@@ -12,6 +12,7 @@
 3. Partial Payment Fixed
 4. Additional Discount Fixed
 5. Show Customer Ledger Aside Date Field
+6. Add Address and City Field in Add New Customer Section.
 
 ### Main Features
 
