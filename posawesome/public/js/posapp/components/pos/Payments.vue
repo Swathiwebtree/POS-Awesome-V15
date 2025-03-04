@@ -82,7 +82,7 @@
                 :rules="[isNumber]"
                 :prefix="currencySymbol(invoice_doc.currency)"
                 @focus="set_rest_amount(payment.idx)"
-                :readonly="invoice_doc.is_return"
+                :readonly="invoice_doc.is_return || (payment.mode_of_payment.toLowerCase() === 'cash' && !is_credit_sale)"
               ></v-text-field>
             </v-col>
             <v-col cols="6" v-if="!is_mpesa_c2b_payment(payment)">
@@ -179,10 +179,10 @@
               color="primary"
               :label="frappe._('Net Total')"
               bg-color="white"
-              hide-details
               :value="formatCurrency(invoice_doc.net_total)"
               readonly
               :prefix="currencySymbol(invoice_doc.currency)"
+			  persistent-placeholder
             ></v-text-field>
           </v-col>
           <v-col cols="6">
@@ -196,6 +196,7 @@
               :value="formatCurrency(invoice_doc.total_taxes_and_charges)"
               readonly
               :prefix="currencySymbol(invoice_doc.currency)"
+			  persistent-placeholder
             ></v-text-field>
           </v-col>
           <v-col cols="6">
@@ -209,6 +210,7 @@
               :value="formatCurrency(invoice_doc.total)"
               readonly
               :prefix="currencySymbol(invoice_doc.currency)"
+			  persistent-placeholder
             ></v-text-field>
           </v-col>
           <v-col cols="6">
@@ -222,6 +224,7 @@
               :value="formatCurrency(invoice_doc.discount_amount)"
               readonly
               :prefix="currencySymbol(invoice_doc.currency)"
+			  persistent-placeholder
             ></v-text-field>
           </v-col>
           <v-col cols="6">
@@ -235,6 +238,7 @@
               :value="formatCurrency(invoice_doc.grand_total)"
               readonly
               :prefix="currencySymbol(invoice_doc.currency)"
+			  persistent-placeholder
             ></v-text-field>
           </v-col>
           <v-col v-if="invoice_doc.rounded_total" cols="6">
@@ -248,6 +252,7 @@
               :value="formatCurrency(invoice_doc.rounded_total)"
               readonly
               :prefix="currencySymbol(invoice_doc.currency)"
+			  persistent-placeholder
             ></v-text-field>
           </v-col>
 
@@ -764,10 +769,18 @@ export default {
 
     // Watch is_credit_sale to reset cash payments
     is_credit_sale(newVal) {
-      if (newVal) {
-        this.reset_cash_payments();
-      }
-    },
+    if (newVal) {
+      // When credit sale is turned on, reset cash payments to 0
+      this.reset_cash_payments();
+    } else {
+      // When credit sale is turned off, set the cash payment back to the invoice total
+      this.invoice_doc.payments.forEach((payment) => {
+        if (payment.mode_of_payment.toLowerCase() === 'cash') {
+          payment.amount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
+        }
+      });
+    }
+  },
   },
   methods: {
     // Back to Invoice View
