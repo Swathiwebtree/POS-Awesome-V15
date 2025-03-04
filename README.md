@@ -6,6 +6,12 @@
 #### An open-source Point of Sale for [Erpnext](https://github.com/frappe/erpnext) using [Vue.js](https://github.com/vuejs/vue) and [Vuetify](https://github.com/vuetifyjs/vuetify) (VERSION 15 Support)
 
 ---
+### Bugs Fixed
+1. Edit Rate Fixed
+2. Edit Discount Fixed
+3. Partial Payment Fixed
+4. Additional Discount Fixed
+5. Show Customer Ledger Aside Date Field
 
 ### Main Features
 
@@ -45,10 +51,6 @@
 
 ### How to Install
 
-#### ASAERP:
-
-One-click installation is available if you are hosting on [ASAERP](https://asaerp.com) from [here](https://asaerp.com/dashboard/marketplace)
-
 #### Self Hosting:
 
 1. `bench get-app branch version-15 https://github.com/defendicon/POS-Awesome-V15`
@@ -60,12 +62,6 @@ One-click installation is available if you are hosting on [ASAERP](https://asaer
 
 ---
 
-### New Features and Bug Report:
-
-- Please Create Github Issue from [here](https://github.com/yrestom/POS-Awesome/issues/new/choose) after checking the existing issues
-- For paid features, you can email me [here](mailto:info@totrox.com)
-
----
 
 ### How To Use:
 
