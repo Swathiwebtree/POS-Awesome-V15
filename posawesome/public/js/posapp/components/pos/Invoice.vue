@@ -106,24 +106,20 @@
         <v-data-table :headers="items_headers" :items="items" v-model:expanded="expanded" show-expand
           item-value="posa_row_id" class="elevation-1" :items-per-page="itemsPerPage" expand-on-click
           hide-default-footer>
-          <template v-slot:item.qty="{ item }">
-  {{ isNaN(item.qty) ? 0 : formatFloat(item.qty) }}
-</template>
+          <template v-slot:item.qty="{ item }">{{
+            formatFloat(item.qty)
+          }}</template>
           <template v-slot:item.rate="{ item }">{{ currencySymbol(pos_profile.currency) }}
             {{ formatCurrency(item.rate) }}</template>
-          <template v-slot:item.amount="{ item }">
-  {{ currencySymbol(pos_profile.currency) }}
-  {{
-    formatCurrency(
-      isNaN(flt(item.qty, float_precision)) || isNaN(flt(item.rate, currency_precision)) ? 
-      0 : 
-      flt(item.qty, float_precision) * flt(item.rate, currency_precision)
-    )
-  }}
-</template>
+          <template v-slot:item.amount="{ item }">{{ currencySymbol(pos_profile.currency) }}
+            {{
+              formatCurrency(
+                flt(item.qty, float_precision) *
+                flt(item.rate, currency_precision)
+              )
+            }}</template>
           <template v-slot:item.posa_is_offer="{ item }">
-            <v-checkbox-btn :model-value="!!item.posa_is_offer || !!item.posa_is_replace" class="center"
-              disabled></v-checkbox-btn>
+            <v-checkbox-btn v-model="item.posa_is_offer" class="center"></v-checkbox-btn>
           </template>
 
           <template v-slot:expanded-row="{ columns: headers, item }">
@@ -159,7 +155,7 @@
                     bg-color="white" hide-details :model-value="formatFloat(item.qty)" @change="
                       [
                         setFormatedFloat(item, 'qty', null, false, $event.target.value),
-                        calc_stock_qty(item, $event.target.value),
+                        calc_stock_qty(item, $event),
                       ]
                       " :rules="[isNumber]" :disabled="!!item.posa_is_offer || !!item.posa_is_replace"></v-text-field>
                 </v-col>
@@ -490,7 +486,7 @@ export default {
 
   computed: {
     total_qty() {
-      
+      this.close_payments();
       let qty = 0;
       this.items.forEach((item) => {
         qty += flt(item.qty);
@@ -505,7 +501,7 @@ export default {
       return this.flt(sum, this.currency_precision);
     },
     subtotal() {
-      
+      this.close_payments();
       let sum = 0;
       this.items.forEach((item) => {
         sum += flt(item.qty) * flt(item.rate);
@@ -705,8 +701,8 @@ export default {
       }
     });
 
-    if (r && r.message && !isNaN(r.message.balance)) {
-      this.customer_balance = r.message.balance;
+    if (r && r.message) {
+      this.customer_balance = r.message.balance || 0;
     } else {
       this.customer_balance = 0;
     }
@@ -2582,11 +2578,6 @@ if (this.invoiceType == "Invoice") {
   },
 
   mounted() {
-  this.$nextTick(() => {
-    if (this.$refs.invoice_posting_date) {
-      console.log(this.$refs.invoice_posting_date.offsetWidth);
-    }
-  });
     this.eventBus.on("register_pos_profile", (data) => {
       this.pos_profile = data.pos_profile;
       this.customer = data.pos_profile.customer;
