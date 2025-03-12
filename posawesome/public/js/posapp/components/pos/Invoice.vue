@@ -1174,12 +1174,27 @@ export default {
             }
           }
         }
-        // Completely skip stock validation
-if (this.invoiceType == "Invoice") {
-  console.warn(`Stock validation skipped for item: ${item.item_name}`);
-  value = true; // Always allow the operation to proceed
-}
-
+        //For Completely skip stock validation Remove Slashes
+//if (this.invoiceType == "Invoice") {
+  //console.warn(`Stock validation skipped for item: ${item.item_name}`);
+  //value = true; // Always allow the operation to proceed
+//}
+if (this.stock_settings.allow_negative_stock != 1) {
+          if (
+            this.invoiceType == "Invoice" &&
+            ((item.is_stock_item && item.stock_qty && !item.actual_qty) ||
+              (item.is_stock_item && item.stock_qty > item.actual_qty))
+          ) {
+            vm.eventBus.emit("show_message", {
+              title: __(
+                `The existing quantity '{0}' for item '{1}' is not enough`,
+                [item.actual_qty, item.item_name]
+              ),
+              color: "error",
+            });
+            value = false;
+          }
+        }
         if (item.qty == 0) {
           vm.eventBus.emit("show_message", {
             title: __(`Quantity for item '{0}' cannot be Zero (0)`, [
