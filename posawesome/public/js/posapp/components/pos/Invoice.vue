@@ -87,8 +87,8 @@
         no-title
         scrollable
         color="primary"
-        :min="frappe.datetime.add_days(frappe.datetime.now_date(true), -7)"
-        :max="frappe.datetime.add_days(frappe.datetime.now_date(true), 7)"
+        :min="frappe.datetime.add_days(frappe.datetime.nowdate(true), -7)"
+        :max="frappe.datetime.add_days(frappe.datetime.nowdate(true), 7)"
         @input="invoice_posting_date = false"
       ></v-date-picker>
     </v-menu>
@@ -119,27 +119,31 @@
               )
             }}</template>
           <template v-slot:item.posa_is_offer="{ item }">
-            <v-checkbox-btn v-model="item.posa_is_offer" class="center"></v-checkbox-btn>
-          </template>
+  <v-checkbox-btn
+    v-model="item.posa_is_offer"
+    class="center"
+    @change="toggleOffer(item)"
+  ></v-checkbox-btn>
+</template>
 
           <template v-slot:expanded-row="{ columns: headers, item }">
             <td :colspan="headers.length" class="ma-0 pa-0">
               <v-row class="ma-0 pa-0">
                 <v-col cols="1">
-                  <v-btn :disabled="!!item.posa_is_offer || !!item.posa_is_replace" icon color="error"
+                  <v-btn :disabled="!!item.posa_is_replace" icon color="error"
                     @click.stop="remove_item(item)">
                     <v-icon icon="mdi-delete">mdi-delete</v-icon>
                   </v-btn>
                 </v-col>
                 <v-spacer></v-spacer>
                 <v-col cols="1">
-                  <v-btn :disabled="!!item.posa_is_offer || !!item.posa_is_replace" icon color="secondary"
+                  <v-btn :disabled="!!item.posa_is_replace" icon color="secondary"
                     @click.stop="subtract_one(item)">
                     <v-icon icon="mdi-minus-circle-outline"></v-icon>
                   </v-btn>
                 </v-col>
                 <v-col cols="1">
-                  <v-btn :disabled="!!item.posa_is_offer || !!item.posa_is_replace" icon color="secondary"
+                  <v-btn :disabled="!!item.posa_is_replace" icon color="secondary"
                     @click.stop="add_one(item)">
                     <v-icon icon="mdi-plus-circle-outline"></v-icon>
                   </v-btn>
@@ -155,15 +159,14 @@
                     bg-color="white" hide-details :model-value="formatFloat(item.qty)" @change="
                       [
                         setFormatedFloat(item, 'qty', null, false, $event.target.value),
-                        calc_stock_qty(item, $event),
+                        calc_stock_qty(item, $event.target.value),
                       ]
-                      " :rules="[isNumber]" :disabled="!!item.posa_is_offer || !!item.posa_is_replace"></v-text-field>
+                      " :rules="[isNumber]" :disabled="!!item.posa_is_replace"></v-text-field>
                 </v-col>
                 <v-col cols="4">
                   <v-select density="compact" bg-color="white" :label="frappe._('UOM')" v-model="item.uom"
                     :items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom" hide-details
                     @update:model-value="calc_uom(item, $event)" :disabled="!!invoice_doc.is_return ||
-                      !!item.posa_is_offer ||
                       !!item.posa_is_replace
                       ">
                   </v-select>
@@ -182,8 +185,7 @@
                         ),
                         calc_prices(item, $event.target.value, $event),
                       ]
-                      " :rules="[isNumber]" id="rate" :disabled="!!item.posa_is_offer ||
-                        !!item.posa_is_replace ||
+                      " :rules="[isNumber]" id="rate" :disabled="!!item.posa_is_replace ||
                         !!item.posa_offer_applied ||
                         !pos_profile.posa_allow_user_to_edit_rate ||
                         !!invoice_doc.is_return
@@ -205,8 +207,7 @@
                         ),
                         calc_prices(item, $event.target.value, $event),
                       ]
-                      " :rules="[isNumber]" id="discount_percentage" :disabled="!!item.posa_is_offer ||
-                        !!item.posa_is_replace ||
+                      " :rules="[isNumber]" id="discount_percentage" :disabled="!!item.posa_is_replace ||
                         item.posa_offer_applied ||
                         !pos_profile.posa_allow_user_to_edit_item_discount ||
                         !!invoice_doc.is_return
@@ -229,8 +230,7 @@
                         ,
                         calc_prices(item, $event.target.value, $event),
                       ]
-                      " :prefix="currencySymbol(pos_profile.currency)" id="discount_amount" :disabled="!!item.posa_is_offer ||
-                        !!item.posa_is_replace ||
+                      " :prefix="currencySymbol(pos_profile.currency)" id="discount_amount" :disabled="!!item.posa_is_replace ||
                         !!item.posa_offer_applied ||
                         !pos_profile.posa_allow_user_to_edit_item_discount ||
                         !!invoice_doc.is_return
@@ -1174,11 +1174,12 @@ export default {
             }
           }
         }
-        //For Completely skip stock validation Remove Slashes
+        // For Completely skip stock validation Removes Slashes
 //if (this.invoiceType == "Invoice") {
   //console.warn(`Stock validation skipped for item: ${item.item_name}`);
   //value = true; // Always allow the operation to proceed
 //}
+
 if (this.stock_settings.allow_negative_stock != 1) {
           if (
             this.invoiceType == "Invoice" &&
@@ -2522,6 +2523,26 @@ if (this.stock_settings.allow_negative_stock != 1) {
         true
       );
     },
+	
+	toggleOffer(item) {
+  if (!item.posa_is_offer) {
+    // Remove any references to existing offers
+    const currentOffers = JSON.parse(item.posa_offers);
+    // Depending on your logic, either remove them all or filter them out
+    const filtered = currentOffers.filter((offerRowId) => {
+      // Possibly do more logic here about which offer is relevant
+      return false; // Return false to remove
+    });
+    item.posa_offers = JSON.stringify(filtered);
+
+    // Reset fields
+    item.posa_offer_applied = 0;
+    item.posa_is_replace = 0;
+    item.discount_percentage = 0;
+    item.discount_amount = 0;
+    this.calc_item_price(item);
+  }
+},
 
     print_draft_invoice() {
       if (!this.pos_profile.posa_allow_print_draft_invoices) {
@@ -2653,15 +2674,15 @@ if (this.stock_settings.allow_negative_stock != 1) {
     });
   },
   beforeUnmount() {
-    evntBus.$off("register_pos_profile");
-    evntBus.$off("add_item");
-    evntBus.$off("update_customer");
-    evntBus.$off("fetch_customer_details");
-    evntBus.$off("clear_invoice");
-    evntBus.$off("set_offers");
-    evntBus.$off("update_invoice_offers");
-    evntBus.$off("update_invoice_coupons");
-    evntBus.$off("set_all_items");
+    this.eventBus.off("register_pos_profile");
+    this.eventBus.off("add_item");
+    this.eventBus.off("update_customer");
+    this.eventBus.off("fetch_customer_details");
+    this.eventBus.off("clear_invoice");
+    this.eventBus.off("set_offers");
+    this.eventBus.off("update_invoice_offers");
+    this.eventBus.off("update_invoice_coupons");
+    this.eventBus.off("set_all_items");
   },
   created() {
     document.addEventListener("keydown", this.shortOpenPayment.bind(this));
@@ -2717,6 +2738,24 @@ if (this.stock_settings.allow_negative_stock != 1) {
         this.additional_discount_percentage = 0;
       }
     },
+	posting_date(newVal) {
+    if (!newVal) return;
+
+    // newVal is a Date object, shift it to local midnight:
+    const localDate = new Date(
+      newVal.getFullYear(),
+      newVal.getMonth(),
+      newVal.getDate()
+    );
+
+    // "YYYY-MM-DD" string
+    const year  = localDate.getFullYear();
+    const month = String(localDate.getMonth() + 1).padStart(2, "0");
+    const day   = String(localDate.getDate()).padStart(2, "0");
+
+    // Change Date To String Only
+    this.posting_date = `${year}-${month}-${day}`;
+  },
   },
 };
 </script>
