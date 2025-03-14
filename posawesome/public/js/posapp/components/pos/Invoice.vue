@@ -95,12 +95,12 @@
   </v-col>
 
   <!-- Balance Field -->
-  <v-col cols="6" class="pb-2 d-flex align-center">
-    <div class="balance-field">
-      <strong>Balance:</strong>
-      <span class="balance-value">{{ formatCurrency(customer_balance) }}</span>
-    </div>
-  </v-col>
+  <v-col v-if="pos_profile.posa_show_customer_balance" cols="6" class="pb-2 d-flex align-center">
+  <div class="balance-field">
+    <strong>Balance:</strong>
+    <span class="balance-value">{{ formatCurrency(customer_balance) }}</span>
+  </div>
+</v-col>
 </v-row>
       <div class="my-0 py-0 overflow-y-auto" style="max-height: 60vh">
         <v-data-table :headers="items_headers" :items="items" v-model:expanded="expanded" show-expand
