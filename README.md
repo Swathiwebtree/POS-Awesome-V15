@@ -11,8 +11,10 @@
 2. Edit Discount Fixed
 3. Partial Payment Fixed
 4. Additional Discount Fixed
-5. Show Customer Ledger Aside Date Field
+5. Show Customer Ledger Aside Date Field ( Can be enabled in Pos Awesome Advance settings )
 6. Add Address and City Field in Add New Customer Section.
+7. Auto Offers Application Fixed
+8. Posting Date Issue Fixed
 
 ### Main Features
 
