@@ -1537,94 +1537,80 @@ if (this.stock_settings.allow_negative_stock != 1) {
     },
 
     calc_prices(item, value, $event) {
-      
-      if ($event && $event.target && $event.target.id) {
+  if ($event && $event.target && $event.target.id) {
+    const fieldId = $event.target.id;
+    const priceListRate = flt(item.price_list_rate, this.currency_precision);
+    let newValue = flt(value, this.currency_precision);
+
+    // Handle negative values
+    if (newValue < 0) {
+      newValue = 0;
+      this.eventBus.emit("show_message", {
+        title: __("Negative values not allowed!"),
+        color: "error"
+      });
+    }
+
+    // Field-wise calculations
+    switch(fieldId) {
+      case "rate":
+        // Rate cannot exceed price list rate
+        newValue = Math.min(newValue, priceListRate);
         
-        const fieldId = $event.target.id; 
+        item.rate = this.flt(newValue, this.currency_precision);
+        item.discount_amount = this.flt(
+          priceListRate - item.rate, 
+          this.currency_precision
+        );
+        item.discount_percentage = this.flt(
+          (item.discount_amount / priceListRate) * 100,
+          this.float_precision
+        );
+        break;
 
-        if (fieldId === "rate") {
-          
-          item.discount_percentage = 0;
-		  
-          // if (value < 0) {
-          //   item.rate = item.price_list_rate;
-          //   item.discount_amount = 0;
-          // } 
-          // else if (value < item.price_list_rate) {
-          //   item.discount_amount = this.flt(
-          //     this.flt(item.price_list_rate) - flt(value),
-          //     this.currency_precision
-          //   );
-          // } else if (value > item.price_list_rate) {
-          //   item.discount_amount = 0;
-          // }
+      case "discount_amount":
+        // Max discount = price list rate
+        newValue = Math.min(newValue, priceListRate);
+        
+        item.discount_amount = this.flt(newValue, this.currency_precision);
+        item.rate = this.flt(
+          priceListRate - item.discount_amount,
+          this.currency_precision
+        );
+        item.discount_percentage = this.flt(
+          (item.discount_amount / priceListRate) * 100,
+          this.float_precision
+        );
+        break;
 
-          if (value < 0) {
-            
-            alert("Negative rate ki ijazat nahi!");
-            item.rate = 0; // ya item.rate = item.rate 
-            item.discount_amount = 0;
-          } else {
-            item.rate = value;
+      case "discount_percentage":
+        // Cap percentage at 100%
+        newValue = Math.min(newValue, 100);
+        
+        item.discount_percentage = this.flt(newValue, this.float_precision);
+        item.discount_amount = this.flt(
+          (priceListRate * item.discount_percentage) / 100,
+          this.currency_precision
+        );
+        item.rate = this.flt(
+          priceListRate - item.discount_amount,
+          this.currency_precision
+        );
+        break;
+    }
 
-            //discount_amount = difference of price_list_rate - user rate
-            if (item.price_list_rate && value < item.price_list_rate) {
-              item.discount_amount = this.flt(
-                this.flt(item.price_list_rate) - flt(value),
-                this.currency_precision
-              );
-            } else {
-              item.discount_amount = 0;
-            }
-          }
+    // Ensure rate doesn't go below zero
+    if (item.rate < 0) {
+      item.rate = 0;
+      item.discount_amount = priceListRate;
+      item.discount_percentage = 100;
+    }
 
-        } 
-        else if (fieldId === "discount_amount") {
-          if (value < 0) {
-            item.discount_amount = 0;
-            item.discount_percentage = 0;
-          } else {
-            // Original code:
-            // item.rate = flt(item.price_list_rate) - flt(value);
-            // item.discount_percentage = 0;
-
-            // Agar aap yahi logic rakhna chahte hain, theek hai,
-            // warna comment out kar dein.
-            item.rate = flt(item.price_list_rate) - flt(value);
-            item.discount_percentage = 0;
-          }
-        } 
-        else if (fieldId === "discount_percentage") {
-          if (value < 0) {
-            item.discount_amount = 0;
-            item.discount_percentage = 0;
-          } else {
-            // Original code:
-            // item.rate = this.flt(
-            //   flt(item.price_list_rate) -
-            //     (flt(item.price_list_rate) * flt(value)) / 100,
-            //   this.currency_precision
-            // );
-            // item.discount_amount = this.flt(
-            //   flt(item.price_list_rate) - flt(+item.rate),
-            //   this.currency_precision
-            // );
-
-            // Agar aap discount_percentage se rate/amount auto-calc rakhna chahte hain,
-            // to yehi logic theek hai. 
-            item.rate = this.flt(
-              flt(item.price_list_rate) - 
-              (flt(item.price_list_rate) * flt(value)) / 100,
-              this.currency_precision
-            );
-            item.discount_amount = this.flt(
-              flt(item.price_list_rate) - flt(+item.rate),
-              this.currency_precision
-            );
-          }
-        }
-      }
-    },
+    // Update stock calculations
+    this.calc_stock_qty(item, item.qty);
+    this.$forceUpdate();
+  }
+},
 
     calc_item_price(item) {
       if (!item.posa_offer_applied) {
@@ -2526,22 +2512,20 @@ if (this.stock_settings.allow_negative_stock != 1) {
 	
 	toggleOffer(item) {
   if (!item.posa_is_offer) {
-    // Remove any references to existing offers
-    const currentOffers = JSON.parse(item.posa_offers);
-    // Depending on your logic, either remove them all or filter them out
-    const filtered = currentOffers.filter((offerRowId) => {
-      // Possibly do more logic here about which offer is relevant
-      return false; // Return false to remove
-    });
-    item.posa_offers = JSON.stringify(filtered);
-
-    // Reset fields
+    // Remove all offers linked to this item
+    item.posa_offers = JSON.stringify([]);
     item.posa_offer_applied = 0;
-    item.posa_is_replace = 0;
     item.discount_percentage = 0;
     item.discount_amount = 0;
+    // Reset rate to original price_list_rate
+    item.rate = item.price_list_rate;
+    // Force re-calculation
     this.calc_item_price(item);
+    // Re-evaluate all offers
+    this.handelOffers();
   }
+  // Ensure Vue reactivity
+  this.$forceUpdate();
 },
 
     print_draft_invoice() {
@@ -2761,6 +2745,10 @@ if (this.stock_settings.allow_negative_stock != 1) {
 </script>
 
 <style scoped>
+.v-checkbox-btn.v-selected {
+  background-color: #4CAF50 !important;
+  color: white;
+}
 .border_line_bottom {
   border-bottom: 1px solid lightgray;
 }
