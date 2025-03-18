@@ -1554,9 +1554,7 @@ if (this.stock_settings.allow_negative_stock != 1) {
     // Field-wise calculations
     switch(fieldId) {
       case "rate":
-        // Rate cannot exceed price list rate
-        newValue = Math.min(newValue, priceListRate);
-        
+        // Allow rate to exceed price list rate
         item.rate = this.flt(newValue, this.currency_precision);
         item.discount_amount = this.flt(
           priceListRate - item.rate, 
@@ -1613,11 +1611,12 @@ if (this.stock_settings.allow_negative_stock != 1) {
 },
 
     calc_item_price(item) {
-      if (!item.posa_offer_applied) {
-        if (item.price_list_rate) {
-          item.rate = item.price_list_rate;
-        }
-      }
+      // Commented out the rate reset - allows manual rates
+  // if (!item.posa_offer_applied) {
+  //   if (item.price_list_rate) {
+  //     item.rate = item.price_list_rate;
+  //   }
+  // }
       if (item.discount_percentage) {
         item.rate =
           flt(item.price_list_rate) -
