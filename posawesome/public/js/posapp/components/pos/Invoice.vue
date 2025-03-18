@@ -1612,11 +1612,11 @@ if (this.stock_settings.allow_negative_stock != 1) {
 
     calc_item_price(item) {
       // Commented out the rate reset - allows manual rates
-  // if (!item.posa_offer_applied) {
-  //   if (item.price_list_rate) {
-  //     item.rate = item.price_list_rate;
-  //   }
-  // }
+   if (!item.posa_offer_applied) {
+     if (item.price_list_rate) {
+       item.rate = item.price_list_rate;
+     }
+   }
       if (item.discount_percentage) {
         item.rate =
           flt(item.price_list_rate) -
