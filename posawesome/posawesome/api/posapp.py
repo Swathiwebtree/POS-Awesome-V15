@@ -1062,7 +1062,7 @@ def create_customer(
                     "city": city or "",
                     "state": "",
                     "pincode": "",
-                    "country": country or "Pakistan",
+                    "country": country or "",
                 }
                 make_address(json.dumps(args))
 
@@ -1074,7 +1074,12 @@ def create_customer(
         
         customer_doc = frappe.get_doc("Customer", customer_id)
         customer_doc.customer_name = customer_name
-        ...
+        customer_doc.tax_id = tax_id
+        customer_doc.mobile_no = mobile_no
+        customer_doc.email_id = email_id
+        customer_doc.posa_referral_code = referral_code
+        customer_doc.posa_birthday = birthday
+        customer_doc.customer_type = customer_type
         customer_doc.gender = gender
         customer_doc.save()
 
@@ -1089,7 +1094,7 @@ def create_customer(
             address_doc = frappe.get_doc("Address", existing_address_name)
             address_doc.address_line1 = address_line1 or ""
             address_doc.city = city or ""
-            address_doc.country = country or "Pakistan"
+            address_doc.country = country or ""
             address_doc.save()
         else:
             
@@ -1103,7 +1108,7 @@ def create_customer(
                     "city": city or "",
                     "state": "",
                     "pincode": "",
-                    "country": country or "Pakistan",
+                    "country": country or "",
                 }
                 make_address(json.dumps(args))
 
@@ -1777,7 +1782,7 @@ def get_customer_info(customer):
         res["address_line2"] = addr.address_line2 or ""
         res["city"] = addr.city or ""
         res["state"] = addr.state or ""
-        res["country"] = addr.country or "Pakistan"
+        res["country"] = addr.country or ""
 
     return res
 
