@@ -821,8 +821,10 @@ export default {
 
     // Submit Payment
     submit(event, payment_received = false, print = false) {
-      // Validate total payments
-      if (!this.invoice_doc.is_return && this.total_payments <= 0) {
+      // Validate total payments only if not credit sale and invoice total is not zero
+      if (!this.is_credit_sale && !this.invoice_doc.is_return && 
+          this.total_payments <= 0 && 
+          (this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0) {
         this.eventBus.emit("show_message", {
           title: `Please enter payment amount`,
           color: "error",
@@ -843,14 +845,33 @@ export default {
           }
         });
 
-        if (has_cash_payment && cash_amount < (this.invoice_doc.rounded_total || this.invoice_doc.grand_total)) {
-          this.eventBus.emit("show_message", {
-            title: `Cash payment cannot be less than invoice total when credit sale is off`,
-            color: "error",
-          });
-          frappe.utils.play_sound("error");
-          return;
+        if (has_cash_payment) {
+          if (!this.pos_profile.posa_allow_partial_payment && 
+              cash_amount < (this.invoice_doc.rounded_total || this.invoice_doc.grand_total) &&
+              (this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0) {
+            this.eventBus.emit("show_message", {
+              title: `Cash payment cannot be less than invoice total when partial payment is not allowed`,
+              color: "error",
+            });
+            frappe.utils.play_sound("error");
+            return;
+          }
         }
+      }
+
+      // Validate partial payments only if not credit sale and invoice total is not zero
+      if (
+        !this.is_credit_sale &&
+        !this.pos_profile.posa_allow_partial_payment &&
+        this.total_payments < (this.invoice_doc.rounded_total || this.invoice_doc.grand_total) &&
+        (this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
+      ) {
+        this.eventBus.emit("show_message", {
+          title: `The amount paid is not complete`,
+          color: "error",
+        });
+        frappe.utils.play_sound("error");
+        return;
       }
 
       // Validate phone payment
@@ -872,20 +893,6 @@ export default {
           frappe.utils.play_sound("error");
           return;
         }
-      }
-
-      // Validate partial payments
-      if (
-        !this.is_credit_sale &&
-        !this.pos_profile.posa_allow_partial_payment &&
-        this.total_payments < (this.invoice_doc.rounded_total || this.invoice_doc.grand_total)
-      ) {
-        this.eventBus.emit("show_message", {
-          title: `The amount paid is not complete`,
-          color: "error",
-        });
-        frappe.utils.play_sound("error");
-        return;
       }
 
       // Validate paid_change
