@@ -481,6 +481,42 @@ def add_taxes_from_tax_template(item, parent_doc):
                     tax_row.update({"category": "Total", "add_deduct_tax": "Add"})
                 tax_row.db_insert()
 
+def validate_return_items(original_invoice_name, return_items):
+    """
+    Ensure that return items do not exceed the quantity from the original invoice.
+    """
+    original_invoice = frappe.get_doc("Sales Invoice", original_invoice_name)
+    original_item_qty = {}
+
+    for item in original_invoice.items:
+        original_item_qty[item.item_code] = original_item_qty.get(item.item_code, 0) + item.qty
+
+    returned_items = frappe.get_all(
+        "Sales Invoice",
+        filters={
+            "return_against": original_invoice_name,
+            "docstatus": 1,
+            "is_return": 1
+        },
+        fields=["name"]
+    )
+
+    for returned_invoice in returned_items:
+        ret_doc = frappe.get_doc("Sales Invoice", returned_invoice.name)
+        for item in ret_doc.items:
+            if item.item_code in original_item_qty:
+                original_item_qty[item.item_code] -= abs(item.qty)
+
+    for item in return_items:
+        item_code = item.get("item_code")
+        return_qty = abs(item.get("qty", 0))
+        if item_code in original_item_qty and return_qty > original_item_qty[item_code]:
+            return {
+                "valid": False,
+                "message": _("You are trying to return more quantity for item {0} than was sold.").format(item_code),
+            }
+
+    return {"valid": True}
 
 @frappe.whitelist()
 def update_invoice(data):
