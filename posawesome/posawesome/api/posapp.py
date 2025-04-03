@@ -526,7 +526,8 @@ def update_invoice(data):
     if data.get('is_return') and data.get('return_against'):
         validation_result = validate_return_items(data.get('return_against'), data.get('items', []))
         if not validation_result.get('valid'):
-            frappe.throw(validation_result.get('message'))
+            # frappe.throw(validation_result.get('message'))
+            pass
             
     # Continue with existing logic
     invoice_doc = frappe.get_doc("Sales Invoice", data.get("name")) if data.get("name") else None
