@@ -1,10 +1,29 @@
 <template>
   <div>
-    <v-autocomplete density="compact" clearable auto-select-first variant="outlined" color="primary"
-      :label="frappe._('Customer')" v-model="customer" :items="customers" item-title="customer_name" item-value="name"
-      bg-color="white" :no-data-text="__('Customers not found')" hide-details :customFilter="customFilter"
-      :disabled="readonly" append-icon="mdi-plus" @click:append="new_customer" prepend-inner-icon="mdi-account-edit"
-      @click:prepend-inner="edit_customer">
+    <v-autocomplete
+      ref="customerDropdown"
+      density="compact"
+      clearable
+      variant="outlined"
+      color="primary"
+      :label="frappe._('Customer')"
+      v-model="internalCustomer"
+      :items="customers"
+      item-title="customer_name"
+      item-value="name"
+      bg-color="white"
+      :no-data-text="__('Customers not found')"
+      hide-details
+      :customFilter="customFilter"
+      :disabled="readonly"
+      append-icon="mdi-plus"
+      @click:append="new_customer"
+      prepend-inner-icon="mdi-account-edit"
+      @click:prepend-inner="edit_customer"
+      @update:menu="onCustomerMenuToggle"
+      @update:modelValue="onCustomerChange"
+      @keydown.enter="handleEnter"
+    >
       <template v-slot:item="{ props, item }">
         <v-list-item v-bind="props">
           <v-list-item-subtitle v-if="item.raw.customer_name != item.raw.name">
@@ -25,7 +44,7 @@
         </v-list-item>
       </template>
     </v-autocomplete>
-    {{ console.log("my ccustomers", customers) }}
+
     <div class="mb-8">
       <UpdateCustomer></UpdateCustomer>
     </div>
@@ -33,13 +52,20 @@
 </template>
 
 <script>
-
 import UpdateCustomer from './UpdateCustomer.vue';
+
 export default {
+  props: {
+    pos_profile: Object
+  },
+
   data: () => ({
     pos_profile: '',
     customers: [],
     customer: '',
+    internalCustomer: null,
+    tempSelectedCustomer: null,
+    isMenuOpen: false,
     readonly: false,
     customer_info: {},
   }),
@@ -49,15 +75,68 @@ export default {
   },
 
   methods: {
+    onCustomerMenuToggle(isOpen) {
+      this.isMenuOpen = isOpen;
+
+      if (isOpen) {
+        this.internalCustomer = null;
+
+        this.$nextTick(() => {
+          setTimeout(() => {
+            const dropdown = this.$refs.customerDropdown?.$el?.querySelector('.v-overlay__content .v-select-list');
+            if (dropdown) dropdown.scrollTop = 0;
+          }, 50);
+        });
+      } else {
+        if (this.tempSelectedCustomer) {
+          this.internalCustomer = this.tempSelectedCustomer;
+          this.customer = this.tempSelectedCustomer;
+          this.eventBus.emit('update_customer', this.customer);
+        }
+        this.tempSelectedCustomer = null;
+      }
+    },
+
+    onCustomerChange(val) {
+      this.tempSelectedCustomer = val;
+
+      if (!this.isMenuOpen) {
+        this.customer = val;
+        this.eventBus.emit('update_customer', val);
+      }
+    },
+
+    handleEnter(event) {
+      const inputText = event.target.value?.toLowerCase() || '';
+
+      const matched = this.customers.find(cust => {
+        return (
+          cust.customer_name?.toLowerCase().includes(inputText) ||
+          cust.name?.toLowerCase().includes(inputText)
+        );
+      });
+
+      if (matched) {
+        this.tempSelectedCustomer = matched.name;
+        this.internalCustomer = matched.name;
+        this.customer = matched.name;
+        this.eventBus.emit('update_customer', matched.name);
+        this.isMenuOpen = false;
+
+        // force close the menu
+        event.target.blur();
+      }
+    },
+
     get_customer_names() {
       var vm = this;
-      if (this.customers.length > 0) {
-        return;
-      }
+      if (this.customers.length > 0) return;
+
       if (vm.pos_profile.posa_local_storage && localStorage.customer_storage) {
         vm.customers = JSON.parse(localStorage.getItem('customer_storage'));
       }
 
+      this.loadingCustomers = true;
       frappe.call({
         method: 'posawesome.posawesome.api.posapp.get_customer_names',
         args: {
@@ -65,32 +144,29 @@ export default {
         },
         callback: function (r) {
           if (r.message) {
-            console.log(vm.customers)
             vm.customers = r.message;
-            console.log(vm.customers)
+            vm.loadingCustomers = false;
+
             if (vm.pos_profile.posa_local_storage) {
               localStorage.setItem('customer_storage', '');
-              localStorage.setItem(
-                'customer_storage',
-                JSON.stringify(r.message)
-              );
+              localStorage.setItem('customer_storage', JSON.stringify(r.message));
             }
-
           }
         },
       });
     },
+
     new_customer() {
       this.eventBus.emit('open_update_customer', null);
     },
+
     edit_customer() {
       this.eventBus.emit('open_update_customer', this.customer_info);
     },
+
     customFilter(itemText, queryText, itemRow) {
       const item = itemRow.raw;
-      const textOne = item.customer_name
-        ? item.customer_name.toLowerCase()
-        : '';
+      const textOne = item.customer_name ? item.customer_name.toLowerCase() : '';
       const textTwo = item.tax_id ? item.tax_id.toLowerCase() : '';
       const textThree = item.email_id ? item.email_id.toLowerCase() : '';
       const textFour = item.mobile_no ? item.mobile_no.toLowerCase() : '';
@@ -98,19 +174,17 @@ export default {
       const searchText = queryText.toLowerCase();
 
       return (
-        textOne.indexOf(searchText) > -1 ||
-        textTwo.indexOf(searchText) > -1 ||
-        textThree.indexOf(searchText) > -1 ||
-        textFour.indexOf(searchText) > -1 ||
-        textFifth.indexOf(searchText) > -1
+        textOne.includes(searchText) ||
+        textTwo.includes(searchText) ||
+        textThree.includes(searchText) ||
+        textFour.includes(searchText) ||
+        textFifth.includes(searchText)
       );
     },
   },
 
-  computed: {},
-
-  created: function () {
-    this.$nextTick(function () {
+  created() {
+    this.$nextTick(() => {
       this.eventBus.on('register_pos_profile', (pos_profile) => {
         this.pos_profile = pos_profile;
         this.get_customer_names();
@@ -121,6 +195,7 @@ export default {
       });
       this.eventBus.on('set_customer', (customer) => {
         this.customer = customer;
+        this.internalCustomer = customer;
       });
       this.eventBus.on('add_customer_to_list', (customer) => {
         this.customers.push(customer);
@@ -135,12 +210,6 @@ export default {
         this.get_customer_names();
       });
     });
-  },
-
-  watch: {
-    customer() {
-      this.eventBus.emit('update_customer', this.customer);
-    },
   },
 };
 </script>
