@@ -23,40 +23,15 @@
       </v-card>
     </v-dialog>
     <v-card style="max-height: 70vh; height: 70vh" class="cards my-0 py-0 mt-3 bg-grey-lighten-5">
-      <v-row align="center" class="items px-2 py-1">
-        
-<v-row align="center" class="items px-2 py-1">
-  
-
-
-<v-col cols="9" class="pb-2 pr-0">
-  <div style="height: 10px;"></div>
-  <Customer :pos_profile="pos_profile" />
-</v-col>
-
-
-
-  
-
-<v-col cols="3" class="pb-2">
-  <div style="height: 10px;"></div>
-  <v-select
-    density="compact"
-    hide-details
-    variant="outlined"
-    color="primary"
-    bg-color="white"
-    :items="invoiceTypes"
-    :label="frappe._('Type')"
-    v-model="invoiceType"
-    :disabled="invoiceType == 'Return'"
-  ></v-select>
-</v-col>
-
-
-</v-row>
-
-        
+  <v-row align="center" class="items px-2 py-1">
+    <v-col :cols="pos_profile.posa_allow_sales_order ? 9 : 12" class="pb-2 pr-0">
+      <Customer />
+    </v-col>
+        <v-col v-if="pos_profile.posa_allow_sales_order" cols="3" class="pb-2">
+          <v-select density="compact" hide-details variant="outlined" color="primary" bg-color="white"
+            :items="invoiceTypes" :label="frappe._('Type')" v-model="invoiceType"
+            :disabled="invoiceType == 'Return'"></v-select>
+        </v-col>
       </v-row>
 
       <v-row align="center" class="items px-2 py-1 mt-0 pt-0" v-if="pos_profile.posa_use_delivery_charges">
@@ -75,9 +50,7 @@
           </v-autocomplete>
         </v-col>
         <v-col cols="4" class="pb-0 mb-0 pt-0">
-          <div style="height: 16px;"></div>
-<div style="height: 16px;"></div>
-<v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Delivery Charges Rate')"
+          <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Delivery Charges Rate')"
             bg-color="white" hide-details :model-value="formatCurrency(delivery_charges_rate)"
             :prefix="currencySymbol(pos_profile.currency)" disabled></v-text-field>
         </v-col>
