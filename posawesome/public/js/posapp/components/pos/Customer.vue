@@ -1,6 +1,6 @@
 <template>
   <div>
-    <!-- ✅ Disable dropdown if either readonly or loadingCustomers is true -->
+    <!-- ? Disable dropdown if either readonly or loadingCustomers is true -->
     <v-autocomplete
       ref="customerDropdown"
       density="compact"
@@ -71,7 +71,7 @@ export default {
     isMenuOpen: false,           // Tracks whether dropdown menu is open
     readonly: false,
     customer_info: {},           // Used for edit modal
-    loadingCustomers: false      // ✅ New state to track loading status
+    loadingCustomers: false      // ? New state to track loading status
   }),
 
   components: {
@@ -148,7 +148,7 @@ export default {
         vm.customers = JSON.parse(localStorage.getItem('customer_storage'));
       }
 
-      this.loadingCustomers = true; // ✅ Start loading
+      this.loadingCustomers = true; // ? Start loading
       frappe.call({
         method: 'posawesome.posawesome.api.posapp.get_customer_names',
         args: {
@@ -163,7 +163,7 @@ export default {
               localStorage.setItem('customer_storage', JSON.stringify(r.message));
             }
           }
-          vm.loadingCustomers = false; // ✅ Stop loading
+          vm.loadingCustomers = false; // ? Stop loading
         },
       });
     },
@@ -208,8 +208,11 @@ export default {
       });
 
       this.eventBus.on('add_customer_to_list', (customer) => {
-        this.customers.push(customer);
-      });
+  this.customers.push(customer);
+  this.customer = customer.name;
+  this.internalCustomer = customer.name;
+  this.eventBus.emit('update_customer', customer.name);
+});
 
       this.eventBus.on('set_customer_readonly', (value) => {
         this.readonly = value;
