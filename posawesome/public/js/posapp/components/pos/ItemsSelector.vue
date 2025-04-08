@@ -8,7 +8,8 @@
           <v-text-field density="compact" clearable autofocus variant="outlined" color="primary"
             :label="frappe._('Search Items')" hint="Search by item code, serial number, batch no or barcode"
             bg-color="white" hide-details v-model="debounce_search" @keydown.esc="esc_event"
-            @keydown.enter="search_onchange" ref="debounce_search"></v-text-field>
+            @keydown.enter="search_onchange" @click:clear="clearSearch" @blur="restoreSearch" 
+            @click="clearSearch" ref="debounce_search"></v-text-field>
         </v-col>
         <v-col cols="3" class="pb-0 mb-2" v-if="pos_profile.posa_input_qty">
           <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('QTY')" bg-color="white"
@@ -107,6 +108,7 @@ export default {
     items: [],
     search: "",
     first_search: "",
+    search_backup: "",
     itemsPerPage: 1000,
     offersCount: 0,
     appliedOffersCount: 0,
@@ -368,6 +370,7 @@ export default {
     esc_event() {
       this.search = null;
       this.first_search = null;
+      this.search_backup = null;
       this.qty = 1;
       this.$refs.debounce_search.focus();
     },
@@ -447,6 +450,20 @@ export default {
       permute(words);
 
       return combinations;
+    },
+    clearSearch() {
+      this.search_backup = this.first_search;
+      this.first_search = "";
+      this.search = "";
+      this.get_items();
+    },
+    
+    restoreSearch() {
+      if (this.first_search === "") {
+        this.first_search = this.search_backup;
+        this.search = this.search_backup;
+        this.get_items();
+      }
     },
   },
 
