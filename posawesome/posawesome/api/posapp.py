@@ -130,24 +130,32 @@ def get_items(
     pos_profile, price_list=None, item_group="", search_value="", customer=None
 ):
     _pos_profile = json.loads(pos_profile)
-    ttl = _pos_profile.get("posa_server_cache_duration")
-    if ttl:
-        ttl = int(ttl) * 30
+    use_price_list = _pos_profile.get("posa_use_server_cache")
 
-    @redis_cache(ttl=ttl or 1800)
+    @redis_cache(ttl=60)
     def __get_items(pos_profile, price_list, item_group, search_value, customer=None):
         return _get_items(pos_profile, price_list, item_group, search_value, customer)
 
     def _get_items(pos_profile, price_list, item_group, search_value, customer=None):
         pos_profile = json.loads(pos_profile)
+        condition = ""
+        
+        # Clear quantity cache to ensure fresh values on each search
+        try:
+            if hasattr(frappe.local.cache, "delete_key"):
+                frappe.local.cache.delete_key('bin_qty_cache')
+            elif frappe.cache().get_value('bin_qty_cache'):
+                frappe.cache().delete_value('bin_qty_cache')
+        except Exception as e:
+            frappe.log_error(f"Error clearing bin_qty_cache: {str(e)}", "POS Awesome")
+        
         today = nowdate()
-        data = dict()
-        posa_display_items_in_stock = pos_profile.get("posa_display_items_in_stock")
+        warehouse = pos_profile.get("warehouse")
+        use_limit_search = pos_profile.get("pose_use_limit_search")
         search_serial_no = pos_profile.get("posa_search_serial_no")
         search_batch_no = pos_profile.get("posa_search_batch_no")
         posa_show_template_items = pos_profile.get("posa_show_template_items")
-        warehouse = pos_profile.get("warehouse")
-        use_limit_search = pos_profile.get("pose_use_limit_search")
+        posa_display_items_in_stock = pos_profile.get("posa_display_items_in_stock")
         search_limit = 0
 
         if not price_list:
@@ -155,7 +163,6 @@ def get_items(
 
         limit = ""
 
-        condition = ""
         condition += get_item_group_condition(pos_profile.get("name"))
 
         if use_limit_search:
@@ -327,7 +334,7 @@ def get_items(
                     result.append(row)
         return result
 
-    if _pos_profile.get("posa_use_server_cache"):
+    if use_price_list:
         return __get_items(pos_profile, price_list, item_group, search_value, customer)
     else:
         return _get_items(pos_profile, price_list, item_group, search_value, customer)
@@ -539,6 +546,20 @@ def submit_invoice(invoice, data):
                 "Company", invoice_doc.company, "default_cash_account"
             )
         }
+
+    # Update remarks with items details
+    if not invoice_doc.custom_custom_remarks:
+        items = []
+        for item in invoice_doc.items:
+            if item.item_name and item.rate and item.qty:
+                total = item.rate * item.qty
+                items.append(f"{item.item_name} - Rate: {item.rate}, Qty: {item.qty}, Amount: {total}")
+        
+        # Add the grand total at the end of remarks
+        grand_total = f"\nGrand Total: {invoice_doc.grand_total}"
+        items.append(grand_total)
+        
+        invoice_doc.remarks = "\n".join(items)
 
     # creating advance payment
     if data.get("credit_change"):
@@ -771,6 +792,22 @@ def submit_in_background_job(kwargs):
     payments = kwargs.get("payments")
 
     invoice_doc = frappe.get_doc("Sales Invoice", invoice)
+    
+    # Update remarks with items details for background job
+    if not invoice_doc.custom_custom_remarks:
+        items = []
+        for item in invoice_doc.items:
+            if item.item_name and item.rate and item.qty:
+                total = item.rate * item.qty
+                items.append(f"{item.item_name} - Rate: {item.rate}, Qty: {item.qty}, Amount: {total}")
+        
+        # Add the grand total at the end of remarks
+        grand_total = f"\nGrand Total: {invoice_doc.grand_total}"
+        items.append(grand_total)
+        
+        invoice_doc.remarks = "\n".join(items)
+        invoice_doc.save()
+    
     invoice_doc.submit()
     redeeming_customer_credit(
         invoice_doc, data, is_payment_entry, total_cash, cash_account, payments
@@ -877,6 +914,12 @@ def get_items_details(pos_profile, items_data):
         if len(items_data) > 0:
             for item in items_data:
                 item_code = item.get("item_code")
+                # Force refresh stock quantity on each request using proper cache clearing
+                if hasattr(frappe.local.cache, "delete_key"):
+                    frappe.local.cache.delete_key('bin_qty_cache')
+                elif frappe.cache().get_value('bin_qty_cache'):
+                    frappe.cache().delete_value('bin_qty_cache')
+                
                 item_stock_qty = get_stock_availability(item_code, warehouse)
                 (has_batch_no, has_serial_no) = frappe.db.get_value(
                     "Item", item_code, ["has_batch_no", "has_serial_no"]
@@ -936,10 +979,8 @@ def get_items_details(pos_profile, items_data):
 
         return result
 
-    if _pos_profile.get("posa_use_server_cache"):
-        return __get_items_details(pos_profile, items_data)
-    else:
-        return _get_items_details(pos_profile, items_data)
+    # Skip cache to ensure fresh stock quantities on every request
+    return _get_items_details(pos_profile, items_data)
 
 
 @frappe.whitelist()

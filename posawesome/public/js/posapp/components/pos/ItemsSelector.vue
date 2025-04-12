@@ -118,6 +118,7 @@ export default {
     customer: null,
     new_line: false,
     qty: 1,
+    refresh_interval: null,
   }),
 
   watch: {
@@ -167,6 +168,13 @@ export default {
         vm.items = JSON.parse(localStorage.getItem("items_storage"));
         this.eventBus.emit("set_all_items", vm.items);
         vm.loading = false;
+        
+        // Even when loading from localStorage, refresh the quantities
+        setTimeout(() => {
+          if (vm.filtered_items && vm.filtered_items.length > 0) {
+            vm.update_items_details(vm.filtered_items);
+          }
+        }, 300);
       }
       frappe.call({
         method: "posawesome.posawesome.api.posapp.get_items",
@@ -183,6 +191,14 @@ export default {
             vm.eventBus.emit("set_all_items", vm.items);
             vm.loading = false;
             console.info("Items Loaded");
+            
+            // Always refresh quantities after items are loaded
+            setTimeout(() => {
+              if (vm.filtered_items && vm.filtered_items.length > 0) {
+                vm.update_items_details(vm.filtered_items);
+              }
+            }, 300);
+            
             if (
               vm.pos_profile.posa_local_storage &&
               !vm.pos_profile.pose_use_limit_search
@@ -262,6 +278,15 @@ export default {
       if (item.has_variants) {
         this.eventBus.emit("open_variants_model", item, this.items);
       } else {
+        if (item.actual_qty === 0 && this.pos_profile.posa_display_items_in_stock) {
+          this.eventBus.emit("show_message", {
+            title: `No stock available for ${item.item_name}`,
+            color: "warning",
+          });
+          this.update_items_details([item]);
+          return;
+        }
+        
         if (!item.qty || item.qty === 1) {
           item.qty = Math.abs(this.qty);
         }
@@ -325,14 +350,23 @@ export default {
         this.$refs.debounce_search.focus();
       }
     },
-    search_onchange() {
-      const vm = this;
-      if (vm.pos_profile.pose_use_limit_search) {
-        vm.get_items();
-      } else {
-        vm.enter_event();
-      }
-    },
+    search_onchange: _.debounce(function() {
+        const vm = this;
+        if (vm.pos_profile.pose_use_limit_search) {
+            vm.get_items();
+        } else {
+            // Save the current filtered items before search to maintain quantity data
+            const current_items = [...vm.filtered_items];
+            vm.enter_event();
+            
+            // After search, update quantities for newly filtered items
+            if (vm.filtered_items && vm.filtered_items.length > 0) {
+                setTimeout(() => {
+                    vm.update_items_details(vm.filtered_items);
+                }, 300);
+            }
+        }
+    }, 300),
     get_item_qty(first_search) {
       let scal_qty = Math.abs(this.qty);
       if (first_search.startsWith(this.pos_profile.posa_scale_barcode_start)) {
@@ -377,29 +411,59 @@ export default {
     update_items_details(items) {
       // set debugger
       const vm = this;
+      if (!items || !items.length) return;
+      
       frappe.call({
         method: "posawesome.posawesome.api.posapp.get_items_details",
         args: {
           pos_profile: vm.pos_profile,
           items_data: items,
         },
+        freeze: true,
         callback: function (r) {
           if (r.message) {
+            let qtyChanged = false;
+            
             items.forEach((item) => {
               const updated_item = r.message.find(
                 (element) => element.item_code == item.item_code
               );
-              item.actual_qty = updated_item.actual_qty;
-              item.serial_no_data = updated_item.serial_no_data;
-              item.batch_no_data = updated_item.batch_no_data;
-              item.item_uoms = updated_item.item_uoms;
+              if (updated_item) {
+                // Save previous quantity for comparison
+                const prev_qty = item.actual_qty;
+                
+                item.actual_qty = updated_item.actual_qty;
+                item.serial_no_data = updated_item.serial_no_data;
+                item.batch_no_data = updated_item.batch_no_data;
+                item.item_uoms = updated_item.item_uoms;
+                
+                // Log and track significant quantity changes
+                if (prev_qty > 0 && item.actual_qty === 0) {
+                  console.log(`Item ${item.item_code} quantity changed from ${prev_qty} to 0`);
+                  qtyChanged = true;
+                }
+              }
             });
+            
+            // Force update if any item's quantity changed significantly
+            if (qtyChanged) {
+              vm.$forceUpdate();
+            }
           }
         },
+        error: function(err) {
+          console.error("Error fetching item details:", err);
+          // Retry once after short delay
+          setTimeout(() => {
+            vm.update_items_details(items);
+          }, 1000);
+        }
       });
     },
     update_cur_items_details() {
-      this.update_items_details(this.filtered_items);
+      if (this.filtered_items && this.filtered_items.length > 0) {
+        this.update_items_details(this.filtered_items);
+      }
     },
     scan_barcoud() {
       const vm = this;
@@ -483,17 +547,26 @@ export default {
           filtred_group_list = this.items;
         }
         if (!this.search || this.search.length < 3) {
+          let filtered = [];
           if (
             this.pos_profile.posa_show_template_items &&
             this.pos_profile.posa_hide_variants_items
           ) {
-            return (filtred_list = filtred_group_list
+            filtered = filtred_group_list
               .filter((item) => !item.variant_of)
-              .slice(0, 50));
+              .slice(0, 50);
           } else {
-            filtred_list = filtred_group_list.slice(0, 50);
-            return filtred_list;
+            filtered = filtred_group_list.slice(0, 50);
           }
+          
+          // Ensure quantities are defined
+          filtered.forEach(item => {
+            if (item.actual_qty === undefined) {
+              item.actual_qty = 0;
+            }
+          });
+          
+          return filtered;
         } else if (this.search) {
           filtred_list = filtred_group_list.filter((item) => {
             let found = false;
@@ -564,17 +637,43 @@ export default {
             }
           }
         }
+        
+        let final_filtered_list = [];
         if (
           this.pos_profile.posa_show_template_items &&
           this.pos_profile.posa_hide_variants_items
         ) {
-          return filtred_list.filter((item) => !item.variant_of).slice(0, 50);
+          final_filtered_list = filtred_list.filter((item) => !item.variant_of).slice(0, 50);
         } else {
-          return filtred_list.slice(0, 50);
+          final_filtered_list = filtred_list.slice(0, 50);
         }
+        
+        // Ensure quantities are defined for each item
+        final_filtered_list.forEach(item => {
+          if (item.actual_qty === undefined) {
+            item.actual_qty = 0;
+          }
+        });
+        
+        // Force request quantity update for filtered items
+        if (final_filtered_list.length > 0) {
+          setTimeout(() => {
+            this.update_items_details(final_filtered_list);
+          }, 100);
+        }
+        
+        return final_filtered_list;
       } else {
-
-        return this.items.slice(0, 50);
+        const items_list = this.items.slice(0, 50);
+        
+        // Ensure quantities are defined
+        items_list.forEach(item => {
+          if (item.actual_qty === undefined) {
+            item.actual_qty = 0;
+          }
+        });
+        
+        return items_list;
       }
     },
     debounce_search: {
@@ -614,10 +713,24 @@ export default {
     this.eventBus.on("update_customer", (data) => {
       this.customer = data;
     });
+    
+    // Setup auto-refresh for item quantities
+    this.refresh_interval = setInterval(() => {
+      if (this.filtered_items && this.filtered_items.length > 0) {
+        this.update_cur_items_details();
+      }
+    }, 30000); // Refresh every 30 seconds
   },
 
   mounted() {
     this.scan_barcoud();
+  },
+  
+  beforeUnmount() {
+    // Clear interval when component is destroyed
+    if (this.refresh_interval) {
+      clearInterval(this.refresh_interval);
+    }
   },
 };
 </script>
