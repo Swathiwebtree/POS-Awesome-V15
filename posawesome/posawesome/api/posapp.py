@@ -548,18 +548,17 @@ def submit_invoice(invoice, data):
         }
 
     # Update remarks with items details
-    if not invoice_doc.custom_custom_remarks:
-        items = []
-        for item in invoice_doc.items:
-            if item.item_name and item.rate and item.qty:
-                total = item.rate * item.qty
-                items.append(f"{item.item_name} - Rate: {item.rate}, Qty: {item.qty}, Amount: {total}")
-        
-        # Add the grand total at the end of remarks
-        grand_total = f"\nGrand Total: {invoice_doc.grand_total}"
-        items.append(grand_total)
-        
-        invoice_doc.remarks = "\n".join(items)
+    items = []
+    for item in invoice_doc.items:
+        if item.item_name and item.rate and item.qty:
+            total = item.rate * item.qty
+            items.append(f"{item.item_name} - Rate: {item.rate}, Qty: {item.qty}, Amount: {total}")
+    
+    # Add the grand total at the end of remarks
+    grand_total = f"\nGrand Total: {invoice_doc.grand_total}"
+    items.append(grand_total)
+    
+    invoice_doc.remarks = "\n".join(items)
 
     # creating advance payment
     if data.get("credit_change"):
@@ -794,19 +793,18 @@ def submit_in_background_job(kwargs):
     invoice_doc = frappe.get_doc("Sales Invoice", invoice)
     
     # Update remarks with items details for background job
-    if not invoice_doc.custom_custom_remarks:
-        items = []
-        for item in invoice_doc.items:
-            if item.item_name and item.rate and item.qty:
-                total = item.rate * item.qty
-                items.append(f"{item.item_name} - Rate: {item.rate}, Qty: {item.qty}, Amount: {total}")
-        
-        # Add the grand total at the end of remarks
-        grand_total = f"\nGrand Total: {invoice_doc.grand_total}"
-        items.append(grand_total)
-        
-        invoice_doc.remarks = "\n".join(items)
-        invoice_doc.save()
+    items = []
+    for item in invoice_doc.items:
+        if item.item_name and item.rate and item.qty:
+            total = item.rate * item.qty
+            items.append(f"{item.item_name} - Rate: {item.rate}, Qty: {item.qty}, Amount: {total}")
+    
+    # Add the grand total at the end of remarks
+    grand_total = f"\nGrand Total: {invoice_doc.grand_total}"
+    items.append(grand_total)
+    
+    invoice_doc.remarks = "\n".join(items)
+    invoice_doc.save()
     
     invoice_doc.submit()
     redeeming_customer_credit(
