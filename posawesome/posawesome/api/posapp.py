@@ -928,6 +928,18 @@ def get_items_details(pos_profile, items_data):
                     fields=["uom", "conversion_factor"],
                 )
 
+                # Add stock UOM if not already in uoms list
+                stock_uom = frappe.db.get_value("Item", item_code, "stock_uom")
+                if stock_uom:
+                    stock_uom_exists = False
+                    for uom_data in uoms:
+                        if uom_data.get("uom") == stock_uom:
+                            stock_uom_exists = True
+                            break
+                    
+                    if not stock_uom_exists:
+                        uoms.append({"uom": stock_uom, "conversion_factor": 1.0})
+
                 serial_no_data = frappe.get_all(
                     "Serial No",
                     filters={
@@ -1019,6 +1031,28 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None):
         res["actual_qty"] = get_stock_availability(item_code, warehouse)
     res["max_discount"] = max_discount
     res["batch_no_data"] = batch_no_data
+    
+    # Add UOMs data directly from item document
+    uoms = frappe.get_all(
+        "UOM Conversion Detail",
+        filters={"parent": item_code},
+        fields=["uom", "conversion_factor"],
+    )
+    
+    # Add stock UOM if not already in uoms list
+    stock_uom = frappe.db.get_value("Item", item_code, "stock_uom")
+    if stock_uom:
+        stock_uom_exists = False
+        for uom_data in uoms:
+            if uom_data.get("uom") == stock_uom:
+                stock_uom_exists = True
+                break
+        
+        if not stock_uom_exists:
+            uoms.append({"uom": stock_uom, "conversion_factor": 1.0})
+    
+    res["item_uoms"] = uoms
+    
     return res
 
 

@@ -287,6 +287,17 @@ export default {
           return;
         }
         
+        // Ensure UOMs are initialized before adding the item
+        if (!item.item_uoms || item.item_uoms.length === 0) {
+          // If UOMs are not available, fetch them first
+          this.update_items_details([item]);
+          
+          // Add stock UOM as fallback
+          if (!item.item_uoms || item.item_uoms.length === 0) {
+            item.item_uoms = [{ uom: item.stock_uom, conversion_factor: 1.0 }];
+          }
+        }
+        
         if (!item.qty || item.qty === 1) {
           item.qty = Math.abs(this.qty);
         }
@@ -435,7 +446,17 @@ export default {
                 item.actual_qty = updated_item.actual_qty;
                 item.serial_no_data = updated_item.serial_no_data;
                 item.batch_no_data = updated_item.batch_no_data;
-                item.item_uoms = updated_item.item_uoms;
+                
+                // Properly handle UOMs data
+                if (updated_item.item_uoms && updated_item.item_uoms.length > 0) {
+                  item.item_uoms = updated_item.item_uoms;
+                } else if (!item.item_uoms || !item.item_uoms.length) {
+                  // If no UOMs found, at least add the stock UOM
+                  item.item_uoms = [{ uom: item.stock_uom, conversion_factor: 1.0 }];
+                }
+                
+                item.has_batch_no = updated_item.has_batch_no;
+                item.has_serial_no = updated_item.has_serial_no;
                 
                 // Log and track significant quantity changes
                 if (prev_qty > 0 && item.actual_qty === 0) {

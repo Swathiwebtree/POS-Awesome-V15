@@ -619,6 +619,11 @@ export default {
       new_item.price_list_rate = item.rate;
       new_item.qty = item.qty;
       new_item.uom = item.uom ? item.uom : item.stock_uom;
+      // Ensure item_uoms is initialized
+      new_item.item_uoms = item.item_uoms || [];
+      if (new_item.item_uoms.length === 0 && new_item.stock_uom) {
+        new_item.item_uoms.push({ uom: new_item.stock_uom, conversion_factor: 1 });
+      }
       new_item.actual_batch_qty = "";
       new_item.conversion_factor = 1;
       new_item.posa_offers = JSON.stringify([]);
@@ -1463,9 +1468,19 @@ export default {
             item.stock_qty = data.stock_qty;
             item.actual_qty = data.actual_qty;
             item.stock_uom = data.stock_uom;
-            (item.has_serial_no = data.has_serial_no),
-              (item.has_batch_no = data.has_batch_no),
-              vm.calc_item_price(item);
+            
+            // Set item UOMs from API data if available
+            if (data.item_uoms && data.item_uoms.length > 0) {
+              item.item_uoms = data.item_uoms;
+            } else if (!item.item_uoms || !item.item_uoms.length) {
+              // If no UOMs found, at least add the stock UOM
+              item.item_uoms = [{ uom: item.stock_uom, conversion_factor: 1.0 }];
+            }
+            
+            item.has_serial_no = data.has_serial_no;
+            item.has_batch_no = data.has_batch_no;
+            
+            vm.calc_item_price(item);
           }
         },
       });
