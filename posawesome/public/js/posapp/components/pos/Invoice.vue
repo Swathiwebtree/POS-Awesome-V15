@@ -23,13 +23,10 @@
       </v-card>
     </v-dialog>
     <v-card style="max-height: 70vh; height: 70vh" class="cards my-0 py-0 mt-3 bg-grey-lighten-5">
-      <v-row align="center" class="items px-2 py-1">
-        <v-col v-if="pos_profile.posa_allow_sales_order" cols="9" class="pb-2 pr-0">
-          <Customer></Customer>
-        </v-col>
-        <v-col v-if="!pos_profile.posa_allow_sales_order" cols="12" class="pb-2">
-          <Customer></Customer>
-        </v-col>
+  <v-row align="center" class="items px-2 py-1">
+    <v-col :cols="pos_profile.posa_allow_sales_order ? 9 : 12" class="pb-2 pr-0">
+      <Customer />
+    </v-col>
         <v-col v-if="pos_profile.posa_allow_sales_order" cols="3" class="pb-2">
           <v-select density="compact" hide-details variant="outlined" color="primary" bg-color="white"
             :items="invoiceTypes" :label="frappe._('Type')" v-model="invoiceType"
@@ -642,25 +639,25 @@ export default {
     },
 
     clear_invoice() {
-      this.items = [];
-      this.posa_offers = [];
-      this.expanded = [];
-      this.posa_offers = [];
-      this.eventBus.emit("set_pos_coupons", []);
-      this.posa_coupons = [];
-      this.customer = this.pos_profile.customer;
-      this.invoice_doc = "";
-      this.return_doc = "";
-      this.discount_amount = 0;
-      this.additional_discount_percentage = 0;
-      this.delivery_charges_rate = 0;
-      this.selected_delivery_charge = "";
-      this.eventBus.emit("set_customer_readonly", false);
-      this.invoiceType = this.pos_profile.posa_default_sales_order
-        ? "Order"
-        : "Invoice";
-      this.invoiceTypes = ["Invoice", "Order"];
-    },
+  this.items = [];
+  this.posa_offers = [];
+  this.expanded = [];
+  this.eventBus.emit("set_pos_coupons", []);
+  this.posa_coupons = [];
+  this.invoice_doc = "";
+  this.return_doc = "";
+  this.discount_amount = 0;
+  this.additional_discount_percentage = 0;
+  this.delivery_charges_rate = 0;
+  this.selected_delivery_charge = "";
+
+  // Always reset to default customer after invoice
+  this.customer = this.pos_profile.customer;
+
+  this.eventBus.emit("set_customer_readonly", false);
+  this.invoiceType = this.pos_profile.posa_default_sales_order ? "Order" : "Invoice";
+  this.invoiceTypes = ["Invoice", "Order"];
+},
 	
 	async fetch_customer_balance() {
   try {
@@ -857,14 +854,27 @@ export default {
       doc.items = this.get_invoice_items();
       doc.total = this.subtotal;
       doc.discount_amount = flt(this.discount_amount);
-      doc.additional_discount_percentage = flt(
-        this.additional_discount_percentage
-      );
+      doc.additional_discount_percentage = flt(this.additional_discount_percentage);
       doc.posa_pos_opening_shift = this.pos_opening_shift.name;
       doc.payments = this.get_payments();
       doc.taxes = [];
-      doc.is_return = this.invoice_doc.is_return;
-      doc.return_against = this.invoice_doc.return_against;
+      
+      // Handle return specific fields
+      if (this.invoice_doc.is_return) {
+        doc.is_return = 1;
+        doc.return_against = this.invoice_doc.return_against;
+        doc.update_stock = 1;
+        doc.ignore_pricing_rule = 1;
+        doc.is_pos = 1;
+        doc.pos_profile = this.pos_profile.name;
+        doc.warehouse = this.pos_profile.warehouse;
+        doc.cost_center = this.pos_profile.cost_center;
+        doc.conversion_rate = 1;
+        doc.currency = this.pos_profile.currency;
+        doc.customer = this.invoice_doc.customer;
+        doc.posting_date = frappe.datetime.nowdate();
+      }
+      
       doc.posa_offers = this.posa_offers;
       doc.posa_coupons = this.posa_coupons;
       doc.posa_delivery_charges = this.selected_delivery_charge.name;
