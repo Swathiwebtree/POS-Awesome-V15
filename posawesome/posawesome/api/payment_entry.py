@@ -313,7 +313,7 @@ def process_pos_payment(payload):
                     reference_no=pos_opening_shift_name,
                     reference_date=today,
                     cost_center=data.pos_profile.get("cost_center"),
-                    submit=1,
+                    submit=0,  # Changed to 0 (don't submit yet)
                 )
                 
                 # If we have a payment entry, use its account as primary account for JE
@@ -354,91 +354,154 @@ def process_pos_payment(payload):
         if total_payment_amount > 0:
             # Log key information about payments
             frappe.log_error(
-                f"Creating allocation with: mode_of_payment={mode_of_payment}, bank_account={bank_account}",
+                f"Creating payment allocation with total: {total_payment_amount}",
                 "POS Payment Details"
             )
             
-            # Try additional payment information from POS Profile if needed
-            if not bank_account and not mode_of_payment:
-                try:
-                    # Try to get default cash mode of payment from POS Profile
-                    default_cash_mop = data.pos_profile.get("posa_cash_mode_of_payment")
-                    if default_cash_mop:
-                        mode_of_payment = default_cash_mop
-                        frappe.log_error(f"Using default cash mode of payment from POS Profile: {mode_of_payment}", "POS Payment Debug")
-                        
-                        # Get account for this MOP
-                        payment_account = frappe.get_value(
-                            "Mode of Payment Account",
-                            {"parent": mode_of_payment, "company": company},
-                            "default_account"
-                        )
-                        
-                        if payment_account:
-                            bank_account = payment_account
-                            frappe.log_error(f"Using account from default cash MOP: {bank_account}", "POS Payment Debug")
-                except Exception as e:
-                    frappe.log_error(f"Error getting default cash MOP: {str(e)}", "POS Payment Error")
-            
-            if not bank_account:
-                # Try Cash account as final fallback
-                try:
-                    cash_account = frappe.get_value("Company", company, "default_cash_account")
-                    if cash_account:
-                        bank_account = cash_account
-                        frappe.log_error(f"Using company default cash account: {bank_account}", "POS Payment Debug")
-                except Exception as e:
-                    frappe.log_error(f"Error getting default cash account: {str(e)}", "POS Payment Error")
-            
-            # Use our new direct journal entry function
-            je_result = create_direct_journal_entry(
-                company=company,
-                customer=customer,
-                invoices_list=data.selected_invoices,
-                payment_amount=total_payment_amount,
-                bank_account=bank_account,
-                mode_of_payment=mode_of_payment
-            )
-            
-            if je_result:
-                created_journal_entries.append(je_result)
-                frappe.msgprint(f"Created Journal Entry {je_result['name']} to allocate payment", 
-                              title="Payment Allocated")
-                
-                # Also update unallocated amount on any payment entries
-                if created_payment and new_payment_entry:
-                    # Set payment entry as fully allocated
+            # If we have created a new payment entry, use it for allocation
+            if created_payment and new_payment_entry:
+                # Check if the payment entry is already submitted
+                if new_payment_entry.docstatus == 1:
+                    frappe.log_error(f"Payment entry {new_payment_entry.name} already submitted, creating new one for allocation", "POS Payment Debug")
+                    # Create a new payment entry for allocation
                     try:
-                        payment_doc = frappe.get_doc("Payment Entry", new_payment_entry.name)
-                        payment_doc.db_set("unallocated_amount", 0)
-                        
-                        # Link payment entry to journal entry for cancellation handling
-                        payment_doc.db_set("posa_linked_je", je_result['name'])
-                        
-                        # Also add a comment for tracking
-                        frappe.get_doc({
-                            "doctype": "Comment",
-                            "comment_type": "Info",
-                            "reference_doctype": "Payment Entry",
-                            "reference_name": payment_doc.name,
-                            "content": f"Linked with Journal Entry: {je_result['name']}"
-                        }).insert(ignore_permissions=True)
-                        
-                        # Add a comment to journal entry as well
-                        frappe.get_doc({
-                            "doctype": "Comment",
-                            "comment_type": "Info",
-                            "reference_doctype": "Journal Entry",
-                            "reference_name": je_result['name'],
-                            "content": f"Linked with Payment Entry: {payment_doc.name}"
-                        }).insert(ignore_permissions=True)
-                        
-                        frappe.db.commit()
+                        payment_entry = create_payment_entry(
+                            company=company,
+                            customer=customer,
+                            currency=currency,
+                            amount=total_payment_amount,
+                            mode_of_payment=mode_of_payment,
+                            posting_date=today,
+                            reference_no=pos_opening_shift_name,
+                            reference_date=today,
+                            cost_center=data.pos_profile.get("cost_center"),
+                            submit=0,  # Don't submit yet
+                        )
+                        frappe.log_error(f"Created new payment entry for allocation: {payment_entry.name}", "POS Payment Debug")
                     except Exception as e:
-                        frappe.log_error(f"Error updating payment entry {new_payment_entry.name}: {str(e)}", "POS Payment Error")
+                        frappe.log_error(f"Error creating payment entry for allocation: {str(e)}", "POS Payment Error")
+                        errors.append(f"Error creating payment entry for allocation: {str(e)}")
+                        payment_entry = None
+                else:
+                    payment_entry = new_payment_entry
+                    frappe.log_error(f"Using existing payment entry: {payment_entry.name}", "POS Payment Debug")
             else:
-                errors.append("Failed to create Journal Entry for allocation")
-                frappe.log_error("Failed to create Journal Entry - check Direct JE Error logs", "POS Payment Error")
+                # Create a new payment entry for allocation
+                try:
+                    # Try additional payment information from POS Profile
+                    if not mode_of_payment:
+                        # Try to get default cash mode of payment from POS Profile
+                        default_cash_mop = data.pos_profile.get("posa_cash_mode_of_payment")
+                        if default_cash_mop:
+                            mode_of_payment = default_cash_mop
+                            frappe.log_error(f"Using default cash mode of payment from POS Profile: {mode_of_payment}", "POS Payment Debug")
+                    
+                    if not mode_of_payment:
+                        mode_of_payment = "Cash"  # Default to Cash if nothing else available
+                    
+                    # Create payment entry
+                    payment_entry = create_payment_entry(
+                        company=company,
+                        customer=customer,
+                        currency=currency,
+                        amount=total_payment_amount,
+                        mode_of_payment=mode_of_payment,
+                        posting_date=today,
+                        reference_no=pos_opening_shift_name,
+                        reference_date=today,
+                        cost_center=data.pos_profile.get("cost_center"),
+                        submit=0,  # Don't submit yet
+                    )
+                    frappe.log_error(f"Created new payment entry: {payment_entry.name}", "POS Payment Debug")
+                except Exception as e:
+                    frappe.log_error(f"Error creating payment entry: {str(e)}", "POS Payment Error")
+                    errors.append(f"Error creating payment entry: {str(e)}")
+                    payment_entry = None
+            
+            # Allocate payments to invoices if we have a payment entry
+            if payment_entry:
+                try:
+                    # Clear any existing references
+                    payment_entry.references = []
+                    
+                    # Add references to each invoice
+                    remaining_amount = total_payment_amount
+                    allocated_invoices = []
+                    
+                    for invoice in data.selected_invoices:
+                        invoice_name = invoice.get("voucher_no") or invoice.get("name")
+                        outstanding_amount = flt(invoice.get("outstanding_amount"))
+                        
+                        # Skip invalid invoices
+                        if not invoice_name or outstanding_amount <= 0:
+                            frappe.log_error(f"Skipping invoice {invoice_name or 'Unknown'} with outstanding {outstanding_amount}", "POS Payment Debug")
+                            continue
+                        
+                        # Calculate allocation for this invoice (limited by remaining amount)
+                        allocation = min(remaining_amount, outstanding_amount)
+                        if allocation <= 0:
+                            frappe.log_error(f"Zero allocation for invoice {invoice_name}", "POS Payment Debug")
+                            continue
+                            
+                        # Subtract from remaining amount
+                        remaining_amount -= allocation
+                        
+                        # Add invoice reference
+                        payment_entry.append("references", {
+                            "reference_doctype": "Sales Invoice",
+                            "reference_name": invoice_name,
+                            "total_amount": outstanding_amount,
+                            "outstanding_amount": outstanding_amount,
+                            "allocated_amount": allocation
+                        })
+                        
+                        # Track what invoices were allocated
+                        allocated_invoices.append({
+                            "name": invoice_name,
+                            "amount": allocation
+                        })
+                        
+                        frappe.log_error(f"Allocated {allocation} to invoice {invoice_name}", "POS Payment Allocation")
+                        
+                        if remaining_amount <= 0:
+                            break
+                    
+                    # Save and submit the payment entry
+                    payment_entry.save()
+                    payment_entry.submit()
+                    frappe.db.commit()
+                    
+                    # If this is a new payment entry for allocation (separate from the original payment method entries)
+                    if not created_payment or payment_entry.name != new_payment_entry.name:
+                        frappe.log_error(f"Adding new payment entry to results: {payment_entry.name}", "POS Payment Debug")
+                        new_payments_entry.append(payment_entry)
+                        all_payments_entry.append(payment_entry)
+                    
+                    # Submit the original payment entry if it hasn't been submitted yet
+                    if created_payment and new_payment_entry and new_payment_entry.docstatus == 0:
+                        try:
+                            new_payment_entry.submit()
+                            frappe.log_error(f"Submitted original payment entry: {new_payment_entry.name}", "POS Payment Debug")
+                        except Exception as e:
+                            frappe.log_error(f"Error submitting original payment entry: {str(e)}", "POS Payment Error")
+                            errors.append(f"Error submitting original payment entry: {str(e)}")
+                    
+                    frappe.log_error(f"Successfully submitted payment entry {payment_entry.name} with {len(payment_entry.references)} invoices", "POS Payment Success")
+                    
+                    # Create result for display
+                    created_journal_entries.append({
+                        "name": payment_entry.name,
+                        "amount": total_payment_amount - remaining_amount,
+                        "allocated_invoices": allocated_invoices,
+                        "type": "Payment Entry"
+                    })
+                    
+                    frappe.msgprint(f"Created Payment Entry {payment_entry.name} to allocate payment", 
+                                  title="Payment Allocated")
+                    
+                except Exception as e:
+                    frappe.log_error(f"Error allocating payment: {str(e)}", "POS Payment Error")
+                    errors.append(f"Error allocating payment: {str(e)}")
 
     # then show the results
     msg = ""
@@ -454,25 +517,25 @@ def process_pos_payment(payload):
         msg += "</tbody>"
         msg += "</table>"
     if len(created_journal_entries) > 0:
-        msg += "<h4>Created Journal Entries</h4>"
+        msg += "<h4>Payment Allocations</h4>"
         msg += "<table class='table table-bordered'>"
-        msg += "<thead><tr><th>Journal Entry</th><th>Amount</th></tr></thead>"
+        msg += "<thead><tr><th>Document</th><th>Amount</th><th>Type</th></tr></thead>"
         msg += "<tbody>"
-        for je in created_journal_entries:
-            msg += "<tr><td>{0}</td><td>{1}</td></tr>".format(
-                je.get("name"), je.get("amount")
+        for entry in created_journal_entries:
+            msg += "<tr><td>{0}</td><td>{1}</td><td>{2}</td></tr>".format(
+                entry.get("name"), entry.get("amount"), entry.get("type", "Journal Entry")
             )
         msg += "</tbody>"
         msg += "</table>"
         
         # Show allocated invoices too
-        for je in created_journal_entries:
-            if je.get("allocated_invoices"):
+        for entry in created_journal_entries:
+            if entry.get("allocated_invoices"):
                 msg += "<h4>Allocated Invoices</h4>"
                 msg += "<table class='table table-bordered'>"
                 msg += "<thead><tr><th>Invoice</th><th>Amount</th></tr></thead>"
                 msg += "<tbody>"
-                for invoice in je.get("allocated_invoices"):
+                for invoice in entry.get("allocated_invoices"):
                     msg += "<tr><td>{0}</td><td>{1}</td></tr>".format(
                         invoice.get("name"), invoice.get("amount")
                     )

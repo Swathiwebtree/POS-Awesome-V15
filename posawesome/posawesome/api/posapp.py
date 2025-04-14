@@ -296,11 +296,14 @@ def get_items(
                         },
                         fields=["name as serial_no"],
                     )
-                item_stock_qty = 0
+                item_stock_qty = get_stock_availability(
+                        item_code, pos_profile.get("warehouse")
+                    )
                 if pos_profile.get("posa_display_items_in_stock") or use_limit_search:
                     item_stock_qty = get_stock_availability(
                         item_code, pos_profile.get("warehouse")
                     )
+                        
                 attributes = ""
                 if pos_profile.get("posa_show_template_items") and item.has_variants:
                     attributes = get_item_attributes(item.item_code)
