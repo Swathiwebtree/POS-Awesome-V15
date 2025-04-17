@@ -119,6 +119,8 @@ export default {
     new_line: false,
     qty: 1,
     refresh_interval: null,
+    currentRequest: null,
+    abortController: null,
   }),
 
   watch: {
@@ -191,6 +193,9 @@ export default {
             vm.eventBus.emit("set_all_items", vm.items);
             vm.loading = false;
             console.info("Items Loaded");
+            vm.$nextTick(() => {
+              if(vm.search) vm.search_onchange();
+            });
             
             // Always refresh quantities after items are loaded
             setTimeout(() => {
@@ -361,14 +366,17 @@ export default {
         this.$refs.debounce_search.focus();
       }
     },
-    search_onchange: _.debounce(function() {
+    search_onchange: _.debounce(function(newSearchTerm) {
+            if(newSearchTerm) vm.search = newSearchTerm;
         const vm = this;
         if (vm.pos_profile.pose_use_limit_search) {
             vm.get_items();
         } else {
             // Save the current filtered items before search to maintain quantity data
             const current_items = [...vm.filtered_items];
-            vm.enter_event();
+            if(vm.search && vm.search.length >=3) {
+              vm.enter_event();
+            }
             
             // After search, update quantities for newly filtered items
             if (vm.filtered_items && vm.filtered_items.length > 0) {
@@ -420,18 +428,26 @@ export default {
       this.$refs.debounce_search.focus();
     },
     update_items_details(items) {
-      // set debugger
       const vm = this;
       if (!items || !items.length) return;
+
+      // Cancel previous request
+      if (vm.currentRequest) {
+        vm.abortController.abort();
+        vm.currentRequest = null;
+      }
+
+      vm.abortController = new AbortController();
       
-      frappe.call({
+      vm.currentRequest = frappe.call({
         method: "posawesome.posawesome.api.posapp.get_items_details",
         args: {
           pos_profile: vm.pos_profile,
           items_data: items,
         },
         freeze: true,
-        callback: function (r) {
+        signal: vm.abortController.signal,
+        callback: function(r) {
           if (r.message) {
             let qtyChanged = false;
             
@@ -473,11 +489,19 @@ export default {
           }
         },
         error: function(err) {
-          console.error("Error fetching item details:", err);
-          // Retry once after short delay
-          setTimeout(() => {
-            vm.update_items_details(items);
-          }, 1000);
+          if (err.name !== 'AbortError') {
+            console.error("Error fetching item details:", err);
+            setTimeout(() => {
+              vm.update_items_details(items);
+            }, 1000);
+          }
+        }
+      });
+      
+      // Cleanup on component destroy
+      this.$once('hook:beforeDestroy', () => {
+        if (vm.abortController) {
+          vm.abortController.abort();
         }
       });
     },
