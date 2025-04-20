@@ -367,8 +367,9 @@ export default {
       }
     },
     search_onchange: _.debounce(function(newSearchTerm) {
-            if(newSearchTerm) vm.search = newSearchTerm;
         const vm = this;
+        if(newSearchTerm) vm.search = newSearchTerm;
+        
         if (vm.pos_profile.pose_use_limit_search) {
             vm.get_items();
         } else {
@@ -499,11 +500,11 @@ export default {
       });
       
       // Cleanup on component destroy
-      this.$once('hook:beforeDestroy', () => {
+      this.cleanupBeforeDestroy = () => {
         if (vm.abortController) {
           vm.abortController.abort();
         }
-      });
+      };
     },
     update_cur_items_details() {
       if (this.filtered_items && this.filtered_items.length > 0) {
@@ -775,6 +776,11 @@ export default {
     // Clear interval when component is destroyed
     if (this.refresh_interval) {
       clearInterval(this.refresh_interval);
+    }
+    
+    // Call cleanup function for abort controller
+    if (this.cleanupBeforeDestroy) {
+      this.cleanupBeforeDestroy();
     }
   },
 };
