@@ -513,18 +513,30 @@ export default {
     },
     scan_barcoud() {
       const vm = this;
-      onScan.attachTo(document, {
-        suffixKeyCodes: [],
-        keyCodeMapper: function (oEvent) {
-          oEvent.stopImmediatePropagation();
-          return onScan.decodeKeyEvent(oEvent);
-        },
-        onScan: function (sCode) {
-          setTimeout(() => {
-            vm.trigger_onscan(sCode);
-          }, 300);
-        },
-      });
+      try {
+        // Check if scanner is already attached to document
+        if (document._scannerAttached) {
+          return;
+        }
+        
+        onScan.attachTo(document, {
+          suffixKeyCodes: [],
+          keyCodeMapper: function (oEvent) {
+            oEvent.stopImmediatePropagation();
+            return onScan.decodeKeyEvent(oEvent);
+          },
+          onScan: function (sCode) {
+            setTimeout(() => {
+              vm.trigger_onscan(sCode);
+            }, 300);
+          },
+        });
+        
+        // Mark document as having scanner attached
+        document._scannerAttached = true;
+      } catch (error) {
+        console.warn('Scanner initialization error:', error.message);
+      }
     },
     trigger_onscan(sCode) {
       if (this.filtered_items.length == 0) {
@@ -781,6 +793,16 @@ export default {
     // Call cleanup function for abort controller
     if (this.cleanupBeforeDestroy) {
       this.cleanupBeforeDestroy();
+    }
+    
+    // Detach scanner if it was attached
+    if (document._scannerAttached) {
+      try {
+        onScan.detachFrom(document);
+        document._scannerAttached = false;
+      } catch (error) {
+        console.warn('Scanner detach error:', error.message);
+      }
     }
   },
 };
