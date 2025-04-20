@@ -131,5 +131,8 @@ export default {
       this.selected = [];
     });
   },
+  beforeUnmount() {
+    this.eventBus.off('open_returns');
+  },
 };
 </script>

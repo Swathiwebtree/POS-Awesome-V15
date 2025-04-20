@@ -1440,14 +1440,14 @@ export default {
   },
   beforeUnmount() {
     // Remove event listeners
-    this.eventBus.$off("send_invoice_doc_payment");
-    this.eventBus.$off("register_pos_profile");
-    this.eventBus.$off("add_the_new_address");
-    this.eventBus.$off("update_invoice_type");
-    this.eventBus.$off("update_customer");
-    this.eventBus.$off("set_pos_settings");
-    this.eventBus.$off("set_customer_info_to_edit");
-    this.eventBus.$off("set_mpesa_payment");
+    this.eventBus.off("send_invoice_doc_payment");
+    this.eventBus.off("register_pos_profile");
+    this.eventBus.off("add_the_new_address");
+    this.eventBus.off("update_invoice_type");
+    this.eventBus.off("update_customer");
+    this.eventBus.off("set_pos_settings");
+    this.eventBus.off("set_customer_info_to_edit");
+    this.eventBus.off("set_mpesa_payment");
   },
   unmounted() {
     // Remove keyboard shortcut listener
