@@ -493,7 +493,7 @@ def add_taxes_from_tax_template(item, parent_doc):
 def update_invoice(data):
     data = json.loads(data)
     
-    # If this is a return invoice, validate items first
+    # If this is a return invoice with a reference invoice, validate items
     if data.get('is_return') and data.get('return_against'):
         validation_result = validate_return_items(data.get('return_against'), data.get('items', []))
         if not validation_result.get('valid'):
@@ -1974,6 +1974,10 @@ def update_invoice_from_order(data):
 @frappe.whitelist()
 def validate_return_items(return_against, items):
      """Custom validation for return items"""
+     # If no return_against (return without invoice), skip validation
+     if not return_against:
+         return {"valid": True}
+         
      original_invoice = frappe.get_doc("Sales Invoice", return_against)
      
      # Create lookup for original items

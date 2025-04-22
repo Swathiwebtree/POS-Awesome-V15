@@ -13,6 +13,8 @@
               v-model="invoice_name" density="compact" clearable class="mx-4"></v-text-field>
             <v-btn variant="text" class="ml-2" color="primary" theme="dark" @click="search_invoices">{{ __('Search')
               }}</v-btn>
+            <v-btn v-if="pos_profile.posa_allow_return_without_invoice == 1" variant="text" class="ml-2" color="secondary" theme="dark" @click="return_without_invoice">{{ __('Return without Invoice')
+              }}</v-btn>
           </v-row>
           <v-row>
             <v-col cols="12" class="pa-1" v-if="dialog_data">
@@ -47,6 +49,7 @@ export default {
     dialog_data: '',
     company: '',
     invoice_name: '',
+    pos_profile: '',
     headers: [
       {
         title: __('Customer'),
@@ -100,6 +103,14 @@ export default {
         },
       });
     },
+    return_without_invoice() {
+      const invoice_doc = {};
+      invoice_doc.items = [];
+      invoice_doc.is_return = 1;
+      const data = { invoice_doc };
+      this.eventBus.emit('load_return_invoice', data);
+      this.invoicesDialog = false;
+    },
     submit_dialog() {
       if (this.selected.length > 0) {
         const return_doc = this.selected[0];
@@ -130,9 +141,14 @@ export default {
       this.dialog_data = '';
       this.selected = [];
     });
+
+    this.eventBus.on('register_pos_profile', (data) => {
+      this.pos_profile = data.pos_profile;
+    });
   },
   beforeUnmount() {
     this.eventBus.off('open_returns');
+    this.eventBus.off('register_pos_profile');
   },
 };
 </script>
