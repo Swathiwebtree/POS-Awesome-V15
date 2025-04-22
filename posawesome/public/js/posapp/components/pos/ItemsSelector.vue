@@ -8,7 +8,7 @@
           <v-text-field density="compact" clearable autofocus variant="outlined" color="primary"
             :label="frappe._('Search Items')" hint="Search by item code, serial number, batch no or barcode"
             bg-color="white" hide-details v-model="debounce_search" @keydown.esc="esc_event"
-            @keydown.enter="search_onchange" @click:clear="clearSearch" @blur="restoreSearch" 
+            @keydown.enter="search_onchange" @click:clear="clearSearch"
             @click="clearSearch" ref="debounce_search"></v-text-field>
         </v-col>
         <v-col cols="3" class="pb-0 mb-2" v-if="pos_profile.posa_input_qty">
@@ -68,7 +68,7 @@
       <v-row no-gutters align="center" justify="center">
         <v-col cols="12">
           <v-select :items="items_group" :label="frappe._('Items Group')" density="compact" variant="outlined"
-            hide-details v-model="item_group" v-on:update:model-value="search_onchange"></v-select>
+            hide-details v-model="item_group"></v-select>
         </v-col>
         <v-col cols="3" class="mt-1">
           <v-btn-toggle v-model="items_view" color="primary" group density="compact" rounded>
@@ -121,6 +121,7 @@ export default {
     refresh_interval: null,
     currentRequest: null,
     abortController: null,
+    items_loaded: false,
   }),
 
   watch: {
@@ -132,7 +133,11 @@ export default {
       }
     },
     customer() {
-      this.get_items();
+      if (this.items_loaded && this.filtered_items && this.filtered_items.length > 0) {
+        this.update_items_details(this.filtered_items);
+      } else {
+        this.get_items();
+      }
     },
     new_line() {
       this.eventBus.emit("set_new_line", this.new_line);
@@ -151,6 +156,17 @@ export default {
         console.error("No POS Profile");
         return;
       }
+      
+      // If items are already loaded and it's not a specific search or customer change, don't reload
+      if (this.items_loaded && !this.first_search && !this.pos_profile.pose_use_limit_search) {
+        console.info("Items already loaded, skipping reload");
+        // Still update quantities for displayed items
+        if (this.filtered_items && this.filtered_items.length > 0) {
+          this.update_items_details(this.filtered_items);
+        }
+        return;
+      }
+      
       const vm = this;
       this.loading = true;
       let search = this.get_search(this.first_search);
@@ -170,6 +186,7 @@ export default {
         vm.items = JSON.parse(localStorage.getItem("items_storage"));
         this.eventBus.emit("set_all_items", vm.items);
         vm.loading = false;
+        vm.items_loaded = true;
         
         // Even when loading from localStorage, refresh the quantities
         setTimeout(() => {
@@ -192,6 +209,7 @@ export default {
             vm.items = r.message;
             vm.eventBus.emit("set_all_items", vm.items);
             vm.loading = false;
+            vm.items_loaded = true;
             console.info("Items Loaded");
             vm.$nextTick(() => {
               if(vm.search) vm.search_onchange();
@@ -357,9 +375,6 @@ export default {
       }
       if (match) {
         this.add_item(new_item);
-        this.search = null;
-        this.first_search = null;
-        this.debounce_search = null;
         this.flags.serial_no = null;
         this.flags.batch_no = null;
         this.qty = 1;
@@ -547,8 +562,6 @@ export default {
         frappe.utils.play_sound("error");
       } else {
         this.enter_event();
-        this.debounce_search = null;
-        this.search = null;
       }
     },
     generateWordCombinations(inputString) {
@@ -577,14 +590,14 @@ export default {
       this.search_backup = this.first_search;
       this.first_search = "";
       this.search = "";
-      this.get_items();
+      // No need to call get_items() again
     },
     
     restoreSearch() {
       if (this.first_search === "") {
         this.first_search = this.search_backup;
         this.search = this.search_backup;
-        this.get_items();
+        // No need to reload items when focus is lost
       }
     },
   },
