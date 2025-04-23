@@ -167,6 +167,7 @@ def get_items(
 
         if use_limit_search:
             search_limit = pos_profile.get("posa_search_limit") or 500
+            data = {}
             if search_value:
                 data = search_serial_or_batch_or_barcode_number(
                     search_value, search_serial_no
@@ -1095,6 +1096,22 @@ def create_customer(
 ):
     pos_profile = json.loads(pos_profile_doc)
     
+    # Format birthday to MySQL compatible format (YYYY-MM-DD) if provided
+    formatted_birthday = None
+    if birthday:
+        try:
+            # Try to parse date in DD-MM-YYYY format
+            if '-' in birthday:
+                date_parts = birthday.split('-')
+                if len(date_parts) == 3:
+                    day, month, year = date_parts
+                    formatted_birthday = f"{year}-{month}-{day}"
+            # If format is already YYYY-MM-DD, use as is
+            elif len(birthday) == 10 and birthday[4] == '-' and birthday[7] == '-':
+                formatted_birthday = birthday
+        except Exception:
+            frappe.log_error(f"Error formatting birthday: {birthday}", "POS Awesome")
+    
     if method == "create":
         
         is_exist = frappe.db.exists("Customer", {"customer_name": customer_name})
@@ -1109,7 +1126,7 @@ def create_customer(
                     "mobile_no": mobile_no,
                     "email_id": email_id,
                     "posa_referral_code": referral_code,
-                    "posa_birthday": birthday,
+                    "posa_birthday": formatted_birthday,
                     "customer_type": customer_type,
                     "gender": gender,
                 }
@@ -1151,7 +1168,7 @@ def create_customer(
         customer_doc.mobile_no = mobile_no
         customer_doc.email_id = email_id
         customer_doc.posa_referral_code = referral_code
-        customer_doc.posa_birthday = birthday
+        customer_doc.posa_birthday = formatted_birthday
         customer_doc.customer_type = customer_type
         customer_doc.gender = gender
         customer_doc.save()
