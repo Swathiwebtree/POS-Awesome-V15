@@ -1105,7 +1105,7 @@ def create_customer(
                 date_parts = birthday.split('-')
                 if len(date_parts) == 3:
                     day, month, year = date_parts
-                    formatted_birthday = f"{year}-{month}-{day}"
+                    formatted_birthday = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
             # If format is already YYYY-MM-DD, use as is
             elif len(birthday) == 10 and birthday[4] == '-' and birthday[7] == '-':
                 formatted_birthday = birthday

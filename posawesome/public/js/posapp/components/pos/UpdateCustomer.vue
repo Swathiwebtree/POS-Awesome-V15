@@ -375,14 +375,20 @@ export default {
           else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(this.birthday)) {
             const parts = this.birthday.split('-');
             if (parts.length === 3) {
-              formatted_birthday = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+              const day = parts[0].padStart(2, '0');
+              const month = parts[1].padStart(2, '0');
+              const year = parts[2];
+              formatted_birthday = `${year}-${month}-${day}`;
             }
           }
           // Handle DD/MM/YYYY format
           else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(this.birthday)) {
             const parts = this.birthday.split('/');
             if (parts.length === 3) {
-              formatted_birthday = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+              const day = parts[0].padStart(2, '0');
+              const month = parts[1].padStart(2, '0');
+              const year = parts[2];
+              formatted_birthday = `${year}-${month}-${day}`;
             }
           }
           // For any other format, try to use the browser's date parsing
