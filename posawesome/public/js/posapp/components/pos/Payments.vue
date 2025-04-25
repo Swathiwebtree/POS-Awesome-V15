@@ -432,8 +432,8 @@
             ></v-switch>
           </v-col>
           <v-col cols="6" v-if="is_credit_sale">
-            <v-menu ref="date_menu" v-model="date_menu" :close-on-content-click="false" transition="scale-transition">
-              <template v-slot:activator="{ on, attrs }">
+            <v-menu ref="date_menu" v-model="date_menu" :close-on-content-click="false" transition="scale-transition" min-width="auto">
+              <template v-slot:activator="{ props }">
                 <v-text-field
                   v-model="invoice_doc.due_date"
                   :label="frappe._('Due Date')"
@@ -441,9 +441,10 @@
                   variant="outlined"
                   density="compact"
                   hide-details
-                  v-bind="attrs"
-                  v-on="on"
+                  v-bind="props"
                   color="primary"
+                  clearable
+                  @click:clear="invoice_doc.due_date = ''"
                 ></v-text-field>
               </template>
               <v-date-picker
@@ -452,7 +453,7 @@
                 scrollable
                 color="primary"
                 :min="frappe.datetime.now_date()"
-                @input="date_menu = false; update_credit_due_date()"
+                @update:model-value="date_menu = false; update_credit_due_date()"
               ></v-date-picker>
             </v-menu>
           </v-col>
