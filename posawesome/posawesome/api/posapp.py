@@ -449,13 +449,21 @@ def get_customer_names(pos_profile):
 
 @frappe.whitelist()
 def get_sales_person_names():
-    sales_persons = frappe.get_list(
-        "Sales Person",
-        filters={"enabled": 1},
-        fields=["name", "sales_person_name"],
-        limit_page_length=100000,
-    )
-    return sales_persons
+    import json
+    print("Fetching sales persons...")
+    try:
+        sales_persons = frappe.get_list(
+            "Sales Person",
+            filters={"enabled": 1},
+            fields=["name", "sales_person_name"],
+            limit_page_length=100000,
+        )
+        print(f"Found {len(sales_persons)} sales persons: {json.dumps(sales_persons)}")
+        return sales_persons
+    except Exception as e:
+        print(f"Error fetching sales persons: {str(e)}")
+        frappe.log_error(f"Error fetching sales persons: {str(e)}", "POS Sales Person Error")
+        return []
 
 
 def add_taxes_from_tax_template(item, parent_doc):
