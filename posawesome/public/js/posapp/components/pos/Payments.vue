@@ -508,7 +508,9 @@
         <!-- Sales Person Selection -->
         <v-row class="pb-0 mb-2" align="start">
           <v-col cols="12">
-            <v-autocomplete
+            <p v-if="sales_persons && sales_persons.length > 0" class="mt-1 mb-1 text-subtitle-2">{{ sales_persons.length }} sales persons found</p>
+            <p v-else class="mt-1 mb-1 text-subtitle-2 text-red">No sales persons found</p>
+            <v-select
               density="compact"
               clearable
               variant="outlined"
@@ -516,29 +518,13 @@
               :label="frappe._('Sales Person')"
               v-model="sales_person"
               :items="sales_persons"
-              item-title="sales_person_name"
-              item-value="name"
+              item-title="title"
+              item-value="value"
               bg-color="white"
               :no-data-text="__('Sales Person not found')"
               hide-details
-              :customFilter="salesPersonFilter"
-              append-icon="mdi-plus"
-              @click:append="new_address"
               :disabled="readonly"
-            >
-              <template v-slot:item="{ item }">
-                <v-list-item>
-                  <v-list-item-content>
-                    <v-list-item-title class="text-primary text-subtitle-1">
-                      <div v-html="item.sales_person_name"></div>
-                    </v-list-item-title>
-                    <v-list-item-subtitle v-if="item.sales_person_name !== item.name">
-                      <div v-html="`ID: ${item.name}`"></div>
-                    </v-list-item-subtitle>
-                  </v-list-item-content>
-                </v-list-item>
-              </template>
-            </v-autocomplete>
+            ></v-select>
           </v-col>
         </v-row>
       </div>
@@ -780,8 +766,10 @@ export default {
             allocated_percentage: 100,
           },
         ];
+        console.log('Updated sales_team with sales_person:', newVal);
       } else {
         this.invoice_doc.sales_team = [];
+        console.log('Cleared sales_team');
       }
     },
 
@@ -1159,30 +1147,42 @@ export default {
     // Get Sales Person Names
     get_sales_person_names() {
       const vm = this;
+      console.log("Getting sales persons...");
       if (vm.pos_profile.posa_local_storage && localStorage.sales_persons_storage) {
-        vm.sales_persons = JSON.parse(localStorage.getItem("sales_persons_storage"));
+        try {
+          vm.sales_persons = JSON.parse(localStorage.getItem("sales_persons_storage"));
+          console.log("Sales persons from localStorage:", vm.sales_persons);
+          console.log("localStorage sales_persons length:", vm.sales_persons.length);
+        } catch(e) {
+          console.error("Error parsing localStorage sales_persons:", e);
+        }
       }
       frappe.call({
         method: "posawesome.posawesome.api.posapp.get_sales_person_names",
         callback: function (r) {
-          if (r.message) {
-            vm.sales_persons = r.message;
+          console.log("API Response:", r);
+          if (r.message && r.message.length > 0) {
+            // Convert complex objects to simple value/text pairs
+            vm.sales_persons = r.message.map(sp => ({
+              value: sp.name,
+              title: sp.sales_person_name,
+              sales_person_name: sp.sales_person_name,
+              name: sp.name
+            }));
+            
+            console.log("Sales persons data (formatted):", vm.sales_persons);
+            console.log("API sales_persons length:", vm.sales_persons.length);
+            console.log("First sales person item:", vm.sales_persons[0] || "No items");
+            
             if (vm.pos_profile.posa_local_storage) {
-              localStorage.setItem("sales_persons_storage", JSON.stringify(r.message));
+              localStorage.setItem("sales_persons_storage", JSON.stringify(vm.sales_persons));
             }
+          } else {
+            console.log("No sales persons returned from API");
+            vm.sales_persons = [];
           }
         },
       });
-    },
-
-    // Sales Person Filter
-    salesPersonFilter(itemText, queryText, itemRow) {
-      const item = itemRow.raw;
-      const searchText = queryText.toLowerCase();
-      return (
-        (item.sales_person_name && item.sales_person_name.toLowerCase().includes(searchText)) ||
-        (item.name && item.name.toLowerCase().includes(searchText))
-      );
     },
 
     // Request Payment for Phone Type
