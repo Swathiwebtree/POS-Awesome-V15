@@ -1,6 +1,6 @@
 <template>
   <v-row justify="center">
-    <v-dialog v-model="customerDialog" max-width="600px" @click:outside="clear_customer">
+    <v-dialog v-model="customerDialog" max-width="600px" persistent>
       <v-card>
         <v-card-title>
           <span v-if="customer_id" class="text-h5 text-primary">{{
@@ -103,12 +103,33 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer></v-spacer>
-          <v-btn color="error" theme="dark" @click="close_dialog">{{
+          <v-btn color="error" theme="dark" @click="confirm_close">{{
             __('Close')
           }}</v-btn>
           <v-btn color="success" theme="dark" @click="submit_dialog">{{
             __('Submit')
           }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Confirmation Dialog -->
+    <v-dialog v-model="confirmDialog" max-width="400px">
+      <v-card>
+        <v-card-title class="text-h5 text-primary">
+          {{ __('Confirm Close') }}
+        </v-card-title>
+        <v-card-text>
+          {{ __('Are you sure you want to close? All entered data will be lost.') }}
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="primary" @click="confirmDialog = false">
+            {{ __('Continue Editing') }}
+          </v-btn>
+          <v-btn color="error" @click="confirmClose">
+            {{ __('Yes, Close') }}
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -120,6 +141,7 @@
 export default {
   data: () => ({
     customerDialog: false,
+    confirmDialog: false,
     pos_profile: '',
     customer_id: '',
     customer_name: '',
@@ -256,6 +278,20 @@ export default {
           }
         }, 50);
       });
+    },
+    confirm_close() {
+      // Check if any data has been entered
+      if (this.customer_name || this.tax_id || this.mobile_no || this.address_line1 || 
+          this.email_id || this.referral_code || this.birthday) {
+        this.confirmDialog = true;
+      } else {
+        // If no data entered, just close
+        this.close_dialog();
+      }
+    },
+    confirmClose() {
+      this.confirmDialog = false;
+      this.close_dialog();
     },
     close_dialog() {
       this.customerDialog = false;
@@ -510,6 +546,7 @@ export default {
   created: function () {
     this.eventBus.on('open_update_customer', (data) => {
       this.customerDialog = true;
+      
       if (data) {
         this.customer_name = data.customer_name;
         this.customer_id = data.name;
