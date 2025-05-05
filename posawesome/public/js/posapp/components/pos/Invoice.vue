@@ -192,9 +192,16 @@
   :label="frappe._('Discount Amount')"
   bg-color="white"
   hide-details
-  :model-value="formatCurrency(discount_amount)"
+  :model-value="formatCurrency(item.discount_amount || 0)"
   ref="discount"
-  @change="calc_prices(items[expanded[0]], $event.target.value, { target: { id: 'discount_amount' } })"
+  @input="(value) => {
+    if (expanded.length > 0) {
+      const selectedItem = items.find(i => i.posa_row_id === expanded[0].posa_row_id);
+      if (selectedItem) {
+        calc_prices(selectedItem, value, { target: { id: 'discount_amount' } });
+      }
+    }
+  }"
   :rules="['isNumber']"
   id="discount_amount"
   :disabled="!!item.posa_is_replace || pos_profile.posa_offer_applied || 
@@ -1605,22 +1612,22 @@ export default {
     },
 
     calc_prices(item, value, $event) {
-      if (!$event?.target?.id) return;
+      if (!$event?.target?.id || !item) return;
       
       const fieldId = $event.target.id;
       const priceListRate = flt(item.price_list_rate, this.currency_precision);
       let newValue = flt(value, this.currency_precision);
 
-      // Handle negative values
-      if (newValue < 0) {
-        newValue = 0;
-        this.eventBus.emit("show_message", {
-          title: __("Negative values not allowed"),
-          color: "error"
-        });
-      }
-
       try {
+        // Handle negative values
+        if (newValue < 0) {
+          newValue = 0;
+          this.eventBus.emit("show_message", {
+            title: __("Negative values not allowed"),
+            color: "error"
+          });
+        }
+
         // Field-wise calculations
         switch(fieldId) {
           case "rate":
@@ -1669,6 +1676,15 @@ export default {
         // Update stock calculations and force UI update
         this.calc_stock_qty(item, item.qty);
         this.$forceUpdate();
+
+        // Emit an event to notify about the price update
+        this.eventBus.emit("item_price_updated", {
+          item_code: item.item_code,
+          rate: item.rate,
+          discount_amount: item.discount_amount,
+          discount_percentage: item.discount_percentage
+        });
+
       } catch (error) {
         console.error("Error calculating prices:", error);
         this.eventBus.emit("show_message", {
