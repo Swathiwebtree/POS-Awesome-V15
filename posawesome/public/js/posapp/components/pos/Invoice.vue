@@ -22,7 +22,7 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
-    <v-card style="max-height: 70vh; height: 70vh" class="cards my-0 py-0 mt-3 bg-grey-lighten-5">
+    <v-card style="max-height: 70vh; height: 70vh" :class="['cards my-0 py-0 mt-3 bg-grey-lighten-5', {'return-mode': invoiceType === 'Return'}]">
   <v-row align="center" class="items px-2 py-1">
     <v-col :cols="pos_profile.posa_allow_sales_order ? 9 : 12" class="pb-2 pr-0">
       <Customer />
@@ -128,17 +128,16 @@
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('QTY')"
                     bg-color="white" hide-details :model-value="formatFloat(item.qty)" @change="
                       [
-                        setFormatedFloat(item, 'qty', null, false, $event.target.value),
-                        calc_stock_qty(item, $event.target.value),
+                        setFormatedQty(item, 'qty', null, false, $event.target.value),
+                        calc_stock_qty(item, item.qty),
                       ]
                       " :rules="[isNumber]" :disabled="!!item.posa_is_replace"></v-text-field>
                 </v-col>
                 <v-col cols="4">
                   <v-select density="compact" bg-color="white" :label="frappe._('UOM')" v-model="item.uom"
                     :items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom" hide-details
-                    @update:model-value="calc_uom(item, $event)" :disabled="!!invoice_doc.is_return ||
-                      !!item.posa_is_replace
-                      ">
+                    @update:model-value="calc_uom(item, $event)" :disabled="!!item.posa_is_replace || 
+                    (this.invoiceType === 'Return' && this.invoice_doc.return_against)">
                   </v-select>
                 </v-col>
                 <v-col cols="4">
@@ -158,7 +157,7 @@
                       " :rules="[isNumber]" id="rate" :disabled="!!item.posa_is_replace ||
                         !!item.posa_offer_applied ||
                         !pos_profile.posa_allow_user_to_edit_rate ||
-                        !!invoice_doc.is_return
+                        (this.invoiceType === 'Return' && this.invoice_doc.return_against)
                         ? true
                         : false
                         "></v-text-field>
@@ -180,33 +179,39 @@
                       " :rules="[isNumber]" id="discount_percentage" :disabled="!!item.posa_is_replace ||
                         item.posa_offer_applied ||
                         !pos_profile.posa_allow_user_to_edit_item_discount ||
-                        !!invoice_doc.is_return
+                        (this.invoiceType === 'Return' && this.invoice_doc.return_against)
                         ? true
                         : false
                         " suffix="%"></v-text-field>
                 </v-col>
                 <v-col cols="4">
-                  <v-text-field density="compact" variant="outlined" color="primary"
-                    :label="frappe._('Discount Amount')" bg-color="white" hide-details
-                    :model-value="formatCurrency(item.discount_amount)" :rules="[isNumber]" @change="
+                  <v-text-field
+                    density="compact"
+                    variant="outlined"
+                    color="primary"
+                    :label="frappe._('Discount Amount')"
+                    bg-color="white"
+                    hide-details
+                    v-model="discount_amount"
+                    ref="discount"
+                    :prefix="currencySymbol(pos_profile.currency)"
+                    :rules="[isNumber]"
+                    @change="
                       [
                         setFormatedCurrency(
-                          item,
+                          null,
                           'discount_amount',
                           null,
                           true,
                           $event
                         ),
-                        ,
-                        calc_prices(item, $event.target.value, $event),
                       ]
-                      " :prefix="currencySymbol(pos_profile.currency)" id="discount_amount" :disabled="!!item.posa_is_replace ||
-                        !!item.posa_offer_applied ||
-                        !pos_profile.posa_allow_user_to_edit_item_discount ||
-                        !!invoice_doc.is_return
-                        ? true
-                        : false
-                        "></v-text-field>
+                    "
+                    :disabled="
+                      !pos_profile.posa_allow_user_to_edit_additional_discount ||
+                      (this.invoiceType === 'Return' && this.invoice_doc.return_against)
+                    "
+                  ></v-text-field>
                 </v-col>
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary"
@@ -325,18 +330,8 @@
 </v-text-field>
             </v-col>
             <v-col v-if="pos_profile.posa_use_percentage_discount" cols="6" class="pa-1">
-              <v-text-field :model-value="formatFloat(additional_discount_percentage)" @change="
-                [
-                  setFormatedFloat(
-                    additional_discount_percentage,
-                    'additional_discount_percentage',
-                    null,
-                    false,
-                    $event
-                  ),
-                  update_discount_umount(),
-                ]
-                " :rules="[isNumber]" :label="frappe._('Additional Discount %')" suffix="%" ref="percentage_discount"
+              <v-text-field v-model="additional_discount_percentage" @change="update_discount_umount()"
+                :rules="[isNumber]" :label="frappe._('Additional Discount %')" suffix="%" ref="percentage_discount"
                 variant="outlined" density="compact" color="warning" hide-details :disabled="!pos_profile.posa_allow_user_to_edit_additional_discount ||
                   discount_percentage_offer_name
                   ? true
@@ -468,7 +463,12 @@ export default {
     Total() {
       let sum = 0;
       this.items.forEach((item) => {
-        sum += flt(item.qty) * flt(item.rate);
+        // For returns, we need to use absolute values to calculate the total correctly
+        if (this.invoiceType === "Return") {
+          sum += Math.abs(flt(item.qty)) * flt(item.rate);
+        } else {
+          sum += flt(item.qty) * flt(item.rate);
+        }
       });
       return this.flt(sum, this.currency_precision);
     },
@@ -476,7 +476,12 @@ export default {
       this.close_payments();
       let sum = 0;
       this.items.forEach((item) => {
-        sum += flt(item.qty) * flt(item.rate);
+        // For returns, we need to use absolute values to calculate the subtotal correctly
+        if (this.invoiceType === "Return") {
+          sum += Math.abs(flt(item.qty)) * flt(item.rate);
+        } else {
+          sum += flt(item.qty) * flt(item.rate);
+        }
       });
       sum -= this.flt(this.discount_amount);
       sum += this.flt(this.delivery_charges_rate);
@@ -485,7 +490,12 @@ export default {
     total_items_discount_amount() {
       let sum = 0;
       this.items.forEach((item) => {
-        sum += flt(item.qty) * flt(item.discount_amount);
+        // For returns, we need to use absolute values for calculations
+        if (this.invoiceType === "Return") {
+          sum += Math.abs(flt(item.qty)) * flt(item.discount_amount);
+        } else {
+          sum += flt(item.qty) * flt(item.discount_amount);
+        }
       });
       return this.flt(sum, this.float_precision);
     },
@@ -508,7 +518,12 @@ export default {
     },
 
     add_one(item) {
-      item.qty++;
+      // For returns, we need to add (make more negative)
+      if (this.invoiceType === "Return") {
+        item.qty++;
+      } else {
+        item.qty++;
+      }
       if (item.qty == 0) {
         this.remove_item(item);
       }
@@ -516,7 +531,12 @@ export default {
       this.$forceUpdate();
     },
     subtract_one(item) {
-      item.qty--;
+      // For returns, we need to subtract (make less negative)
+      if (this.invoiceType === "Return") {
+        item.qty--;
+      } else {
+        item.qty--;
+      }
       if (item.qty == 0) {
         this.remove_item(item);
       }
@@ -552,6 +572,10 @@ export default {
           item.batch_no = null;
           this.set_batch_qty(new_item, new_item.batch_no, false);
         }
+        // Make quantity negative for returns
+        if (this.invoiceType === "Return") {
+          new_item.qty = -Math.abs(new_item.qty || 1);
+        }
         this.items.unshift(new_item);
         this.update_item_detail(new_item);
       } else {
@@ -572,7 +596,12 @@ export default {
           item.to_set_serial_no = null;
         }
         if (!cur_item.has_batch_no) {
-          cur_item.qty += item.qty || 1;
+          // For returns, subtract from quantity to make it more negative
+          if (this.invoiceType === "Return") {
+            cur_item.qty -= (item.qty || 1);
+          } else {
+            cur_item.qty += (item.qty || 1);
+          }
           this.calc_stock_qty(cur_item, cur_item.qty);
         } else {
           if (
@@ -580,14 +609,24 @@ export default {
               cur_item.batch_no == item.batch_no) ||
             !cur_item.batch_no
           ) {
-            cur_item.qty += item.qty || 1;
+            // For returns, subtract from quantity to make it more negative
+            if (this.invoiceType === "Return") {
+              cur_item.qty -= (item.qty || 1);
+            } else {
+              cur_item.qty += (item.qty || 1);
+            }
             this.calc_stock_qty(cur_item, cur_item.qty);
           } else {
             const new_item = this.get_new_item(cur_item);
             new_item.batch_no = item.batch_no || item.to_set_batch_no;
             new_item.batch_no_expiry_date = "";
             new_item.actual_batch_qty = "";
-            new_item.qty = item.qty || 1;
+            // Make quantity negative for returns
+            if (this.invoiceType === "Return") {
+              new_item.qty = -Math.abs(item.qty || 1);
+            } else {
+              new_item.qty = item.qty || 1;
+            }
             if (new_item.batch_no) {
               this.set_batch_qty(new_item, new_item.batch_no, false);
               item.to_set_batch_no = null;
@@ -612,13 +651,25 @@ export default {
       if (!item.posa_is_replace) {
         item.posa_is_replace = "";
       }
+      
+      // Set negative quantity for return invoices
+      if (this.invoiceType === "Return" && item.qty > 0) {
+        item.qty = -Math.abs(item.qty);
+      }
+      
       new_item.stock_qty = item.qty;
       new_item.discount_amount = 0;
       new_item.discount_percentage = 0;
       new_item.discount_amount_per_item = 0;
       new_item.price_list_rate = item.rate;
+      new_item.base_price_list_rate = item.rate; // Add base_price_list_rate
       new_item.qty = item.qty;
       new_item.uom = item.uom ? item.uom : item.stock_uom;
+      // Ensure item_uoms is initialized
+      new_item.item_uoms = item.item_uoms || [];
+      if (new_item.item_uoms.length === 0 && new_item.stock_uom) {
+        new_item.item_uoms.push({ uom: new_item.stock_uom, conversion_factor: 1 });
+      }
       new_item.actual_batch_qty = "";
       new_item.conversion_factor = 1;
       new_item.posa_offers = JSON.stringify([]);
@@ -712,7 +763,14 @@ export default {
     async load_invoice(data = {}) {
       this.clear_invoice()
       if (data.is_return) {
-        this.eventBus.emit("set_customer_readonly", true);
+        // For return without invoice case, check if there's a return_against
+        // Only set customer readonly if this is a return with reference to an invoice
+        if (data.return_against) {
+          this.eventBus.emit("set_customer_readonly", true);
+        } else {
+          // Allow customer selection for returns without invoice
+          this.eventBus.emit("set_customer_readonly", false);
+        }
         this.invoiceType = "Return";
         this.invoiceTypes = ["Return"];
       }
@@ -800,7 +858,14 @@ export default {
         this.invoiceTypes = ["Invoice", "Order"];
       } else {
         if (data.is_return) {
-          this.eventBus.emit("set_customer_readonly", true);
+          // For return without invoice case, check if there's a return_against
+          // Only set customer readonly if this is a return with reference to an invoice
+          if (data.return_against) {
+            this.eventBus.emit("set_customer_readonly", true);
+          } else {
+            // Allow customer selection for returns without invoice
+            this.eventBus.emit("set_customer_readonly", false);
+          }
           this.invoiceType = "Return";
           this.invoiceTypes = ["Return"];
         }
@@ -862,7 +927,9 @@ export default {
       // Handle return specific fields
       if (this.invoice_doc.is_return) {
         doc.is_return = 1;
-        doc.return_against = this.invoice_doc.return_against;
+        if (this.invoice_doc.return_against) {
+          doc.return_against = this.invoice_doc.return_against;
+        }
         doc.update_stock = 1;
         doc.ignore_pricing_rule = 1;
         doc.is_pos = 1;
@@ -871,7 +938,7 @@ export default {
         doc.cost_center = this.pos_profile.cost_center;
         doc.conversion_rate = 1;
         doc.currency = this.pos_profile.currency;
-        doc.customer = this.invoice_doc.customer;
+        doc.customer = this.invoice_doc.customer || this.customer;
         doc.posting_date = frappe.datetime.nowdate();
       }
       
@@ -1376,7 +1443,7 @@ export default {
     },
 
     update_item_detail(item) {
-      if (!item.item_code || this.invoice_doc.is_return) {
+      if (!item.item_code) {
         return;
       }
       var vm = this;
@@ -1463,9 +1530,19 @@ export default {
             item.stock_qty = data.stock_qty;
             item.actual_qty = data.actual_qty;
             item.stock_uom = data.stock_uom;
-            (item.has_serial_no = data.has_serial_no),
-              (item.has_batch_no = data.has_batch_no),
-              vm.calc_item_price(item);
+            
+            // Set item UOMs from API data if available
+            if (data.item_uoms && data.item_uoms.length > 0) {
+              item.item_uoms = data.item_uoms;
+            } else if (!item.item_uoms || !item.item_uoms.length) {
+              // If no UOMs found, at least add the stock UOM
+              item.item_uoms = [{ uom: item.stock_uom, conversion_factor: 1.0 }];
+            }
+            
+            item.has_serial_no = data.has_serial_no;
+            item.has_batch_no = data.has_batch_no;
+            
+            vm.calc_item_price(item);
           }
         },
       });
@@ -1520,10 +1597,17 @@ export default {
     },
     update_discount_umount() {
       const value = flt(this.additional_discount_percentage);
-      if (value >= -100 && value <= 100) {
+      // If value is too large, reset to 0
+      if (value < -100 || value > 100) {
+        this.additional_discount_percentage = 0;
+        this.discount_amount = 0;
+        return;
+      }
+
+      // Calculate discount amount based on percentage
+      if (this.Total && this.Total !== 0) {
         this.discount_amount = (this.Total * value) / 100;
       } else {
-        this.additional_discount_percentage = 0;
         this.discount_amount = 0;
       }
     },
@@ -1612,14 +1696,60 @@ export default {
 
     calc_uom(item, value) {
       const new_uom = item.item_uoms.find((element) => element.uom == value);
+      if (!new_uom) {
+        this.eventBus.emit("show_message", {
+          title: __("UOM not found"),
+          color: "error",
+        });
+        return;
+      }
+      
+      // Store old conversion factor for ratio calculation
+      const old_conversion_factor = item.conversion_factor || 1;
+      
+      // Ensure base_price_list_rate is properly set first time
+      if (!item.base_price_list_rate && item.price_list_rate) {
+        item.base_price_list_rate = item.price_list_rate / old_conversion_factor;
+      }
+      
+      // Update conversion factor
       item.conversion_factor = new_uom.conversion_factor;
+      
+      // Calculate the ratio of new to old conversion factor
+      const conversion_ratio = item.conversion_factor / old_conversion_factor;
+      
+      // Reset discount if not offer
       if (!item.posa_offer_applied) {
         item.discount_amount = 0;
         item.discount_percentage = 0;
       }
+      
+      // Update price based on conversion factor
       if (item.batch_price) {
         item.price_list_rate = item.batch_price * new_uom.conversion_factor;
+      } else if (item.base_price_list_rate) {
+        // If we have a base price list rate, use it to calculate the new price_list_rate
+        item.price_list_rate = item.base_price_list_rate * new_uom.conversion_factor;
+      } else {
+        // If no base_price_list_rate exists, create one and adjust price_list_rate
+        item.base_price_list_rate = item.price_list_rate / old_conversion_factor;
+        item.price_list_rate = item.base_price_list_rate * new_uom.conversion_factor;
       }
+      
+      // Update rate directly from price_list_rate instead of using conversion ratio
+      // This ensures more accurate pricing when UOM changes
+      item.rate = item.price_list_rate;
+      
+      // If discount has been applied, recalculate it
+      if (item.discount_percentage) {
+        item.rate = item.price_list_rate - (item.price_list_rate * item.discount_percentage / 100);
+        item.discount_amount = item.price_list_rate - item.rate;
+      } else if (item.discount_amount) {
+        item.rate = item.price_list_rate - item.discount_amount;
+      }
+      
+      // Update item details
+      this.calc_stock_qty(item, item.qty);
       this.update_item_detail(item);
     },
 
@@ -1741,9 +1871,17 @@ export default {
     },
 
     shortSelectDiscount(e) {
-      if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
+      console.log('Shortcut pressed:', e.key, e.ctrlKey);
+      if (e.key.toLowerCase() === "e" && (e.ctrlKey || e.metaKey)) {
+        console.log('Focusing discount field');
         e.preventDefault();
-        this.$refs.discount.focus();
+        e.stopPropagation();
+        if (this.$refs.discount) {
+          this.$refs.discount.focus();
+          console.log('Discount field focused');
+        } else {
+          console.log('Discount field ref not found');
+        }
       }
     },
 
@@ -2574,6 +2712,19 @@ export default {
       this.posting_date = date;
       this.$forceUpdate();
     },
+    // Override setFormatedFloat for qty field to handle return mode
+    setFormatedQty(item, field_name, precision, no_negative, value) {
+      // Use the regular formatter method from the mixin
+      let parsedValue = this.setFormatedFloat(item, field_name, precision, no_negative, value);
+      
+      // Ensure negative value for return invoices
+      if (this.invoiceType === "Return" && parsedValue > 0) {
+        parsedValue = -Math.abs(parsedValue);
+        item[field_name] = parsedValue;
+      }
+      
+      return parsedValue;
+    },
   },
 
   mounted() {
@@ -2627,10 +2778,16 @@ export default {
     });
     this.eventBus.on("load_return_invoice", (data) => {
       this.load_invoice(data.invoice_doc);
-      this.discount_amount = -data.return_doc.discount_amount;
-      this.additional_discount_percentage =
-        -data.return_doc.additional_discount_percentage;
-      this.return_doc = data.return_doc;
+      if (data.return_doc) {
+        this.discount_amount = -data.return_doc.discount_amount;
+        this.additional_discount_percentage =
+          -data.return_doc.additional_discount_percentage;
+        this.return_doc = data.return_doc;
+      } else {
+        // For return without invoice, reset discount values
+        this.discount_amount = 0;
+        this.additional_discount_percentage = 0;
+      }
     });
     this.eventBus.on("set_new_line", (data) => {
       this.new_line = data;
@@ -2702,8 +2859,13 @@ export default {
       if (!this.discount_amount || this.discount_amount == 0) {
         this.additional_discount_percentage = 0;
       } else if (this.pos_profile.posa_use_percentage_discount) {
-        this.additional_discount_percentage =
-          (this.discount_amount / this.Total) * 100;
+        // Prevent division by zero which causes NaN
+        if (this.Total && this.Total !== 0) {
+          this.additional_discount_percentage =
+            (this.discount_amount / this.Total) * 100;
+        } else {
+          this.additional_discount_percentage = 0;
+        }
       } else {
         this.additional_discount_percentage = 0;
       }
@@ -2796,5 +2958,23 @@ export default {
 .v-date-picker .v-card-actions {
   padding: 8px !important;
   border-top: 1px solid rgba(0,0,0,0.12);
+}
+
+.return-mode {
+  border: 2px solid #ff5252 !important;
+  position: relative;
+}
+
+.return-mode::before {
+  content: 'RETURN';
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: #ff5252;
+  color: white;
+  padding: 4px 12px;
+  font-weight: bold;
+  border-bottom-left-radius: 8px;
+  z-index: 1;
 }
 </style>

@@ -87,9 +87,21 @@
                 </p>
               </v-col>
             </v-row>
-            <v-data-table :headers="unallocated_payments_headers" :items="unallocated_payments" item-key="name"
-              class="elevation-1 mt-0" :single-select="singleSelect" show-select v-model="selected_payments"
-              :loading="unallocated_payments_loading" checkbox-color="primary">
+            <v-data-table 
+              :headers="unallocated_payments_headers" 
+              :items="unallocated_payments" 
+              item-key="name"
+              class="elevation-1 mt-0" 
+              :loading="unallocated_payments_loading">
+              <template v-slot:item.select="{ item }">
+                <v-checkbox
+                  v-model="selected_payments"
+                  :value="item"
+                  color="primary"
+                  hide-details
+                  @click.stop
+                ></v-checkbox>
+              </template>
               <template v-slot:item.paid_amount="{ item }">
                 {{ currencySymbol(item.currency) }}
                 {{ formatCurrency(item.paid_amount) }}
@@ -210,9 +222,18 @@
             </v-row>
           </strong>
           <div class="pb-6 pr-6" style="position: absolute; bottom: 0; width: 100%">
-            <v-btn block color="primary" theme="dark" @click="submit">
-              {{ __("Submit") }}
-            </v-btn>
+            <v-row>
+              <v-col cols="6" class="pr-1">
+                <v-btn block size="large" color="primary" theme="dark" @click="submit" :disabled="vaildatPayment || isSubmitting" :loading="isSubmitting">
+                  {{ __("Submit") }}
+                </v-btn>
+              </v-col>
+              <v-col cols="6" class="pl-1">
+                <v-btn block size="large" color="success" theme="dark" @click="submit(undefined, false, true)" :disabled="vaildatPayment || isSubmitting" :loading="isSubmitting">
+                  {{ __("Submit & Print") }}
+                </v-btn>
+              </v-col>
+            </v-row>
           </div>
         </v-card>
       </v-col>
@@ -299,6 +320,13 @@ export default {
       ],
       unallocated_payments_headers: [
         {
+          title: "",
+          align: "center",
+          sortable: false,
+          key: "select",
+          width: "50px"
+        },
+        {
           title: __("Payment ID"),
           align: "start",
           sortable: true,
@@ -367,6 +395,7 @@ export default {
           key: "amount",
         },
       ],
+      isSubmitting: false,
     };
   },
 
@@ -390,8 +419,17 @@ export default {
             vm.eventBus.emit("payments_register_pos_profile", r.message);
             vm.eventBus.emit("set_company", r.message.company);
             this.set_payment_methods();
-            this.pos_profile_search = r.message.pos_profile.name;
-            this.pos_profiles_list.push(this.pos_profile_search);
+            
+            // Initialize pos_profile_search as empty
+            this.pos_profile_search = "";
+            
+            // Initialize the dropdown list with profiles but don't select any
+            this.pos_profiles_list = [];
+            // Add current profile to the list but don't select it
+            if (r.message.pos_profile && r.message.pos_profile.name) {
+              this.pos_profiles_list.push(r.message.pos_profile.name);
+            }
+            
             this.payment_methods_list = [];
             this.pos_profile.payments.forEach((element) => {
               this.payment_methods_list.push(element.mode_of_payment);
@@ -465,7 +503,7 @@ export default {
             customer: this.customer_name,
             company: this.company,
             currency: this.pos_profile.currency,
-            pos_profile: this.pos_profile_search,
+            pos_profile: this.pos_profile_search || null,
           }
         )
         .then((r) => {
@@ -564,15 +602,20 @@ export default {
       this.set_payment_methods();
     },
     submit() {
+      if (this.isSubmitting) return;
+      this.isSubmitting = true;
       const customer = this.customer_name;
       const vm = this;
+      
       if (!customer) {
+        this.isSubmitting = false;
         frappe.throw(__("Please select a customer"));
         return;
       }
       
       // Check if we have selected invoices
       if (this.selected_invoices.length == 0) {
+        this.isSubmitting = false;
         frappe.throw(__("Please select an invoice"));
         return;
       }
@@ -583,6 +626,7 @@ export default {
                           this.total_payment_methods;
       
       if (total_payments <= 0) {
+        this.isSubmitting = false;
         frappe.throw(__("Please make a payment or select an payment"));
         return;
       }
@@ -615,6 +659,7 @@ export default {
         freeze: true,
         freeze_message: __("Processing Payment"),
         callback: function (r) {
+          vm.isSubmitting = false;
           if (r.message) {
             frappe.utils.play_sound("submit");
             vm.clear_all(false);
@@ -625,6 +670,95 @@ export default {
             vm.get_draft_mpesa_payments_register();
           }
         },
+        error: function() {
+          vm.isSubmitting = false;
+        }
+      });
+    },
+    submit_and_print() {
+      if (this.isSubmitting) return;
+      this.isSubmitting = true;
+      const customer = this.customer_name;
+      const vm = this;
+      if (!customer) {
+        this.isSubmitting = false;
+        frappe.throw(__("Please select a customer"));
+        return;
+      }
+    
+      // Check if we have selected invoices
+      if (this.selected_invoices.length == 0) {
+        this.isSubmitting = false;
+        frappe.throw(__("Please select an invoice"));
+        return;
+      }
+      
+      // Calculate payment values
+      let total_payments = this.total_selected_payments + 
+                          this.total_selected_mpesa_payments + 
+                          this.total_payment_methods;
+      
+      if (total_payments <= 0) {
+        this.isSubmitting = false;
+        frappe.throw(__("Please make a payment or select an payment"));
+        return;
+      }
+
+      this.payment_methods.forEach((payment) => {
+        payment.amount = flt(payment.amount);
+      });
+
+      const payload = {};
+      payload.customer = customer;
+      payload.company = this.company;
+      payload.currency = this.pos_profile.currency;
+      payload.pos_opening_shift_name = this.pos_opening_shift.name;
+      payload.pos_profile_name = this.pos_profile.name;
+      payload.pos_profile = this.pos_profile;
+      payload.payment_methods = this.payment_methods;
+      payload.selected_invoices = this.selected_invoices;
+      payload.selected_payments = this.selected_payments;
+      payload.total_selected_invoices = flt(this.total_selected_invoices);
+      payload.selected_mpesa_payments = this.selected_mpesa_payments;
+      payload.total_selected_payments = flt(this.total_selected_payments);
+      payload.total_payment_methods = flt(this.total_payment_methods);
+      payload.total_selected_mpesa_payments = flt(
+        this.total_selected_mpesa_payments
+      );
+
+      frappe.call({
+        method: "posawesome.posawesome.api.payment_entry.process_pos_payment",
+        args: { payload },
+        freeze: true,
+        freeze_message: __("Processing Payment"),
+        callback: function (r) {
+          vm.isSubmitting = false;
+          if (r.message) {
+            console.log("Server response:", JSON.stringify(r.message));
+            frappe.utils.play_sound("submit");
+            
+            // Extract payment name from server response
+            const payment_name = r.message.new_payments_entry && r.message.new_payments_entry.length > 0 
+                ? r.message.new_payments_entry[0].name : null;
+            
+            if (payment_name) {
+              console.log("Opening print view with payment name:", payment_name);
+              vm.load_print_page(payment_name);
+            } else {
+              console.log("No payment_name found in response");
+              frappe.msgprint(__("Payment submitted but print function could not be executed. Payment name not found."));
+            }
+            vm.clear_all(false);
+            vm.customer_name = customer;
+            vm.get_outstanding_invoices();
+            vm.get_unallocated_payments();
+            vm.set_mpesa_search_params();
+            vm.get_draft_mpesa_payments_register();
+          }
+        },
+        error: function() {
+          vm.isSubmitting = false;
+        }
       });
     },
     selectSingleInvoice(item) {
@@ -658,6 +792,25 @@ export default {
     },
     isSelected(item) {
       return this.isInvoiceSelected(item) ? 'selected-row bg-primary bg-lighten-4' : '';
+    },
+    
+    load_print_page(payment_name) {
+      if (!payment_name) {
+        frappe.msgprint(__("Payment name not found. Cannot open print view."));
+        return;
+      }
+
+      // Use simplest URL possible to avoid errors
+      const url = 
+        frappe.urllib.get_base_url() +
+        "/printview?doctype=Payment%20Entry" +
+        "&name=" + payment_name +
+        "&trigger_print=1";
+
+      console.log("Opening printing URL:", url);
+      
+      // Open in new window/tab
+      window.open(url, '_blank');
     },
   },
 
