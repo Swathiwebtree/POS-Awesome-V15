@@ -204,9 +204,7 @@
   }"
   :rules="['isNumber']"
   id="discount_amount"
-  :disabled="!!item.posa_is_replace || pos_profile.posa_offer_applied || 
-             !pos_profile.posa_allow_user_to_edit_item_discount ||
-             (this.invoice_type == 'Return' && this.invoice_doc.return_against)"
+  disabled
   :prefix="currencySymbol(pos_profile.currency)"
 ></v-text-field>
                 </v-col>
