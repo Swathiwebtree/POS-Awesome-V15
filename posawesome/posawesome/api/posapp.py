@@ -572,18 +572,23 @@ def update_invoice(data):
             for tax in invoice_doc.taxes:
                 tax.included_in_print_rate = 1
         
-        # Calculate total before tax (sum of item amounts)
+        # Calculate the total amount including tax
         total_before_tax = sum(item.amount for item in invoice_doc.items)
-        
-        # Calculate the tax amount (sum of tax amounts)
         total_tax = sum(tax.amount for tax in invoice_doc.taxes)
-        
-        # The total amount is the sum of item price + tax (for tax-inclusive pricing)
+
+        # When tax is inclusive, the total amount includes the tax already
         invoice_doc.total_amount = total_before_tax + total_tax
         
         # Ensure grand total is the same as total amount (including tax)
         invoice_doc.grand_total = invoice_doc.total_amount
-    
+    else:
+        # If tax is not inclusive, calculate total amount and add tax to grand total
+        total_before_tax = sum(item.amount for item in invoice_doc.items)
+        total_tax = sum(tax.amount for tax in invoice_doc.taxes)
+
+        invoice_doc.total_amount = total_before_tax
+        invoice_doc.grand_total = total_before_tax + total_tax  # Add tax to the grand total
+
     # Update the other necessary fields
     invoice_doc.flags.ignore_permissions = True
     invoice_doc.ignore_mandatory = True
