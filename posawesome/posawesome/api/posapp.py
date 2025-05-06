@@ -568,15 +568,17 @@ def update_invoice(data):
         "POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"
     ):
         if invoice_doc.get("taxes"):
+            # Set tax to be included in the rate (tax inclusive)
             for tax in invoice_doc.taxes:
                 tax.included_in_print_rate = 1
         
-        # Manually adjust the Grand Total to account for tax-inclusive pricing
+        # Calculate the total amount including tax
         total_before_tax = sum(item.amount for item in invoice_doc.items)
         total_tax = sum(tax.amount for tax in invoice_doc.taxes)
-        
-        # In tax-inclusive mode, the grand total should include the net amount and tax
-        invoice_doc.grand_total = total_before_tax + total_tax
+
+        # When tax is inclusive, the total amount includes the tax already
+        invoice_doc.total_amount = total_before_tax + total_tax
+        invoice_doc.grand_total = invoice_doc.total_amount  # Grand total equals total amount when tax inclusive
     
     # Update the other necessary fields
     invoice_doc.flags.ignore_permissions = True
@@ -586,8 +588,6 @@ def update_invoice(data):
     invoice_doc.save()
     
     return invoice_doc
-
-
 
 @frappe.whitelist()
 def submit_invoice(invoice, data):
