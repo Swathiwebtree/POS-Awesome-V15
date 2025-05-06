@@ -542,8 +542,7 @@ def update_invoice(data):
     if data.get('is_return') and data.get('return_against'):
         validation_result = validate_return_items(data.get('return_against'), data.get('items', []))
         if not validation_result.get('valid'):
-            # frappe.throw(validation_result.get('message'))
-            pass
+            pass  # Handle invalid items in return invoices
             
     # Continue with existing logic
     invoice_doc = frappe.get_doc("Sales Invoice", data.get("name")) if data.get("name") else None
@@ -554,7 +553,7 @@ def update_invoice(data):
     else:
         invoice_doc.update(data)
     
-    # Set update_stock to 1 for all invoices except delivery date based ones
+    # Set update_stock to 1 for all invoices except delivery date-based ones
     if not data.get("posa_delivery_date"):
         invoice_doc.update_stock = 1
     else:
@@ -563,7 +562,7 @@ def update_invoice(data):
     # Ensure stock is updated for returns
     if data.get('is_return'):
         invoice_doc.update_stock = 1
-
+    
     # Handle the "Tax Inclusive" setting (restoring logic from version 14)
     if frappe.get_cached_value(
         "POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"
@@ -572,11 +571,22 @@ def update_invoice(data):
             for tax in invoice_doc.taxes:
                 tax.included_in_print_rate = 1
         
+        # Manually adjust the Grand Total to account for tax-inclusive pricing
+        total_before_tax = sum(item.amount for item in invoice_doc.items)
+        total_tax = sum(tax.amount for tax in invoice_doc.taxes)
+        
+        # In tax-inclusive mode, the grand total should include the net amount and tax
+        invoice_doc.grand_total = total_before_tax + total_tax
+    
+    # Update the other necessary fields
     invoice_doc.flags.ignore_permissions = True
     invoice_doc.ignore_mandatory = True
+
+    # Save the invoice
     invoice_doc.save()
     
     return invoice_doc
+
 
 
 @frappe.whitelist()
