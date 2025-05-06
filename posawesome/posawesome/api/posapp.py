@@ -533,7 +533,7 @@ def validate_return_items(original_invoice_name, return_items):
             }
 
     return {"valid": True}
-
+    
 @frappe.whitelist()
 def update_invoice(data):
     data = json.loads(data)
@@ -572,13 +572,17 @@ def update_invoice(data):
             for tax in invoice_doc.taxes:
                 tax.included_in_print_rate = 1
         
-        # Calculate the total amount including tax
+        # Calculate total before tax (sum of item amounts)
         total_before_tax = sum(item.amount for item in invoice_doc.items)
+        
+        # Calculate the tax amount (sum of tax amounts)
         total_tax = sum(tax.amount for tax in invoice_doc.taxes)
-
-        # When tax is inclusive, the total amount includes the tax already
+        
+        # The total amount is the sum of item price + tax (for tax-inclusive pricing)
         invoice_doc.total_amount = total_before_tax + total_tax
-        invoice_doc.grand_total = invoice_doc.total_amount  # Grand total equals total amount when tax inclusive
+        
+        # Ensure grand total is the same as total amount (including tax)
+        invoice_doc.grand_total = invoice_doc.total_amount
     
     # Update the other necessary fields
     invoice_doc.flags.ignore_permissions = True
@@ -588,6 +592,7 @@ def update_invoice(data):
     invoice_doc.save()
     
     return invoice_doc
+
 
 @frappe.whitelist()
 def submit_invoice(invoice, data):
