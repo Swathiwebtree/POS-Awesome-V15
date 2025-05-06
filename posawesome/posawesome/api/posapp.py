@@ -542,7 +542,7 @@ def update_invoice(data):
     if data.get('is_return') and data.get('return_against'):
         validation_result = validate_return_items(data.get('return_against'), data.get('items', []))
         if not validation_result.get('valid'):
-            pass  # Handle invalid items in return invoices
+            frappe.throw(validation_result.get('message'))
             
     # Continue with existing logic
     invoice_doc = frappe.get_doc("Sales Invoice", data.get("name")) if data.get("name") else None
@@ -562,40 +562,40 @@ def update_invoice(data):
     # Ensure stock is updated for returns
     if data.get('is_return'):
         invoice_doc.update_stock = 1
+
+    # Fetch POS Profile for the given data
+    pos_profile = frappe.get_doc("POS Profile", data.get("pos_profile"))
+    is_tax_inclusive = pos_profile.posa_tax_inclusive  # Fetch the 'posa_tax_inclusive' value
+
+    # Calculate net total and tax (ensure these values exist in the 'data')
+    net_total = data.get("net_total", 0.0)
+    tax = data.get("tax", 0.0)
+
+    # Apply tax-inclusive logic
+    if is_tax_inclusive:
+        # If tax is included in the price, Total Amount will be the same as Net Total
+        total_amount = net_total
+        grand_total = total_amount  # Grand Total will be the same as Total Amount (no extra tax)
+    else:
+        # If tax is not included, we add tax separately to the Grand Total
+        total_amount = net_total
+        grand_total = net_total + tax  # Add the tax to Grand Total
+
+    # Update the invoice with the correct totals
+    invoice_doc.net_total = net_total
+    invoice_doc.total_amount = total_amount
+    invoice_doc.grand_total = grand_total
     
-    # Handle the "Tax Inclusive" setting (restoring logic from version 14)
-    if frappe.get_cached_value(
-        "POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"
-    ):
+    # Other existing logic here
+    if frappe.get_cached_value("POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"):
         if invoice_doc.get("taxes"):
-            # Set tax to be included in the rate (tax inclusive)
             for tax in invoice_doc.taxes:
                 tax.included_in_print_rate = 1
-        
-        # Calculate the total amount including tax
-        total_before_tax = sum(item.amount for item in invoice_doc.items)
-        total_tax = sum(tax.amount for tax in invoice_doc.taxes)
-
-        # When tax is inclusive, the total amount includes the tax already
-        invoice_doc.total_amount = total_before_tax + total_tax
-        
-        # Ensure grand total is the same as total amount (including tax)
-        invoice_doc.grand_total = invoice_doc.total_amount
-    else:
-        # If tax is not inclusive, calculate total amount and add tax to grand total
-        total_before_tax = sum(item.amount for item in invoice_doc.items)
-        total_tax = sum(tax.amount for tax in invoice_doc.taxes)
-
-        invoice_doc.total_amount = total_before_tax
-        invoice_doc.grand_total = total_before_tax + total_tax  # Add tax to the grand total
-
-    # Update the other necessary fields
+    
     invoice_doc.flags.ignore_permissions = True
     invoice_doc.ignore_mandatory = True
-
-    # Save the invoice
     invoice_doc.save()
-    
+
     return invoice_doc
 
 
