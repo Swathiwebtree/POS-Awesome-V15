@@ -563,6 +563,14 @@ def update_invoice(data):
     # Ensure stock is updated for returns
     if data.get('is_return'):
         invoice_doc.update_stock = 1
+
+    # Handle the "Tax Inclusive" setting (restoring logic from version 14)
+    if frappe.get_cached_value(
+        "POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"
+    ):
+        if invoice_doc.get("taxes"):
+            for tax in invoice_doc.taxes:
+                tax.included_in_print_rate = 1
         
     invoice_doc.flags.ignore_permissions = True
     invoice_doc.ignore_mandatory = True
