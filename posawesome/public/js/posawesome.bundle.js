@@ -18,6 +18,7 @@ frappe.pages['posawesome'].on_page_load = function(wrapper) {
 
 // Function to update total based on the `posa_tax_inclusive` from POS Profile
 function update_totals_based_on_tax_inclusive() {
+    console.log("script loaded from the bundle")
     // Fetch the current selected POS Profile's `posa_tax_inclusive` value
     frappe.call({
         method: 'frappe.get_cached_value',
