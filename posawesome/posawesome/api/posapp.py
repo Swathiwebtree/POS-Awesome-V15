@@ -560,28 +560,28 @@ def update_invoice(data):
     tax = flt(data.get("tax", 0))
 
     if is_tax_inclusive:
-        total_amount = net_total
-        grand_total = total_amount  # No extra tax added
+        total_amount = net_total  # Tax is included in the net total
+        grand_total = total_amount  # No extra tax added to the grand total
     else:
-        total_amount = net_total
-        grand_total = net_total + tax
+        total_amount = net_total  # Base total (excluding tax)
+        grand_total = net_total + tax  # Add tax to get the grand total
 
+    # Update totals in the invoice doc
     invoice_doc.net_total = net_total
     invoice_doc.total_amount = total_amount
     invoice_doc.grand_total = grand_total
 
-    # Ensure tax flags set correctly
+    # Ensure tax flags set correctly for printing
     if invoice_doc.get("taxes"):
         for tax_row in invoice_doc.taxes:
             tax_row.included_in_print_rate = 1 if is_tax_inclusive else 0
 
+    # Save the invoice
     invoice_doc.flags.ignore_permissions = True
     invoice_doc.ignore_mandatory = True
     invoice_doc.save()
 
     return invoice_doc
-
-
 
 @frappe.whitelist()
 def submit_invoice(invoice, data):
