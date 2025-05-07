@@ -5282,5 +5282,25 @@
   "translatable": 0,
   "unique": 0,
   "width": null
+ },
+ {
+  "doctype": "Custom Field",
+  "dt": "POS Profile",
+  "fieldname": "posa_allow_multi_currency",
+  "fieldtype": "Check",
+  "insert_after": "posa_allow_sales_order",
+  "label": "Allow Multi Currency in POS",
+  "modified": "2024-01-01 12:00:00.000000",
+  "name": "POS Profile-posa_allow_multi_currency",
+  "owner": "Administrator",
+  "creation": "2024-01-01 12:00:00.000000",
+  "parent": null,
+  "parentfield": null,
+  "parenttype": null,
+  "idx": 0,
+  "docstatus": 0,
+  "__islocal": 1,
+  "__unsaved": 1,
+  "default": "0"
  }
 ]

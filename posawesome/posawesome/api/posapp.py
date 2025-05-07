@@ -2157,4 +2157,10 @@ def validate_return_items(return_against, items):
          original_items[item_code]['qty'] -= return_qty
  
      return {"valid": True}
+
+@frappe.whitelist()
+def get_available_currencies():
+    """Get list of available currencies from ERPNext"""
+    return frappe.get_all("Currency", fields=["name", "currency_name"], 
+                         filters={"enabled": 1}, order_by="currency_name")
     
