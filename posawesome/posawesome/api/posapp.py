@@ -537,65 +537,79 @@ def validate_return_items(original_invoice_name, return_items):
 @frappe.whitelist()
 def update_invoice(data):
     data = json.loads(data)
-    
-    # If this is a return invoice with a reference invoice, validate items
-    if data.get('is_return') and data.get('return_against'):
-        validation_result = validate_return_items(data.get('return_against'), data.get('items', []))
-        if not validation_result.get('valid'):
-            frappe.throw(validation_result.get('message'))
-            
-    # Continue with existing logic
-    invoice_doc = frappe.get_doc("Sales Invoice", data.get("name")) if data.get("name") else None
-    
-    if not invoice_doc:
-        invoice_doc = frappe.new_doc("Sales Invoice")
+    if data.get("name"):
+        invoice_doc = frappe.get_doc("Sales Invoice", data.get("name"))
         invoice_doc.update(data)
     else:
-        invoice_doc.update(data)
-    
-    # Set update_stock to 1 for all invoices except delivery date-based ones
-    if not data.get("posa_delivery_date"):
-        invoice_doc.update_stock = 1
-    else:
-        invoice_doc.update_stock = 0
-        
-    # Ensure stock is updated for returns
-    if data.get('is_return'):
-        invoice_doc.update_stock = 1
+        invoice_doc = frappe.get_doc(data)
 
-    # Fetch POS Profile for the given data
-    pos_profile = frappe.get_doc("POS Profile", data.get("pos_profile"))
-    is_tax_inclusive = pos_profile.posa_tax_inclusive  # Fetch the 'posa_tax_inclusive' value
-
-    # Calculate net total and tax (ensure these values exist in the 'data')
-    net_total = data.get("net_total", 0.0)
-    tax = data.get("tax", 0.0)
-
-    # Apply tax-inclusive logic
-    if is_tax_inclusive:
-        # If tax is included in the price, Total Amount will be the same as Net Total
-        total_amount = net_total
-        grand_total = total_amount  # Grand Total will be the same as Total Amount (no extra tax)
-    else:
-        # If tax is not included, we add tax separately to the Grand Total
-        total_amount = net_total
-        grand_total = net_total + tax  # Add the tax to Grand Total
-
-    # Update the invoice with the correct totals
-    invoice_doc.net_total = net_total
-    invoice_doc.total_amount = total_amount
-    invoice_doc.grand_total = grand_total
-    
-    # Other existing logic here
-    if frappe.get_cached_value("POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"):
-        if invoice_doc.get("taxes"):
-            for tax in invoice_doc.taxes:
-                tax.included_in_print_rate = 1
-    
+    invoice_doc.set_missing_values()
     invoice_doc.flags.ignore_permissions = True
-    invoice_doc.ignore_mandatory = True
-    invoice_doc.save()
+    frappe.flags.ignore_account_permission = True
 
+    if invoice_doc.is_return and invoice_doc.return_against:
+        ref_doc = frappe.get_cached_doc(invoice_doc.doctype, invoice_doc.return_against)
+        if not ref_doc.update_stock:
+            invoice_doc.update_stock = 0
+        if len(invoice_doc.payments) == 0:
+            invoice_doc.payments = ref_doc.payments
+        invoice_doc.paid_amount = (
+            invoice_doc.rounded_total or invoice_doc.grand_total or invoice_doc.total
+        )
+        for payment in invoice_doc.payments:
+            if payment.default:
+                payment.amount = invoice_doc.paid_amount
+
+    # Fetch POS Profile's 'posa_tax_inclusive' value
+    pos_profile_tax_inclusive = frappe.get_cached_value(
+        "POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"
+    )
+
+    allow_zero_rated_items = frappe.get_cached_value(
+        "POS Profile", invoice_doc.pos_profile, "posa_allow_zero_rated_items"
+    )
+
+    for item in invoice_doc.items:
+        if not item.rate or item.rate == 0:
+            if allow_zero_rated_items:
+                item.price_list_rate = 0.00
+                item.is_free_item = 1
+            else:
+                frappe.throw(
+                    _("Rate cannot be zero for item {0}").format(item.item_code)
+                )
+        else:
+            item.is_free_item = 0
+
+        # Add taxes from tax template
+        add_taxes_from_tax_template(item, invoice_doc)
+
+        if pos_profile_tax_inclusive:
+            if invoice_doc.get("taxes"):
+                # Mark tax as included in the print rate
+                for tax in invoice_doc.taxes:
+                    tax.included_in_print_rate = 1
+
+            # Adjust the invoice total to reflect tax-included prices
+            total_inclusive_of_tax = 0
+            for item in invoice_doc.items:
+                if item.rate:
+                    # Calculate price including tax
+                    total_inclusive_of_tax += item.rate * item.qty
+
+            # Set the grand total to the inclusive tax total
+            invoice_doc.grand_total = total_inclusive_of_tax
+            invoice_doc.rounded_total = invoice_doc.grand_total
+            invoice_doc.total = invoice_doc.grand_total
+
+    today_date = getdate()
+    if (
+        invoice_doc.get("posting_date")
+        and getdate(invoice_doc.posting_date) != today_date
+    ):
+        invoice_doc.set_posting_time = 1
+
+    invoice_doc.save()
     return invoice_doc
 
 

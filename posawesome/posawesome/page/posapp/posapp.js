@@ -13,39 +13,52 @@ frappe.pages['posapp'].on_page_load = function (wrapper) {
 	$("head").append("<link href='/assets/posawesome/node_modules/vuetify/dist/vuetify.min.css' rel='stylesheet'>");
 	$("head").append("<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css'>");
 	$("head").append("<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900' />");
+	update_totals_based_on_tax_inclusive()
 };
 
-// Handle response when invoice is updated or submitted
-function onInvoiceUpdate(response) {
-    // Check if the tax is included
-    let isTaxInclusive = response.pos_profile.posa_tax_inclusive;  // Fetch posa_tax_inclusive value from response
-    
-    if (isTaxInclusive) {
-        // Synchronize Total Amount and Grand Total if tax is inclusive
-        let totalAmount = response.total_amount;  // Get total amount from backend response
-        let grandTotal = response.grand_total;   // Get grand total from backend response
-        console.log(grandTotal)	
-		console.log(totalAmount)	
-        if (totalAmount === grandTotal) {
-            // Set Total Amount field and Grand Total field to the same value
-            document.getElementById("total_amount_field").value = totalAmount;
-            document.getElementById("grand_total_field").value = grandTotal;
-        }
-    }
-}
+function update_totals_based_on_tax_inclusive() {
+	console.log("script loaded////////////////////////////////////////////")
+    const posProfile = this.page.PosApp.pos_profile;
 
-// Example of handling the backend response after an invoice update or submission
-function submitInvoice(data) {
-    $.ajax({
-        url: '/api/method/your.custom.method',  // Your API endpoint for invoice update
-        method: 'POST',
-        data: data,
-        success: function(response) {
-            // Call the function to update the front-end fields after the backend response
-            onInvoiceUpdate(response);
+    // Ensure the POS Profile is correctly set
+    if (!posProfile) {
+        console.error("POS Profile is not set.");
+        return;
+    }
+
+    // Fetch the current selected POS Profile's `posa_tax_inclusive` value
+    frappe.call({
+        method: 'frappe.get_cached_value',
+        args: {
+            doctype: 'POS Profile',  // POS Profile doctype
+            name: posProfile,  // The POS Profile selected for this session
+            fieldname: 'posa_tax_inclusive'  // The field we're interested in
         },
-        error: function(error) {
-            console.log('Error:', error);
+        callback: function(response) {
+            if (response.message !== undefined) {
+                const posa_tax_inclusive = response.message;  // Get the value of the checkbox
+
+                // Target the total amount field and grand total field
+                const totalAmountField = document.getElementById('input-v-25');
+                const grandTotalField = document.getElementById('input-v-29');
+
+                if (totalAmountField && grandTotalField) {
+                    // If `posa_tax_inclusive` is checked in the POS Profile
+                    if (posa_tax_inclusive) {
+                        // Copy the grand total value to the total amount field
+                        totalAmountField.value = grandTotalField.value;
+                        console.log("Total amount copied from grand total:", grandTotalField.value);
+                    } else {
+                        // If unchecked, clear the total amount field
+                        totalAmountField.value = "";
+                        console.log("Total amount cleared because checkbox is unchecked.");
+                    }
+                } else {
+                    console.error('Could not find total amount or grand total field by ID.');
+                }
+            } else {
+                console.error('Error fetching POS Profile or POS Profile not found.');
+            }
         }
     });
 }
