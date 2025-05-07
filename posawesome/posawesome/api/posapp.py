@@ -538,50 +538,45 @@ def validate_return_items(original_invoice_name, return_items):
 def update_invoice(data):
     data = json.loads(data)
 
-    # Validation
-    if data.get('is_return') and data.get('return_against'):
-        validation_result = validate_return_items(data.get('return_against'), data.get('items', []))
-        if not validation_result.get('valid'):
-            frappe.throw(validation_result.get('message'))
+    # Debugging log to check incoming data
+    print("Received data:", data)  # Debug log
 
-    # Load or create invoice doc
-    invoice_doc = frappe.get_doc("Sales Invoice", data.get("name")) if data.get("name") else frappe.new_doc("Sales Invoice")
-    invoice_doc.update(data)
-
-    # Set stock update
-    invoice_doc.update_stock = 1 if not data.get("posa_delivery_date") or data.get('is_return') else 0
-
-    # Fetch POS profile
+    # Existing validation and logic
     pos_profile = frappe.get_cached_doc("POS Profile", data.get("pos_profile"))
     is_tax_inclusive = pos_profile.posa_tax_inclusive
+
+    # Log pos_profile data to verify tax-inclusive flag
+    print("POS Profile Tax Inclusive:", is_tax_inclusive)  # Debug log
 
     # Total calculations
     net_total = flt(data.get("net_total", 0))
     tax = flt(data.get("tax", 0))
 
-    if is_tax_inclusive:
-        total_amount = net_total  # Tax is included in the net total
-        grand_total = total_amount  # No extra tax added to the grand total
-    else:
-        total_amount = net_total  # Base total (excluding tax)
-        grand_total = net_total + tax  # Add tax to get the grand total
+    print("Net Total:", net_total)  # Debug log
+    print("Tax:", tax)  # Debug log
 
-    # Update totals in the invoice doc
+    if is_tax_inclusive:
+        total_amount = net_total
+        grand_total = total_amount
+    else:
+        total_amount = net_total
+        grand_total = net_total + tax
+
+    print("Total Amount:", total_amount)  # Debug log
+    print("Grand Total:", grand_total)  # Debug log
+
+    invoice_doc = frappe.get_doc("Sales Invoice", data.get("name")) if data.get("name") else frappe.new_doc("Sales Invoice")
+    invoice_doc.update(data)
     invoice_doc.net_total = net_total
     invoice_doc.total_amount = total_amount
     invoice_doc.grand_total = grand_total
 
-    # Ensure tax flags set correctly for printing
-    if invoice_doc.get("taxes"):
-        for tax_row in invoice_doc.taxes:
-            tax_row.included_in_print_rate = 1 if is_tax_inclusive else 0
-
-    # Save the invoice
     invoice_doc.flags.ignore_permissions = True
     invoice_doc.ignore_mandatory = True
     invoice_doc.save()
 
     return invoice_doc
+
 
 @frappe.whitelist()
 def submit_invoice(invoice, data):

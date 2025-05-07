@@ -954,6 +954,10 @@ export default {
       doc.net_total = this.Total;
       doc.tax = this.total_tax || 0;  // Or calculate manually if needed
 
+      console.log("posa_tax_inclusive:", this.pos_profile.posa_tax_inclusive);  // Debug log
+      console.log("Total without tax:", this.Total);  // Debug log
+      console.log("Total tax amount:", this.total_tax);  // Debug log
+
       // Check if the tax-inclusive flag is set
       if (this.pos_profile.posa_tax_inclusive) {
         // Ensure that the total includes taxes if the flag is set
