@@ -468,27 +468,36 @@ export default {
       });
       return this.flt(sum, this.currency_precision);
     },
+    
     subtotal() {
       this.close_payments();
-
-      // If tax is inclusive, just return grand total
-      if (this.pos_profile?.tax_inclusive) {
-        return this.flt(this.invoice_doc?.grand_total || 0, this.currency_precision);
-      }
-      
       let sum = 0;
+
       this.items.forEach((item) => {
-        // For returns, we need to use absolute values to calculate the subtotal correctly
-        if (this.invoiceType === "Return") {
-          sum += Math.abs(flt(item.qty)) * flt(item.rate);
-        } else {
-          sum += flt(item.qty) * flt(item.rate);
-        }
+        const qty = this.invoiceType === "Return" ? Math.abs(flt(item.qty)) : flt(item.qty);
+        const rate = flt(item.rate);
+        sum += qty * rate;
       });
-      sum -= this.flt(this.additional_discount);  // Changed from discount_amount to additional_discount
-      sum += this.flt(this.delivery_charges_rate);
+
+      sum -= flt(this.additional_discount);
+      sum += flt(this.delivery_charges_rate);
+
+      // Add tax only if it's NOT inclusive
+      if (!this.pos_profile?.posa_tax_inclusive) {
+        let tax_total = 0;
+
+        if (this.invoice_doc?.taxes?.length) {
+          this.invoice_doc.taxes.forEach(tax => {
+            tax_total += flt(tax.tax_amount);
+          });
+        }
+
+        sum += tax_total;
+      }
+
       return this.flt(sum, this.currency_precision);
     },
+
     total_items_discount_amount() {
       let sum = 0;
       this.items.forEach((item) => {
