@@ -717,25 +717,32 @@ export default {
     },
 
     clear_invoice() {
-      this.items = [];
-      this.posa_offers = [];
-      this.expanded = [];
-      this.eventBus.emit("set_pos_coupons", []);
-      this.posa_coupons = [];
       this.invoice_doc = "";
-      this.return_doc = "";
+      this.items = [];
+      this.customer = "";
+      this.customer_info = "";
+      this.customer_balance = 0;
       this.discount_amount = 0;
-      this.additional_discount = 0;  // Added this line
+      this.additional_discount = 0;
       this.additional_discount_percentage = 0;
-      this.delivery_charges_rate = 0;
-      this.selected_delivery_charge = "";
-
-      // Always reset to default customer after invoice
-      this.customer = this.pos_profile.customer;
-
-      this.eventBus.emit("set_customer_readonly", false);
+      this.total_tax = 0;
       this.invoiceType = this.pos_profile.posa_default_sales_order ? "Order" : "Invoice";
       this.invoiceTypes = ["Invoice", "Order"];
+      this.posting_date = frappe.datetime.nowdate(); // Reset posting date to current date
+      this.selected_delivery_charge = "";
+      this.delivery_charges_rate = 0;
+      this.selected_currency = this.pos_profile.currency;
+      this.exchange_rate = 1;
+      this.eventBus.emit("set_customer_readonly", false);
+      this.eventBus.emit("update_items_details");
+      this.eventBus.emit("set_pos_coupons", []);
+      this.eventBus.emit("set_customer_info", "");
+      this.eventBus.emit("set_customer", "");
+      this.eventBus.emit("set_customer_credit_dict", []);
+      this.eventBus.emit("set_redeem_customer_credit", false);
+      this.eventBus.emit("set_is_cashback", true);
+      this.eventBus.emit("set_sales_person", "");
+      this.eventBus.emit("set_addresses", []);
     },
 	
 	async fetch_customer_balance() {
