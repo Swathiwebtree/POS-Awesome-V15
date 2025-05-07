@@ -559,9 +559,16 @@ def update_invoice(data):
         for payment in invoice_doc.payments:
             if payment.default:
                 payment.amount = invoice_doc.paid_amount
+
+    # Fetch POS Profile's 'posa_tax_inclusive' value
+    pos_profile_tax_inclusive = frappe.get_cached_value(
+        "POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"
+    )
+
     allow_zero_rated_items = frappe.get_cached_value(
         "POS Profile", invoice_doc.pos_profile, "posa_allow_zero_rated_items"
     )
+
     for item in invoice_doc.items:
         if not item.rate or item.rate == 0:
             if allow_zero_rated_items:
@@ -573,28 +580,27 @@ def update_invoice(data):
                 )
         else:
             item.is_free_item = 0
+
+        # Add taxes from tax template
         add_taxes_from_tax_template(item, invoice_doc)
 
-        if frappe.get_cached_value(
-            "POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"
-        ):
+        if pos_profile_tax_inclusive:
             if invoice_doc.get("taxes"):
                 # Mark tax as included in the print rate
                 for tax in invoice_doc.taxes:
                     tax.included_in_print_rate = 1
 
+            # Adjust the invoice total to reflect tax-included prices
+            total_inclusive_of_tax = 0
+            for item in invoice_doc.items:
+                if item.rate:
+                    # Calculate price including tax
+                    total_inclusive_of_tax += item.rate * item.qty
 
-                # Adjust the invoice total to reflect tax-included prices
-                total_inclusive_of_tax = 0
-                for item in invoice_doc.items:
-                    if item.rate:
-                        # Calculate price including tax
-                        total_inclusive_of_tax += item.rate * item.qty
-
-                # Set the grand total to the inclusive tax total
-                invoice_doc.grand_total = total_inclusive_of_tax
-                invoice_doc.rounded_total = invoice_doc.grand_total
-                invoice_doc.total = invoice_doc.grand_total
+            # Set the grand total to the inclusive tax total
+            invoice_doc.grand_total = total_inclusive_of_tax
+            invoice_doc.rounded_total = invoice_doc.grand_total
+            invoice_doc.total = invoice_doc.grand_total
 
     today_date = getdate()
     if (
@@ -605,6 +611,7 @@ def update_invoice(data):
 
     invoice_doc.save()
     return invoice_doc
+
 
 @frappe.whitelist()
 def submit_invoice(invoice, data):
