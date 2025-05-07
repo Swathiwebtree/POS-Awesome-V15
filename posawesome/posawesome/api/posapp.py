@@ -497,7 +497,43 @@ def add_taxes_from_tax_template(item, parent_doc):
                     tax_row.update({"category": "Total", "add_deduct_tax": "Add"})
                 tax_row.db_insert()
 
+def validate_return_items(original_invoice_name, return_items):
+    """
+    Ensure that return items do not exceed the quantity from the original invoice.
+    """
+    original_invoice = frappe.get_doc("Sales Invoice", original_invoice_name)
+    original_item_qty = {}
 
+    for item in original_invoice.items:
+        original_item_qty[item.item_code] = original_item_qty.get(item.item_code, 0) + item.qty
+
+    returned_items = frappe.get_all(
+        "Sales Invoice",
+        filters={
+            "return_against": original_invoice_name,
+            "docstatus": 1,
+            "is_return": 1
+        },
+        fields=["name"]
+    )
+
+    for returned_invoice in returned_items:
+        ret_doc = frappe.get_doc("Sales Invoice", returned_invoice.name)
+        for item in ret_doc.items:
+            if item.item_code in original_item_qty:
+                original_item_qty[item.item_code] -= abs(item.qty)
+
+    for item in return_items:
+        item_code = item.get("item_code")
+        return_qty = abs(item.get("qty", 0))
+        if item_code in original_item_qty and return_qty > original_item_qty[item_code]:
+            return {
+                "valid": False,
+                "message": _("You are trying to return more quantity for item {0} than was sold.").format(item_code),
+            }
+
+    return {"valid": True}
+    
 @frappe.whitelist()
 def update_invoice(data):
     data = json.loads(data)
@@ -517,7 +553,7 @@ def update_invoice(data):
     else:
         invoice_doc.update(data)
     
-    # Set update_stock to 1 for all invoices except delivery date based ones
+    # Set update_stock to 1 for all invoices except delivery date-based ones
     if not data.get("posa_delivery_date"):
         invoice_doc.update_stock = 1
     else:
@@ -526,11 +562,40 @@ def update_invoice(data):
     # Ensure stock is updated for returns
     if data.get('is_return'):
         invoice_doc.update_stock = 1
-        
+
+    # Fetch POS Profile for the given data
+    pos_profile = frappe.get_doc("POS Profile", data.get("pos_profile"))
+    is_tax_inclusive = pos_profile.posa_tax_inclusive  # Fetch the 'posa_tax_inclusive' value
+
+    # Calculate net total and tax (ensure these values exist in the 'data')
+    net_total = data.get("net_total", 0.0)
+    tax = data.get("tax", 0.0)
+
+    # Apply tax-inclusive logic
+    if is_tax_inclusive:
+        # If tax is included in the price, Total Amount will be the same as Net Total
+        total_amount = net_total
+        grand_total = total_amount  # Grand Total will be the same as Total Amount (no extra tax)
+    else:
+        # If tax is not included, we add tax separately to the Grand Total
+        total_amount = net_total
+        grand_total = net_total + tax  # Add the tax to Grand Total
+
+    # Update the invoice with the correct totals
+    invoice_doc.net_total = net_total
+    invoice_doc.total_amount = total_amount
+    invoice_doc.grand_total = grand_total
+    
+    # Other existing logic here
+    if frappe.get_cached_value("POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"):
+        if invoice_doc.get("taxes"):
+            for tax in invoice_doc.taxes:
+                tax.included_in_print_rate = 1
+    
     invoice_doc.flags.ignore_permissions = True
     invoice_doc.ignore_mandatory = True
     invoice_doc.save()
-    
+
     return invoice_doc
 
 
