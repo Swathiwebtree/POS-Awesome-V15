@@ -513,6 +513,42 @@ export default {
       }
     },
 
+    calculateInvoiceTotals() {
+      if (!this.invoice_doc || !this.pos_profile) return;
+
+      let total = 0;
+      let tax = 0;
+
+      if (this.invoice_doc.items && this.invoice_doc.items.length) {
+        this.invoice_doc.items.forEach((item) => {
+          total += this.flt(item.rate || 0) * this.flt(item.qty || 0);
+        });
+      }
+
+      if (this.pos_profile.posa_tax_inclusive) {
+        // Tax is included in rate
+        tax = 0;
+        this.invoice_doc.total_taxes_and_charges = 0;
+        this.invoice_doc.total = total;
+        this.invoice_doc.net_total = total;
+        this.invoice_doc.grand_total = total;
+      } else {
+        if (this.invoice_doc.taxes && this.invoice_doc.taxes.length) {
+          this.invoice_doc.taxes.forEach((t) => {
+            tax += this.flt(t.tax_amount || 0);
+          });
+        }
+        this.invoice_doc.total_taxes_and_charges = tax;
+        this.invoice_doc.total = total;
+        this.invoice_doc.net_total = total;
+        this.invoice_doc.grand_total = total + tax;
+      }
+
+      this.invoice_doc.rounded_total = this.flt(
+        frappe.utils.round_number(this.invoice_doc.grand_total, this.currency_precision)
+      );
+    },
+
     add_one(item) {
       // For returns, we need to add (make more negative)
       if (this.invoiceType === "Return") {
@@ -2777,6 +2813,7 @@ export default {
       this.invoiceType = this.pos_profile.posa_default_sales_order
         ? "Order"
         : "Invoice";
+      this.calculateInvoiceTotals();
     });
     this.eventBus.on("add_item", (item) => {
       this.add_item(item);
