@@ -903,9 +903,11 @@ export default {
 
     get_invoice_doc() {
       let doc = {};
+      
       if (this.invoice_doc.name) {
         doc = { ...this.invoice_doc };
       }
+
       doc.doctype = "Sales Invoice";
       doc.is_pos = 1;
       doc.ignore_pricing_rule = 1;
@@ -916,21 +918,55 @@ export default {
       doc.naming_series = doc.naming_series || this.pos_profile.naming_series;
       doc.customer = this.customer;
       doc.items = this.get_invoice_items();
-      doc.total = this.subtotal;
-      doc.discount_amount = flt(this.discount_amount);
-      doc.additional_discount_percentage = flt(
-        this.additional_discount_percentage
-      );
+      doc.discount_amount = flt(this.additional_discount);
+      doc.additional_discount_percentage = flt(this.additional_discount_percentage);
       doc.posa_pos_opening_shift = this.pos_opening_shift.name;
       doc.payments = this.get_payments();
       doc.taxes = [];
-      doc.is_return = this.invoice_doc.is_return;
-      doc.return_against = this.invoice_doc.return_against;
+      
+      // Handle return specific fields
+      if (this.invoice_doc.is_return) {
+        doc.is_return = 1;
+        if (this.invoice_doc.return_against) {
+          doc.return_against = this.invoice_doc.return_against;
+        }
+        doc.update_stock = 1;
+        doc.ignore_pricing_rule = 1;
+        doc.is_pos = 1;
+        doc.pos_profile = this.pos_profile.name;
+        doc.warehouse = this.pos_profile.warehouse;
+        doc.cost_center = this.pos_profile.cost_center;
+        doc.conversion_rate = 1;
+        doc.currency = this.pos_profile.currency;
+        doc.customer = this.invoice_doc.customer || this.customer;
+        doc.posting_date = frappe.datetime.nowdate();
+      }
+
+      // Add POS-specific fields
       doc.posa_offers = this.posa_offers;
       doc.posa_coupons = this.posa_coupons;
-      doc.posa_delivery_charges = this.selcted_delivery_charges.name;
+      doc.posa_delivery_charges = this.selected_delivery_charge.name;
       doc.posa_delivery_charges_rate = this.delivery_charges_rate || 0;
       doc.posting_date = this.posting_date;
+
+      // Send tax-inclusive flag, tax, and net total to backend
+      doc.inclusive_tax = this.pos_profile.posa_tax_inclusive;
+      doc.net_total = this.Total;
+      doc.tax = this.total_tax || 0;  // Or calculate manually if needed
+
+      console.log("posa_tax_inclusive:", this.pos_profile.posa_tax_inclusive);  // Debug log
+      console.log("Total without tax:", this.Total);  // Debug log
+      console.log("Total tax amount:", this.total_tax);  // Debug log
+
+      // Check if the tax-inclusive flag is set
+      if (this.pos_profile.posa_tax_inclusive) {
+        // Ensure that the total includes taxes if the flag is set
+        doc.total = this.Total + (this.total_tax || 0);
+      } else {
+        // Otherwise, the total remains as the regular total (without tax)
+        doc.total = this.Total;
+      }
+
       return doc;
     },
 
