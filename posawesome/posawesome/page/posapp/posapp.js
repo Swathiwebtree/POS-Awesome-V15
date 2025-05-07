@@ -15,25 +15,6 @@ frappe.pages['posapp'].on_page_load = function (wrapper) {
 	$("head").append("<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900' />");
 };
 
-// Handle response when invoice is updated or submitted
-function onInvoiceUpdate(response) {
-    // Check if the tax is included
-    let isTaxInclusive = response.pos_profile.posa_tax_inclusive;  // Fetch posa_tax_inclusive value from response
-    
-    if (isTaxInclusive) {
-        // Synchronize Total Amount and Grand Total if tax is inclusive
-        let totalAmount = response.total_amount;  // Get total amount from backend response
-        let grandTotal = response.grand_total;   // Get grand total from backend response
-        console.log(grandTotal)	
-		console.log(totalAmount)	
-        if (totalAmount === grandTotal) {
-            // Set Total Amount field and Grand Total field to the same value
-            document.getElementById("total_amount_field").value = totalAmount;
-            document.getElementById("grand_total_field").value = grandTotal;
-        }
-    }
-}
-
 // Example of handling the backend response after an invoice update or submission
 function submitInvoice(data) {
     $.ajax({
