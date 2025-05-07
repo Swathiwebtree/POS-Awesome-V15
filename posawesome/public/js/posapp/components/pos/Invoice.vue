@@ -964,7 +964,7 @@ export default {
       }
 
       return doc;
-    }
+    },
 
 
     async get_invoice_from_order_doc() {
