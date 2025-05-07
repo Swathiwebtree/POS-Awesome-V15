@@ -15,23 +15,6 @@ frappe.pages['posapp'].on_page_load = function (wrapper) {
 	$("head").append("<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900' />");
 };
 
-
-// Example of handling the backend response after an invoice update or submission
-function submitInvoice(data) {
-    $.ajax({
-        url: '/api/method/your.custom.method',  // Your API endpoint for invoice update
-        method: 'POST',
-        data: data,
-        success: function(response) {
-            // Call the function to update the front-end fields after the backend response
-            onInvoiceUpdate(response);
-        },
-        error: function(error) {
-            console.log('Error:', error);
-        }
-    });
-}
-
 //Only if PT as we are not being able to load from pt.csv
 if (frappe.boot.lang == "pt") {
 	$.extend(
