@@ -996,6 +996,7 @@ export default {
           frappe.utils.play_sound("submit");
           vm.addresses = [];
           vm.eventBus.emit("clear_invoice");
+          vm.eventBus.emit("reset_posting_date");
           vm.back_to_invoice();
         }
       });

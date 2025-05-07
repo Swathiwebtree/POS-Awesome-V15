@@ -229,7 +229,7 @@
                 </v-btn>
               </v-col>
               <v-col cols="6" class="pl-1">
-                <v-btn block size="large" color="success" theme="dark" @click="submit(undefined, false, true)" :disabled="vaildatPayment || isSubmitting" :loading="isSubmitting">
+                <v-btn block size="large" color="success" theme="dark" @click="submit_and_print()" :disabled="vaildatPayment || isSubmitting" :loading="isSubmitting">
                   {{ __("Submit & Print") }}
                 </v-btn>
               </v-col>

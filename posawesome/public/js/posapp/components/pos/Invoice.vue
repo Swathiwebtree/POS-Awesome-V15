@@ -57,12 +57,40 @@
       </v-row>
       <v-row align="center" class="items px-2 py-1 mt-0 pt-0" v-if="pos_profile.posa_allow_change_posting_date">
         <v-col cols="6" class="pb-2">
-          <PostingDate
-            v-model="posting_date"
-            :min-date="frappe.datetime.add_days(frappe.datetime.nowdate(true), -7)"
-            :max-date="frappe.datetime.add_days(frappe.datetime.nowdate(true), 7)"
-            @update:model-value="updatePostingDate"
-          />
+          <v-menu
+            v-model="posting_date_menu"
+            :close-on-content-click="false"
+            transition="scale-transition"
+            density="default"
+          >
+            <template v-slot:activator="{ props }">
+              <v-text-field
+                v-model="formatted_posting_date"
+                :label="frappe._('Posting Date')"
+                readonly
+                variant="outlined"
+                density="compact"
+                clearable
+                color="primary"
+                hide-details
+                v-bind="props"
+              ></v-text-field>
+            </template>
+            <v-date-picker
+              v-model="posting_date"
+              no-title
+              scrollable
+              color="primary"
+              :min="frappe.datetime.add_days(frappe.datetime.nowdate(true), -7)"
+              :max="frappe.datetime.add_days(frappe.datetime.nowdate(true), 7)"
+            >
+              <template #actions>
+                <v-spacer></v-spacer>
+                <v-btn text color="primary" @click="posting_date = null; posting_date_menu = false">{{ __('Clear') }}</v-btn>
+                <v-btn text color="primary" @click="posting_date_menu = false">{{ __('OK') }}</v-btn>
+              </template>
+            </v-date-picker>
+          </v-menu>
         </v-col>
         <!-- Balance Field -->
         <v-col v-if="pos_profile.posa_show_customer_balance" cols="6" class="pb-2 d-flex align-center">
@@ -416,7 +444,6 @@
 
 import format from "../../format";
 import Customer from "./Customer.vue";
-import PostingDate from "./PostingDate.vue";
 
 export default {
   mixins: [format],
@@ -431,7 +458,7 @@ export default {
       customer_info: "",
       customer_balance: 0,
       discount_amount: 0,
-      additional_discount: 0,  // New variable for additional discount
+      additional_discount: 0,
       additional_discount_percentage: 0,
       total_tax: 0,
       items: [],
@@ -454,6 +481,7 @@ export default {
       selected_delivery_charge: "",
       invoice_posting_date: false,
       posting_date: frappe.datetime.nowdate(),
+      posting_date_menu: false,
       items_headers: [
         {
           title: __("Name"),
@@ -475,7 +503,6 @@ export default {
 
   components: {
     Customer,
-    PostingDate,
   },
 
   computed: {
@@ -525,6 +552,25 @@ export default {
         }
       });
       return this.flt(sum, this.float_precision);
+    },
+    // Format posting_date for display as DD-MM-YYYY
+    formatted_posting_date: {
+      get() {
+        if (!this.posting_date) return '';
+        const parts = this.posting_date.split('-');
+        if (parts.length === 3) {
+          return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        return this.posting_date;
+      },
+      set(val) {
+        const parts = val.split('-');
+        if (parts.length === 3) {
+          this.posting_date = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        } else {
+          this.posting_date = val;
+        }
+      }
     },
   },
 
@@ -717,32 +763,27 @@ export default {
     },
 
     clear_invoice() {
-      this.invoice_doc = "";
       this.items = [];
-      this.customer = "";
-      this.customer_info = "";
-      this.customer_balance = 0;
+      this.posa_offers = [];
+      this.expanded = [];
+      this.eventBus.emit("set_pos_coupons", []);
+      this.posa_coupons = [];
+      this.invoice_doc = "";
+      this.return_doc = "";
       this.discount_amount = 0;
-      this.additional_discount = 0;
+      this.additional_discount = 0;  // Added for additional discount
       this.additional_discount_percentage = 0;
-      this.total_tax = 0;
+      this.delivery_charges_rate = 0;
+      this.selected_delivery_charge = "";
+      // Reset posting date to today
+      this.posting_date = frappe.datetime.nowdate();
+
+      // Always reset to default customer after invoice
+      this.customer = this.pos_profile.customer;
+
+      this.eventBus.emit("set_customer_readonly", false);
       this.invoiceType = this.pos_profile.posa_default_sales_order ? "Order" : "Invoice";
       this.invoiceTypes = ["Invoice", "Order"];
-      this.posting_date = frappe.datetime.nowdate(); // Reset posting date to current date
-      this.selected_delivery_charge = "";
-      this.delivery_charges_rate = 0;
-      this.selected_currency = this.pos_profile.currency;
-      this.exchange_rate = 1;
-      this.eventBus.emit("set_customer_readonly", false);
-      this.eventBus.emit("update_items_details");
-      this.eventBus.emit("set_pos_coupons", []);
-      this.eventBus.emit("set_customer_info", "");
-      this.eventBus.emit("set_customer", "");
-      this.eventBus.emit("set_customer_credit_dict", []);
-      this.eventBus.emit("set_redeem_customer_credit", false);
-      this.eventBus.emit("set_is_cashback", true);
-      this.eventBus.emit("set_sales_person", "");
-      this.eventBus.emit("set_addresses", []);
     },
 	
 	async fetch_customer_balance() {
@@ -1176,7 +1217,12 @@ export default {
       const doc = this.get_invoice_doc();
       if (doc.name) {
         try {
-          return this.update_invoice(doc);
+          const updated_doc = this.update_invoice(doc);
+          // Update posting date after invoice update
+          if (updated_doc && updated_doc.posting_date) {
+            this.posting_date = updated_doc.posting_date;
+          }
+          return updated_doc;
         } catch (error) {
           console.error('Error in process_invoice:', error);
           this.eventBus.emit('show_message', {
@@ -1187,7 +1233,12 @@ export default {
         }
       } else {
         try {
-          return this.update_invoice(doc);
+          const updated_doc = this.update_invoice(doc);
+          // Update posting date after invoice creation
+          if (updated_doc && updated_doc.posting_date) {
+            this.posting_date = updated_doc.posting_date;
+          }
+          return updated_doc;
         } catch (error) {
           console.error('Error in process_invoice:', error);
           this.eventBus.emit('show_message', {
@@ -3177,6 +3228,10 @@ export default {
     if (this.pos_profile.posa_allow_multi_currency) {
       this.fetch_available_currencies();
     }
+    // Listen for reset_posting_date to reset posting date after invoice submission
+    this.eventBus.on("reset_posting_date", () => {
+      this.posting_date = frappe.datetime.nowdate();
+    });
   },
   beforeUnmount() {
     // Existing cleanup
@@ -3185,16 +3240,8 @@ export default {
     this.eventBus.off("update_customer");
     this.eventBus.off("fetch_customer_details");
     this.eventBus.off("clear_invoice");
-    this.eventBus.off("set_offers");
-    this.eventBus.off("update_invoice_offers");
-    this.eventBus.off("update_invoice_coupons");
-    this.eventBus.off("set_all_items");
-    
-    // Additional cleanup for missing events
-    this.eventBus.off("load_invoice");
-    this.eventBus.off("load_order");
-    this.eventBus.off("load_return_invoice"); 
-    this.eventBus.off("set_new_line");
+    // Cleanup reset_posting_date listener
+    this.eventBus.off("reset_posting_date");
   },
   created() {
     document.addEventListener("keydown", this.shortOpenPayment.bind(this));
