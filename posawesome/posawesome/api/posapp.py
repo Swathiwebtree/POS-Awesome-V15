@@ -579,8 +579,21 @@ def update_invoice(data):
         "POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"
     ):
         if invoice_doc.get("taxes"):
+            # Mark tax as included in the print rate
             for tax in invoice_doc.taxes:
                 tax.included_in_print_rate = 1
+
+            # Adjust the invoice total to reflect tax-included prices
+            total_inclusive_of_tax = 0
+            for item in invoice_doc.items:
+                if item.rate:
+                    # Calculate price including tax
+                    total_inclusive_of_tax += item.rate * item.qty
+
+            # Set the grand total to the inclusive tax total
+            invoice_doc.grand_total = total_inclusive_of_tax
+            invoice_doc.rounded_total = invoice_doc.grand_total
+            invoice_doc.total = invoice_doc.grand_total
 
     today_date = getdate()
     if (
