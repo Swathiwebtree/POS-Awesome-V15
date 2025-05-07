@@ -537,44 +537,59 @@ def validate_return_items(original_invoice_name, return_items):
 @frappe.whitelist()
 def update_invoice(data):
     data = json.loads(data)
-
-    # Debugging log to check incoming data
-    print("Received data:", data)  # Debug log
-
-    # Existing validation and logic
-    pos_profile = frappe.get_cached_doc("POS Profile", data.get("pos_profile"))
-    is_tax_inclusive = pos_profile.posa_tax_inclusive
-
-    # Log pos_profile data to verify tax-inclusive flag
-    print("POS Profile Tax Inclusive:", is_tax_inclusive)  # Debug log
-
-    # Total calculations
-    net_total = flt(data.get("net_total", 0))
-    tax = flt(data.get("tax", 0))
-
-    print("Net Total:", net_total)  # Debug log
-    print("Tax:", tax)  # Debug log
-
-    if is_tax_inclusive:
-        total_amount = net_total
-        grand_total = total_amount
+    if data.get("name"):
+        invoice_doc = frappe.get_doc("Sales Invoice", data.get("name"))
+        invoice_doc.update(data)
     else:
-        total_amount = net_total
-        grand_total = net_total + tax
+        invoice_doc = frappe.get_doc(data)
 
-    print("Total Amount:", total_amount)  # Debug log
-    print("Grand Total:", grand_total)  # Debug log
-
-    invoice_doc = frappe.get_doc("Sales Invoice", data.get("name")) if data.get("name") else frappe.new_doc("Sales Invoice")
-    invoice_doc.update(data)
-    invoice_doc.net_total = net_total
-    invoice_doc.total_amount = total_amount
-    invoice_doc.grand_total = grand_total
-
+    invoice_doc.set_missing_values()
     invoice_doc.flags.ignore_permissions = True
-    invoice_doc.ignore_mandatory = True
-    invoice_doc.save()
+    frappe.flags.ignore_account_permission = True
 
+    if invoice_doc.is_return and invoice_doc.return_against:
+        ref_doc = frappe.get_cached_doc(invoice_doc.doctype, invoice_doc.return_against)
+        if not ref_doc.update_stock:
+            invoice_doc.update_stock = 0
+        if len(invoice_doc.payments) == 0:
+            invoice_doc.payments = ref_doc.payments
+        invoice_doc.paid_amount = (
+            invoice_doc.rounded_total or invoice_doc.grand_total or invoice_doc.total
+        )
+        for payment in invoice_doc.payments:
+            if payment.default:
+                payment.amount = invoice_doc.paid_amount
+    allow_zero_rated_items = frappe.get_cached_value(
+        "POS Profile", invoice_doc.pos_profile, "posa_allow_zero_rated_items"
+    )
+    for item in invoice_doc.items:
+        if not item.rate or item.rate == 0:
+            if allow_zero_rated_items:
+                item.price_list_rate = 0.00
+                item.is_free_item = 1
+            else:
+                frappe.throw(
+                    _("Rate cannot be zero for item {0}").format(item.item_code)
+                )
+        else:
+            item.is_free_item = 0
+        add_taxes_from_tax_template(item, invoice_doc)
+
+    if frappe.get_cached_value(
+        "POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"
+    ):
+        if invoice_doc.get("taxes"):
+            for tax in invoice_doc.taxes:
+                tax.included_in_print_rate = 1
+
+    today_date = getdate()
+    if (
+        invoice_doc.get("posting_date")
+        and getdate(invoice_doc.posting_date) != today_date
+    ):
+        invoice_doc.set_posting_time = 1
+
+    invoice_doc.save()
     return invoice_doc
 
 
