@@ -3034,12 +3034,38 @@ export default {
     },
 
     formatCurrency(value) {
-      // Override formatCurrency to handle small amounts better
       if (!value) return "0.00";
       
-      // Use higher precision for very small amounts
-      const precision = Math.abs(value) < 0.01 ? 6 : this.currency_precision;
-      return this.flt(value, precision).toFixed(precision);
+      // Convert to absolute value for comparison
+      const absValue = Math.abs(value);
+      
+      // Determine precision based on value size
+      let precision;
+      if (absValue >= 1) {
+        // Normal values use standard precision (2)
+        precision = 2;
+      } else if (absValue >= 0.01) {
+        // Small values between 0.01 and 1 use 4 decimal places
+        precision = 4;
+      } else {
+        // Very small values use higher precision (6)
+        precision = 6;
+      }
+      
+      // Format the number with determined precision
+      const formattedValue = this.flt(value, precision).toFixed(precision);
+      
+      // Remove trailing zeros after decimal point while keeping at least 2 decimals
+      const parts = formattedValue.split('.');
+      if (parts.length === 2) {
+        const decimalPart = parts[1].replace(/0+$/, '');
+        if (decimalPart.length < 2) {
+          return `${parts[0]}.${decimalPart.padEnd(2, '0')}`;
+        }
+        return `${parts[0]}.${decimalPart}`;
+      }
+      
+      return formattedValue;
     },
 
     flt(value, precision = null) {
