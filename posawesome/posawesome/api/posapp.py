@@ -537,66 +537,50 @@ def validate_return_items(original_invoice_name, return_items):
 @frappe.whitelist()
 def update_invoice(data):
     data = json.loads(data)
-    
-    # If this is a return invoice with a reference invoice, validate items
+
+    # Validation
     if data.get('is_return') and data.get('return_against'):
         validation_result = validate_return_items(data.get('return_against'), data.get('items', []))
         if not validation_result.get('valid'):
             frappe.throw(validation_result.get('message'))
-            
-    # Continue with existing logic
-    invoice_doc = frappe.get_doc("Sales Invoice", data.get("name")) if data.get("name") else None
-    
-    if not invoice_doc:
-        invoice_doc = frappe.new_doc("Sales Invoice")
-        invoice_doc.update(data)
-    else:
-        invoice_doc.update(data)
-    
-    # Set update_stock to 1 for all invoices except delivery date-based ones
-    if not data.get("posa_delivery_date"):
-        invoice_doc.update_stock = 1
-    else:
-        invoice_doc.update_stock = 0
-        
-    # Ensure stock is updated for returns
-    if data.get('is_return'):
-        invoice_doc.update_stock = 1
 
-    # Fetch POS Profile for the given data
-    pos_profile = frappe.get_doc("POS Profile", data.get("pos_profile"))
-    is_tax_inclusive = pos_profile.posa_tax_inclusive  # Fetch the 'posa_tax_inclusive' value
+    # Load or create invoice doc
+    invoice_doc = frappe.get_doc("Sales Invoice", data.get("name")) if data.get("name") else frappe.new_doc("Sales Invoice")
+    invoice_doc.update(data)
 
-    # Calculate net total and tax (ensure these values exist in the 'data')
-    net_total = data.get("net_total", 0.0)
-    tax = data.get("tax", 0.0)
+    # Set stock update
+    invoice_doc.update_stock = 1 if not data.get("posa_delivery_date") or data.get('is_return') else 0
 
-    # Apply tax-inclusive logic
+    # Fetch POS profile
+    pos_profile = frappe.get_cached_doc("POS Profile", data.get("pos_profile"))
+    is_tax_inclusive = pos_profile.posa_tax_inclusive
+
+    # Total calculations
+    net_total = flt(data.get("net_total", 0))
+    tax = flt(data.get("tax", 0))
+
     if is_tax_inclusive:
-        # If tax is included in the price, Total Amount will be the same as Net Total
         total_amount = net_total
-        grand_total = total_amount  # Grand Total will be the same as Total Amount (no extra tax)
+        grand_total = total_amount  # No extra tax added
     else:
-        # If tax is not included, we add tax separately to the Grand Total
         total_amount = net_total
-        grand_total = net_total + tax  # Add the tax to Grand Total
+        grand_total = net_total + tax
 
-    # Update the invoice with the correct totals
     invoice_doc.net_total = net_total
     invoice_doc.total_amount = total_amount
     invoice_doc.grand_total = grand_total
-    
-    # Other existing logic here
-    if frappe.get_cached_value("POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"):
-        if invoice_doc.get("taxes"):
-            for tax in invoice_doc.taxes:
-                tax.included_in_print_rate = 1
-    
+
+    # Ensure tax flags set correctly
+    if invoice_doc.get("taxes"):
+        for tax_row in invoice_doc.taxes:
+            tax_row.included_in_print_rate = 1 if is_tax_inclusive else 0
+
     invoice_doc.flags.ignore_permissions = True
     invoice_doc.ignore_mandatory = True
     invoice_doc.save()
 
     return invoice_doc
+
 
 
 @frappe.whitelist()

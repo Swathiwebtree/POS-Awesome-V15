@@ -468,7 +468,7 @@ export default {
       });
       return this.flt(sum, this.currency_precision);
     },
-    
+
     subtotal() {
       this.close_payments();
       let sum = 0;
@@ -479,21 +479,8 @@ export default {
         sum += qty * rate;
       });
 
-      sum -= flt(this.additional_discount);
-      sum += flt(this.delivery_charges_rate);
-
-      // Add tax only if it's NOT inclusive
-      if (!this.pos_profile?.posa_tax_inclusive) {
-        let tax_total = 0;
-
-        if (this.invoice_doc?.taxes?.length) {
-          this.invoice_doc.taxes.forEach(tax => {
-            tax_total += flt(tax.tax_amount);
-          });
-        }
-
-        sum += tax_total;
-      }
+      sum -= this.flt(this.additional_discount);
+      sum += this.flt(this.delivery_charges_rate);
 
       return this.flt(sum, this.currency_precision);
     },
@@ -959,6 +946,11 @@ export default {
       doc.posa_delivery_charges = this.selected_delivery_charge.name;
       doc.posa_delivery_charges_rate = this.delivery_charges_rate || 0;
       doc.posting_date = this.posting_date;
+      // Send tax-inclusive flag, tax and net total to backend
+      doc.inclusive_tax = this.pos_profile.posa_tax_inclusive;
+      doc.net_total = this.Total;
+      doc.tax = this.total_tax || 0;  // Or calculate manually if needed
+
       return doc;
     },
 
