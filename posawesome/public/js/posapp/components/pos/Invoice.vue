@@ -1,5 +1,7 @@
 <template>
+  <!-- Main Invoice Wrapper -->
   <div>
+    <!-- Cancel Sale Confirmation Dialog -->
     <v-dialog v-model="cancel_dialog" max-width="330">
       <v-card>
         <v-card-title class="text-h5">
@@ -10,7 +12,6 @@
         <v-card-text>
           This would cancel and delete the current sale. To save it as Draft, click the "Save and Clear" instead.
         </v-card-text>
-        <!-- <v-card- -->
         <v-card-actions>
           <v-spacer></v-spacer>
           <v-btn color="error" @click="cancel_invoice">
@@ -22,12 +23,17 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Main Invoice Card (contains all invoice content) -->
     <v-card style="max-height: 70vh; height: 70vh"
       :class="['cards my-0 py-0 mt-3 bg-grey-lighten-5', { 'return-mode': invoiceType === 'Return' }]">
+      <!-- Top Row: Customer Selection and Invoice Type -->
       <v-row align="center" class="items px-2 py-1">
         <v-col :cols="pos_profile.posa_allow_sales_order ? 9 : 12" class="pb-2 pr-0">
+          <!-- Customer selection component -->
           <Customer />
         </v-col>
+        <!-- Invoice Type Selection (Only shown if sales orders are allowed) -->
         <v-col v-if="pos_profile.posa_allow_sales_order" cols="3" class="pb-2">
           <v-select density="compact" hide-details variant="outlined" color="primary" bg-color="white"
             :items="invoiceTypes" :label="frappe._('Type')" v-model="invoiceType"
@@ -35,8 +41,10 @@
         </v-col>
       </v-row>
 
+      <!-- Delivery Charges Section (Only if enabled in POS profile) -->
       <v-row align="center" class="items px-2 py-1 mt-0 pt-0" v-if="pos_profile.posa_use_delivery_charges">
         <v-col cols="8" class="pb-0 mb-0 pr-0 pt-0">
+          <!-- Delivery Charges Selection Dropdown -->
           <v-autocomplete density="compact" clearable auto-select-first variant="outlined" color="primary"
             :label="frappe._('Delivery Charges')" v-model="selected_delivery_charge" :items="delivery_charges"
             item-title="name" item-value="name" return-object bg-color="white" :no-data-text="__('Charges not found')"
@@ -50,13 +58,17 @@
             </template>
           </v-autocomplete>
         </v-col>
+        <!-- Delivery Charges Rate Display -->
         <v-col cols="4" class="pb-0 mb-0 pt-0">
           <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Delivery Charges Rate')"
             bg-color="white" hide-details :model-value="formatCurrency(delivery_charges_rate)"
             :prefix="currencySymbol(pos_profile.currency)" disabled></v-text-field>
         </v-col>
       </v-row>
+
+      <!-- Posting Date and Customer Balance Section -->
       <v-row align="center" class="items px-2 py-1 mt-0 pt-0" v-if="pos_profile.posa_allow_change_posting_date">
+        <!-- Posting Date Selection with Date Picker -->
         <v-col cols="6" class="pb-2">
           <v-menu v-model="posting_date_menu" :close-on-content-click="false" transition="scale-transition"
             density="default">
@@ -77,7 +89,7 @@
             </v-date-picker>
           </v-menu>
         </v-col>
-        <!-- Balance Field -->
+        <!-- Customer Balance Display (Only if enabled in POS profile) -->
         <v-col v-if="pos_profile.posa_show_customer_balance" cols="6" class="pb-2 d-flex align-center">
           <div class="balance-field">
             <strong>Balance:</strong>
@@ -85,55 +97,70 @@
           </div>
         </v-col>
       </v-row>
+
+      <!-- Multi-Currency Section (Only if enabled in POS profile) -->
       <v-row align="center" class="items px-2 py-1 mt-0 pt-0" v-if="pos_profile.posa_allow_multi_currency">
+        <!-- Currency Selection Dropdown -->
         <v-col cols="4" class="pb-2">
           <v-select density="compact" variant="outlined" color="primary" :label="frappe._('Currency')" bg-color="white"
             hide-details v-model="selected_currency" :items="available_currencies"
             @update:model-value="update_currency"></v-select>
         </v-col>
+        <!-- Exchange Rate Input Field -->
         <v-col cols="4" class="pb-2">
           <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Exchange Rate')"
             bg-color="white" hide-details v-model="exchange_rate" :rules="[isNumber]"
             @change="update_exchange_rate"></v-text-field>
         </v-col>
       </v-row>
+
+      <!-- Items Table Section (Main items list for invoice) -->
       <div class="my-0 py-0 overflow-y-auto" style="max-height: 60vh">
+        <!-- Main Items Data Table -->
         <v-data-table :headers="items_headers" :items="items" v-model:expanded="expanded" show-expand
           item-value="posa_row_id" class="elevation-1" :items-per-page="itemsPerPage" expand-on-click
           hide-default-footer>
+          <!-- Quantity Column Template -->
           <template v-slot:item.qty="{ item }">{{
             formatFloat(item.qty)
           }}</template>
+          <!-- Rate Column Template with Currency Symbol -->
           <template v-slot:item.rate="{ item }">
             <div class="d-flex align-center">
               <span>{{ currencySymbol(displayCurrency) }}</span>
               <span>{{ formatCurrency(item.rate) }}</span>
             </div>
           </template>
+          <!-- Amount Column Template with Currency Symbol -->
           <template v-slot:item.amount="{ item }">
             <div class="d-flex align-center">
               <span>{{ currencySymbol(displayCurrency) }}</span>
               <span>{{ formatCurrency(item.qty * item.rate) }}</span>
             </div>
           </template>
+          <!-- Discount Amount Column Template -->
           <template v-slot:item.discount_amount="{ item }">
             <div class="d-flex align-center">
               <span>{{ currencySymbol(displayCurrency) }}</span>
               <span>{{ formatCurrency(item.discount_amount) }}</span>
             </div>
           </template>
+          <!-- Price List Rate Column Template -->
           <template v-slot:item.price_list_rate="{ item }">
             <div class="d-flex align-center">
               <span>{{ currencySymbol(displayCurrency) }}</span>
               <span>{{ formatCurrency(item.price_list_rate) }}</span>
             </div>
           </template>
+          <!-- Offer Checkbox Column Template -->
           <template v-slot:item.posa_is_offer="{ item }">
             <v-checkbox-btn v-model="item.posa_is_offer" class="center" @change="toggleOffer(item)"></v-checkbox-btn>
           </template>
 
+          <!-- Expanded Row Template for Item Details -->
           <template v-slot:expanded-row="{ columns: headers, item }">
             <td :colspan="headers.length" class="ma-0 pa-0">
+              <!-- Expanded Item Action Buttons Row -->
               <v-row class="ma-0 pa-0">
                 <v-col cols="1">
                   <v-btn :disabled="!!item.posa_is_replace" icon color="error" @click.stop="remove_item(item)">
@@ -152,11 +179,13 @@
                   </v-btn>
                 </v-col>
               </v-row>
+              <!-- Expanded Item Details Form Row -->
               <v-row class="ma-0 pa-0">
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Item Code')"
                     bg-color="white" hide-details v-model="item.item_code" disabled></v-text-field>
                 </v-col>
+                <!-- Quantity Input Field -->
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('QTY')"
                     bg-color="white" hide-details :model-value="formatFloat(item.qty)" @change="
@@ -166,6 +195,7 @@
                       ]
                       " :rules="[isNumber]" :disabled="!!item.posa_is_replace"></v-text-field>
                 </v-col>
+                <!-- UOM (Unit of Measure) Selection -->
                 <v-col cols="4">
                   <v-select density="compact" bg-color="white" :label="frappe._('UOM')" v-model="item.uom"
                     :items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom" hide-details
@@ -173,6 +203,7 @@
                       (this.invoiceType === 'Return' && this.invoice_doc.return_against)">
                   </v-select>
                 </v-col>
+                <!-- Rate Input Field -->
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Rate')"
                     bg-color="white" hide-details :prefix="currencySymbol(pos_profile.currency)"
@@ -195,6 +226,7 @@
                         : false
                         "></v-text-field>
                 </v-col>
+                <!-- Discount Percentage Input Field -->
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary"
                     :label="frappe._('Discount Percentage')" bg-color="white" hide-details
@@ -217,6 +249,7 @@
                         : false
                         " suffix="%"></v-text-field>
                 </v-col>
+                <!-- Discount Amount Input Field (readonly, auto-calculated) -->
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary"
                     :label="frappe._('Discount Amount')" bg-color="white" hide-details
@@ -230,52 +263,63 @@
                     }" :rules="['isNumber']" id="discount_amount" disabled
                     :prefix="currencySymbol(pos_profile.currency)"></v-text-field>
                 </v-col>
+                <!-- Price List Rate (readonly) -->
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary"
                     :label="frappe._('Price list Rate')" bg-color="white" hide-details
                     :model-value="formatCurrency(item.price_list_rate)" disabled
                     :prefix="currencySymbol(pos_profile.currency)"></v-text-field>
                 </v-col>
+                <!-- Available QTY (readonly) -->
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Available QTY')"
                     bg-color="white" hide-details :model-value="formatFloat(item.actual_qty)" disabled></v-text-field>
                 </v-col>
+                <!-- Item Group (readonly) -->
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Group')"
                     bg-color="white" hide-details v-model="item.item_group" disabled></v-text-field>
                 </v-col>
+                <!-- Stock QTY (readonly) -->
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Stock QTY')"
                     bg-color="white" hide-details :model-value="formatFloat(item.stock_qty)" disabled></v-text-field>
                 </v-col>
+                <!-- Stock UOM (readonly) -->
                 <v-col cols="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Stock UOM')"
                     bg-color="white" hide-details v-model="item.stock_uom" disabled></v-text-field>
                 </v-col>
+                <!-- Offer Applied Checkbox (readonly) -->
                 <v-col align="center" cols="4" v-if="item.posa_offer_applied">
                   <v-checkbox density="default" :label="frappe._('Offer Applied')" v-model="item.posa_offer_applied"
                     readonly hide-details class="shrink mr-2 mt-0"></v-checkbox>
                 </v-col>
+                <!-- Serial No QTY (readonly, if serials enabled) -->
                 <v-col cols="4" v-if="item.has_serial_no == 1 || item.serial_no">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Serial No QTY')"
                     bg-color="white" hide-details v-model="item.serial_no_selected_count" type="number"
                     disabled></v-text-field>
                 </v-col>
+                <!-- Serial No Selection (if serials enabled) -->
                 <v-col cols="12" v-if="item.has_serial_no == 1 || item.serial_no">
                   <v-autocomplete v-model="item.serial_no_selected" :items="item.serial_no_data" item-title="serial_no"
                     variant="outlined" density="compact" chips color="primary" small-chips
                     :label="frappe._('Serial No')" multiple @update:model-value="set_serial_no(item)"></v-autocomplete>
                 </v-col>
+                <!-- Batch No Available QTY (readonly, if batch enabled) -->
                 <v-col cols="4" v-if="item.has_batch_no == 1 || item.batch_no">
                   <v-text-field density="compact" variant="outlined" color="primary"
                     :label="frappe._('Batch No. Available QTY')" bg-color="white" hide-details
                     :model-value="formatFloat(item.actual_batch_qty)" disabled></v-text-field>
                 </v-col>
+                <!-- Batch No Expiry Date (readonly, if batch enabled) -->
                 <v-col cols="4" v-if="item.has_batch_no == 1 || item.batch_no">
                   <v-text-field density="compact" variant="outlined" color="primary"
                     :label="frappe._('Batch No Expiry Date')" bg-color="white" hide-details
                     v-model="item.batch_no_expiry_date" disabled></v-text-field>
                 </v-col>
+                <!-- Batch No Selection (if batch enabled) -->
                 <v-col cols="8" v-if="item.has_batch_no == 1 || item.batch_no">
                   <v-autocomplete v-model="item.batch_no" :items="item.batch_no_data" item-title="batch_no"
                     variant="outlined" density="compact" color="primary" :label="frappe._('Batch No')"
@@ -290,6 +334,7 @@
                     </template>
                   </v-autocomplete>
                 </v-col>
+                <!-- Delivery Date Picker (if sales order and order type) -->
                 <v-col cols="4" v-if="
                   pos_profile.posa_allow_sales_order &&
                   invoiceType == 'Order'
@@ -423,6 +468,7 @@ export default {
   mixins: [format],
   data() {
     return {
+      // POS profile settings
       pos_profile: "",
       pos_opening_shift: "",
       stock_settings: "",
@@ -435,28 +481,29 @@ export default {
       additional_discount: 0,
       additional_discount_percentage: 0,
       total_tax: 0,
-      items: [],
-      posOffers: [],
-      posa_offers: [],
-      posa_coupons: [],
-      allItems: [],
-      discount_percentage_offer_name: null,
-      invoiceTypes: ["Invoice", "Order"],
-      invoiceType: "Invoice",
-      itemsPerPage: 1000,
-      expanded: [],
-      singleExpand: true,
-      cancel_dialog: false,
-      float_precision: 6,
-      currency_precision: 6,
-      new_line: false,
-      delivery_charges: [],
-      delivery_charges_rate: 0,
-      selected_delivery_charge: "",
-      invoice_posting_date: false,
-      posting_date: frappe.datetime.nowdate(),
-      posting_date_menu: false,
+      items: [], // List of invoice items
+      posOffers: [], // All available offers
+      posa_offers: [], // Offers applied to this invoice
+      posa_coupons: [], // Coupons applied
+      allItems: [], // All items for offer logic
+      discount_percentage_offer_name: null, // Track which offer is applied
+      invoiceTypes: ["Invoice", "Order"], // Types of invoices
+      invoiceType: "Invoice", // Current invoice type
+      itemsPerPage: 1000, // Items per page in table
+      expanded: [], // Expanded rows in items table
+      singleExpand: true, // Only one row expanded at a time
+      cancel_dialog: false, // Cancel dialog visibility
+      float_precision: 6, // Float precision for calculations
+      currency_precision: 6, // Currency precision for display
+      new_line: false, // Add new line for item
+      delivery_charges: [], // List of delivery charges
+      delivery_charges_rate: 0, // Selected delivery charge rate
+      selected_delivery_charge: "", // Selected delivery charge object
+      invoice_posting_date: false, // Posting date dialog
+      posting_date: frappe.datetime.nowdate(), // Invoice posting date
+      posting_date_menu: false, // Posting date menu visibility
       items_headers: [
+        // Table headers for items
         {
           title: __("Name"),
           align: "start",
@@ -469,9 +516,9 @@ export default {
         { title: __("Amount"), key: "amount", align: "center" },
         { title: __("Offer?"), key: "posa_is_offer", align: "center" },
       ],
-      selected_currency: "",
-      exchange_rate: 1,
-      available_currencies: [],
+      selected_currency: "", // Currently selected currency
+      exchange_rate: 1, // Current exchange rate
+      available_currencies: [], // List of available currencies
     };
   },
 
@@ -480,6 +527,7 @@ export default {
   },
 
   computed: {
+    // Calculate total quantity of all items
     total_qty() {
       this.close_payments();
       let qty = 0;
@@ -488,40 +536,40 @@ export default {
       });
       return this.flt(qty, this.float_precision);
     },
+    // Calculate total amount for all items (handles returns)
     Total() {
       let sum = 0;
       this.items.forEach((item) => {
-        // For returns, we need to use absolute values to calculate the total correctly
+        // For returns, use absolute value for correct calculation
         const qty = this.invoiceType === "Return" ? Math.abs(flt(item.qty)) : flt(item.qty);
         const rate = flt(item.rate);
         sum += qty * rate;
       });
       return this.flt(sum, this.currency_precision);
     },
+    // Calculate subtotal after discounts and delivery charges
     subtotal() {
       this.close_payments();
       let sum = 0;
       this.items.forEach((item) => {
-        // For returns, we need to use absolute values to calculate the subtotal correctly
+        // For returns, use absolute value for correct calculation
         const qty = this.invoiceType === "Return" ? Math.abs(flt(item.qty)) : flt(item.qty);
         const rate = flt(item.rate);
         sum += qty * rate;
       });
-      
-      // Convert additional discount to selected currency if needed
+      // Subtract additional discount
       const additional_discount = this.flt(this.additional_discount);
       sum -= additional_discount;
-      
-      // Add delivery charges in selected currency
+      // Add delivery charges
       const delivery_charges = this.flt(this.delivery_charges_rate);
       sum += delivery_charges;
-      
       return this.flt(sum, this.currency_precision);
     },
+    // Calculate total discount amount for all items
     total_items_discount_amount() {
       let sum = 0;
       this.items.forEach((item) => {
-        // For returns, we need to use absolute values for calculations
+        // For returns, use absolute value for correct calculation
         if (this.invoiceType === "Return") {
           sum += Math.abs(flt(item.qty)) * flt(item.discount_amount);
         } else {
@@ -549,16 +597,17 @@ export default {
         }
       }
     },
+    // Get currency symbol for display
     currencySymbol() {
       return (currency) => {
         return get_currency_symbol(currency || this.selected_currency || this.pos_profile.currency);
       };
     },
-    
+    // Get display currency
     displayCurrency() {
       return this.selected_currency || this.pos_profile.currency;
     },
-    
+    // Table headers for item table (for another table if needed)
     itemTableHeaders() {
       return [
         {
@@ -592,6 +641,7 @@ export default {
   },
 
   methods: {
+    // Remove an item from the invoice and expanded rows
     remove_item(item) {
       const index = this.items.findIndex(
         (el) => el.posa_row_id == item.posa_row_id
@@ -607,6 +657,7 @@ export default {
       }
     },
 
+    // Increase quantity of an item (handles return logic)
     add_one(item) {
       // For returns, we need to add (make more negative)
       if (this.invoiceType === "Return") {
@@ -620,6 +671,7 @@ export default {
       this.calc_stock_qty(item, item.qty);
       this.$forceUpdate();
     },
+    // Decrease quantity of an item (handles return logic)
     subtract_one(item) {
       // For returns, we need to subtract (make less negative)
       if (this.invoiceType === "Return") {
@@ -634,6 +686,7 @@ export default {
       this.$forceUpdate();
     },
 
+    // Add a new item to the invoice, or update existing one if found
     add_item(item) {
       if (!item.uom) {
         item.uom = item.stock_uom;
@@ -651,11 +704,13 @@ export default {
       }
       if (index === -1 || this.new_line) {
         const new_item = this.get_new_item(item);
+        // Handle serial number logic
         if (item.has_serial_no && item.to_set_serial_no) {
           new_item.serial_no_selected = [];
           new_item.serial_no_selected.push(item.to_set_serial_no);
           item.to_set_serial_no = null;
         }
+        // Handle batch number logic
         if (item.has_batch_no && item.to_set_batch_no) {
           new_item.batch_no = item.to_set_batch_no;
           item.to_set_batch_no = null;
@@ -671,6 +726,7 @@ export default {
       } else {
         const cur_item = this.items[index];
         this.update_items_details([cur_item]);
+        // Serial number logic for existing item
         if (item.has_serial_no && item.to_set_serial_no) {
           if (cur_item.serial_no_selected.includes(item.to_set_serial_no)) {
             this.eventBus.emit("show_message", {
@@ -685,6 +741,7 @@ export default {
           cur_item.serial_no_selected.push(item.to_set_serial_no);
           item.to_set_serial_no = null;
         }
+        // Batch logic for existing item
         if (!cur_item.has_batch_no) {
           // For returns, subtract from quantity to make it more negative
           if (this.invoiceType === "Return") {
@@ -730,6 +787,7 @@ export default {
       this.$forceUpdate();
     },
 
+    // Create a new item object with default and calculated fields
     get_new_item(item) {
       const new_item = { ...item };
       if (!item.qty) {
@@ -770,6 +828,7 @@ export default {
       new_item.posa_notes = "";
       new_item.posa_delivery_date = "";
       new_item.posa_row_id = this.makeid(20);
+      // Expand row if batch/serial required
       if (
         (!this.pos_profile.posa_auto_set_batch && new_item.has_batch_no) ||
         new_item.has_serial_no
@@ -779,6 +838,7 @@ export default {
       return new_item;
     },
 
+    // Reset all invoice fields to default/empty values
     clear_invoice() {
       this.items = [];
       this.posa_offers = [];
@@ -803,6 +863,7 @@ export default {
       this.invoiceTypes = ["Invoice", "Order"];
     },
 
+    // Fetch customer balance from backend
     async fetch_customer_balance() {
       try {
         if (!this.customer) {
@@ -825,7 +886,7 @@ export default {
       }
     },
 
-
+    // Cancel the current invoice, optionally delete from backend
     async cancel_invoice() {
       const doc = this.get_invoice_doc();
       this.invoiceType = this.pos_profile.posa_default_sales_order
@@ -853,6 +914,7 @@ export default {
       this.cancel_dialog = false;
     },
 
+    // Load an invoice (or return invoice) from data, set all fields accordingly
     async load_invoice(data = {}) {
       console.log("load_invoice called with data:", {
         is_return: data.is_return,
@@ -935,6 +997,8 @@ export default {
         customer: this.customer
       });
     },
+
+    // Save and clear the current invoice (draft logic)
     save_and_clear_invoice() {
       const doc = this.get_invoice_doc();
       if (doc.name) {
@@ -963,6 +1027,7 @@ export default {
 
     },
 
+    // Start a new order (or return order) with provided data
     async new_order(data = {}) {
       let old_invoice = null;
       this.eventBus.emit("set_customer_readonly", false);
@@ -1025,6 +1090,7 @@ export default {
       return old_invoice;
     },
 
+    // Build the invoice document object for backend submission
     get_invoice_doc() {
       let doc = {};
       if (this.invoice_doc.name) {
@@ -1138,6 +1204,7 @@ export default {
       return doc;
     },
 
+    // Get invoice doc from order doc (for sales order to invoice conversion)
     async get_invoice_from_order_doc() {
       let doc = {};
       if (this.invoice_doc.doctype == "Sales Order") {
@@ -1202,6 +1269,7 @@ export default {
       return doc;
     },
 
+    // Prepare items array for invoice doc
     get_invoice_items() {
       const items_list = [];
       this.items.forEach((item) => {
@@ -1260,6 +1328,7 @@ export default {
       return items_list;
     },
 
+    // Prepare items array for order doc
     get_order_items() {
       const items_list = [];
       this.items.forEach((item) => {
@@ -1290,6 +1359,7 @@ export default {
       return items_list;
     },
 
+    // Prepare payments array for invoice doc
     get_payments() {
       const payments = [];
       // Use this.subtotal which is already in selected currency and includes all calculations
@@ -1325,7 +1395,7 @@ export default {
       return payments;
     },
 
-    // Add new method to convert amounts
+    // Convert amount to selected currency
     convert_amount(amount) {
       if (this.selected_currency === this.pos_profile.currency) {
         return amount;
@@ -1333,6 +1403,7 @@ export default {
       return this.flt(amount * this.exchange_rate, this.currency_precision);
     },
 
+    // Update invoice in backend
     update_invoice(doc) {
       var vm = this;
       frappe.call({
@@ -1350,6 +1421,7 @@ export default {
       return this.invoice_doc;
     },
 
+    // Update invoice from order in backend
     update_invoice_from_order(doc) {
       var vm = this;
       frappe.call({
@@ -1367,6 +1439,7 @@ export default {
       return this.invoice_doc;
     },
 
+    // Process and save invoice (handles update or create)
     process_invoice() {
       const doc = this.get_invoice_doc();
       if (doc.name) {
@@ -1404,6 +1477,7 @@ export default {
       }
     },
 
+    // Process and save invoice from order
     async process_invoice_from_order() {
       const doc = await this.get_invoice_from_order_doc();
       var up_invoice;
@@ -1415,6 +1489,7 @@ export default {
       }
     },
 
+    // Show payment dialog after validation and processing
     async show_payment() {
       try {
         console.log('Starting show_payment process');
@@ -1534,6 +1609,7 @@ export default {
       }
     },
 
+    // Validate invoice before payment/submit (return logic, quantity, rates, etc)
     async validate() {
       console.log('Starting return validation');
       
@@ -1675,6 +1751,7 @@ export default {
       return true;
     },
 
+    // Get draft invoices from backend
     get_draft_invoices() {
       var vm = this;
       frappe.call({
@@ -1691,6 +1768,7 @@ export default {
       });
     },
 
+    // Get draft orders from backend
     get_draft_orders() {
       var vm = this;
       frappe.call({
@@ -1708,14 +1786,17 @@ export default {
       });
     },
 
+    // Open returns dialog
     open_returns() {
       this.eventBus.emit("open_returns", this.pos_profile.company);
     },
 
+    // Close payment dialog
     close_payments() {
       this.eventBus.emit("show_payment", "false");
     },
 
+    // Update details for all items (fetch from backend)
     async update_items_details(items) {
       if (!items?.length) return;
       if (!this.pos_profile) return;
@@ -1753,6 +1834,7 @@ export default {
       }
     },
 
+    // Update details for a single item (fetch from backend)
     update_item_detail(item) {
       if (!item.item_code) {
         return;
@@ -1880,6 +1962,7 @@ export default {
       });
     },
 
+    // Fetch customer details (info, price list, etc)
     fetch_customer_details() {
       var vm = this;
       if (this.customer) {
@@ -1902,6 +1985,7 @@ export default {
       }
     },
 
+    // Get price list for current customer
     get_price_list() {
       let price_list = this.pos_profile.selling_price_list;
       if (this.customer_info && this.pos_profile) {
@@ -1920,6 +2004,7 @@ export default {
       return price_list;
     },
 
+    // Update price list for customer
     update_price_list() {
       let price_list = this.get_price_list();
       if (price_list == this.pos_profile.selling_price_list) {
@@ -1927,6 +2012,8 @@ export default {
       }
       this.eventBus.emit("update_customer_price_list", price_list);
     },
+
+    // Update additional discount amount based on percentage
     update_discount_umount() {
       const value = flt(this.additional_discount_percentage);
       // If value is too large, reset to 0
@@ -1944,6 +2031,7 @@ export default {
       }
     },
 
+    // Calculate prices and discounts for an item based on field change
     calc_prices(item, value, $event) {
       if (!$event?.target?.id || !item) return;
 
@@ -2037,6 +2125,7 @@ export default {
       }
     },
 
+    // Calculate item price and discount fields
     calc_item_price(item) {
       if (!item.posa_offer_applied) {
         if (item.price_list_rate) {
@@ -2088,6 +2177,7 @@ export default {
       this.$forceUpdate();
     },
 
+    // Update UOM (unit of measure) for an item and recalculate prices
     calc_uom(item, value) {
       const new_uom = item.item_uoms.find((element) => element.uom == value);
       if (!new_uom) {
@@ -2171,10 +2261,12 @@ export default {
       this.$forceUpdate();
     },
 
+    // Calculate stock quantity for an item
     calc_stock_qty(item, value) {
       item.stock_qty = item.conversion_factor * value;
     },
 
+    // Set serial numbers for an item (and update qty)
     set_serial_no(item) {
       console.log(item)
       if (!item.has_serial_no) return;
@@ -2190,6 +2282,7 @@ export default {
       }
     },
 
+    // Set batch number for an item (and update batch data)
     set_batch_qty(item, value, update = true) {
       console.log(item, value)
       const existing_items = this.items.filter(
@@ -2266,6 +2359,7 @@ export default {
       item.batch_no_data = batch_no_data;
     },
 
+    // Keyboard shortcut: open payment dialog
     shortOpenPayment(e) {
       if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -2273,6 +2367,7 @@ export default {
       }
     },
 
+    // Keyboard shortcut: delete first item from the invoice
     shortDeleteFirstItem(e) {
       if (e.key === "d" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -3559,6 +3654,7 @@ export default {
   },
 
   mounted() {
+    // Register event listeners for POS profile, items, customer, offers, etc.
     this.eventBus.on("register_pos_profile", (data) => {
       this.pos_profile = data.pos_profile;
       this.customer = data.pos_profile.customer;
@@ -3622,15 +3718,13 @@ export default {
       });
     });
     this.eventBus.on("load_return_invoice", (data) => {
+      // Handle loading of return invoice and set all related fields
       console.log("Invoice component received load_return_invoice event with data:", data);
-      
       this.load_invoice(data.invoice_doc);
-      
       // Explicitly mark as return invoice
       this.invoiceType = "Return";
       this.invoiceTypes = ["Return"];
       this.invoice_doc.is_return = 1;
-      
       // Ensure negative values for returns
       if (this.items && this.items.length) {
         this.items.forEach(item => {
@@ -3639,20 +3733,16 @@ export default {
           if (item.stock_qty > 0) item.stock_qty = -Math.abs(item.stock_qty);
         });
       }
-      
       if (data.return_doc) {
         console.log("Return against existing invoice:", data.return_doc.name);
         // Ensure negative discount amounts
         this.discount_amount = data.return_doc.discount_amount > 0 ? 
           -Math.abs(data.return_doc.discount_amount) : 
           data.return_doc.discount_amount;
-          
         this.additional_discount_percentage = data.return_doc.additional_discount_percentage > 0 ?
           -Math.abs(data.return_doc.additional_discount_percentage) :
           data.return_doc.additional_discount_percentage;
-          
         this.return_doc = data.return_doc;
-        
         // Set return_against reference
         this.invoice_doc.return_against = data.return_doc.name;
       } else {
@@ -3661,7 +3751,6 @@ export default {
         this.discount_amount = 0;
         this.additional_discount_percentage = 0;
       }
-      
       console.log("Invoice state after loading return:", {
         invoiceType: this.invoiceType,
         is_return: this.invoice_doc.is_return,
@@ -3680,6 +3769,7 @@ export default {
       this.posting_date = frappe.datetime.nowdate();
     });
   },
+  // Cleanup event listeners before component is destroyed
   beforeUnmount() {
     // Existing cleanup
     this.eventBus.off("register_pos_profile");
@@ -3690,19 +3780,23 @@ export default {
     // Cleanup reset_posting_date listener
     this.eventBus.off("reset_posting_date");
   },
+  // Register global keyboard shortcuts when component is created
   created() {
     document.addEventListener("keydown", this.shortOpenPayment.bind(this));
     document.addEventListener("keydown", this.shortDeleteFirstItem.bind(this));
     document.addEventListener("keydown", this.shortOpenFirstItem.bind(this));
     document.addEventListener("keydown", this.shortSelectDiscount.bind(this));
   },
+  // Remove global keyboard shortcuts when component is unmounted
   unmounted() {
     document.removeEventListener("keydown", this.shortOpenPayment);
     document.removeEventListener("keydown", this.shortDeleteFirstItem);
     document.removeEventListener("keydown", this.shortOpenFirstItem);
     document.removeEventListener("keydown", this.shortSelectDiscount);
   },
+  // Vue watchers for reactive data changes
   watch: {
+    // Watch for customer change and update related data
     customer() {
       this.close_payments();
       this.eventBus.emit("set_customer", this.customer);
@@ -3710,19 +3804,23 @@ export default {
       this.fetch_customer_balance();
       this.set_delivery_charges();
     },
+    // Watch for customer_info change and emit to edit form
     customer_info() {
       this.eventBus.emit("set_customer_info_to_edit", this.customer_info);
     },
+    // Watch for expanded row change and update item detail
     expanded(data_value) {
       if (data_value.length > 0) {
         this.update_item_detail(data_value[0]);
       }
     },
+    // Watch for discount offer name change and emit
     discount_percentage_offer_name() {
       this.eventBus.emit("update_discount_percentage_offer_name", {
         value: this.discount_percentage_offer_name,
       });
     },
+    // Watch for items array changes (deep) and re-handle offers
     items: {
       deep: true,
       handler(items) {
@@ -3730,9 +3828,11 @@ export default {
         this.$forceUpdate();
       },
     },
+    // Watch for invoice type change and emit
     invoiceType() {
       this.eventBus.emit("update_invoice_type", this.invoiceType);
     },
+    // Watch for additional discount and update percentage accordingly
     additional_discount() {
       if (!this.additional_discount || this.additional_discount == 0) {
         this.additional_discount_percentage = 0;
@@ -3748,6 +3848,7 @@ export default {
         this.additional_discount_percentage = 0;
       }
     },
+    // Watch for posting date changes and ensure correct format
     posting_date: {
       handler(newVal) {
         if (!newVal) return;
@@ -3775,25 +3876,30 @@ export default {
 </script>
 
 <style scoped>
+/* Style for selected checkbox button */
 .v-checkbox-btn.v-selected {
   background-color: #4CAF50 !important;
   color: white;
 }
 
+/* Bottom border for elements */
 .border_line_bottom {
   border-bottom: 1px solid lightgray;
 }
 
+/* Disable pointer events for elements */
 .disable-events {
   pointer-events: none;
 }
 
+/* Style for customer balance field */
 .balance-field {
   display: flex;
   align-items: center;
   justify-content: flex-end;
 }
 
+/* Style for balance value text */
 .balance-value {
   font-size: 1.5rem;
   font-weight: bold;
@@ -3801,7 +3907,7 @@ export default {
   margin-left: 5px;
 }
 
-/* Add these new styles for date picker buttons */
+/* Styles for date picker buttons */
 .v-date-picker .v-btn {
   min-width: 80px !important;
   margin: 0 4px !important;
@@ -3809,15 +3915,17 @@ export default {
   font-weight: 500 !important;
 }
 
+/* Style for text variant date picker button */
 .v-date-picker .v-btn--variant-text {
   padding: 0 12px !important;
 }
 
+/* Spacer inside date picker */
 .v-date-picker .v-spacer {
   flex: 1 1 auto !important;
 }
 
-/* Updated date picker button styles */
+/* Updated style for date picker action buttons */
 .date-action-btn {
   min-width: 64px !important;
   height: 36px !important;
@@ -3829,22 +3937,26 @@ export default {
   letter-spacing: 0.25px !important;
 }
 
+/* Card style for date picker */
 .v-date-picker {
   border-radius: 4px;
   overflow: hidden;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
 }
 
+/* Actions section in date picker card */
 .v-date-picker .v-card-actions {
   padding: 8px !important;
   border-top: 1px solid rgba(0, 0, 0, 0.12);
 }
 
+/* Red border and label for return mode card */
 .return-mode {
   border: 2px solid #ff5252 !important;
   position: relative;
 }
 
+/* Label for return mode card */
 .return-mode::before {
   content: 'RETURN';
   position: absolute;
