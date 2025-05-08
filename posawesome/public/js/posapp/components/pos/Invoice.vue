@@ -341,12 +341,8 @@
             <v-col cols="6" v-if="!pos_profile.posa_use_percentage_discount">
               <v-text-field v-model="additional_discount" :label="frappe._('Additional Discount')"
                 prepend-inner-icon="mdi-cash-minus" variant="outlined" density="compact" color="warning"
-
-
                 :prefix="currencySymbol(pos_profile.currency)"
                 :disabled="!pos_profile.posa_allow_user_to_edit_additional_discount" />
-
-
             </v-col>
 
             <v-col cols="6" v-else>
@@ -363,10 +359,11 @@
                 prepend-inner-icon="mdi-tag-minus" variant="outlined" density="compact" color="warning" readonly />
             </v-col>
 
-            <v-col cols="6" class="pa-1 mt-2">
+            <!-- Total (moved to maintain row alignment) -->
+            <v-col cols="6">
               <v-text-field :model-value="formatCurrency(subtotal)" :prefix="currencySymbol(displayCurrency)"
-              :label="frappe._('Total')" prepend-inner-icon="mdi-cash" variant="outlined" density="compact" readonly
-              color="success" />
+                :label="frappe._('Total')" prepend-inner-icon="mdi-cash" variant="outlined" density="compact" readonly
+                color="success" />
             </v-col>
           </v-row>
         </v-col>
