@@ -33,11 +33,15 @@
                   </v-img>
                   <v-card-text class="text--primary pa-1">
                     <div class="text-caption text-primary">
-                      {{ currencySymbol(item.currency) || "" }}
-                      {{ formatCurrency(item.rate) || 0 }}
+                      {{ currencySymbol(pos_profile.currency) || "" }}
+                      {{ format_currency(item.rate, pos_profile.currency, 4) }}
+                    </div>
+                    <div v-if="pos_profile.posa_allow_multi_currency && selected_currency !== pos_profile.currency" class="text-caption text-success">
+                      {{ currencySymbol(selected_currency) || "" }}
+                      {{ format_currency(getConvertedRate(item), selected_currency, 4) }}
                     </div>
                     <div class="text-caption golden--text">
-                      {{ formatFloat(item.actual_qty) || 0 }}
+                      {{ format_number(item.actual_qty, 4) || 0 }}
                       {{ item.stock_uom || "" }}
                     </div>
                   </v-card-text>
@@ -50,13 +54,17 @@
               <v-data-table :headers="getItemsHeaders()" :items="filtered_items" item-key="item_code" item-value="item-"
                 class="elevation-1" :items-per-page="itemsPerPage" hide-default-footer @click:row="click_item_row">
                 <template v-slot:item.rate="{ item }">
-                  <span class="text-primary">{{ currencySymbol(item.currency) }}
-                    {{ formatCurrency(item.rate) }}</span>
+                  <div>
+                    <div class="text-primary">{{ currencySymbol(pos_profile.currency) }}
+                      {{ format_currency(item.rate, pos_profile.currency, 4) }}</div>
+                    <div v-if="pos_profile.posa_allow_multi_currency && selected_currency !== pos_profile.currency" class="text-success">
+                      {{ currencySymbol(selected_currency) }}
+                      {{ format_currency(getConvertedRate(item), selected_currency, 4) }}
+                    </div>
+                  </div>
                 </template>
                 <template v-slot:item.actual_qty="{ item }">
-                  <span class="golden--text">{{
-                    formatFloat(item.actual_qty)
-                    }}</span>
+                  <span class="golden--text">{{ format_number(item.actual_qty, 4) }}</span>
                 </template>
               </v-data-table>
             </div>
@@ -122,6 +130,8 @@ export default {
     currentRequest: null,
     abortController: null,
     items_loaded: false,
+    selected_currency: "",
+    exchange_rate: 1,
   }),
 
   watch: {
@@ -321,6 +331,21 @@ export default {
           }
         }
         
+        // Convert rate if multi-currency is enabled
+        if (this.pos_profile.posa_allow_multi_currency && 
+            this.selected_currency !== this.pos_profile.currency) {
+          // Store original rate as base_rate
+          item.base_rate = item.rate;
+          item.base_price_list_rate = item.price_list_rate;
+          
+          // Set converted rates
+          item.rate = this.getConvertedRate(item);
+          item.price_list_rate = this.getConvertedRate(item);
+          
+          // Set currency
+          item.currency = this.selected_currency;
+        }
+
         if (!item.qty || item.qty === 1) {
           item.qty = Math.abs(this.qty);
         }
@@ -600,6 +625,53 @@ export default {
         // No need to reload items when focus is lost
       }
     },
+    getConvertedRate(item) {
+      if (!item.rate) return 0;
+      if (!this.exchange_rate) return item.rate;
+      
+      const convertedRate = item.rate * this.exchange_rate;
+      // Always show converted rates with 4 decimal places
+      return flt(convertedRate, 4);
+    },
+    currencySymbol(currency) {
+      return get_currency_symbol(currency);
+    },
+    format_currency(value, currency, precision) {
+      if (!value) return '0';
+      
+      // Convert to string for checking decimal points
+      let valueStr = value.toString();
+      
+      // If value has decimal points, show 4 decimal places
+      if (valueStr.includes('.')) {
+        return flt(value, 4).toString();
+      }
+      
+      // For whole numbers, return as is
+      return valueStr;
+    },
+    format_number(value, precision) {
+      if (!value) return '0';
+      
+      // Convert to string for checking decimal points
+      let valueStr = value.toString();
+      
+      // If value has decimal points, show 4 decimal places
+      if (valueStr.includes('.')) {
+        return flt(value, 4).toString();
+      }
+      
+      // For whole numbers, return as is
+      return valueStr;
+    },
+    hasDecimalPrecision(value) {
+      // Check if the value has any decimal precision when multiplied by exchange rate
+      if (this.exchange_rate && this.exchange_rate !== 1) {
+        let convertedValue = value * this.exchange_rate;
+        return !Number.isInteger(convertedValue);
+      }
+      return !Number.isInteger(value);
+    },
   },
 
   computed: {
@@ -791,6 +863,12 @@ export default {
         this.update_cur_items_details();
       }
     }, 30000); // Refresh every 30 seconds
+
+    // Add new event listener for currency changes
+    this.eventBus.on("update_currency", (data) => {
+      this.selected_currency = data.currency;
+      this.exchange_rate = data.exchange_rate;
+    });
   },
 
   mounted() {
@@ -817,8 +895,14 @@ export default {
         console.warn('Scanner detach error:', error.message);
       }
     }
+
+    this.eventBus.off("update_currency");
   },
 };
 </script>
 
-<style scoped></style>
+<style scoped>
+.text-success {
+  color: #4CAF50 !important;
+}
+</style>

@@ -188,10 +188,10 @@
               color="primary"
               :label="frappe._('Net Total')"
               bg-color="white"
-              :value="formatCurrency(invoice_doc.net_total)"
+              :value="formatCurrency(invoice_doc.net_total, displayCurrency)"
               readonly
-              :prefix="currencySymbol(invoice_doc.currency)"
-			  persistent-placeholder
+              :prefix="currencySymbol()"
+              persistent-placeholder
             ></v-text-field>
           </v-col>
           <v-col cols="6">
@@ -202,10 +202,10 @@
               :label="frappe._('Tax and Charges')"
               bg-color="white"
               hide-details
-              :value="formatCurrency(invoice_doc.total_taxes_and_charges)"
+              :value="formatCurrency(invoice_doc.total_taxes_and_charges, displayCurrency)"
               readonly
-              :prefix="currencySymbol(invoice_doc.currency)"
-			  persistent-placeholder
+              :prefix="currencySymbol()"
+              persistent-placeholder
             ></v-text-field>
           </v-col>
           <v-col cols="6">
@@ -216,10 +216,24 @@
               :label="frappe._('Total Amount')"
               bg-color="white"
               hide-details
-              :value="formatCurrency(invoice_doc.total)"
+              :value="formatCurrency(invoice_doc.total, displayCurrency)"
               readonly
-              :prefix="currencySymbol(invoice_doc.currency)"
-			  persistent-placeholder
+              :prefix="currencySymbol()"
+              persistent-placeholder
+            ></v-text-field>
+          </v-col>
+          <v-col cols="6">
+            <v-text-field
+              density="compact"
+              variant="outlined"
+              color="primary"
+              :label="diff_label"
+              bg-color="white"
+              hide-details
+              :value="formatCurrency(diff_payment, displayCurrency)"
+              readonly
+              :prefix="currencySymbol()"
+              persistent-placeholder
             ></v-text-field>
           </v-col>
           <v-col cols="6">
@@ -233,7 +247,7 @@
               :value="formatCurrency(invoice_doc.discount_amount)"
               readonly
               :prefix="currencySymbol(invoice_doc.currency)"
-			  persistent-placeholder
+              persistent-placeholder
             ></v-text-field>
           </v-col>
           <v-col cols="6">
@@ -247,7 +261,7 @@
               :value="formatCurrency(invoice_doc.grand_total)"
               readonly
               :prefix="currencySymbol(invoice_doc.currency)"
-			  persistent-placeholder
+              persistent-placeholder
             ></v-text-field>
           </v-col>
           <v-col v-if="invoice_doc.rounded_total" cols="6">
@@ -261,7 +275,7 @@
               :value="formatCurrency(invoice_doc.rounded_total)"
               readonly
               :prefix="currencySymbol(invoice_doc.currency)"
-			  persistent-placeholder
+              persistent-placeholder
             ></v-text-field>
           </v-col>
 
@@ -624,6 +638,16 @@ export default {
     };
   },
   computed: {
+    currencySymbol() {
+      return (currency) => {
+        return get_currency_symbol(currency || this.invoice_doc.currency);
+      };
+    },
+    
+    displayCurrency() {
+      return this.invoice_doc ? this.invoice_doc.currency : '';
+    },
+    
     // Total payments including actual payments, loyalty, and redeemed credits
     total_payments() {
       let total = 0;
@@ -659,12 +683,12 @@ export default {
 
     // Label for the difference field
     diff_label() {
-      return this.diff_payment > 0 ? "To Be Paid" : "Change";
+      return this.diff_payment > 0 ? `To Be Paid (${this.displayCurrency})` : `Change (${this.displayCurrency})`;
     },
 
     // Displayed total payments
     total_payments_display() {
-      return this.formatCurrency(this.total_payments);
+      return this.formatCurrency(this.total_payments, this.displayCurrency);
     },
 
     // Available loyalty points amount
@@ -1375,6 +1399,13 @@ export default {
         this.credit_change = 0;
       }
     },
+    formatCurrency(value) {
+      if (!value) return "0.00";
+      return this.flt(value, this.currency_precision).toFixed(this.currency_precision);
+    },
+    get_change_amount() {
+      return Math.max(0, this.total_payments - this.invoice_doc.grand_total);
+    }
   },
   created() {
     // Initialize keyboard shortcuts
