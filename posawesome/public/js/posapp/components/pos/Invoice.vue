@@ -337,17 +337,16 @@
                 prepend-inner-icon="mdi-format-list-numbered" variant="outlined" density="compact" readonly
                 color="accent" />
             </v-col>
-            <v-col v-if="!pos_profile.posa_use_percentage_discount" cols="6" class="pa-1">
-              <v-text-field
-                v-model="additional_discount"
-                :label="frappe._('Additional Discount')"
-                variant="outlined"
-                density="compact"
-                color="warning"
-                :prefix="currencySymbol(displayCurrency)"
-                :disabled="!pos_profile.posa_allow_user_to_edit_additional_discount"
-              >
-              </v-text-field>
+            <!-- Additional Discount (Amount or Percentage) -->
+            <v-col cols="6" v-if="!pos_profile.posa_use_percentage_discount">
+              <v-text-field v-model="additional_discount" :label="frappe._('Additional Discount')"
+                prepend-inner-icon="mdi-cash-minus" variant="outlined" density="compact" color="warning"
+
+
+                :prefix="currencySymbol(pos_profile.currency)"
+                :disabled="!pos_profile.posa_allow_user_to_edit_additional_discount" />
+
+
             </v-col>
 
             <v-col cols="6" v-else>
@@ -360,14 +359,14 @@
             <!-- Items Discount -->
             <v-col cols="6">
               <v-text-field :model-value="formatCurrency(total_items_discount_amount)"
-                :prefix="currencySymbol(displayCurrency)" :label="frappe._('Items Discounts')" variant="outlined"
-                density="compact" color="warning" readonly hide-details></v-text-field>
+                :prefix="currencySymbol(displayCurrency)" :label="frappe._('Items Discounts')" 
+                prepend-inner-icon="mdi-tag-minus" variant="outlined" density="compact" color="warning" readonly />
             </v-col>
 
             <v-col cols="6" class="pa-1 mt-2">
               <v-text-field :model-value="formatCurrency(subtotal)" :prefix="currencySymbol(displayCurrency)"
-                :label="frappe._('Total')" variant="outlined" density="compact" readonly hide-details
-                color="success"></v-text-field>
+              :label="frappe._('Total')" prepend-inner-icon="mdi-cash" variant="outlined" density="compact" readonly
+              color="success" />
             </v-col>
           </v-row>
         </v-col>
@@ -858,49 +857,72 @@ export default {
     },
 
     async load_invoice(data = {}) {
+      console.log("load_invoice called with data:", {
+        is_return: data.is_return,
+        return_against: data.return_against,
+        customer: data.customer,
+        items_count: data.items ? data.items.length : 0
+      });
+      
       this.clear_invoice()
       if (data.is_return) {
+        console.log("Processing return invoice");
         // For return without invoice case, check if there's a return_against
         // Only set customer readonly if this is a return with reference to an invoice
         if (data.return_against) {
+          console.log("Return has reference to invoice:", data.return_against);
           this.eventBus.emit("set_customer_readonly", true);
         } else {
+          console.log("Return without invoice reference, customer can be selected");
           // Allow customer selection for returns without invoice
           this.eventBus.emit("set_customer_readonly", false);
         }
         this.invoiceType = "Return";
         this.invoiceTypes = ["Return"];
       }
+      
       this.invoice_doc = data;
-      this.items = data.items;
-      this.update_items_details(this.items);
-      this.posa_offers = data.posa_offers || [];
-      this.items.forEach((item) => {
-        if (!item.posa_row_id) {
-          item.posa_row_id = this.makeid(20);
-        }
-        if (item.batch_no) {
-          this.set_batch_qty(item, item.batch_no);
-        }
-      });
+      this.items = data.items || [];
+      console.log("Items set:", this.items.length, "items");
+      
+      if (this.items.length > 0) {
+        this.update_items_details(this.items);
+        this.posa_offers = data.posa_offers || [];
+        this.items.forEach((item) => {
+          if (!item.posa_row_id) {
+            item.posa_row_id = this.makeid(20);
+          }
+          if (item.batch_no) {
+            this.set_batch_qty(item, item.batch_no);
+          }
+        });
+      } else {
+        console.log("Warning: No items in return invoice");
+      }
+      
       this.customer = data.customer;
       this.posting_date = data.posting_date || frappe.datetime.nowdate();
       this.discount_amount = data.discount_amount;
       this.additional_discount_percentage =
         data.additional_discount_percentage;
-      this.items.forEach((item) => {
-        if (item.serial_no) {
-          item.serial_no_selected = [];
-          const serial_list = item.serial_no.split("\n");
-          serial_list.forEach((element) => {
-            if (element.length) {
-              item.serial_no_selected.push(element);
-            }
-          });
-          item.serial_no_selected_count = item.serial_no_selected.length;
-        }
-      });
+        
+      if (this.items.length > 0) {
+        this.items.forEach((item) => {
+          if (item.serial_no) {
+            item.serial_no_selected = [];
+            const serial_list = item.serial_no.split("\n");
+            serial_list.forEach((element) => {
+              if (element.length) {
+                item.serial_no_selected.push(element);
+              }
+            });
+            item.serial_no_selected_count = item.serial_no_selected.length;
+          }
+        });
+      }
+      
       if (data.is_return) {
+        console.log("Setting return values for discounts");
         this.discount_amount = -data.discount_amount;
         this.additional_discount_percentage =
           -data.additional_discount_percentage;
@@ -908,6 +930,13 @@ export default {
       } else {
         this.eventBus.emit("set_pos_coupons", data.posa_coupons);
       }
+      
+      console.log("load_invoice completed, invoice state:", {
+        invoiceType: this.invoiceType,
+        is_return: this.invoice_doc.is_return,
+        items: this.items.length,
+        customer: this.customer
+      });
     },
     save_and_clear_invoice() {
       const doc = this.get_invoice_doc();
@@ -1024,43 +1053,73 @@ export default {
       doc.naming_series = doc.naming_series || this.pos_profile.naming_series;
       doc.customer = this.customer;
       
+      // Determine if this is a return invoice
+      const isReturn = this.invoiceType === 'Return' || this.invoice_doc.is_return;
+      doc.is_return = isReturn ? 1 : 0;
+      
       // Calculate amounts in selected currency
       const items = this.get_invoice_items();
       doc.items = items;
       
-      // Calculate totals in selected currency
-      doc.total = this.Total;
-      doc.net_total = this.Total;  // Net total is same as total before taxes
-      doc.base_total = this.Total * (1 / this.exchange_rate || 1);
-      doc.base_net_total = this.Total * (1 / this.exchange_rate || 1);
+      // Calculate totals in selected currency ensuring negative values for returns
+      let total = this.Total;
+      if (isReturn && total > 0) total = -Math.abs(total);
       
-      // Apply discounts
-      doc.discount_amount = flt(this.additional_discount);
-      doc.base_discount_amount = flt(this.additional_discount * (1 / this.exchange_rate || 1));
-      doc.additional_discount_percentage = flt(this.additional_discount_percentage);
+      doc.total = total;
+      doc.net_total = total;  // Net total is same as total before taxes
+      doc.base_total = total * (1 / this.exchange_rate || 1);
+      doc.base_net_total = total * (1 / this.exchange_rate || 1);
       
-      // Calculate grand total
-      doc.grand_total = this.subtotal;
-      doc.base_grand_total = this.subtotal * (1 / this.exchange_rate || 1);
-      doc.rounded_total = this.subtotal;
-      doc.base_rounded_total = this.subtotal * (1 / this.exchange_rate || 1);
+      // Apply discounts with correct sign for returns
+      let discountAmount = flt(this.additional_discount);
+      if (isReturn && discountAmount > 0) discountAmount = -Math.abs(discountAmount);
+      
+      doc.discount_amount = discountAmount;
+      doc.base_discount_amount = discountAmount * (1 / this.exchange_rate || 1);
+      
+      let discountPercentage = flt(this.additional_discount_percentage);
+      if (isReturn && discountPercentage > 0) discountPercentage = -Math.abs(discountPercentage);
+      
+      doc.additional_discount_percentage = discountPercentage;
+      
+      // Calculate grand total with correct sign for returns
+      let grandTotal = this.subtotal;
+      if (isReturn && grandTotal > 0) grandTotal = -Math.abs(grandTotal);
+      
+      doc.grand_total = grandTotal;
+      doc.base_grand_total = grandTotal * (1 / this.exchange_rate || 1);
+      doc.rounded_total = grandTotal;
+      doc.base_rounded_total = grandTotal * (1 / this.exchange_rate || 1);
       
       // Add POS specific fields
       doc.posa_pos_opening_shift = this.pos_opening_shift.name;
       doc.payments = this.get_payments();
       doc.taxes = [];
-      doc.is_return = this.invoiceType === 'Return' ? 1 : 0;
       
       // Handle return specific fields
-      if (this.invoice_doc.is_return) {
+      if (isReturn) {
         if (this.invoice_doc.return_against) {
           doc.return_against = this.invoice_doc.return_against;
         }
-        doc.is_return = 1;
         doc.update_stock = 1;
-        doc.ignore_pricing_rule = 1;
-        doc.is_pos = 1;
-        doc.pos_profile = this.pos_profile.name;
+        
+        // Double-check all values are negative
+        if (doc.grand_total > 0) doc.grand_total = -Math.abs(doc.grand_total);
+        if (doc.base_grand_total > 0) doc.base_grand_total = -Math.abs(doc.base_grand_total);
+        if (doc.rounded_total > 0) doc.rounded_total = -Math.abs(doc.rounded_total);
+        if (doc.base_rounded_total > 0) doc.base_rounded_total = -Math.abs(doc.base_rounded_total);
+        if (doc.total > 0) doc.total = -Math.abs(doc.total);
+        if (doc.base_total > 0) doc.base_total = -Math.abs(doc.base_total);
+        if (doc.net_total > 0) doc.net_total = -Math.abs(doc.net_total);
+        if (doc.base_net_total > 0) doc.base_net_total = -Math.abs(doc.base_net_total);
+        
+        // Ensure payments have negative amounts
+        if (doc.payments && doc.payments.length) {
+          doc.payments.forEach(payment => {
+            if (payment.amount > 0) payment.amount = -Math.abs(payment.amount);
+            if (payment.base_amount > 0) payment.base_amount = -Math.abs(payment.base_amount);
+          });
+        }
       }
       
       // Add offer details
@@ -1244,12 +1303,16 @@ export default {
         // For the first payment method, assign the full remaining amount
         const payment_amount = index === 0 ? remaining_amount : (payment.amount || 0);
         
+        // For return invoices, ensure payment amounts are negative
+        const adjusted_amount = this.invoiceType === 'Return' || this.invoice_doc.is_return ? 
+          -Math.abs(payment_amount) : payment_amount;
+        
         // No need to convert amount since subtotal is already in selected currency
         payments.push({
-          amount: payment_amount,
+          amount: adjusted_amount,
           base_amount: this.selected_currency !== this.pos_profile.currency ? 
-            this.flt(payment_amount / (this.exchange_rate || 1), this.currency_precision) : 
-            payment_amount,
+            this.flt(adjusted_amount / (this.exchange_rate || 1), this.currency_precision) : 
+            adjusted_amount,
           mode_of_payment: payment.mode_of_payment,
           default: payment.default,
           account: payment.account || "",
@@ -1358,6 +1421,12 @@ export default {
     async show_payment() {
       try {
         console.log('Starting show_payment process');
+        console.log('Invoice state before payment:', {
+          invoiceType: this.invoiceType,
+          is_return: this.invoice_doc ? this.invoice_doc.is_return : false,
+          items_count: this.items.length,
+          customer: this.customer
+        });
 
         if (!this.customer) {
           console.log('Customer validation failed');
@@ -1412,8 +1481,47 @@ export default {
         invoice_doc.base_grand_total = this.subtotal * (1 / this.exchange_rate || 1);
         invoice_doc.base_rounded_total = this.subtotal * (1 / this.exchange_rate || 1);
         
-        // Update payment currencies and amounts
+        // Check if this is a return invoice
+        if (this.invoiceType === 'Return' || invoice_doc.is_return) {
+          console.log('Preparing RETURN invoice for payment with:', {
+            is_return: invoice_doc.is_return,
+            invoiceType: this.invoiceType,
+            return_against: invoice_doc.return_against,
+            items: invoice_doc.items.length,
+            grand_total: invoice_doc.grand_total
+          });
+          
+          // For return invoices, explicitly ensure all amounts are negative
+          invoice_doc.is_return = 1;
+          if (invoice_doc.grand_total > 0) invoice_doc.grand_total = -Math.abs(invoice_doc.grand_total);
+          if (invoice_doc.rounded_total > 0) invoice_doc.rounded_total = -Math.abs(invoice_doc.rounded_total);
+          if (invoice_doc.total > 0) invoice_doc.total = -Math.abs(invoice_doc.total);
+          if (invoice_doc.base_grand_total > 0) invoice_doc.base_grand_total = -Math.abs(invoice_doc.base_grand_total);
+          if (invoice_doc.base_rounded_total > 0) invoice_doc.base_rounded_total = -Math.abs(invoice_doc.base_rounded_total);
+          if (invoice_doc.base_total > 0) invoice_doc.base_total = -Math.abs(invoice_doc.base_total);
+          
+          // Ensure all items have negative quantity and amount
+          if (invoice_doc.items && invoice_doc.items.length) {
+            invoice_doc.items.forEach(item => {
+              if (item.qty > 0) item.qty = -Math.abs(item.qty);
+              if (item.stock_qty > 0) item.stock_qty = -Math.abs(item.stock_qty);
+              if (item.amount > 0) item.amount = -Math.abs(item.amount);
+            });
+          }
+        }
+        
+        // Get payments with correct sign (positive/negative)
         invoice_doc.payments = this.get_payments();
+        console.log('Final payment data:', invoice_doc.payments);
+
+        // Double-check return invoice payments are negative
+        if ((this.invoiceType === 'Return' || invoice_doc.is_return) && invoice_doc.payments.length) {
+          invoice_doc.payments.forEach(payment => {
+            if (payment.amount > 0) payment.amount = -Math.abs(payment.amount);
+            if (payment.base_amount > 0) payment.base_amount = -Math.abs(payment.base_amount);
+          });
+          console.log('Ensured negative payment amounts for return:', invoice_doc.payments);
+        }
 
         console.log('Showing payment dialog with currency:', invoice_doc.currency);
         this.eventBus.emit("show_payment", "true");
@@ -1431,6 +1539,41 @@ export default {
 
     async validate() {
       console.log('Starting return validation');
+      
+      // For all returns, check if amounts are negative
+      if (this.invoiceType === 'Return' || this.invoice_doc.is_return) {
+        console.log('Validating return invoice values');
+        
+        // Check if quantities are negative
+        const positiveItems = this.items.filter(item => item.qty >= 0 || item.stock_qty >= 0);
+        if (positiveItems.length > 0) {
+          console.log('Found positive quantities in return items:', positiveItems.map(i => i.item_code));
+          this.eventBus.emit('show_message', {
+            title: __(`Return items must have negative quantities`),
+            color: 'error'
+          });
+          
+          // Fix the quantities to be negative
+          positiveItems.forEach(item => {
+            item.qty = -Math.abs(item.qty);
+            item.stock_qty = -Math.abs(item.stock_qty);
+          });
+          
+          // Force update to reflect changes
+          this.$forceUpdate();
+        }
+        
+        // Ensure total amount is negative
+        if (this.subtotal > 0) {
+          console.log('Return has positive subtotal:', this.subtotal);
+          this.eventBus.emit('show_message', {
+            title: __(`Return total must be negative`),
+            color: 'warning'
+          });
+        }
+      }
+      
+      // For return with reference to existing invoice
       if (this.invoice_doc.is_return && this.invoice_doc.return_against) {
         console.log('Return doc:', this.invoice_doc);
         console.log('Current items:', this.items);
@@ -3482,17 +3625,52 @@ export default {
       });
     });
     this.eventBus.on("load_return_invoice", (data) => {
+      console.log("Invoice component received load_return_invoice event with data:", data);
+      
       this.load_invoice(data.invoice_doc);
+      
+      // Explicitly mark as return invoice
+      this.invoiceType = "Return";
+      this.invoiceTypes = ["Return"];
+      this.invoice_doc.is_return = 1;
+      
+      // Ensure negative values for returns
+      if (this.items && this.items.length) {
+        this.items.forEach(item => {
+          // Ensure item quantities are negative
+          if (item.qty > 0) item.qty = -Math.abs(item.qty);
+          if (item.stock_qty > 0) item.stock_qty = -Math.abs(item.stock_qty);
+        });
+      }
+      
       if (data.return_doc) {
-        this.discount_amount = -data.return_doc.discount_amount;
-        this.additional_discount_percentage =
-          -data.return_doc.additional_discount_percentage;
+        console.log("Return against existing invoice:", data.return_doc.name);
+        // Ensure negative discount amounts
+        this.discount_amount = data.return_doc.discount_amount > 0 ? 
+          -Math.abs(data.return_doc.discount_amount) : 
+          data.return_doc.discount_amount;
+          
+        this.additional_discount_percentage = data.return_doc.additional_discount_percentage > 0 ?
+          -Math.abs(data.return_doc.additional_discount_percentage) :
+          data.return_doc.additional_discount_percentage;
+          
         this.return_doc = data.return_doc;
+        
+        // Set return_against reference
+        this.invoice_doc.return_against = data.return_doc.name;
       } else {
+        console.log("Return without invoice reference");
         // For return without invoice, reset discount values
         this.discount_amount = 0;
         this.additional_discount_percentage = 0;
       }
+      
+      console.log("Invoice state after loading return:", {
+        invoiceType: this.invoiceType,
+        is_return: this.invoice_doc.is_return,
+        items: this.items.length,
+        customer: this.customer
+      });
     });
     this.eventBus.on("set_new_line", (data) => {
       this.new_line = data;

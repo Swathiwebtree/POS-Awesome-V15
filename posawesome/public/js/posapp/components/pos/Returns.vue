@@ -555,30 +555,53 @@ export default {
       this.perform_search();
     },
     return_without_invoice() {
+      console.log('Starting return without invoice flow');
       const invoice_doc = {};
       invoice_doc.items = [];
       invoice_doc.is_return = 1;
       const data = { invoice_doc };
+      console.log('Emitting load_return_invoice event with data:', data);
       this.eventBus.emit('load_return_invoice', data);
       this.invoicesDialog = false;
     },
     submit_dialog() {
       if (this.selected.length > 0) {
+        console.log('Starting return with invoice flow');
         const return_doc = this.selected[0];
         const invoice_doc = {};
         const items = [];
+        
+        console.log('Original return doc:', return_doc);
+        
         return_doc.items.forEach((item) => {
           const new_item = { ...item };
-          new_item.qty = item.qty * -1;
-          new_item.stock_qty = item.stock_qty * -1;
-          new_item.amount = item.amount * -1;
+          // Make sure quantities are negative for returns
+          new_item.qty = item.qty > 0 ? item.qty * -1 : item.qty;
+          new_item.stock_qty = item.stock_qty > 0 ? item.stock_qty * -1 : item.stock_qty;
+          new_item.amount = item.amount > 0 ? item.amount * -1 : item.amount;
           items.push(new_item);
         });
+        
         invoice_doc.items = items;
         invoice_doc.is_return = 1;
         invoice_doc.return_against = return_doc.name;
         invoice_doc.customer = return_doc.customer;
+        
+        // Make sure grand_total is negative for returns
+        if (return_doc.grand_total > 0) {
+          invoice_doc.grand_total = return_doc.grand_total * -1;
+        } else {
+          invoice_doc.grand_total = return_doc.grand_total;
+        }
+        
+        // These fields ensure proper return handling
+        invoice_doc.update_stock = 1;
+        invoice_doc.pos_profile = this.pos_profile.name;
+        invoice_doc.company = this.company;
+        
         const data = { invoice_doc, return_doc };
+        console.log('Emitting load_return_invoice event with data:', data);
+        
         this.eventBus.emit('load_return_invoice', data);
         this.invoicesDialog = false;
       }

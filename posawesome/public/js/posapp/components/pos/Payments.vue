@@ -668,8 +668,15 @@ export default {
     diff_payment() {
       if (!this.invoice_doc) return 0;
       let invoice_total = this.flt(this.invoice_doc.rounded_total || this.invoice_doc.grand_total, this.currency_precision);
-      let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
-      return diff >= 0 ? diff : 0;
+      
+      // For returns, the invoice total is negative, so we need to adjust the calculation
+      if (this.invoice_doc.is_return) {
+        let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
+        return diff >= 0 ? diff : 0;
+      } else {
+        let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
+        return diff >= 0 ? diff : 0;
+      }
     },
 
     // Change to be given back to the customer
@@ -832,8 +839,54 @@ export default {
       });
     },
 
+    // Ensure all payments are properly set for returns
+    ensureReturnPaymentsAreNegative() {
+      if (!this.invoice_doc || !this.invoice_doc.is_return) {
+        return;
+      }
+      
+      console.log("Ensuring all return payments are negative...");
+      
+      // Check if any payment amount is set
+      let hasPaymentSet = false;
+      this.invoice_doc.payments.forEach(payment => {
+        if (Math.abs(payment.amount) > 0) {
+          hasPaymentSet = true;
+        }
+      });
+      
+      // If no payment set, set the default one
+      if (!hasPaymentSet) {
+        const default_payment = this.invoice_doc.payments.find(payment => payment.default === 1);
+        if (default_payment) {
+          const amount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
+          default_payment.amount = -Math.abs(amount);
+          if (default_payment.base_amount !== undefined) {
+            default_payment.base_amount = -Math.abs(amount);
+          }
+        }
+      }
+      
+      // Ensure all set payments are negative
+      this.invoice_doc.payments.forEach(payment => {
+        if (payment.amount > 0) {
+          payment.amount = -Math.abs(payment.amount);
+        }
+        if (payment.base_amount !== undefined && payment.base_amount > 0) {
+          payment.base_amount = -Math.abs(payment.base_amount);
+        }
+      });
+      
+      console.log("Return payments after fix:", JSON.parse(JSON.stringify(this.invoice_doc.payments)));
+    },
+
     // Submit Payment
     submit(event, payment_received = false, print = false) {
+      // For return invoices, ensure payment amounts are negative
+      if (this.invoice_doc.is_return) {
+        this.ensureReturnPaymentsAreNegative();
+      }
+
       // Validate total payments only if not credit sale and invoice total is not zero
       if (!this.is_credit_sale && !this.invoice_doc.is_return && 
           this.total_payments <= 0 && 
@@ -961,12 +1014,18 @@ export default {
 
     // Submit Invoice to Backend
     submit_invoice(print) {
+      // For return invoices, ensure payments are negative one last time
+      if (this.invoice_doc.is_return) {
+        this.ensureReturnPaymentsAreNegative();
+      }
+      
       let totalPayedAmount = 0;
+      
       this.invoice_doc.payments.forEach((payment) => {
         payment.amount = this.flt(payment.amount);
         totalPayedAmount += payment.amount;
       });
-
+      
       if (this.invoice_doc.is_return && totalPayedAmount === 0) {
         this.invoice_doc.is_pos = 0;
       }
@@ -994,9 +1053,43 @@ export default {
           invoice: this.invoice_doc,
         },
         callback: function (r) {
+          if (r.exc) {
+            console.error("Error submitting invoice:", r.exc);
+            // Show detailed error message to help debugging
+            let errorMsg = r.exc.toString();
+            if (errorMsg.includes("Amount must be negative")) {
+              vm.eventBus.emit("show_message", {
+                title: __("Fixing payment amounts for return invoice..."),
+                color: "warning",
+              });
+              
+              // Force fix the amounts
+              vm.invoice_doc.payments.forEach((payment) => {
+                if (payment.amount > 0) {
+                  payment.amount = -Math.abs(payment.amount);
+                }
+                if (payment.base_amount > 0) {
+                  payment.base_amount = -Math.abs(payment.base_amount);
+                }
+              });
+              
+              // Retry submission once
+              console.log("Retrying submission with fixed payment amounts");
+              setTimeout(() => {
+                vm.submit_invoice(print);
+              }, 500);
+            } else {
+              vm.eventBus.emit("show_message", {
+                title: __("Error submitting invoice: ") + errorMsg,
+                color: "error",
+              });
+            }
+            return;
+          }
+          
           if (!r.message) {
             vm.eventBus.emit("show_message", {
-              title: __("Error submitting invoice"),
+              title: __("Error submitting invoice: No response from server"),
               color: "error",
             });
             return;
@@ -1028,19 +1121,60 @@ export default {
 
     // Set Full Amount for a Payment Method
     set_full_amount(idx) {
+      // For return invoices, ensure amount is negative
+      const isReturn = this.invoice_doc.is_return || this.invoiceType === "Return";
+      
       this.invoice_doc.payments.forEach((payment) => {
-        payment.amount =
-          payment.idx === idx
-            ? this.invoice_doc.rounded_total || this.invoice_doc.grand_total
-            : 0;
+        if (payment.idx === idx) {
+          let amount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
+          // Make amount negative for return invoices
+          if (isReturn) {
+            amount = -Math.abs(amount);
+          }
+          payment.amount = amount;
+          
+          // Also set base_amount if it exists
+          if (payment.base_amount !== undefined) {
+            payment.base_amount = isReturn ? -Math.abs(amount) : amount;
+          }
+        } else {
+          payment.amount = 0;
+          if (payment.base_amount !== undefined) {
+            payment.base_amount = 0;
+          }
+        }
       });
+      
+      // Diagnostic log to check setting amounts
+      if (isReturn) {
+        console.log("Set payment for return:", 
+          this.invoice_doc.payments.find(p => p.idx === idx)?.amount);
+      }
     },
 
     // Set Remaining Amount when a Payment Method is Focused
     set_rest_amount(idx) {
+      // For return invoices, ensure amount is negative
+      const isReturn = this.invoice_doc.is_return || this.invoiceType === "Return";
+      
       this.invoice_doc.payments.forEach((payment) => {
         if (payment.idx === idx && payment.amount === 0 && this.diff_payment > 0) {
-          payment.amount = this.diff_payment;
+          let amount = this.diff_payment;
+          // Make amount negative for return invoices
+          if (isReturn) {
+            amount = -Math.abs(amount);
+          }
+          payment.amount = amount;
+          
+          // Also set base_amount if it exists
+          if (payment.base_amount !== undefined) {
+            payment.base_amount = isReturn ? -Math.abs(amount) : amount;
+          }
+          
+          // Diagnostic log
+          if (isReturn) {
+            console.log("Set rest amount for return:", amount);
+          }
         }
       });
     },
@@ -1143,7 +1277,8 @@ export default {
     // Get Customer Addresses
     get_addresses() {
       const vm = this;
-      if (!vm.invoice_doc) {
+      if (!vm.invoice_doc || !vm.invoice_doc.customer) {
+        vm.addresses = [];
         return;
       }
       frappe.call({
@@ -1174,6 +1309,13 @@ export default {
 
     // Open New Address Dialog
     new_address() {
+      if (!this.invoice_doc || !this.invoice_doc.customer) {
+        this.eventBus.emit("show_message", {
+          title: __("Please select a customer first"),
+          color: "error",
+        });
+        return;
+      }
       this.eventBus.emit("open_new_address", this.invoice_doc.customer);
     },
 
@@ -1421,22 +1563,39 @@ export default {
         );
         this.is_credit_sale = false;
         this.is_write_off_change = false;
-        if (default_payment && !invoice_doc.is_return) {
+        
+        if (invoice_doc.is_return) {
+          this.is_return = true;
+          // First reset all payment amounts to zero
+          invoice_doc.payments.forEach((payment) => {
+            payment.amount = 0;
+            payment.base_amount = 0;
+          });
+          
+          // Then set default payment to negative amount
+          if (default_payment) {
+            const amount = invoice_doc.rounded_total || invoice_doc.grand_total;
+            default_payment.amount = -Math.abs(amount);
+            if (default_payment.base_amount !== undefined) {
+              default_payment.base_amount = -Math.abs(amount);
+            }
+          }
+        } else if (default_payment) {
+          // For regular invoices, set positive amount
           default_payment.amount = this.flt(
             invoice_doc.rounded_total || invoice_doc.grand_total,
             this.currency_precision
           );
         }
-        if (invoice_doc.is_return) {
-          this.is_return = true;
-          invoice_doc.payments.forEach((payment) => {
-            payment.amount = 0;
-            payment.base_amount = 0;
-          });
-        }
+        
         this.loyalty_amount = 0;
         this.redeemed_customer_credit = 0;
-        this.get_addresses();
+        
+        // Only get addresses if customer exists
+        if (invoice_doc.customer) {
+          this.get_addresses();
+        }
+        
         this.get_sales_person_names();
       });
 
@@ -1456,6 +1615,14 @@ export default {
           this.invoice_doc.posa_delivery_date = null;
           this.invoice_doc.posa_notes = null;
           this.invoice_doc.shipping_address_name = null;
+        }
+        
+        // Handle return invoices properly
+        if (this.invoice_doc && data === "Return") {
+          this.invoice_doc.is_return = 1;
+          
+          // Use our helper method to ensure payments are negative
+          this.ensureReturnPaymentsAreNegative();
         }
       });
 

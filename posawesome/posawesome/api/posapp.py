@@ -577,9 +577,17 @@ def update_invoice(data):
                 if hasattr(item, 'base_price_list_rate'):
                     item.base_price_list_rate = flt(item.price_list_rate / invoice_doc.conversion_rate)
         else:
-            # For items without offers, use regular price list rate
-            if item.price_list_rate:
-                item.rate = flt(item.price_list_rate * invoice_doc.conversion_rate)
+            # For items without offers, preserve manual rate changes
+            if hasattr(item, 'rate') and item.rate != item.price_list_rate:
+                # Manual rate change detected, preserve it
+                item.price_list_rate = item.rate  # Update price list rate to match manual rate
+                if hasattr(item, 'base_rate'):
+                    item.base_rate = flt(item.rate / invoice_doc.conversion_rate)
+                if hasattr(item, 'base_price_list_rate'):
+                    item.base_price_list_rate = flt(item.price_list_rate / invoice_doc.conversion_rate)
+            elif item.price_list_rate:
+                # No manual change, use regular price list rate
+                item.rate = flt(item.price_list_rate)
                 if hasattr(item, 'base_rate'):
                     item.base_rate = flt(item.rate / invoice_doc.conversion_rate)
 
