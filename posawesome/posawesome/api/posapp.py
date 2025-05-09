@@ -5,7 +5,8 @@
 from __future__ import unicode_literals
 import json
 import frappe
-from frappe.utils import nowdate, flt, cstr, getdate
+from frappe.utils import nowdate, flt, cstr, getdate, cint, money_in_words
+from erpnext.setup.utils import get_exchange_rate
 from frappe import _
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
 from erpnext.stock.get_item_details import get_item_details
@@ -543,147 +544,65 @@ def update_invoice(data):
     else:
         invoice_doc = frappe.get_doc(data)
 
-    # Set currency and conversion rate before set_missing_values
-    if data.get("currency"):
-        invoice_doc.currency = data["currency"]
-        if data.get("conversion_rate"):
-            invoice_doc.conversion_rate = flt(data["conversion_rate"])
-            invoice_doc.plc_conversion_rate = flt(data["conversion_rate"])
-        elif invoice_doc.currency != frappe.get_cached_value("Company", invoice_doc.company, "default_currency"):
-            invoice_doc.conversion_rate = get_exchange_rate(
-                invoice_doc.currency,
-                frappe.get_cached_value("Company", invoice_doc.company, "default_currency"),
-                invoice_doc.posting_date
-            )
-            invoice_doc.plc_conversion_rate = invoice_doc.conversion_rate
-
+    # Set currency from data before set_missing_values
+    selected_currency = data.get("currency")
+    
+    # Set missing values first
     invoice_doc.set_missing_values()
     
-    # Ensure price list currency matches transaction currency
-    invoice_doc.price_list_currency = invoice_doc.currency
-    invoice_doc.plc_conversion_rate = invoice_doc.conversion_rate
-    
-    # Handle offer rates and price list rates
-    for item in invoice_doc.items:
-        # If item has offer applied, use the offer rate
-        if hasattr(item, 'posa_offer_applied') and item.posa_offer_applied:
-            if hasattr(item, 'posa_offer_rate') and item.posa_offer_rate:
-                item.rate = flt(item.posa_offer_rate)
-                if hasattr(item, 'base_rate'):
-                    item.base_rate = flt(item.rate / invoice_doc.conversion_rate)
-            # Keep original price list rate
-            if hasattr(item, 'posa_original_rate'):
-                item.price_list_rate = flt(item.posa_original_rate)
-                if hasattr(item, 'base_price_list_rate'):
-                    item.base_price_list_rate = flt(item.price_list_rate / invoice_doc.conversion_rate)
-        else:
-            # For items without offers, preserve manual rate changes
-            if hasattr(item, 'rate') and item.rate != item.price_list_rate:
-                # Manual rate change detected, preserve it
-                item.price_list_rate = item.rate  # Update price list rate to match manual rate
-                if hasattr(item, 'base_rate'):
-                    item.base_rate = flt(item.rate / invoice_doc.conversion_rate)
-                if hasattr(item, 'base_price_list_rate'):
-                    item.base_price_list_rate = flt(item.price_list_rate / invoice_doc.conversion_rate)
-            elif item.price_list_rate:
-                # No manual change, use regular price list rate
-                item.rate = flt(item.price_list_rate)
-                if hasattr(item, 'base_rate'):
-                    item.base_rate = flt(item.rate / invoice_doc.conversion_rate)
+    # Ensure selected currency is preserved after set_missing_values
+    if selected_currency:
+        invoice_doc.currency = selected_currency
+        # Get default conversion rate from ERPNext if currency is different from company currency
+        if invoice_doc.currency != frappe.get_cached_value("Company", invoice_doc.company, "default_currency"):
+            company_currency = frappe.get_cached_value("Company", invoice_doc.company, "default_currency")
+            # Get exchange rate from selected currency to base currency
+            exchange_rate = get_exchange_rate(
+                invoice_doc.currency,
+                company_currency,
+                invoice_doc.posting_date
+            )
+            invoice_doc.conversion_rate = exchange_rate
+            invoice_doc.plc_conversion_rate = exchange_rate
+            invoice_doc.price_list_currency = selected_currency
 
-        # Calculate amounts
-        if hasattr(item, 'base_amount'):
-            item.base_amount = flt(item.amount / invoice_doc.conversion_rate)
-        if hasattr(item, 'base_net_amount'):
-            item.base_net_amount = flt(item.net_amount / invoice_doc.conversion_rate)
+            # Update rates and amounts for all items using multiplication
+            for item in invoice_doc.items:
+                if item.price_list_rate:
+                    # If exchange rate is 285 PKR = 1 USD
+                    # To convert USD to PKR: multiply by exchange rate
+                    # Example: 0.35 USD * 285 = 100 PKR
+                    item.base_price_list_rate = flt(item.price_list_rate * exchange_rate, item.precision("base_price_list_rate"))
+                if item.rate:
+                    item.base_rate = flt(item.rate * exchange_rate, item.precision("base_rate"))
+                if item.amount:
+                    item.base_amount = flt(item.amount * exchange_rate, item.precision("base_amount"))
 
-        # Force rate to be maintained
-        if hasattr(item, 'maintain_rate'):
-            item.maintain_rate = 1
-        if hasattr(item, 'rate_unchanged'):
-            item.rate_unchanged = 1
+            # Update payment amounts
+            for payment in invoice_doc.payments:
+                payment.base_amount = flt(payment.amount * exchange_rate, payment.precision("base_amount"))
 
-    # Update payment amounts in selected currency
-    for payment in invoice_doc.payments:
-        payment.currency = invoice_doc.currency
-        if hasattr(payment, 'base_amount'):
-            payment.base_amount = flt(payment.amount / invoice_doc.conversion_rate)
+            # Update invoice level amounts
+            invoice_doc.base_total = flt(invoice_doc.total * exchange_rate, invoice_doc.precision("base_total"))
+            invoice_doc.base_net_total = flt(invoice_doc.net_total * exchange_rate, invoice_doc.precision("base_net_total"))
+            invoice_doc.base_grand_total = flt(invoice_doc.grand_total * exchange_rate, invoice_doc.precision("base_grand_total"))
+            invoice_doc.base_rounded_total = flt(invoice_doc.rounded_total * exchange_rate, invoice_doc.precision("base_rounded_total"))
+            invoice_doc.base_in_words = money_in_words(invoice_doc.base_rounded_total, invoice_doc.company_currency)
 
-    # Update base amounts for the invoice
-    if invoice_doc.conversion_rate and invoice_doc.conversion_rate != 1:
-        invoice_doc.base_total = flt(invoice_doc.total / invoice_doc.conversion_rate)
-        invoice_doc.base_net_total = flt(invoice_doc.net_total / invoice_doc.conversion_rate)
-        invoice_doc.base_grand_total = flt(invoice_doc.grand_total / invoice_doc.conversion_rate)
-        invoice_doc.base_rounded_total = flt(invoice_doc.rounded_total / invoice_doc.conversion_rate)
-        invoice_doc.base_in_words = money_in_words(invoice_doc.base_rounded_total, invoice_doc.company_currency)
+            # Update data to be sent back to frontend
+            data["conversion_rate"] = exchange_rate
+            data["plc_conversion_rate"] = exchange_rate
 
     invoice_doc.flags.ignore_permissions = True
     frappe.flags.ignore_account_permission = True
-
-    if invoice_doc.is_return and invoice_doc.return_against:
-        ref_doc = frappe.get_cached_doc(invoice_doc.doctype, invoice_doc.return_against)
-        if not ref_doc.update_stock:
-            invoice_doc.update_stock = 0
-        if len(invoice_doc.payments) == 0:
-            invoice_doc.payments = ref_doc.payments
-            # Update payment currency and amounts for returns
-            for payment in invoice_doc.payments:
-                payment.currency = invoice_doc.currency
-                if hasattr(payment, 'base_amount'):
-                    payment.base_amount = flt(payment.amount / invoice_doc.conversion_rate)
-        invoice_doc.paid_amount = (
-            invoice_doc.rounded_total or invoice_doc.grand_total or invoice_doc.total
-        )
-        for payment in invoice_doc.payments:
-            if payment.default:
-                payment.amount = invoice_doc.paid_amount
-                if hasattr(payment, 'base_amount'):
-                    payment.base_amount = flt(payment.amount / invoice_doc.conversion_rate)
-
-    # Fetch POS Profile's 'posa_tax_inclusive' value
-    pos_profile_tax_inclusive = frappe.get_cached_value(
-        "POS Profile", invoice_doc.pos_profile, "posa_tax_inclusive"
-    )
-
-    allow_zero_rated_items = frappe.get_cached_value(
-        "POS Profile", invoice_doc.pos_profile, "posa_allow_zero_rated_items"
-    )
-
-    for item in invoice_doc.items:
-        if not item.rate or item.rate == 0:
-            if allow_zero_rated_items:
-                item.price_list_rate = 0.00
-                item.is_free_item = 1
-            else:
-                frappe.throw(
-                    _("Rate cannot be zero for item {0}").format(item.item_code)
-                )
-        else:
-            item.is_free_item = 0
-
-        # Add taxes from tax template
-        add_taxes_from_tax_template(item, invoice_doc)
-
-        if pos_profile_tax_inclusive:
-            if invoice_doc.get("taxes"):
-                # Mark tax as included in the print rate
-                for tax in invoice_doc.taxes:
-                    tax.included_in_print_rate = 1
-
-            # Adjust the invoice total to reflect tax-included prices
-            total_inclusive_of_tax = 0
-            for item in invoice_doc.items:
-                if item.rate:
-                    # Calculate price including tax
-                    total_inclusive_of_tax += item.rate * item.qty
-
-            # Set the grand total to the inclusive tax total
-            invoice_doc.grand_total = total_inclusive_of_tax
-            invoice_doc.rounded_total = invoice_doc.grand_total
-            invoice_doc.total = invoice_doc.grand_total
-
+    invoice_doc.docstatus = 0
     invoice_doc.save()
-    return invoice_doc
+
+    # Return both the invoice doc and the updated data
+    response = invoice_doc.as_dict()
+    response["conversion_rate"] = invoice_doc.conversion_rate
+    response["plc_conversion_rate"] = invoice_doc.conversion_rate
+    return response
 
 
 @frappe.whitelist()

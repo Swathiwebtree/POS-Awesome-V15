@@ -656,33 +656,72 @@ export default {
       let total = 0;
       if (this.invoice_doc && this.invoice_doc.payments) {
         this.invoice_doc.payments.forEach((payment) => {
+          // Payment amount is already in selected currency
           total += parseFloat(payment.amount) || 0;
         });
       }
-      total += parseFloat(this.loyalty_amount) || 0;
-      total += parseFloat(this.redeemed_customer_credit) || 0;
+      
+      // Add loyalty amount (convert if needed)
+      if (this.loyalty_amount) {
+        // Loyalty points are stored in base currency (PKR)
+        if (this.invoice_doc.currency !== this.pos_profile.currency) {
+          // Convert to selected currency (e.g. USD) by dividing
+          total += this.flt(this.loyalty_amount / (this.invoice_doc.conversion_rate || 1), this.currency_precision);
+        } else {
+          total += parseFloat(this.loyalty_amount) || 0;
+        }
+      }
+      
+      // Add redeemed customer credit (convert if needed)
+      if (this.redeemed_customer_credit) {
+        // Customer credit is stored in base currency (PKR)
+        if (this.invoice_doc.currency !== this.pos_profile.currency) {
+          // Convert to selected currency (e.g. USD) by dividing
+          total += this.flt(this.redeemed_customer_credit / (this.invoice_doc.conversion_rate || 1), this.currency_precision);
+        } else {
+          total += parseFloat(this.redeemed_customer_credit) || 0;
+        }
+      }
+      
       return this.flt(total, this.currency_precision);
     },
+    
     // Calculate difference between invoice total and payments
     diff_payment() {
       if (!this.invoice_doc) return 0;
-      let invoice_total = this.flt(this.invoice_doc.rounded_total || this.invoice_doc.grand_total, this.currency_precision);
-      // Adjust for returns
+      
+      // Get invoice total in selected currency
+      let invoice_total = this.flt(
+        this.invoice_doc.rounded_total || this.invoice_doc.grand_total, 
+        this.currency_precision
+      );
+      
+      // Calculate difference (all amounts are in selected currency)
+      let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
+      
+      // For returns, ensure difference is not negative
       if (this.invoice_doc.is_return) {
-        let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
-        return diff >= 0 ? diff : 0;
-      } else {
-        let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
         return diff >= 0 ? diff : 0;
       }
+      
+      return diff >= 0 ? diff : 0;
     },
+    
     // Calculate change to be given back to customer
     credit_change() {
-      let invoice_total = this.flt(this.invoice_doc.rounded_total || this.invoice_doc.grand_total, this.currency_precision);
+      // Get invoice total in selected currency
+      let invoice_total = this.flt(
+        this.invoice_doc.rounded_total || this.invoice_doc.grand_total, 
+        this.currency_precision
+      );
+      
+      // Calculate change (all amounts are in selected currency)
       let change = this.flt(this.total_payments - invoice_total, this.currency_precision);
-      // Ensure that change cannot be negative
+      
+      // Ensure change is not negative
       return change > 0 ? change : 0;
     },
+    
     // Label for the difference field (To Be Paid/Change)
     diff_label() {
       return this.diff_payment > 0 ? `To Be Paid (${this.displayCurrency})` : `Change (${this.displayCurrency})`;
@@ -691,11 +730,22 @@ export default {
     total_payments_display() {
       return this.formatCurrency(this.total_payments, this.displayCurrency);
     },
-    // Calculate available loyalty points amount
+    // Display formatted difference payment
+    diff_payment_display() {
+      return this.formatCurrency(this.diff_payment, this.displayCurrency);
+    },
+    // Calculate available loyalty points amount in selected currency
     available_points_amount() {
       let amount = 0;
       if (this.customer_info.loyalty_points) {
+        // Convert loyalty points to amount in base currency (PKR)
         amount = this.customer_info.loyalty_points * this.customer_info.conversion_factor;
+        
+        // Convert to selected currency if needed
+        if (this.invoice_doc.currency !== this.pos_profile.currency) {
+          // Convert PKR to USD by dividing
+          amount = this.flt(amount / (this.invoice_doc.conversion_rate || 1), this.currency_precision);
+        }
       }
       return amount;
     },
@@ -718,15 +768,6 @@ export default {
         (el) => el.fieldtype === "Button" && el.fieldname === "request_for_payment"
       ) || false;
     },
-    // Computed property for diff_payment display
-    diff_payment_display: {
-      get() {
-        return this.formatCurrency(this.diff_payment);
-      },
-      set(value) {
-        // Handle any changes if needed
-      }
-    }
   },
   watch: {
     // Watch diff_payment to update paid_change

@@ -629,9 +629,11 @@ export default {
       if (!item.rate) return 0;
       if (!this.exchange_rate) return item.rate;
       
-      const convertedRate = item.rate * this.exchange_rate;
-      // Always show converted rates with 4 decimal places
-      return flt(convertedRate, 4);
+      // If exchange rate is 300 PKR = 1 USD
+      // To convert PKR to USD: divide by exchange rate
+      // Example: 3000 PKR / 300 = 10 USD
+      const convertedRate = item.rate / this.exchange_rate;
+      return this.flt(convertedRate, 4);
     },
     currencySymbol(currency) {
       return get_currency_symbol(currency);
