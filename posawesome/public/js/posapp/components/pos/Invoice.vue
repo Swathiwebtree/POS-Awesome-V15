@@ -668,7 +668,7 @@ export default {
             el.uom === item.uom &&
             !el.posa_is_offer &&
             !el.posa_is_replace &&
-            el.batch_no === item.batch_no
+            ((el.batch_no && item.batch_no && el.batch_no === item.batch_no) || (!el.batch_no && !item.batch_no))
         );
       }
       if (index === -1 || this.new_line) {
@@ -710,47 +710,20 @@ export default {
           cur_item.serial_no_selected.push(item.to_set_serial_no);
           item.to_set_serial_no = null;
         }
-        // Batch logic for existing item
-        if (!cur_item.has_batch_no) {
-          // For returns, subtract from quantity to make it more negative
-          if (this.invoiceType === "Return") {
-            cur_item.qty -= (item.qty || 1);
-          } else {
-            cur_item.qty += (item.qty || 1);
-          }
-          this.calc_stock_qty(cur_item, cur_item.qty);
+        
+        // For returns, subtract from quantity to make it more negative
+        if (this.invoiceType === "Return") {
+          cur_item.qty -= (item.qty || 1);
         } else {
-          if (
-            (cur_item.stock_qty < cur_item.actual_batch_qty &&
-              cur_item.batch_no == item.batch_no) ||
-            !cur_item.batch_no
-          ) {
-            // For returns, subtract from quantity to make it more negative
-            if (this.invoiceType === "Return") {
-              cur_item.qty -= (item.qty || 1);
-            } else {
-              cur_item.qty += (item.qty || 1);
-            }
-            this.calc_stock_qty(cur_item, cur_item.qty);
-          } else {
-            const new_item = this.get_new_item(cur_item);
-            new_item.batch_no = item.batch_no || item.to_set_batch_no;
-            new_item.batch_no_expiry_date = "";
-            new_item.actual_batch_qty = "";
-            // Make quantity negative for returns
-            if (this.invoiceType === "Return") {
-              new_item.qty = -Math.abs(item.qty || 1);
-            } else {
-              new_item.qty = item.qty || 1;
-            }
-            if (new_item.batch_no) {
-              this.set_batch_qty(new_item, new_item.batch_no, false);
-              item.to_set_batch_no = null;
-              item.batch_no = null;
-            }
-            this.items.unshift(new_item);
-          }
+          cur_item.qty += (item.qty || 1);
         }
+        this.calc_stock_qty(cur_item, cur_item.qty);
+        
+        // Update batch quantity if needed
+        if (cur_item.has_batch_no && cur_item.batch_no) {
+          this.set_batch_qty(cur_item, cur_item.batch_no, false);
+        }
+        
         this.set_serial_no(cur_item);
       }
       this.$forceUpdate();
