@@ -1111,23 +1111,42 @@ export default {
     // Set full amount for a payment method (or negative for returns)
     set_full_amount(idx) {
       const isReturn = this.invoice_doc.is_return || this.invoiceType === "Return";
-      this.invoice_doc.payments.forEach((payment) => {
-        if (payment.idx === idx) {
-          let amount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
-          if (isReturn) {
-            amount = -Math.abs(amount);
-          }
-          payment.amount = amount;
-          if (payment.base_amount !== undefined) {
-            payment.base_amount = isReturn ? -Math.abs(amount) : amount;
-          }
-        } else {
-          payment.amount = 0;
-          if (payment.base_amount !== undefined) {
-            payment.base_amount = 0;
-          }
+      let totalAmount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
+      
+      console.log('Setting full amount for payment method idx:', idx);
+      console.log('Current payments:', JSON.stringify(this.invoice_doc.payments));
+
+      // Reset all payment amounts first
+      this.invoice_doc.payments.forEach(payment => {
+        payment.amount = 0;
+        if (payment.base_amount !== undefined) {
+          payment.base_amount = 0;
         }
       });
+
+      // Get the clicked payment method's name from the button text
+      const clickedButton = event?.target?.textContent?.trim();
+      console.log('Clicked button text:', clickedButton);
+
+      // Set amount only for clicked payment method
+      const clickedPayment = this.invoice_doc.payments.find(payment => 
+        payment.mode_of_payment === clickedButton
+      );
+
+      if (clickedPayment) {
+        console.log('Found clicked payment:', clickedPayment.mode_of_payment);
+        let amount = isReturn ? -Math.abs(totalAmount) : totalAmount;
+        clickedPayment.amount = amount;
+        if (clickedPayment.base_amount !== undefined) {
+          clickedPayment.base_amount = isReturn ? -Math.abs(amount) : amount;
+        }
+        console.log('Set amount for payment:', clickedPayment.mode_of_payment, 'amount:', amount);
+      } else {
+        console.log('No payment found for button text:', clickedButton);
+      }
+
+      // Force Vue to update the view
+      this.$forceUpdate();
     },
     // Set remaining amount for a payment method when focused
     set_rest_amount(idx) {
