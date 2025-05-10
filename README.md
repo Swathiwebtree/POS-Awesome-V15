@@ -10,48 +10,42 @@
 ### Main Features
 
 1. Supports Erpnext Version 15
-2. User-friendly and provides a good user experience and speed of use
-3. The cashier can either use list view or card view during sales transactions. Card view shows the images of the items
-4. Supports enqueue invoice submission after printing the receipt for faster processing
-5. Supports batch & serial numbering
-6. Supports batch-based pricing
-7. Supports UOM-specific barcode and pricing
-8. Supports sales of scale (weighted) products
-9. Ability to make returns from POS
-10. Supports Making returns for either cash or customer credit
-11. Supports using customer credit notes for payment
-12. Supports credit sales
-13. Allows the user to choose a due date for credit sales
-14. Supports customer loyalty points
-15. Shortcut keys
-16. Supports Customer Discount
-17. Supports POS Offers
-18. Auto-apply batches for bundle items
-19. Search and add items by Serial Number
-20. Create Sales Orders from POS directly
-21. Supports template items with variants
-22. Supports multiple languages
-23. Supports Mpesa mobile payment
-24. POS Coupons
-25. Supports Referral Code
-26. Supports Customer and Customer Group price list
-27. Supports Sales Person
-28. Supports Delivery Charges
-29. Search and add items by Batch Number
-30. Accept new payments from customers against existing invoices
-31. Payments Reconciliation
-32. A lot more bug fixes from the version 14
----
-
-### Bugs Fixed
-1. Edit Rate Fixed
-2. Edit Discount Fixed
-3. Partial Payment Fixed
-4. Additional Discount Fixed
-5. Show Customer Ledger Aside Date Field ( Can be enabled in Pos Awesome Advance settings )
-6. Add Address and City Field in Add New Customer Section.
-7. Auto Offers Application Fixed
-8. New Posting Date UI with 
+2. Supports Multi-Currency Transactions.
+    Customers can be invoiced in different currencies
+    Exchange Rate is fetched automatically based on selected currency
+    Invoices made with posawesome display Grand Total in both base and selected currency in erpnext.
+    
+3. User-friendly and provides a good user experience and speed of use
+4. The cashier can either use list view or card view during sales transactions. Card view shows the images of the items
+5. Supports enqueue invoice submission after printing the receipt for faster processing
+6. Supports batch & serial numbering
+7. Supports batch-based pricing
+8. Supports UOM-specific barcode and pricing
+9. Supports sales of scale (weighted) products
+10. Ability to make returns from POS
+11. Supports Making returns for either cash or customer credit
+12. Supports using customer credit notes for payment
+13. Supports credit sales
+14. Allows the user to choose a due date for credit sales
+15. Supports customer loyalty points
+16. Shortcut keys
+17. Supports Customer Discount
+18. Supports POS Offers
+19. Auto-apply batches for bundle items
+20. Search and add items by Serial Number
+21. Create Sales Orders from POS directly
+22. Supports template items with variants
+23. Supports multiple languages
+24. Supports Mpesa mobile payment
+25. POS Coupons
+26. Supports Referral Code
+27. Supports Customer and Customer Group price list
+28. Supports Sales Person
+29. Supports Delivery Charges
+30. Search and add items by Batch Number
+31. Accept new payments from customers against existing invoices
+32. Payments Reconciliation
+33. A lot more bug fixes from the version 14
 
 ### How to Install
 
@@ -65,7 +59,6 @@
 6. `bench --site [your.site.name] migrate`
 
 ---
-
 
 ### How To Use:
 
