@@ -690,11 +690,14 @@ export default {
     diff_payment() {
       if (!this.invoice_doc) return 0;
       
-      // Get invoice total in selected currency
-      let invoice_total = this.flt(
-        this.invoice_doc.rounded_total || this.invoice_doc.grand_total, 
-        this.currency_precision
-      );
+      // For multi-currency, use grand_total instead of rounded_total
+      let invoice_total;
+      if (this.pos_profile.posa_allow_multi_currency && 
+          this.invoice_doc.currency !== this.pos_profile.currency) {
+        invoice_total = this.flt(this.invoice_doc.grand_total, this.currency_precision);
+      } else {
+        invoice_total = this.flt(this.invoice_doc.rounded_total || this.invoice_doc.grand_total, this.currency_precision);
+      }
       
       // Calculate difference (all amounts are in selected currency)
       let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
@@ -709,11 +712,14 @@ export default {
     
     // Calculate change to be given back to customer
     credit_change() {
-      // Get invoice total in selected currency
-      let invoice_total = this.flt(
-        this.invoice_doc.rounded_total || this.invoice_doc.grand_total, 
-        this.currency_precision
-      );
+      // For multi-currency, use grand_total instead of rounded_total
+      let invoice_total;
+      if (this.pos_profile.posa_allow_multi_currency && 
+          this.invoice_doc.currency !== this.pos_profile.currency) {
+        invoice_total = this.flt(this.invoice_doc.grand_total, this.currency_precision);
+      } else {
+        invoice_total = this.flt(this.invoice_doc.rounded_total || this.invoice_doc.grand_total, this.currency_precision);
+      }
       
       // Calculate change (all amounts are in selected currency)
       let change = this.flt(this.total_payments - invoice_total, this.currency_precision);
