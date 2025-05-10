@@ -544,18 +544,44 @@ export default {
     set_mpesa_search_params() {
       if (!this.pos_profile.posa_allow_mpesa_reconcile_payments) return;
       if (!this.customer_name) return;
+      
       this.mpesa_search_name = this.customer_info.customer_name.split(" ")[0];
+      
       if (this.customer_info.mobile_no) {
-        this.mpesa_search_mobile =
-          this.customer_info.mobile_no.substring(0, 4) +
-          " ***** " +
-          this.customer_info.mobile_no.substring(9);
+        // Validate mobile number format
+        const mobileNo = this.customer_info.mobile_no.replace(/[^0-9]/g, '');
+        
+        if (mobileNo.length !== 12 && mobileNo.length !== 10) {
+          frappe.throw(__('Invalid mobile number format. Must be 10 or 12 digits'));
+          return;
+        }
+        
+        // Format for display with proper masking
+        if (mobileNo.length === 12) { // Format: 254XXXXXXXXX
+          this.mpesa_search_mobile = 
+            mobileNo.substring(0, 3) + 
+            " **** " + 
+            mobileNo.substring(9);
+        } else { // Format: 07XXXXXXXX
+          this.mpesa_search_mobile = 
+            mobileNo.substring(0, 2) + 
+            " **** " + 
+            mobileNo.substring(8);
+        }
       }
     },
     get_draft_mpesa_payments_register() {
       if (!this.pos_profile.posa_allow_mpesa_reconcile_payments) return;
+      
+      // Validate search parameters
+      if (!this.mpesa_search_name && !this.mpesa_search_mobile) {
+        frappe.throw(__('Please provide either name or mobile number for search'));
+        return;
+      }
+      
       const vm = this;
       this.mpesa_payments_loading = true;
+      
       return frappe
         .call("posawesome.posawesome.api.m_pesa.get_mpesa_draft_payments", {
           company: vm.company,
@@ -567,10 +593,28 @@ export default {
         .then((r) => {
           if (r.message) {
             vm.mpesa_payments = r.message;
+            if (vm.mpesa_payments.length === 0) {
+              frappe.show_alert({
+                message: __('No Mpesa payments found for the given criteria'),
+                indicator: 'orange'
+              });
+            }
           } else {
             vm.mpesa_payments = [];
+            frappe.show_alert({
+              message: __('Failed to fetch Mpesa payments'),
+              indicator: 'red'
+            });
           }
           vm.mpesa_payments_loading = false;
+        })
+        .catch((err) => {
+          vm.mpesa_payments_loading = false;
+          vm.mpesa_payments = [];
+          frappe.show_alert({
+            message: __('Error fetching Mpesa payments: {0}', [err.message]),
+            indicator: 'red'
+          });
         });
     },
     set_payment_methods() {
