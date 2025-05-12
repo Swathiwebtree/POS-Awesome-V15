@@ -701,8 +701,10 @@ export default {
             ((el.batch_no && item.batch_no && el.batch_no === item.batch_no) || (!el.batch_no && !item.batch_no))
         );
       }
+
+      let new_item;
       if (index === -1 || this.new_line) {
-        const new_item = this.get_new_item(item);
+        new_item = this.get_new_item(item);
         // Handle serial number logic
         if (item.has_serial_no && item.to_set_serial_no) {
           new_item.serial_no_selected = [];
@@ -765,8 +767,8 @@ export default {
       }
       this.$forceUpdate();
       
-      // If this is a new item and should be expanded
-      if ((!this.pos_profile.posa_auto_set_batch && new_item.has_batch_no) || new_item.has_serial_no) {
+      // Only try to expand if new_item exists and should be expanded
+      if (new_item && ((!this.pos_profile.posa_auto_set_batch && new_item.has_batch_no) || new_item.has_serial_no)) {
         this.expanded = [new_item.posa_row_id];
       }
     },
