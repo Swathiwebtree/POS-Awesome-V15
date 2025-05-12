@@ -1,4 +1,4 @@
-{% include "posawesome/posawesome/page/posapp/onscan.js" %}
+// Include onscan.js
 frappe.pages['posapp'].on_page_load = function (wrapper) {
 	var page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -13,55 +13,52 @@ frappe.pages['posapp'].on_page_load = function (wrapper) {
 	$("head").append("<link href='/assets/posawesome/node_modules/vuetify/dist/vuetify.min.css' rel='stylesheet'>");
 	$("head").append("<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css'>");
 	$("head").append("<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900' />");
-	update_totals_based_on_tax_inclusive()
+	
+	// Listen for POS Profile registration
+	frappe.realtime.on('pos_profile_registered', () => {
+		const update_totals_based_on_tax_inclusive = () => {
+			console.log("Updating totals based on tax inclusive settings");
+			const posProfile = this.page.$PosApp.pos_profile;
+
+			if (!posProfile) {
+				console.error("POS Profile is not set.");
+				return;
+			}
+
+			frappe.call({
+				method: 'frappe.get_cached_value',
+				args: {
+					doctype: 'POS Profile',
+					name: posProfile,
+					fieldname: 'posa_tax_inclusive'
+				},
+				callback: function(response) {
+					if (response.message !== undefined) {
+						const posa_tax_inclusive = response.message;
+						const totalAmountField = document.getElementById('input-v-25');
+						const grandTotalField = document.getElementById('input-v-29');
+
+						if (totalAmountField && grandTotalField) {
+							if (posa_tax_inclusive) {
+								totalAmountField.value = grandTotalField.value;
+								console.log("Total amount copied from grand total:", grandTotalField.value);
+							} else {
+								totalAmountField.value = "";
+								console.log("Total amount cleared because checkbox is unchecked.");
+							}
+						} else {
+							console.error('Could not find total amount or grand total field by ID.');
+						}
+					} else {
+						console.error('Error fetching POS Profile or POS Profile not found.');
+					}
+				}
+			});
+		};
+
+		update_totals_based_on_tax_inclusive();
+	});
 };
-
-function update_totals_based_on_tax_inclusive() {
-	console.log("script loaded////////////////////////////////////////////")
-    const posProfile = this.page.PosApp.pos_profile;
-
-    // Ensure the POS Profile is correctly set
-    if (!posProfile) {
-        console.error("POS Profile is not set.");
-        return;
-    }
-
-    // Fetch the current selected POS Profile's `posa_tax_inclusive` value
-    frappe.call({
-        method: 'frappe.get_cached_value',
-        args: {
-            doctype: 'POS Profile',  // POS Profile doctype
-            name: posProfile,  // The POS Profile selected for this session
-            fieldname: 'posa_tax_inclusive'  // The field we're interested in
-        },
-        callback: function(response) {
-            if (response.message !== undefined) {
-                const posa_tax_inclusive = response.message;  // Get the value of the checkbox
-
-                // Target the total amount field and grand total field
-                const totalAmountField = document.getElementById('input-v-25');
-                const grandTotalField = document.getElementById('input-v-29');
-
-                if (totalAmountField && grandTotalField) {
-                    // If `posa_tax_inclusive` is checked in the POS Profile
-                    if (posa_tax_inclusive) {
-                        // Copy the grand total value to the total amount field
-                        totalAmountField.value = grandTotalField.value;
-                        console.log("Total amount copied from grand total:", grandTotalField.value);
-                    } else {
-                        // If unchecked, clear the total amount field
-                        totalAmountField.value = "";
-                        console.log("Total amount cleared because checkbox is unchecked.");
-                    }
-                } else {
-                    console.error('Could not find total amount or grand total field by ID.');
-                }
-            } else {
-                console.error('Error fetching POS Profile or POS Profile not found.');
-            }
-        }
-    });
-}
 
 //Only if PT as we are not being able to load from pt.csv
 if (frappe.boot.lang == "pt") {

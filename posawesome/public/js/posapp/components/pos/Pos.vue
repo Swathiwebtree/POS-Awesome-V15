@@ -87,6 +87,7 @@ export default {
             this.get_offers(this.pos_profile.name);
             this.eventBus.emit('register_pos_profile', r.message);
             this.eventBus.emit('set_company', r.message.company);
+            frappe.realtime.emit('pos_profile_registered');
             console.info('LoadPosProfile');
           } else {
             this.create_opening_voucher();
