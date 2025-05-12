@@ -117,9 +117,19 @@
       <!-- Items Table Section (Main items list for invoice) -->
       <div class="my-0 py-0 overflow-y-auto" style="max-height: calc(70vh - 180px)">
         <!-- Main Items Data Table -->
-        <v-data-table :headers="items_headers" :items="items" v-model:expanded="expanded" show-expand
-          item-value="posa_row_id" class="elevation-1" :items-per-page="itemsPerPage" expand-on-click
-          density="compact" hide-default-footer>
+        <v-data-table 
+          :headers="items_headers" 
+          :items="items" 
+          v-model:expanded="expanded" 
+          show-expand
+          item-value="posa_row_id" 
+          class="elevation-1" 
+          :items-per-page="itemsPerPage" 
+          expand-on-click
+          density="compact" 
+          hide-default-footer
+          :single-expand="true"
+          @update:expanded="handleExpandedUpdate">
           <!-- Quantity Column Template -->
           <template v-slot:item.qty="{ item }">{{
             formatFloat(item.qty)
@@ -459,7 +469,7 @@ export default {
       invoiceTypes: ["Invoice", "Order"], // Types of invoices
       invoiceType: "Invoice", // Current invoice type
       itemsPerPage: 1000, // Items per page in table
-      expanded: [], // Expanded rows in items table
+      expanded: [], // Array of expanded row IDs
       singleExpand: true, // Only one row expanded at a time
       cancel_dialog: false, // Cancel dialog visibility
       float_precision: 6, // Float precision for calculations
@@ -610,7 +620,61 @@ export default {
   },
 
   methods: {
-    // Remove an item from the invoice and expanded rows
+    shortOpenFirstItem(e) {
+      if (e.key.toLowerCase() === "a" && (e.ctrlKey || e.metaKey)) {
+        try {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          if (!this.items || this.items.length === 0) {
+            console.log('No items to expand/collapse');
+            return;
+          }
+
+          const firstItem = this.items[0];
+          console.log('Processing first item:', firstItem.item_code);
+          
+          // Check if first item is currently expanded using its ID
+          const isExpanded = this.expanded.includes(firstItem.posa_row_id);
+          
+          // Toggle expanded state using item ID
+          if (isExpanded) {
+            console.log('Collapsing item:', firstItem.item_code);
+            this.expanded = [];
+          } else {
+            console.log('Expanding item:', firstItem.item_code);
+            this.expanded = [firstItem.posa_row_id];
+            // Update item details when expanding
+            this.$nextTick(() => {
+              this.update_item_detail(firstItem);
+            });
+          }
+        } catch (error) {
+          console.error('Error in shortOpenFirstItem:', error);
+          this.eventBus.emit("show_message", {
+            title: __("Error toggling item details"),
+            color: "error"
+          });
+        }
+      }
+    },
+
+    handleExpandedUpdate(newExpanded) {
+      console.log('Expanded state updated:', newExpanded);
+      this.expanded = newExpanded;
+      
+      // Update item details for newly expanded items
+      if (newExpanded && newExpanded.length > 0) {
+        const expandedItemId = newExpanded[0];
+        const expandedItem = this.items.find(item => item.posa_row_id === expandedItemId);
+        if (expandedItem) {
+          this.$nextTick(() => {
+            this.update_item_detail(expandedItem);
+          });
+        }
+      }
+    },
+
     remove_item(item) {
       const index = this.items.findIndex(
         (el) => el.posa_row_id == item.posa_row_id
@@ -618,44 +682,10 @@ export default {
       if (index >= 0) {
         this.items.splice(index, 1);
       }
-      const idx = this.expanded.findIndex(
-        (el) => el.posa_row_id == item.posa_row_id
-      );
-      if (idx >= 0) {
-        this.expanded.splice(idx, 1);
-      }
+      // Remove from expanded if present
+      this.expanded = this.expanded.filter(id => id !== item.posa_row_id);
     },
 
-    // Increase quantity of an item (handles return logic)
-    add_one(item) {
-      // For returns, we need to add (make more negative)
-      if (this.invoiceType === "Return") {
-        item.qty++;
-      } else {
-        item.qty++;
-      }
-      if (item.qty == 0) {
-        this.remove_item(item);
-      }
-      this.calc_stock_qty(item, item.qty);
-      this.$forceUpdate();
-    },
-    // Decrease quantity of an item (handles return logic)
-    subtract_one(item) {
-      // For returns, we need to subtract (make less negative)
-      if (this.invoiceType === "Return") {
-        item.qty--;
-      } else {
-        item.qty--;
-      }
-      if (item.qty == 0) {
-        this.remove_item(item);
-      }
-      this.calc_stock_qty(item, item.qty);
-      this.$forceUpdate();
-    },
-
-    // Add a new item to the invoice, or update existing one if found
     add_item(item) {
       if (!item.uom) {
         item.uom = item.stock_uom;
@@ -692,6 +722,13 @@ export default {
         }
         this.items.unshift(new_item);
         this.update_item_detail(new_item);
+
+        // Expand new item if it has batch or serial number
+        if ((!this.pos_profile.posa_auto_set_batch && new_item.has_batch_no) || new_item.has_serial_no) {
+          this.$nextTick(() => {
+            this.expanded = [new_item.posa_row_id];
+          });
+        }
       } else {
         const cur_item = this.items[index];
         this.update_items_details([cur_item]);
@@ -727,6 +764,11 @@ export default {
         this.set_serial_no(cur_item);
       }
       this.$forceUpdate();
+      
+      // If this is a new item and should be expanded
+      if ((!this.pos_profile.posa_auto_set_batch && new_item.has_batch_no) || new_item.has_serial_no) {
+        this.expanded = [new_item.posa_row_id];
+      }
     },
 
     // Create a new item object with default and calculated fields
@@ -2435,30 +2477,6 @@ export default {
       }
     },
 
-    shortOpenFirstItem(e) {
-      if (e.key.toLowerCase() === "a" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (this.items.length > 0) {
-          const firstItem = this.items[0];
-          const isExpanded = this.expanded.some(item => item.posa_row_id === firstItem.posa_row_id);
-
-          if (isExpanded) {
-            // If already expanded, remove it from expanded array
-            this.expanded = this.expanded.filter(item => item.posa_row_id !== firstItem.posa_row_id);
-          } else {
-            // If not expanded, add it to expanded array
-            this.expanded = [firstItem];
-          }
-
-          // Force update to ensure reactivity
-          this.$nextTick(() => {
-            this.$forceUpdate();
-          });
-        }
-      }
-    },
-
     shortSelectDiscount(e) {
       console.log('Shortcut pressed:', e.key, e.ctrlKey);
       if (e.key.toLowerCase() === "e" && (e.ctrlKey || e.metaKey)) {
@@ -3767,6 +3785,36 @@ export default {
       }
       // For base currency or when multi-currency is disabled, round to nearest integer
       return Math.round(amount);
+    },
+
+    // Increase quantity of an item (handles return logic)
+    add_one(item) {
+      // For returns, we need to add (make more negative)
+      if (this.invoiceType === "Return") {
+        item.qty++;
+      } else {
+        item.qty++;
+      }
+      if (item.qty == 0) {
+        this.remove_item(item);
+      }
+      this.calc_stock_qty(item, item.qty);
+      this.$forceUpdate();
+    },
+
+    // Decrease quantity of an item (handles return logic)
+    subtract_one(item) {
+      // For returns, we need to subtract (make less negative)
+      if (this.invoiceType === "Return") {
+        item.qty--;
+      } else {
+        item.qty--;
+      }
+      if (item.qty == 0) {
+        this.remove_item(item);
+      }
+      this.calc_stock_qty(item, item.qty);
+      this.$forceUpdate();
     },
   },
 
