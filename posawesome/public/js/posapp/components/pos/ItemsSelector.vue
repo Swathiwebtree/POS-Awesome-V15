@@ -5,14 +5,15 @@
         color="info"></v-progress-linear>
       <v-row class="items px-2 py-1">
         <v-col class="pb-0 mb-2">
-          <v-text-field density="compact" clearable autofocus variant="outlined" color="primary"
+          <v-text-field density="compact" clearable autofocus variant="solo" color="primary"
             :label="frappe._('Search Items')" hint="Search by item code, serial number, batch no or barcode"
             bg-color="white" hide-details v-model="debounce_search" @keydown.esc="esc_event"
             @keydown.enter="search_onchange" @click:clear="clearSearch"
+            prepend-inner-icon="mdi-magnify"
             @focus="handleItemSearchFocus" ref="debounce_search"></v-text-field>
         </v-col>
         <v-col cols="3" class="pb-0 mb-2" v-if="pos_profile.posa_input_qty">
-          <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('QTY')" bg-color="white"
+          <v-text-field density="compact" variant="solo" color="primary" :label="frappe._('QTY')" bg-color="white"
             hide-details v-model.number="qty" type="number" @keydown.enter="enter_event"
             @keydown.esc="esc_event"></v-text-field>
         </v-col>
@@ -75,7 +76,7 @@
     <v-card class="cards mb-0 mt-3 pa-2 bg-grey-lighten-5">
       <v-row no-gutters align="center" justify="center">
         <v-col cols="12">
-          <v-select :items="items_group" :label="frappe._('Items Group')" density="compact" variant="outlined"
+          <v-select :items="items_group" :label="frappe._('Items Group')" density="compact" variant="solo"
             hide-details v-model="item_group"></v-select>
         </v-col>
         <v-col cols="3" class="mt-1">

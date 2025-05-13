@@ -74,7 +74,8 @@
             density="default">
             <template v-slot:activator="{ props }">
               <v-text-field v-model="formatted_posting_date" :label="frappe._('Posting Date')" readonly
-                variant="outlined" density="compact" clearable color="primary" hide-details
+                variant="solo" density="compact" clearable color="primary" hide-details
+                prepend-inner-icon="mdi-calendar"
                 v-bind="props"></v-text-field>
             </template>
             <v-date-picker v-model="posting_date" no-title scrollable color="primary"
@@ -115,7 +116,7 @@
       </v-row>
 
       <!-- Items Table Section (Main items list for invoice) -->
-      <div class="my-0 py-0 overflow-y-auto" style="max-height: calc(70vh - 180px)">
+      <div class="my-0 py-0 overflow-y-auto mt-3" style="max-height: calc(70vh - 180px)">
         <!-- Main Items Data Table -->
         <v-data-table 
           :headers="items_headers" 
@@ -354,13 +355,13 @@
             <!-- Total Qty -->
             <v-col cols="6">
               <v-text-field :model-value="formatFloat(total_qty)" :label="frappe._('Total Qty')"
-                prepend-inner-icon="mdi-format-list-numbered" variant="outlined" density="compact" readonly
+                prepend-inner-icon="mdi-format-list-numbered" variant="solo" density="compact" readonly
                 color="accent" />
             </v-col>
             <!-- Additional Discount (Amount or Percentage) -->
             <v-col cols="6" v-if="!pos_profile.posa_use_percentage_discount">
               <v-text-field v-model="additional_discount" :label="frappe._('Additional Discount')"
-                prepend-inner-icon="mdi-cash-minus" variant="outlined" density="compact" color="warning"
+                prepend-inner-icon="mdi-cash-minus" variant="solo" density="compact" color="warning"
                 :prefix="currencySymbol(pos_profile.currency)"
                 :disabled="!pos_profile.posa_allow_user_to_edit_additional_discount" />
             </v-col>
@@ -368,7 +369,7 @@
             <v-col cols="6" v-else>
               <v-text-field v-model="additional_discount_percentage" @change="update_discount_umount()"
                 :rules="[isNumber]" :label="frappe._('Additional Discount %')" suffix="%"
-                prepend-inner-icon="mdi-percent" variant="outlined" density="compact" color="warning"
+                prepend-inner-icon="mdi-percent" variant="solo" density="compact" color="warning"
                 :disabled="!pos_profile.posa_allow_user_to_edit_additional_discount || !!discount_percentage_offer_name" />
             </v-col>
 
@@ -376,13 +377,13 @@
             <v-col cols="6">
               <v-text-field :model-value="formatCurrency(total_items_discount_amount)"
                 :prefix="currencySymbol(displayCurrency)" :label="frappe._('Items Discounts')" 
-                prepend-inner-icon="mdi-tag-minus" variant="outlined" density="compact" color="warning" readonly />
+                prepend-inner-icon="mdi-tag-minus" variant="solo" density="compact" color="warning" readonly />
             </v-col>
 
             <!-- Total (moved to maintain row alignment) -->
             <v-col cols="6">
               <v-text-field :model-value="formatCurrency(subtotal)" :prefix="currencySymbol(displayCurrency)"
-                :label="frappe._('Total')" prepend-inner-icon="mdi-cash" variant="outlined" density="compact" readonly
+                :label="frappe._('Total')" prepend-inner-icon="mdi-cash" variant="solo" density="compact" readonly
                 color="success" />
             </v-col>
           </v-row>
