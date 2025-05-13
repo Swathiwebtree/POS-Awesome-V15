@@ -239,14 +239,10 @@
                 <v-col cols="12" sm="4">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Discount Amount')"
                     bg-color="white" hide-details :model-value="formatCurrency(item.discount_amount || 0)" ref="discount"
-                    @input="(value) => {
-                      if (expanded.length > 0) {
-                        const selectedItem = items.find(i => i.posa_row_id === expanded[0].posa_row_id);
-                        if (selectedItem) {
-                          calc_prices(selectedItem, value, { target: { id: 'discount_amount' } });
-                        }
-                      }
-                    }" :rules="['isNumber']" id="discount_amount" disabled :prefix="currencySymbol(pos_profile.currency)"></v-text-field>
+                    @change="(event) => { if (expanded && expanded.length === 1 && expanded[0] === item.posa_row_id) { calc_prices(item, event.target.value, { target: { id: 'discount_amount' } }); } }" 
+                    :rules="['isNumber']" id="discount_amount" 
+                    :disabled="!!item.posa_is_replace || item.posa_offer_applied || !pos_profile.posa_allow_user_to_edit_item_discount || (invoiceType === 'Return' && invoice_doc.return_against)" 
+                    :prefix="currencySymbol(pos_profile.currency)"></v-text-field>
                 </v-col>
 
                 <!-- Third Row -->
@@ -2126,21 +2122,35 @@ export default {
             break;
 
           case "discount_amount":
+            console.log("[calc_prices] Event Target ID:", fieldId);
+            console.log("[calc_prices] RAW value received by function:", value); // <-- ADDED THIS
+            console.log("[calc_prices] Original item.price_list_rate:", item.price_list_rate);
+            console.log("[calc_prices] Converted price_list_rate for calc:", converted_price_list_rate);
+            console.log("[calc_prices] Input value (newValue before Math.min):", newValue);
+
             // Ensure discount amount doesn't exceed price list rate
             newValue = Math.min(newValue, converted_price_list_rate);
+            console.log("[calc_prices] Input value (newValue after Math.min):", newValue);
 
             // Store base discount and convert to selected currency
             item.base_discount_amount = this.flt(newValue * this.exchange_rate, this.currency_precision);
             item.discount_amount = newValue;
+            console.log("[calc_prices] Updated item.discount_amount:", item.discount_amount);
+            console.log("[calc_prices] Updated item.base_discount_amount:", item.base_discount_amount);
 
             // Update rate based on discount
             item.rate = this.flt(converted_price_list_rate - item.discount_amount, this.currency_precision);
             item.base_rate = this.flt(item.price_list_rate - item.base_discount_amount, this.currency_precision);
+            console.log("[calc_prices] Calculated item.rate:", item.rate);
+            console.log("[calc_prices] Calculated item.base_rate:", item.base_rate);
 
             // Calculate percentage
             if (converted_price_list_rate) {
               item.discount_percentage = this.flt((item.discount_amount / converted_price_list_rate) * 100, this.float_precision);
+            } else {
+              item.discount_percentage = 0; // Avoid division by zero
             }
+            console.log("[calc_prices] Calculated item.discount_percentage:", item.discount_percentage);
             break;
 
           case "discount_percentage":
