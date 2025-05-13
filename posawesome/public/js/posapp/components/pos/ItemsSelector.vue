@@ -53,7 +53,7 @@
           <div fluid class="items" v-if="items_view == 'list'">
             <div class="my-0 py-0 overflow-y-auto" style="max-height: 65vh">
               <v-data-table :headers="getItemsHeaders()" :items="filtered_items" item-key="item_code" item-value="item-"
-                class="elevation-1" :items-per-page="itemsPerPage" hide-default-footer @click:row="click_item_row">
+                class="elevation-0 sleek-data-table" :items-per-page="itemsPerPage" hide-default-footer @click:row="click_item_row">
                 <template v-slot:item.rate="{ item }">
                   <div>
                     <div class="text-primary">{{ currencySymbol(pos_profile.currency) }}
@@ -913,5 +913,16 @@ export default {
 <style scoped>
 .text-success {
   color: #4CAF50 !important;
+}
+
+.sleek-data-table {
+  border-radius: 12px !important; /* Match Customer.vue style */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05) !important; /* Match Customer.vue style */
+  background-color: #fff !important; /* Match Customer.vue style */
+  overflow: hidden !important; /* Ensures border-radius applies correctly */
+}
+
+.sleek-data-table:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important; /* Match Customer.vue style */
 }
 </style>
