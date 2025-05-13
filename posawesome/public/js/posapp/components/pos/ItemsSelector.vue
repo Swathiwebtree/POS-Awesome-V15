@@ -9,7 +9,7 @@
             :label="frappe._('Search Items')" hint="Search by item code, serial number, batch no or barcode"
             bg-color="white" hide-details v-model="debounce_search" @keydown.esc="esc_event"
             @keydown.enter="search_onchange" @click:clear="clearSearch"
-            @click="clearSearch" ref="debounce_search"></v-text-field>
+            @focus="handleItemSearchFocus" ref="debounce_search"></v-text-field>
         </v-col>
         <v-col cols="3" class="pb-0 mb-2" v-if="pos_profile.posa_input_qty">
           <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('QTY')" bg-color="white"
@@ -624,6 +624,12 @@ export default {
         this.search = this.search_backup;
         // No need to reload items when focus is lost
       }
+    },
+    handleItemSearchFocus() {
+      this.first_search = "";
+      this.search = "";
+      // Optionally, you might want to also clear search_backup if the behaviour should be a full reset on focus
+      // this.search_backup = ""; 
     },
     getConvertedRate(item) {
       if (!item.rate) return 0;
