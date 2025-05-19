@@ -782,6 +782,9 @@ export default {
       if (!item.posa_is_replace) {
         item.posa_is_replace = "";
       }
+      
+      // Initialize flag for tracking manual rate changes
+      new_item._manual_rate_set = false;
 
       // Set negative quantity for return invoices
       if (this.invoiceType === "Return" && item.qty > 0) {
@@ -793,7 +796,20 @@ export default {
       new_item.discount_percentage = 0;
       new_item.discount_amount_per_item = 0;
       new_item.price_list_rate = item.rate;
-      new_item.base_price_list_rate = item.rate; // Add base_price_list_rate
+      
+      // Setup base rates properly for multi-currency
+      if (this.selected_currency !== this.pos_profile.currency) {
+        // Store original base currency values
+        new_item.base_price_list_rate = item.rate * this.exchange_rate;
+        new_item.base_rate = item.rate * this.exchange_rate;
+        new_item.base_discount_amount = 0;
+      } else {
+        // In base currency, base rates = displayed rates
+        new_item.base_price_list_rate = item.rate;
+        new_item.base_rate = item.rate;
+        new_item.base_discount_amount = 0;
+      }
+      
       new_item.qty = item.qty;
       new_item.uom = item.uom ? item.uom : item.stock_uom;
       // Ensure item_uoms is initialized
@@ -1201,6 +1217,7 @@ export default {
       } else {
         // Same currency, just ensure negative values for returns
         const multiplier = isReturn ? -1 : 1;
+        // When in base currency, the base amounts are the same as the regular amounts
         doc.base_total = total * multiplier;
         doc.base_net_total = total * multiplier;
         doc.base_discount_amount = discountAmount * multiplier;
@@ -1324,10 +1341,12 @@ export default {
           // item.rate is in USD (e.g. 10 USD)
           // base_rate should be in PKR (e.g. 3000 PKR)
           new_item.rate = flt(item.rate);  // Keep rate in USD
-          new_item.base_rate = flt(item.rate * this.exchange_rate);  // Convert to PKR
+          
+          // Use pre-stored base_rate if available, otherwise calculate
+          new_item.base_rate = item.base_rate || flt(item.rate * this.exchange_rate);
           
           new_item.price_list_rate = flt(item.price_list_rate);  // Keep price list rate in USD
-          new_item.base_price_list_rate = flt(item.price_list_rate * this.exchange_rate);  // Convert to PKR
+          new_item.base_price_list_rate = item.base_price_list_rate || flt(item.price_list_rate * this.exchange_rate);
           
           // Calculate amounts
           new_item.amount = flt(item.qty) * new_item.rate;  // Amount in USD
@@ -1335,17 +1354,17 @@ export default {
           
           // Handle discount amount
           new_item.discount_amount = flt(item.discount_amount);  // Keep discount in USD
-          new_item.base_discount_amount = flt(item.discount_amount * this.exchange_rate);  // Convert to PKR
+          new_item.base_discount_amount = item.base_discount_amount || flt(item.discount_amount * this.exchange_rate);
         } else {
-          // Same currency (PKR), no conversion needed
+          // Same currency (base currency), make sure we use base rates if available
           new_item.rate = flt(item.rate);
-          new_item.base_rate = flt(item.rate);
+          new_item.base_rate = item.base_rate || flt(item.rate);
           new_item.price_list_rate = flt(item.price_list_rate);
-          new_item.base_price_list_rate = flt(item.price_list_rate);
+          new_item.base_price_list_rate = item.base_price_list_rate || flt(item.price_list_rate);
           new_item.amount = flt(item.qty) * new_item.rate;
           new_item.base_amount = new_item.amount;
           new_item.discount_amount = flt(item.discount_amount);
-          new_item.base_discount_amount = flt(item.discount_amount);
+          new_item.base_discount_amount = item.base_discount_amount || flt(item.discount_amount);
         }
 
         // For returns, ensure all amounts are negative
@@ -1893,11 +1912,11 @@ export default {
       }
       var vm = this;
       
-      // Only update rate if no offer is applied
-      if (item.price_list_rate && !item.posa_offer_applied) {
-        item.rate = item.price_list_rate;
-        this.$forceUpdate();
-      }
+      // Remove this block which was causing the issue - rates should persist regardless of currency
+      // if (item.price_list_rate && !item.posa_offer_applied) {
+      //   item.rate = item.price_list_rate;
+      //   this.$forceUpdate();
+      // }
 
       frappe.call({
         method: "posawesome.posawesome.api.posapp.get_item_detail",
@@ -1945,29 +1964,42 @@ export default {
               vm.set_batch_qty(item, item.batch_no, false);
             }
             
-            // Always store base rates from server
-            item.base_price_list_rate = data.price_list_rate;
+            // First save base rates if not exists or if in default currency
+            if (!item.base_rate || vm.selected_currency === vm.pos_profile.currency) {
+              // Always store base rates from server in base currency
+              item.base_price_list_rate = data.price_list_rate;
+              
+              if (!item.posa_offer_applied) {
+                item.base_rate = data.price_list_rate;
+              }
+            }
             
             // Only update rates if no offer is applied
             if (!item.posa_offer_applied) {
-              item.base_rate = data.price_list_rate;
-              
               // Convert to selected currency if needed
               if (vm.selected_currency !== vm.pos_profile.currency) {
                 const exchange_rate = vm.exchange_rate || 1;
-                item.price_list_rate = vm.flt(data.price_list_rate / exchange_rate, vm.currency_precision);
-                item.rate = vm.flt(data.price_list_rate / exchange_rate, vm.currency_precision);
+                item.price_list_rate = vm.flt(item.base_price_list_rate / exchange_rate, vm.currency_precision);
+                
+                // In multi-currency mode, update the rate from base_rate
+                item.rate = vm.flt(item.base_rate / exchange_rate, vm.currency_precision);
               } else {
-                item.price_list_rate = data.price_list_rate;
-                item.rate = data.price_list_rate;
+                // When in default currency, use base rates directly for price_list_rate
+                item.price_list_rate = item.base_price_list_rate;
+                
+                // IMPORTANT: For default currency, only set rate if it's not already set
+                // This preserves manually entered rates
+                if (!item._manual_rate_set) {
+                  item.rate = item.base_rate;
+                }
               }
             } else {
               // For items with offers, only update price_list_rate
               if (vm.selected_currency !== vm.pos_profile.currency) {
                 const exchange_rate = vm.exchange_rate || 1;
-                item.price_list_rate = vm.flt(data.price_list_rate / exchange_rate, vm.currency_precision);
+                item.price_list_rate = vm.flt(item.base_price_list_rate / exchange_rate, vm.currency_precision);
               } else {
-                item.price_list_rate = data.price_list_rate;
+                item.price_list_rate = item.base_price_list_rate;
               }
             }
 
@@ -1989,7 +2021,13 @@ export default {
               // Calculate discount in selected currency
               const discount_amount = vm.flt((item.price_list_rate * discount_percent) / 100, vm.currency_precision);
               item.discount_amount = discount_amount;
+              
+              // Also store base discount amount
+              item.base_discount_amount = vm.flt((item.base_price_list_rate * discount_percent) / 100, vm.currency_precision);
+              
+              // Update rates with discount
               item.rate = vm.flt(item.price_list_rate - discount_amount, vm.currency_precision);
+              item.base_rate = vm.flt(item.base_price_list_rate - item.base_discount_amount, vm.currency_precision);
             }
             
             // Update other item details
@@ -2006,6 +2044,17 @@ export default {
             // Calculate final amount
             item.amount = vm.flt(item.qty * item.rate, vm.currency_precision);
             item.base_amount = vm.flt(item.qty * item.base_rate, vm.currency_precision);
+            
+            // Log updated rates for debugging
+            console.log(`Updated rates for ${item.item_code} on expand:`, {
+              base_rate: item.base_rate,
+              rate: item.rate,
+              base_price_list_rate: item.base_price_list_rate, 
+              price_list_rate: item.price_list_rate,
+              exchange_rate: vm.exchange_rate,
+              selected_currency: vm.selected_currency,
+              default_currency: vm.pos_profile.currency
+            });
             
             // Force update UI immediately
             vm.$forceUpdate();
@@ -2091,6 +2140,11 @@ export default {
       let newValue = flt(value, this.currency_precision);
 
       try {
+        // Flag to track manual rate changes
+        if (fieldId === 'rate') {
+          item._manual_rate_set = true;
+        }
+        
         // Handle negative values
         if (newValue < 0) {
           newValue = 0;
@@ -2193,6 +2247,12 @@ export default {
 
     // Calculate item price and discount fields
     calc_item_price(item) {
+      // Skip recalculation if called from update_item_rates to avoid double calculations
+      if (item._skip_calc) {
+        item._skip_calc = false;
+        return;
+      }
+      
       if (!item.posa_offer_applied) {
         if (item.price_list_rate) {
           // Always work with base rates first
@@ -3552,12 +3612,38 @@ export default {
           currency: currency,
           exchange_rate: 1
         });
+        
+        // First ensure base rates exist for all items
+        this.items.forEach(item => {
+          if (!item.base_rate) {
+            item.base_rate = item.rate;
+            item.base_price_list_rate = item.price_list_rate;
+            item.base_discount_amount = item.discount_amount || 0;
+          }
+        });
+        
+        // Then update all item rates
+        this.update_item_rates();
         return;
       }
       
       try {
         console.log('Updating currency exchange rate...');
         console.log('Selected:', currency, 'Base:', this.pos_profile.currency, 'Date:', this.posting_date);
+        
+        // First ensure base rates exist for all items
+        this.items.forEach(item => {
+          if (!item.base_rate) {
+            // Store original rates in base currency before switching
+            item.base_rate = item.rate;
+            item.base_price_list_rate = item.price_list_rate;
+            item.base_discount_amount = item.discount_amount || 0;
+            console.log(`Stored base rates for ${item.item_code}:`, {
+              base_rate: item.base_rate,
+              base_price_list_rate: item.base_price_list_rate
+            });
+          }
+        });
         
         // Get rate from selected to base currency
         const response = await frappe.call({
@@ -3588,9 +3674,12 @@ export default {
             this.available_currencies[currencyIndex].rate = rate;
           }
           
-          // Update all item rates based on new exchange rate
+          // Force update of all items immediately
           this.update_item_rates();
-
+          
+          // Log updated items for debugging
+          console.log(`Updated all ${this.items.length} items to currency ${currency} with rate ${rate}`);
+          
           // Show success message
           this.eventBus.emit("show_message", {
             title: __(`Exchange rate updated: 1 ${currency} = ${this.flt(rate, 6)} ${this.pos_profile.currency}`),
@@ -3618,6 +3707,9 @@ export default {
           this.available_currencies[currencyIndex].rate = null;
         }
         
+        // Restore all items to base currency rates
+        this.update_item_rates();
+        
         this.eventBus.emit("show_message", {
           title: __(`Error: Could not fetch exchange rate from ${currency} to ${this.pos_profile.currency}. Please set up the exchange rate first.`),
           color: "error"
@@ -3643,15 +3735,36 @@ export default {
       console.log('Updating item rates with exchange rate:', this.exchange_rate);
 
       this.items.forEach(item => {
-        // Store original rates if not already stored
+        // Set skip flag to avoid double calculations
+        item._skip_calc = true;
+        
+        // First ensure base rates exist for all items
         if (!item.base_rate) {
-          item.base_rate = item.rate;
-          item.base_price_list_rate = item.price_list_rate;
-          item.base_discount_amount = item.discount_amount;
+          console.log(`Setting base rates for ${item.item_code} for the first time`);
+          if (this.selected_currency === this.pos_profile.currency) {
+            // When in base currency, base rates = displayed rates
+            item.base_rate = item.rate;
+            item.base_price_list_rate = item.price_list_rate;
+            item.base_discount_amount = item.discount_amount || 0;
+          } else {
+            // When in another currency, calculate base rates
+            item.base_rate = item.rate * this.exchange_rate;
+            item.base_price_list_rate = item.price_list_rate * this.exchange_rate;
+            item.base_discount_amount = (item.discount_amount || 0) * this.exchange_rate;
+          }
         }
 
-        // Convert all monetary values to selected currency
-        if (this.selected_currency !== this.pos_profile.currency) {
+        // Currency conversion logic
+        if (this.selected_currency === this.pos_profile.currency) {
+          // When switching back to default currency, restore from base rates
+          console.log(`Restoring rates for ${item.item_code} from base rates`);
+          item.price_list_rate = item.base_price_list_rate;
+          item.rate = item.base_rate;
+          item.discount_amount = item.base_discount_amount;
+        } else {
+          // When switching to another currency, convert from base rates
+          console.log(`Converting rates for ${item.item_code} to ${this.selected_currency}`);
+          
           // If exchange rate is 285 PKR = 1 USD
           // To convert PKR to USD: divide by exchange rate
           // Example: 100 PKR / 285 = 0.35 USD
@@ -3663,22 +3776,29 @@ export default {
           item.price_list_rate = converted_price < 0.000001 ? 0 : converted_price;
           item.rate = converted_rate < 0.000001 ? 0 : converted_rate;
           item.discount_amount = converted_discount < 0.000001 ? 0 : converted_discount;
-
-          console.log(`Converted rates for ${item.item_code}:`, {
-            base_rate: item.base_rate,
-            converted_rate: item.rate,
-            exchange_rate: this.exchange_rate,
-            precision: this.currency_precision
-          });
-        } else {
-          // Restore base currency values
-          item.price_list_rate = item.base_price_list_rate;
-          item.rate = item.base_rate;
-          item.discount_amount = item.base_discount_amount;
         }
+        
+        // Always recalculate final amounts
+        item.amount = this.flt(item.qty * item.rate, this.currency_precision);
+        item.base_amount = this.flt(item.qty * item.base_rate, this.currency_precision);
 
+        console.log(`Updated rates for ${item.item_code}:`, {
+          price_list_rate: item.price_list_rate,
+          base_price_list_rate: item.base_price_list_rate,
+          rate: item.rate,
+          base_rate: item.base_rate,
+          discount: item.discount_amount,
+          base_discount: item.base_discount_amount,
+          amount: item.amount,
+          base_amount: item.base_amount,
+        });
+
+        // Apply any other pricing rules if needed
         this.calc_item_price(item);
       });
+      
+      // Force UI update after all calculations
+      this.$forceUpdate();
     },
 
     formatCurrency(value) {
