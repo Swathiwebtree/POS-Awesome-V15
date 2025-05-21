@@ -1971,10 +1971,12 @@ export default {
               item.has_batch_no &&
               vm.pos_profile.posa_auto_set_batch &&
               !item.batch_no &&
-              data.batch_no_data
+              data.batch_no_data &&
+              data.batch_no_data.length > 0
             ) {
               item.batch_no_data = data.batch_no_data;
-              vm.set_batch_qty(item, item.batch_no, false);
+              // Pass null instead of undefined to avoid console warning
+              vm.set_batch_qty(item, null, false);
             }
             
             // First save base rates if not exists or if in default currency
