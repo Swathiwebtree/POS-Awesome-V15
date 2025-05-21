@@ -689,14 +689,27 @@ export default {
       }
       let index = -1;
       if (!this.new_line) {
-        index = this.items.findIndex(
-          (el) =>
-            el.item_code === item.item_code &&
-            el.uom === item.uom &&
-            !el.posa_is_offer &&
-            !el.posa_is_replace &&
-            ((el.batch_no && item.batch_no && el.batch_no === item.batch_no) || (!el.batch_no && !item.batch_no))
-        );
+        // For auto_set_batch enabled, we should check if the item code and UOM match only
+        // For items with batch but auto_set_batch disabled, check if batch numbers match
+        // This will allow quantity to increment for batch items with auto_set_batch enabled
+        if (this.pos_profile.posa_auto_set_batch && item.has_batch_no) {
+          index = this.items.findIndex(
+            (el) =>
+              el.item_code === item.item_code &&
+              el.uom === item.uom &&
+              !el.posa_is_offer &&
+              !el.posa_is_replace
+          );
+        } else {
+          index = this.items.findIndex(
+            (el) =>
+              el.item_code === item.item_code &&
+              el.uom === item.uom &&
+              !el.posa_is_offer &&
+              !el.posa_is_replace &&
+              ((el.batch_no && item.batch_no && el.batch_no === item.batch_no) || (!el.batch_no && !item.batch_no))
+          );
+        }
       }
 
       let new_item;
