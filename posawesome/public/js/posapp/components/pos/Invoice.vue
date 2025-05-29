@@ -533,12 +533,24 @@ export default {
         const rate = flt(item.rate);
         sum += qty * rate;
       });
+      
       // Subtract additional discount
       const additional_discount = this.flt(this.additional_discount);
       sum -= additional_discount;
+      
       // Add delivery charges
       const delivery_charges = this.flt(this.delivery_charges_rate);
       sum += delivery_charges;
+      
+      // Add taxes
+      if (this.invoice_doc && this.invoice_doc.taxes) {
+        this.invoice_doc.taxes.forEach(tax => {
+          if (tax.tax_amount) {
+            sum += flt(tax.tax_amount);
+          }
+        });
+      }
+      
       return this.flt(sum, this.currency_precision);
     },
     // Calculate total discount amount for all items
@@ -1159,6 +1171,16 @@ export default {
       
       // Calculate grand total with correct sign for returns
       let grandTotal = this.subtotal;
+      
+      // Add taxes to grand total
+      if (this.invoice_doc && this.invoice_doc.taxes) {
+        this.invoice_doc.taxes.forEach(tax => {
+          if (tax.tax_amount) {
+            grandTotal += flt(tax.tax_amount);
+          }
+        });
+      }
+      
       if (isReturn && grandTotal > 0) grandTotal = -Math.abs(grandTotal);
       
       doc.grand_total = grandTotal;
@@ -1171,7 +1193,23 @@ export default {
       // Add POS specific fields
       doc.posa_pos_opening_shift = this.pos_opening_shift.name;
       doc.payments = this.get_payments();
+      
+      // Copy existing taxes if available
       doc.taxes = [];
+      if (this.invoice_doc && this.invoice_doc.taxes) {
+        doc.taxes = this.invoice_doc.taxes.map(tax => {
+          return {
+            account_head: tax.account_head,
+            charge_type: tax.charge_type || "On Net Total",
+            description: tax.description,
+            rate: tax.rate,
+            tax_amount: tax.tax_amount,
+            total: tax.total,
+            base_tax_amount: tax.tax_amount * (1 / this.exchange_rate || 1),
+            base_total: tax.total * (1 / this.exchange_rate || 1)
+          };
+        });
+      }
       
       // Handle return specific fields
       if (isReturn) {
