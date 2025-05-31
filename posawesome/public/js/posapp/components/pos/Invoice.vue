@@ -542,15 +542,6 @@ export default {
       const delivery_charges = this.flt(this.delivery_charges_rate);
       sum += delivery_charges;
       
-      // Add taxes
-      if (this.invoice_doc && this.invoice_doc.taxes) {
-        this.invoice_doc.taxes.forEach(tax => {
-          if (tax.tax_amount) {
-            sum += flt(tax.tax_amount);
-          }
-        });
-      }
-      
       return this.flt(sum, this.currency_precision);
     },
     // Calculate total discount amount for all items
