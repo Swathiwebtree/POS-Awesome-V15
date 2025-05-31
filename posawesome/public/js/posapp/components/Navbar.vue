@@ -252,13 +252,12 @@ export default {
       this.serverOnline = false; // Assume server is offline until a successful connection is made
 
       try {
-        // Determine the base URL for the socket connection.
-        // The port '9000' is a common default for Socket.IO servers, but it MUST be adjusted
-        // to the actual port your backend's WebSocket server is listening on.
-        const protocol = window.location.protocol; // e.g., 'http:', 'https:'
-        const host = window.location.hostname; // e.g., 'localhost', 'yourdomain.com'
-        const port = '9000'; // IMPORTANT: Configure this to your actual Socket.IO server port!
+        // Get the current window location to determine the server URL
+        const protocol = window.location.protocol;
+        const host = window.location.hostname;
+        const port = window.location.port || (protocol === 'https:' ? '443' : '80');
 
+        // Use the same host and port as the current page
         this.socket = io(`${protocol}//${host}:${port}`, {
           path: '/socket.io', // Standard path for Socket.IO connections
           transports: ['websocket', 'polling'], // Preferred transport methods (websocket is faster)
@@ -266,7 +265,8 @@ export default {
           reconnectionAttempts: Infinity, // Attempt to reconnect indefinitely
           reconnectionDelay: 1000, // Initial delay before first reconnection attempt (1 second)
           reconnectionDelayMax: 5000, // Maximum delay between reconnection attempts (5 seconds)
-          timeout: 20000 // How long to wait before considering the connection failed (20 seconds)
+          timeout: 20000, // How long to wait before considering the connection failed (20 seconds)
+          forceNew: true
         });
 
         // Event listener for a successful connection to the Socket.IO server.
@@ -276,12 +276,17 @@ export default {
           console.log('Socket.IO: Connected to server');
         });
 
-        // Event listener for disconnection from the Socket.IO server.
+        // Event listener for disconnection from the Socket.IO server
         this.socket.on('disconnect', (reason) => {
           this.serverOnline = false; // Update server status to offline
           this.serverConnecting = false; // No longer connecting if disconnected
           console.warn('Socket.IO: Disconnected from server. Reason:', reason);
-          // Socket.IO's `reconnection: true` handles automatic reconnection attempts.
+          
+          // Show error message to user
+          this.showMessage({
+            color: 'error',
+            title: this.__('Server connection lost. Please check your internet connection.')
+          });
         });
 
         // Event listener for connection errors (e.g., server not found, refused connection).
@@ -289,6 +294,12 @@ export default {
           this.serverOnline = false; // Update server status to offline
           this.serverConnecting = false; // No longer connecting if an error occurred
           console.error('Socket.IO: Connection error:', error.message);
+          
+          // Show error message to user
+          this.showMessage({
+            color: 'error',
+            title: this.__('Unable to connect to server. Please try again later.')
+          });
         });
 
       } catch (err) {
@@ -296,6 +307,12 @@ export default {
         this.serverOnline = false;
         this.serverConnecting = false;
         console.error('Failed to initialize Socket.IO connection:', err);
+        
+        // Show error message to user
+        this.showMessage({
+          color: 'error',
+          title: this.__('Failed to initialize server connection.')
+        });
       }
     },
     // --- SIGNAL ONLINE/OFFLINE EVENTS ---
