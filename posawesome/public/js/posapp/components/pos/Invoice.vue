@@ -4132,9 +4132,7 @@ export default {
         });
       }
     });
-    this.eventBus.on("add_item", (item) => {
-      this.add_item(item);
-    });
+    this.eventBus.on("add_item", this.add_item);
     this.eventBus.on("update_customer", (customer) => {
       this.customer = customer;
     });
@@ -4218,6 +4216,8 @@ export default {
     this.eventBus.on("reset_posting_date", () => {
       this.posting_date = frappe.datetime.nowdate();
     });
+    this.eventBus.on("open_variants_model", this.open_variants_model);
+    this.eventBus.on("calc_uom", this.calc_uom);
   },
   // Cleanup event listeners before component is destroyed
   beforeUnmount() {

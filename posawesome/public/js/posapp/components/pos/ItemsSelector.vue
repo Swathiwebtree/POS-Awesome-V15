@@ -365,6 +365,8 @@ export default {
       new_item.item_barcode.forEach((element) => {
         if (this.search == element.barcode) {
           new_item.uom = element.posa_uom;
+          // Call calc_uom to update rate based on new UOM
+          this.eventBus.emit("calc_uom", new_item, element.posa_uom);
           match = true;
         }
       });
