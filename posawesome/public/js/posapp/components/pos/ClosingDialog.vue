@@ -14,14 +14,20 @@
                 <v-data-table :headers="headers" :items="dialog_data.payment_reconciliation" item-key="mode_of_payment"
                   class="elevation-1" :items-per-page="itemsPerPage" hide-default-footer>
                   <template v-slot:item.closing_amount="props">
-                    <v-confirm-edit v-model:return-value="props.item.closing_amount">
-                      {{ currencySymbol(pos_profile.currency) }}
-                      {{ formatCurrency(props.item.closing_amount) }}
-                      <template v-slot:input>
-                        <v-text-field v-model="props.item.closing_amount" :rules="[max25chars]"
-                          :label="frappe._('Edit')" single-line counter type="number"></v-text-field>
-                      </template>
-                    </v-confirm-edit>
+                    <v-text-field
+                      v-model="props.item.closing_amount"
+                      :rules="[max25chars]"
+                      :label="frappe._('Edit')"
+                      single-line
+                      counter
+                      type="number"
+                      density="compact"
+                      variant="outlined"
+                      color="primary"
+                      bg-color="white"
+                      hide-details
+                      :prefix="currencySymbol(pos_profile.currency)"
+                    ></v-text-field>
                   </template>
                   <template v-slot:item.difference="{ item }">
                     {{ currencySymbol(pos_profile.currency) }}
