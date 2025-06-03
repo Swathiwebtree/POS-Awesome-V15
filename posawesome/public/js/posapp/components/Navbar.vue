@@ -1,7 +1,9 @@
 <template>
   <!-- Main navigation container -->
   <nav>
+
     <!-- Top App Bar: application header with nav toggle, logo, title, and actions -->
+
     <v-app-bar app flat height="56" color="white" class="border-bottom">
       <v-app-bar-nav-icon ref="navIcon" @click="handleNavClick" class="text-secondary" />
 

@@ -8,6 +8,7 @@
           <v-text-field density="compact" clearable autofocus variant="solo" color="primary"
             :label="frappe._('Search Items')" hint="Search by item code, serial number, batch no or barcode"
             bg-color="white" hide-details v-model="debounce_search" @keydown.esc="esc_event"
+
             @keydown.enter="search_onchange" @click:clear="clearSearch" prepend-inner-icon="mdi-magnify"
             @focus="handleItemSearchFocus" ref="debounce_search">
             <!-- Add camera scan button if enabled -->
@@ -17,6 +18,7 @@
               </v-btn>
             </template>
           </v-text-field>
+
         </v-col>
         <v-col cols="3" class="pb-0 mb-2" v-if="pos_profile.posa_input_qty">
           <v-text-field density="compact" variant="solo" color="primary" :label="frappe._('QTY')" bg-color="white"
@@ -60,8 +62,10 @@
           <div fluid class="items" v-if="items_view == 'list'">
             <div class="my-0 py-0 overflow-y-auto" style="max-height: 65vh">
               <v-data-table :headers="getItemsHeaders()" :items="filtered_items" item-key="item_code" item-value="item-"
+
                 class="elevation-0 sleek-data-table" :items-per-page="itemsPerPage" hide-default-footer
                 @click:row="click_item_row">
+
                 <template v-slot:item.rate="{ item }">
                   <div>
                     <div class="text-primary">{{ currencySymbol(pos_profile.currency) }}
@@ -85,8 +89,10 @@
     <v-card class="cards mb-0 mt-3 pa-2 bg-grey-lighten-5">
       <v-row no-gutters align="center" justify="center">
         <v-col cols="12">
+
           <v-select :items="items_group" :label="frappe._('Items Group')" density="compact" variant="solo" hide-details
             v-model="item_group"></v-select>
+
         </v-col>
         <v-col cols="3" class="mt-1">
           <v-btn-toggle v-model="items_view" color="primary" group density="compact" rounded>
@@ -799,6 +805,7 @@ export default {
       // Keep the search term for manual search
       this.trigger_onscan(scannedCode);
     },
+
     getConvertedRate(item) {
       if (!item.rate) return 0;
       if (!this.exchange_rate) return item.rate;
@@ -1083,6 +1090,7 @@ export default {
 }
 
 .sleek-data-table {
+
   border-radius: 12px !important;
   /* Match Customer.vue style */
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05) !important;
@@ -1096,5 +1104,6 @@ export default {
 .sleek-data-table:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
   /* Match Customer.vue style */
+
 }
 </style>
