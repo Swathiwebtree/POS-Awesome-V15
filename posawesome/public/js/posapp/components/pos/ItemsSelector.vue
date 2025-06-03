@@ -658,153 +658,147 @@ export default {
         this.$refs.cameraScanner.startScanning();
       }
     },
-      onBarcodeScanned(scannedCode) {
-        console.log('Barcode scanned:', scannedCode);
-        
-        // Clear any previous search
-        this.search = '';
-        this.first_search = '';
-        
-        // Set the scanned code as search term
-        this.first_search = scannedCode;
-        this.search = scannedCode;
-        
-        // Show scanning feedback
-        frappe.show_alert({
-          message: `Scanning for: ${scannedCode}`,
-          indicator: 'blue'
-        }, 2);
-        
-        // Enhanced item search and submission logic
-        setTimeout(() => {
-          this.processScannedItem(scannedCode);
-        }, 300);
-      },
+    onBarcodeScanned(scannedCode) {
+      console.log('Barcode scanned:', scannedCode);
       
-      processScannedItem(scannedCode) {
-        // First try to find exact match by barcode
-        let foundItem = this.items.find(item => 
-          item.barcode === scannedCode || 
-          item.item_code === scannedCode ||
-          (item.barcodes && item.barcodes.some(bc => bc.barcode === scannedCode))
+      // Clear any previous search
+      this.search = '';
+      this.first_search = '';
+      
+      // Set the scanned code as search term
+      this.first_search = scannedCode;
+      this.search = scannedCode;
+      
+      // Show scanning feedback
+      frappe.show_alert({
+        message: `Scanning for: ${scannedCode}`,
+        indicator: 'blue'
+      }, 2);
+      
+      // Enhanced item search and submission logic
+      setTimeout(() => {
+        this.processScannedItem(scannedCode);
+      }, 300);
+    },
+    processScannedItem(scannedCode) {
+      // First try to find exact match by barcode
+      let foundItem = this.items.find(item => 
+        item.barcode === scannedCode || 
+        item.item_code === scannedCode ||
+        (item.barcodes && item.barcodes.some(bc => bc.barcode === scannedCode))
+      );
+      
+      if (foundItem) {
+        console.log('Found item by exact match:', foundItem);
+        this.addScannedItemToInvoice(foundItem, scannedCode);
+        return;
+      }
+      
+      // If no exact match, try partial search
+      const searchResults = this.searchItemsByCode(scannedCode);
+      
+      if (searchResults.length === 1) {
+        console.log('Found item by search:', searchResults[0]);
+        this.addScannedItemToInvoice(searchResults[0], scannedCode);
+      } else if (searchResults.length > 1) {
+        // Multiple matches - show selection dialog
+        this.showMultipleItemsDialog(searchResults, scannedCode);
+      } else {
+        // No matches found
+        this.handleItemNotFound(scannedCode);
+      }
+    },
+    searchItemsByCode(code) {
+      return this.items.filter(item => {
+        const searchTerm = code.toLowerCase();
+        return (
+          item.item_code.toLowerCase().includes(searchTerm) ||
+          item.item_name.toLowerCase().includes(searchTerm) ||
+          (item.barcode && item.barcode.toLowerCase().includes(searchTerm)) ||
+          (item.barcodes && item.barcodes.some(bc => bc.barcode.toLowerCase().includes(searchTerm)))
         );
-        
-        if (foundItem) {
-          console.log('Found item by exact match:', foundItem);
-          this.addScannedItemToInvoice(foundItem, scannedCode);
-          return;
-        }
-        
-        // If no exact match, try partial search
-        const searchResults = this.searchItemsByCode(scannedCode);
-        
-        if (searchResults.length === 1) {
-          console.log('Found item by search:', searchResults[0]);
-          this.addScannedItemToInvoice(searchResults[0], scannedCode);
-        } else if (searchResults.length > 1) {
-          // Multiple matches - show selection dialog
-          this.showMultipleItemsDialog(searchResults, scannedCode);
-        } else {
-          // No matches found
-          this.handleItemNotFound(scannedCode);
-        }
-      },
+      });
+    },
+    addScannedItemToInvoice(item, scannedCode) {
+      console.log('Adding scanned item to invoice:', item, scannedCode);
       
-      searchItemsByCode(code) {
-        return this.items.filter(item => {
-          const searchTerm = code.toLowerCase();
-          return (
-            item.item_code.toLowerCase().includes(searchTerm) ||
-            item.item_name.toLowerCase().includes(searchTerm) ||
-            (item.barcode && item.barcode.toLowerCase().includes(searchTerm)) ||
-            (item.barcodes && item.barcodes.some(bc => bc.barcode.toLowerCase().includes(searchTerm)))
-          );
-        });
-      },
+      // Use existing add_item method with enhanced feedback
+      this.add_item(item);
       
-      addScannedItemToInvoice(item, scannedCode) {
-        console.log('Adding scanned item to invoice:', item, scannedCode);
-        
-        // Use existing add_item method with enhanced feedback
-        this.add_item(item);
-        
-        // Show success message
-        frappe.show_alert({
-          message: `Added: ${item.item_name}`,
-          indicator: 'green'
-        }, 3);
-        
-        // Clear search after successful addition
-        setTimeout(() => {
-          this.clearSearch();
-        }, 1000);
-      },
+      // Show success message
+      frappe.show_alert({
+        message: `Added: ${item.item_name}`,
+        indicator: 'green'
+      }, 3);
       
-      showMultipleItemsDialog(items, scannedCode) {
-        // Create a dialog to let user choose from multiple matches
-        const dialog = new frappe.ui.Dialog({
-          title: __('Multiple Items Found'),
-          fields: [
-            {
-              fieldtype: 'HTML',
-              fieldname: 'items_html',
-              options: this.generateItemSelectionHTML(items, scannedCode)
-            }
-          ],
-          primary_action_label: __('Cancel'),
-          primary_action: () => dialog.hide()
-        });
-        
-        dialog.show();
-        
-        // Add click handlers for item selection
-        setTimeout(() => {
-          items.forEach((item, index) => {
-            const button = dialog.$wrapper.find(`[data-item-index="${index}"]`);
-            button.on('click', () => {
-              this.addScannedItemToInvoice(item, scannedCode);
-              dialog.hide();
-            });
-          });
-        }, 100);
-      },
+      // Clear search after successful addition
+      setTimeout(() => {
+        this.clearSearch();
+      }, 1000);
+    },
+    showMultipleItemsDialog(items, scannedCode) {
+      // Create a dialog to let user choose from multiple matches
+      const dialog = new frappe.ui.Dialog({
+        title: __('Multiple Items Found'),
+        fields: [
+          {
+            fieldtype: 'HTML',
+            fieldname: 'items_html',
+            options: this.generateItemSelectionHTML(items, scannedCode)
+          }
+        ],
+        primary_action_label: __('Cancel'),
+        primary_action: () => dialog.hide()
+      });
       
-      generateItemSelectionHTML(items, scannedCode) {
-        let html = `<div class="mb-3"><strong>Scanned Code:</strong> ${scannedCode}</div>`;
-        html += '<div class="item-selection-list">';
-        
+      dialog.show();
+      
+      // Add click handlers for item selection
+      setTimeout(() => {
         items.forEach((item, index) => {
-          html += `
-            <div class="item-option p-3 mb-2 border rounded cursor-pointer" data-item-index="${index}" style="border: 1px solid #ddd; cursor: pointer;">
-              <div class="d-flex align-items-center">
-                <img src="${item.image || '/assets/posawesome/js/posapp/components/pos/placeholder-image.png'}" 
-                     style="width: 50px; height: 50px; object-fit: cover; margin-right: 15px;" />
-                <div>
-                  <div class="font-weight-bold">${item.item_name}</div>
-                  <div class="text-muted small">${item.item_code}</div>
-                  <div class="text-primary">${this.format_currency(item.rate, this.pos_profile.currency)}</div>
-                </div>
+          const button = dialog.$wrapper.find(`[data-item-index="${index}"]`);
+          button.on('click', () => {
+            this.addScannedItemToInvoice(item, scannedCode);
+            dialog.hide();
+          });
+        });
+      }, 100);
+    },
+    generateItemSelectionHTML(items, scannedCode) {
+      let html = `<div class="mb-3"><strong>Scanned Code:</strong> ${scannedCode}</div>`;
+      html += '<div class="item-selection-list">';
+      
+      items.forEach((item, index) => {
+        html += `
+          <div class="item-option p-3 mb-2 border rounded cursor-pointer" data-item-index="${index}" style="border: 1px solid #ddd; cursor: pointer;">
+            <div class="d-flex align-items-center">
+              <img src="${item.image || '/assets/posawesome/js/posapp/components/pos/placeholder-image.png'}" 
+                   style="width: 50px; height: 50px; object-fit: cover; margin-right: 15px;" />
+              <div>
+                <div class="font-weight-bold">${item.item_name}</div>
+                <div class="text-muted small">${item.item_code}</div>
+                <div class="text-primary">${this.format_currency(item.rate, this.pos_profile.currency)}</div>
               </div>
             </div>
-          `;
-        });
-        
-        html += '</div>';
-        return html;
-      },
+          </div>
+        `;
+      });
       
-      handleItemNotFound(scannedCode) {
-        console.warn('Item not found for scanned code:', scannedCode);
-        
-        // Show error message
-        frappe.show_alert({
-          message: `Item not found: ${scannedCode}`,
-          indicator: 'red'
-        }, 5);
-        
-        // Keep the search term for manual search
-        this.trigger_onscan(scannedCode);
-      },
+      html += '</div>';
+      return html;
+    },
+    handleItemNotFound(scannedCode) {
+      console.warn('Item not found for scanned code:', scannedCode);
+      
+      // Show error message
+      frappe.show_alert({
+        message: `Item not found: ${scannedCode}`,
+        indicator: 'red'
+      }, 5);
+      
+      // Keep the search term for manual search
+      this.trigger_onscan(scannedCode);
+    },
     getConvertedRate(item) {
       if (!item.rate) return 0;
       if (!this.exchange_rate) return item.rate;

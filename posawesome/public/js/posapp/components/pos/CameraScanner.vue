@@ -284,8 +284,7 @@ export default {
                 this.scanResult = firstResult.rawValue;
                 this.scanFormat = firstResult.format;
                 this.errorMessage = '';
-                this.isScanning = false; // Stop further scanning attempts by QrcodeStream or hide it
-
+                
                 this.$emit('barcode-scanned', this.scanResult);
 
                 if (typeof frappe !== 'undefined' && frappe.show_alert) {
@@ -294,10 +293,12 @@ export default {
                         indicator: 'green'
                     }, 3);
                 }
-
+                
+                // Reset scan result after a delay for next scan
                 setTimeout(() => {
-                    this.stopScanning();
-                }, 3000);
+                    this.scanResult = '';
+                    this.scanFormat = '';
+                }, 2000);
             }
         },
 
