@@ -11,10 +11,7 @@ frappe.ui.form.on('POS Opening Shift', {
 		frm.set_query("user", function(doc) {
 			return {
 				query: "posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.get_cashiers",
-				filters: { 'parent': doc.pos_profile },
-				formatter: function(value, description) {
-					return description || value;
-				}
+				filters: { 'parent': doc.pos_profile }
 			};
 		});
 		frm.set_query("pos_profile", function(doc) {
