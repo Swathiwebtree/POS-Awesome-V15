@@ -294,11 +294,15 @@ export default {
                     }, 3);
                 }
                 
-                // Reset scan result after a delay for next scan
+                // Reset scan result and temporarily pause scanning
+                this.isScanning = false;
+                
+                // Resume scanning after a short delay
                 setTimeout(() => {
                     this.scanResult = '';
                     this.scanFormat = '';
-                }, 2000);
+                    this.isScanning = true;
+                }, 1000);
             }
         },
 
