@@ -10,12 +10,12 @@
 
 After switching branches or pulling latest changes:
 
-cd apps/posawesome
-git pull
-yarn install
-cd ../..
-bench build --app posawesome
-bench --site your.site migrate
+1. cd apps/posawesome
+2. git pull
+3. yarn install
+4. cd ../..
+5. bench build --app posawesome
+6. bench --site your.site migrate
 
 ### Main Features
 
