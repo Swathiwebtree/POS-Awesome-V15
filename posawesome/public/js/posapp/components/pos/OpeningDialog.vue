@@ -120,17 +120,35 @@ export default {
     },
     get_opening_dialog_data() {
       const vm = this;
+      // Load cached data first for offline usage
+      if (localStorage.opening_dialog_storage) {
+        try {
+          const cached = JSON.parse(localStorage.getItem('opening_dialog_storage'));
+          if (cached) {
+            vm.companies = cached.companies.map(c => c.name);
+            vm.pos_profiles_data = cached.pos_profiles_data || [];
+            vm.payments_method_data = cached.payments_method || [];
+            vm.company = vm.companies[0] || '';
+          }
+        } catch (e) {
+          console.error('Failed to parse opening dialog cache', e);
+        }
+      }
+
       frappe.call({
         method: 'posawesome.posawesome.api.posapp.get_opening_dialog_data',
         args: {},
         callback: function (r) {
           if (r.message) {
-            r.message.companies.forEach((element) => {
-              vm.companies.push(element.name);
-            });
-            vm.company = vm.companies[0];
+            vm.companies = r.message.companies.map(element => element.name);
             vm.pos_profiles_data = r.message.pos_profiles_data;
             vm.payments_method_data = r.message.payments_method;
+            vm.company = vm.companies[0] || '';
+            try {
+              localStorage.setItem('opening_dialog_storage', JSON.stringify(r.message));
+            } catch (e) {
+              console.error('Failed to cache opening dialog data', e);
+            }
           }
         },
       });
@@ -151,8 +169,13 @@ export default {
           if (r.message) {
             vm.eventBus.emit('register_pos_data', r.message);
             vm.eventBus.emit('set_company', r.message.company);
+            try {
+              localStorage.setItem('pos_opening_storage', JSON.stringify(r.message));
+            } catch (e) {
+              console.error('Failed to cache opening data', e);
+            }
             vm.close_opening_dialog();
-            is_loading = false;
+            vm.is_loading = false;
           }
         });
     },

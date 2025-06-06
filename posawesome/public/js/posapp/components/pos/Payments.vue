@@ -604,6 +604,14 @@
 <script>
 // Importing format mixin for currency and utility functions
 import format from "../../format";
+import {
+  saveOfflineInvoice,
+  syncOfflineInvoices,
+  getPendingOfflineInvoiceCount,
+  isOffline,
+} from "../../../offline";
+import generateOfflineInvoiceHTML from "../../../offline_print_template";
+
 export default {
   // Using format mixin for shared formatting methods
   mixins: [format],
@@ -1049,6 +1057,19 @@ export default {
         is_cashback: this.is_cashback,
       };
       const vm = this;
+
+      if (isOffline()) {
+        saveOfflineInvoice({ data: data, invoice: this.invoice_doc });
+        this.eventBus.emit("pending_invoices_changed", getPendingOfflineInvoiceCount());
+        vm.eventBus.emit("show_message", { title: __("Invoice saved offline"), color: "warning" });
+        if (print) {
+          this.print_offline_invoice(this.invoice_doc);
+        }
+        vm.eventBus.emit("clear_invoice");
+        vm.eventBus.emit("reset_posting_date");
+        vm.back_to_invoice();
+        return;
+      }
       frappe.call({
         method: "posawesome.posawesome.api.posapp.submit_invoice",
         args: {
@@ -1198,6 +1219,16 @@ export default {
         },
         true
       );
+    },
+    // Print invoice using a more detailed offline template
+    print_offline_invoice(invoice) {
+      if (!invoice) return;
+      const html = generateOfflineInvoiceHTML(invoice);
+      const win = window.open("", "_blank");
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      win.print();
     },
     // Validate due date (should not be in the past)
     validate_due_date() {
@@ -1504,12 +1535,47 @@ export default {
     // Get change amount for display
     get_change_amount() {
       return Math.max(0, this.total_payments - this.invoice_doc.grand_total);
+    },
+    // Sync any invoices stored offline and show pending/synced counts
+    async syncPendingInvoices() {
+      const pending = getPendingOfflineInvoiceCount();
+      if (pending) {
+        this.eventBus.emit("show_message", {
+          title: `${pending} invoice${pending > 1 ? 's' : ''} pending for sync`,
+          color: "warning",
+        });
+        this.eventBus.emit("pending_invoices_changed", pending);
+      }
+      if (isOffline()) {
+        // Don't attempt to sync while offline; just update the counter
+        return;
+      }
+      const result = await syncOfflineInvoices();
+      if (result && (result.synced || result.drafted)) {
+        if (result.synced) {
+          this.eventBus.emit("show_message", {
+            title: `${result.synced} offline invoice${result.synced > 1 ? 's' : ''} synced`,
+            color: "success",
+          });
+        }
+        if (result.drafted) {
+          this.eventBus.emit("show_message", {
+            title: `${result.drafted} offline invoice${result.drafted > 1 ? 's' : ''} saved as draft`,
+            color: "warning",
+          });
+        }
+      }
+      this.eventBus.emit("pending_invoices_changed", getPendingOfflineInvoiceCount());
     }
   },
   // Lifecycle hook: created
   created() {
     // Register keyboard shortcut for payment
     document.addEventListener("keydown", this.shortPay.bind(this));
+    this.syncPendingInvoices();
+    this.eventBus.on("network-online", this.syncPendingInvoices);
+    // Also sync when the server connection is re-established
+    this.eventBus.on("server-online", this.syncPendingInvoices);
   },
   // Lifecycle hook: mounted
   mounted() {
@@ -1603,6 +1669,8 @@ export default {
     this.eventBus.off("set_pos_settings");
     this.eventBus.off("set_customer_info_to_edit");
     this.eventBus.off("set_mpesa_payment");
+    this.eventBus.off("network-online", this.syncPendingInvoices);
+    this.eventBus.off("server-online", this.syncPendingInvoices);
   },
   // Lifecycle hook: unmounted
   unmounted() {

@@ -19,16 +19,19 @@
            It changes color and icon based on whether there's internet, server connection, or if it's connecting. -->
       <v-tooltip bottom>
         <template #activator="{ on, attrs }">
-          <v-btn icon v-bind="attrs" v-on="on" :title="statusText" class="mx-2">
-            <v-progress-circular v-if="serverConnecting" indeterminate color="blue" size="24"
-              width="2"></v-progress-circular>
-            <v-icon v-else :color="statusColor" size="24">
-              {{ statusIcon }}
-            </v-icon>
-          </v-btn>
+          <v-badge :content="pendingInvoices" :model-value="pendingInvoices > 0" color="red" overlap offset-x="4" offset-y="4">
+            <v-btn icon v-bind="attrs" v-on="on" :title="statusText" class="mx-2">
+              <v-progress-circular v-if="serverConnecting" indeterminate color="blue" size="24"
+                width="2"></v-progress-circular>
+              <v-icon v-else :color="statusColor" size="24">
+                {{ statusIcon }}
+              </v-icon>
+            </v-btn>
+          </v-badge>
         </template>
         <span>{{ statusText }}</span>
       </v-tooltip>
+      <span class="mx-2 text-caption">{{ syncInfoText }}</span>
 
       <v-btn style="cursor: unset; text-transform: none;" variant="text" color="primary">
         {{ posProfile.name }}
@@ -51,6 +54,10 @@
               class="user-menu-item">
               <v-list-item-icon><v-icon>mdi-printer</v-icon></v-list-item-icon>
               <v-list-item-title>{{ __('Print Last Invoice') }}</v-list-item-title>
+            </v-list-item>
+            <v-list-item @click="syncPendingInvoices" class="user-menu-item">
+              <v-list-item-icon><v-icon>mdi-sync</v-icon></v-list-item-icon>
+              <v-list-item-title>{{ __('Sync Offline Invoices') }}</v-list-item-title>
             </v-list-item>
             <v-divider class="my-2" />
             <v-list-item @click="logOut" class="user-menu-item">
@@ -110,6 +117,7 @@
 // Import the Socket.IO client library for real-time server status monitoring.
 // This import is crucial for the server connectivity indicator.
 import { io } from 'socket.io-client';
+import { getPendingOfflineInvoiceCount, syncOfflineInvoices, isOffline, getLastSyncTotals } from '../../offline.js';
 
 export default {
   name: 'NavBar', // Component name
@@ -129,11 +137,15 @@ export default {
       freeze: false, // Controls the visibility of the freeze dialog (true for visible, false for hidden)
       freezeTitle: '', // Title text for the freeze dialog
       freezeMsg: '', // Message text for the freeze dialog
+      // --- PENDING OFFLINE INVOICES ---
+      pendingInvoices: 0, // Number of invoices saved locally while offline
+      syncTotals: getLastSyncTotals(),
       // --- SIGNAL INDICATOR STATES ---
       networkOnline: navigator.onLine, // Boolean: Reflects the browser's current network connectivity (true if online, false if offline)
       serverOnline: false,             // Boolean: Reflects the real-time server health via WebSocket (true if connected, false if disconnected)
       serverConnecting: false,         // Boolean: Indicates if the client is currently attempting to establish a connection to the server via WebSocket
-      socket: null                     // Instance of the Socket.IO client, used for real-time communication with the server
+      socket: null,                    // Instance of the Socket.IO client, used for real-time communication with the server
+      offlineMessageShown: false       // Flag to avoid repeating offline warnings
     };
   },
   computed: {
@@ -166,6 +178,13 @@ export default {
       if (this.serverConnecting) return this.__('Connecting to server...'); // Message when connecting
       if (!this.networkOnline) return this.__('No Internet Connection'); // Message when no internet
       return this.serverOnline ? this.__('Connected to Server') : this.__('Server Offline'); // Messages for server status
+    },
+    /**
+     * Returns a short string summarizing the last offline invoice sync results.
+     */
+    syncInfoText() {
+      const { pending, synced, drafted } = this.syncTotals;
+      return `To Sync: ${pending} | Synced: ${synced} | Draft: ${drafted}`;
     }
   },
   created() {
@@ -174,6 +193,7 @@ export default {
     const bootCompany = frappe?.boot?.user_info?.company;
     this.company = bootCompany || this.company; // Use boot company or default 'POS Awesome'
     console.log('Fetched company:', this.company);
+    window.serverOnline = this.serverOnline;
 
     // If a specific company name is found (not the default), fetch its logo from Frappe.
     if (this.company !== 'POS Awesome') {
@@ -191,6 +211,11 @@ export default {
     // Register event listeners on the global event bus. These listeners react to events
     // emitted from other parts of the application to update the NavBar's state.
     this.$nextTick(() => {
+      // Initialize pending invoices count
+      this.updatePendingInvoices();
+      this.syncPendingInvoices();
+      // Listen for changes in pending invoices from other components
+      this.eventBus.on('pending_invoices_changed', this.updatePendingInvoices);
       this.eventBus.on('show_message', this.showMessage); // Listens for requests to show a snackbar message
       this.eventBus.on('set_company', data => { // Listens for updates to company details (name, logo)
         this.company = data.name || this.company;
@@ -233,6 +258,8 @@ export default {
     // when the component is destroyed (e.g., navigating away from the page).
     window.removeEventListener('online', this.handleOnline);
     window.removeEventListener('offline', this.handleOffline);
+    // Remove event bus listener for pending invoices
+    this.eventBus.off('pending_invoices_changed', this.updatePendingInvoices);
     // --- CLOSE SOCKET ---
     // Disconnect and clean up Socket.IO listeners to ensure proper resource management.
     if (this.socket) {
@@ -329,8 +356,11 @@ export default {
          */
         this.socket.on('connect', () => {
           this.serverOnline = true;
+          window.serverOnline = true;
           this.serverConnecting = false;
+          this.offlineMessageShown = false; // reset offline warning flag
           console.log('Socket.IO: Connected to server');
+          this.eventBus.emit('server-online');
         });
 
         /**
@@ -338,13 +368,19 @@ export default {
          */
         this.socket.on('disconnect', (reason) => {
           this.serverOnline = false;
+          window.serverOnline = false;
           this.serverConnecting = false;
           console.warn('Socket.IO: Disconnected from server. Reason:', reason);
 
-          this.showMessage({
-            color: 'error',
-            title: this.__('Server connection lost. Please check your internet connection.')
-          });
+          this.eventBus.emit('server-offline');
+
+          if (!this.offlineMessageShown) {
+            this.showMessage({
+              color: 'error',
+              title: this.__('Server connection lost. Please check your internet connection.')
+            });
+            this.offlineMessageShown = true;
+          }
         });
 
         /**
@@ -352,16 +388,22 @@ export default {
          */
         this.socket.on('connect_error', (error) => {
           this.serverOnline = false;
+          window.serverOnline = false;
           this.serverConnecting = false;
           console.error('Socket.IO: Connection error:', error.message);
+          this.eventBus.emit('server-offline');
 
-          this.showMessage({
-            color: 'error',
-            title: this.__('Unable to connect to server. Please try again later.')
-          });
+          if (!this.offlineMessageShown) {
+            this.showMessage({
+              color: 'error',
+              title: this.__('Unable to connect to server. Please try again later.')
+            });
+            this.offlineMessageShown = true;
+          }
         });
       } catch (err) {
         this.serverOnline = false;
+        window.serverOnline = false;
         this.serverConnecting = false;
         console.error('Failed to initialize Socket.IO connection:', err);
 
@@ -381,6 +423,10 @@ export default {
     handleOnline() {
       this.networkOnline = true; // Browser is now online
       console.log('Browser is online');
+      this.offlineMessageShown = false; // allow future offline warnings
+      this.eventBus.emit('network-online');
+      this.syncPendingInvoices();
+      window.serverOnline = this.serverOnline;
       // If the server is not online and not currently connecting, and a socket instance exists,
       // explicitly try to connect the socket. This helps in re-establishing server connection
       // immediately after internet recovery.
@@ -399,8 +445,10 @@ export default {
     handleOffline() {
       this.networkOnline = false; // Browser is now offline
       this.serverOnline = false; // Server is considered unreachable if there's no internet
+      window.serverOnline = false;
       this.serverConnecting = false; // Stop any ongoing connection attempts
       console.log('Browser is offline');
+      this.eventBus.emit('network-offline');
       // Disconnect the socket gracefully if the network goes offline.
       if (this.socket) {
         this.socket.disconnect();
@@ -521,6 +569,43 @@ export default {
           }
         }
       });
+    },
+
+    async syncPendingInvoices() {
+      const pending = getPendingOfflineInvoiceCount();
+      if (pending) {
+        this.showMessage({
+          title: `${pending} invoice${pending > 1 ? 's' : ''} pending for sync`,
+          color: 'warning'
+        });
+      }
+      const result = await syncOfflineInvoices();
+      if (result && (result.synced || result.drafted)) {
+        if (result.synced) {
+          this.showMessage({
+            title: `${result.synced} offline invoice${result.synced > 1 ? 's' : ''} synced`,
+            color: 'success'
+          });
+        }
+        if (result.drafted) {
+          this.showMessage({
+            title: `${result.drafted} offline invoice${result.drafted > 1 ? 's' : ''} saved as draft`,
+            color: 'warning'
+          });
+        }
+      }
+      if (result) {
+        this.syncTotals = { ...result };
+      }
+      this.updatePendingInvoices();
+      this.eventBus.emit('pending_invoices_changed', this.pendingInvoices);
+    },
+    /**
+     * Reads the current number of invoices stored offline and updates the badge
+     * counter in the navigation bar.
+     */
+    updatePendingInvoices() {
+      this.pendingInvoices = getPendingOfflineInvoiceCount();
     },
     /**
      * Displays a snackbar message at the top right of the screen.

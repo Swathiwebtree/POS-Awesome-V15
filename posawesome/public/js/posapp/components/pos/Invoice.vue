@@ -439,6 +439,7 @@
 
 import format from "../../format";
 import Customer from "./Customer.vue";
+import { isOffline } from "../../../offline";
 
 export default {
   mixins: [format],
@@ -1361,6 +1362,9 @@ export default {
       this.items.forEach((item) => {
         const new_item = {
           item_code: item.item_code,
+          // Retain the item name for offline invoices
+          // Fallback to item_code if item_name is not available
+          item_name: item.item_name || item.item_code,
           posa_row_id: item.posa_row_id,
           posa_offers: item.posa_offers,
           posa_offer_applied: item.posa_offer_applied,
@@ -1430,6 +1434,9 @@ export default {
       this.items.forEach((item) => {
         const new_item = {
           item_code: item.item_code,
+          // Retain item name to show on offline order documents
+          // Use item_code if item_name is missing
+          item_name: item.item_name || item.item_code,
           posa_row_id: item.posa_row_id,
           posa_offers: item.posa_offers,
           posa_offer_applied: item.posa_offer_applied,
@@ -1517,6 +1524,12 @@ export default {
     // Update invoice in backend
     update_invoice(doc) {
       var vm = this;
+      if (isOffline()) {
+        // When offline, simply merge the passed doc with the current invoice_doc
+        // to allow offline invoice creation without server calls
+        vm.invoice_doc = Object.assign({}, vm.invoice_doc || {}, doc);
+        return vm.invoice_doc;
+      }
       frappe.call({
         method: "posawesome.posawesome.api.posapp.update_invoice",
         args: {
@@ -1535,6 +1548,11 @@ export default {
     // Update invoice from order in backend
     update_invoice_from_order(doc) {
       var vm = this;
+      if (isOffline()) {
+        // Offline mode - merge doc locally without server update
+        vm.invoice_doc = Object.assign({}, vm.invoice_doc || {}, doc);
+        return vm.invoice_doc;
+      }
       frappe.call({
         method: "posawesome.posawesome.api.posapp.update_invoice_from_order",
         args: {
