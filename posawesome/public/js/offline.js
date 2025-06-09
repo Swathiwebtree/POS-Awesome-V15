@@ -38,7 +38,54 @@ function persist(key) {
     .catch(e => console.error(`Failed to persist ${key}`, e));
 }
 
+// Add new validation function
+export function validateStockForOfflineInvoice(items) {
+  const stockCache = memory.local_stock_cache || {};
+  const invalidItems = [];
+
+  items.forEach(item => {
+    const itemCode = item.item_code;
+    const requestedQty = Math.abs(item.qty || 0);
+    const currentStock = stockCache[itemCode]?.actual_qty || 0;
+    
+    if (currentStock - requestedQty < 0) {
+      invalidItems.push({
+        item_code: itemCode,
+        item_name: item.item_name || itemCode,
+        requested_qty: requestedQty,
+        available_qty: currentStock
+      });
+    }
+  });
+
+  // Create clean error message
+  let errorMessage = "";
+  if (invalidItems.length === 1) {
+    const item = invalidItems[0];
+    errorMessage = `Not enough stock for ${item.item_name}. You need ${item.requested_qty} but only ${item.available_qty} available.`;
+  } else if (invalidItems.length > 1) {
+    errorMessage = "Insufficient stock for multiple items:\n" + 
+      invalidItems.map(item => 
+        `• ${item.item_name}: Need ${item.requested_qty}, Have ${item.available_qty}`
+      ).join('\n');
+  }
+
+  return {
+    isValid: invalidItems.length === 0,
+    invalidItems: invalidItems,
+    errorMessage: errorMessage
+  };
+}
+
 export function saveOfflineInvoice(entry) {
+  if (entry.invoice && entry.invoice.items) {
+    const validation = validateStockForOfflineInvoice(entry.invoice.items);
+    
+    if (!validation.isValid) {
+      throw new Error(validation.errorMessage);
+    }
+  }
+
   const key = 'offline_invoices';
   const entries = memory.offline_invoices;
   entries.push(entry);
@@ -412,6 +459,15 @@ export function setOpeningStorage(data) {
     persist('pos_opening_storage');
   } catch (e) {
     console.error('Failed to set opening storage', e);
+  }
+}
+
+export function clearOpeningStorage() {
+  try {
+    memory.pos_opening_storage = null;
+    persist('pos_opening_storage');
+  } catch (e) {
+    console.error('Failed to clear opening storage', e);
   }
 }
 
