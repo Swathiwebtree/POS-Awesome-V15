@@ -9,7 +9,8 @@
 
       <v-img src="/assets/posawesome/js/posapp/components/pos/pos.png" alt="POS Awesome" max-width="32" class="mx-2" />
 
-      <v-toolbar-title @click="goDesk" class="text-h6 font-weight-bold text-primary navbar-title" style="cursor: pointer; text-decoration: none;">
+      <v-toolbar-title @click="goDesk" class="text-h6 font-weight-bold text-primary navbar-title"
+        style="cursor: pointer; text-decoration: none;">
         <span class="font-weight-light">POS</span><span>Awesome</span>
       </v-toolbar-title>
 
@@ -22,7 +23,8 @@
         </v-btn>
         <div class="status-info-always-visible">
           <div class="status-title-inline"
-            :class="{ 'status-connected': statusColor === 'green', 'status-offline': statusColor === 'red' }">{{ statusText }}</div>
+            :class="{ 'status-connected': statusColor === 'green', 'status-offline': statusColor === 'red' }">{{
+            statusText }}</div>
           <div class="status-detail-inline">{{ syncInfoText }}</div>
         </div>
       </div>
@@ -34,19 +36,9 @@
         </v-chip>
       </div>
 
-      <v-btn 
-        icon 
-        color="primary" 
-        class="mx-1 offline-invoices-btn" 
-        @click="showOfflineInvoices = true"
-        :class="{ 'has-pending': pendingInvoices > 0 }"
-      >
-        <v-badge 
-          v-if="pendingInvoices > 0" 
-          :content="pendingInvoices" 
-          color="error" 
-          overlap
-        >
+      <v-btn icon color="primary" class="mx-1 offline-invoices-btn" @click="showOfflineInvoices = true"
+        :class="{ 'has-pending': pendingInvoices > 0 }">
+        <v-badge v-if="pendingInvoices > 0" :content="pendingInvoices" color="error" overlap>
           <v-icon>mdi-file-document-multiple-outline</v-icon>
         </v-badge>
         <v-icon v-else>mdi-file-document-multiple-outline</v-icon>
@@ -55,46 +47,86 @@
         </v-tooltip>
       </v-btn>
 
-      <v-menu offset-y offset-x :min-width="200">
+      <v-menu offset-y :min-width="240" :close-on-content-click="false" location="bottom end" :offset="[0, 4]">
         <template #activator="{ props }">
-          <v-btn v-bind="props" color="primary" variant="elevated" class="menu-btn-enhanced">
+          <v-btn v-bind="props" color="primary" variant="elevated" class="menu-btn-compact">
             {{ __('Menu') }}
-            <v-icon right>mdi-menu-down</v-icon>
+            <v-icon right size="16" class="ml-1">mdi-menu-down</v-icon>
           </v-btn>
         </template>
-        <v-card class="menu-card-enhanced" elevation="8">
-          <v-list density="compact" class="menu-list-enhanced">
-            <v-list-item v-if="!posProfile.posa_hide_closing_shift" @click="openCloseShift" class="menu-item-enhanced">
+        <v-card class="menu-card-compact" elevation="12">
+          <div class="menu-header-compact">
+            <v-icon color="primary" size="20">mdi-menu</v-icon>
+            <span class="menu-header-text-compact">{{ __('Actions') }}</span>
+          </div>
+          <v-list density="compact" class="menu-list-compact">
+            <v-list-item v-if="!posProfile.posa_hide_closing_shift" @click="openCloseShift"
+              class="menu-item-compact primary-action">
               <template v-slot:prepend>
-                <v-icon color="primary" size="20">mdi-content-save-move-outline</v-icon>
+                <div class="menu-icon-wrapper-compact primary-icon">
+                  <v-icon color="white" size="16">mdi-content-save-move-outline</v-icon>
+                </div>
               </template>
-              <v-list-item-title>{{ __('Close Shift') }}</v-list-item-title>
+              <div class="menu-content-compact">
+                <v-list-item-title class="menu-item-title-compact">{{ __('Close Shift') }}</v-list-item-title>
+                <v-list-item-subtitle class="menu-item-subtitle-compact">{{ __('End current session')
+                  }}</v-list-item-subtitle>
+              </div>
             </v-list-item>
+
             <v-list-item v-if="posProfile.posa_allow_print_last_invoice && lastInvoiceId" @click="printLastInvoice"
-              class="menu-item-enhanced">
+              class="menu-item-compact secondary-action">
               <template v-slot:prepend>
-                <v-icon color="primary" size="20">mdi-printer</v-icon>
+                <div class="menu-icon-wrapper-compact secondary-icon">
+                  <v-icon color="white" size="16">mdi-printer</v-icon>
+                </div>
               </template>
-              <v-list-item-title>{{ __('Print Last Invoice') }}</v-list-item-title>
+              <div class="menu-content-compact">
+                <v-list-item-title class="menu-item-title-compact">{{ __('Print Last Invoice') }}</v-list-item-title>
+                <v-list-item-subtitle class="menu-item-subtitle-compact">{{ __('Reprint previous transaction')
+                  }}</v-list-item-subtitle>
+              </div>
             </v-list-item>
-            <v-list-item @click="syncPendingInvoices" class="menu-item-enhanced">
+
+            <v-list-item @click="syncPendingInvoices" class="menu-item-compact info-action">
               <template v-slot:prepend>
-                <v-icon color="primary" size="20">mdi-sync</v-icon>
+                <div class="menu-icon-wrapper-compact info-icon">
+                  <v-icon color="white" size="16">mdi-sync</v-icon>
+                </div>
               </template>
-              <v-list-item-title>{{ __('Sync Offline Invoices') }}</v-list-item-title>
+              <div class="menu-content-compact">
+                <v-list-item-title class="menu-item-title-compact">{{ __('Sync Offline Invoices') }}</v-list-item-title>
+                <v-list-item-subtitle class="menu-item-subtitle-compact">{{ __('Upload pending transactions')
+                  }}</v-list-item-subtitle>
+              </div>
             </v-list-item>
-            <v-divider />
-            <v-list-item @click="logOut" class="menu-item-enhanced logout-item">
+
+            <v-divider class="menu-section-divider-compact"></v-divider>
+
+            <v-list-item @click="goAbout" class="menu-item-compact neutral-action">
               <template v-slot:prepend>
-                <v-icon color="error" size="20">mdi-logout</v-icon>
+                <div class="menu-icon-wrapper-compact neutral-icon">
+                  <v-icon color="white" size="16">mdi-information-outline</v-icon>
+                </div>
               </template>
-              <v-list-item-title>{{ __('Logout') }}</v-list-item-title>
+              <div class="menu-content-compact">
+                <v-list-item-title class="menu-item-title-compact">{{ __('About') }}</v-list-item-title>
+                <v-list-item-subtitle class="menu-item-subtitle-compact">{{ __('App information')
+                  }}</v-list-item-subtitle>
+              </div>
             </v-list-item>
-            <v-list-item @click="goAbout" class="menu-item-enhanced">
+
+            <v-list-item @click="logOut" class="menu-item-compact danger-action">
               <template v-slot:prepend>
-                <v-icon color="info" size="20">mdi-information-outline</v-icon>
+                <div class="menu-icon-wrapper-compact danger-icon">
+                  <v-icon color="white" size="16">mdi-logout</v-icon>
+                </div>
               </template>
-              <v-list-item-title>{{ __('About') }}</v-list-item-title>
+              <div class="menu-content-compact">
+                <v-list-item-title class="menu-item-title-compact">{{ __('Logout') }}</v-list-item-title>
+                <v-list-item-subtitle class="menu-item-subtitle-compact">{{ __('Sign out of session')
+                  }}</v-list-item-subtitle>
+              </div>
             </v-list-item>
           </v-list>
         </v-card>
@@ -139,11 +171,83 @@
       </v-card>
     </v-dialog>
 
-    <OfflineInvoicesDialog
-      v-model="showOfflineInvoices"
-      :pos-profile="posProfile"
-      @deleted="updateAfterDelete"
-    />
+    <OfflineInvoicesDialog v-model="showOfflineInvoices" :pos-profile="posProfile" @deleted="updateAfterDelete" />
+
+    <!-- About Dialog - Improved Compact Version -->
+    <v-dialog v-model="showAboutDialog" max-width="650" persistent>
+      <v-card class="about-dialog-card-improved">
+        <v-card-title class="about-header-improved pa-5">
+          <div class="header-content-improved">
+            <div class="header-icon-wrapper-improved">
+              <v-icon size="22" class="header-icon">mdi-information-outline</v-icon>
+            </div>
+            <div class="header-text-improved">
+              <h3 class="header-title-improved">{{ __('About') }}</h3>
+              <p class="header-subtitle-improved">{{ __('System Information') }}</p>
+            </div>
+            <div class="header-stats-improved" v-if="!loadingAppInfo && !appInfoError">
+              <v-chip size="small" color="primary" variant="tonal" class="status-chip-improved">
+                <v-icon start size="14">mdi-application-outline</v-icon>
+                {{ appInfo.length }} {{ __('Apps') }}
+              </v-chip>
+            </div>
+          </div>
+          <v-btn icon="mdi-close" variant="text" size="default" @click="showAboutDialog = false" class="close-btn-improved"></v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-0 white-background">
+          <div class="content-container-improved">
+            <!-- Loading State -->
+            <div v-if="loadingAppInfo" class="empty-state-improved text-center">
+              <v-progress-circular indeterminate color="primary" size="50"></v-progress-circular>
+              <p class="text-body-2 mt-3 mb-0">{{ __('Loading...') }}</p>
+            </div>
+            
+            <!-- Error State -->
+            <div v-else-if="appInfoError" class="empty-state-improved text-center">
+              <v-icon size="50" color="error" class="mb-3">mdi-alert-circle-outline</v-icon>
+              <p class="text-body-2 mb-3">{{ __('Error Loading Data') }}</p>
+              <v-btn color="primary" variant="outlined" size="default" @click="loadAppInfo">
+                <v-icon start size="18">mdi-refresh</v-icon>
+                {{ __('Retry') }}
+              </v-btn>
+            </div>
+            
+            <!-- Applications List - Improved -->
+            <div v-else class="apps-list-improved">
+              <div class="apps-header-improved">
+                <h4 class="text-h6 mb-2">{{ __('Installed Applications') }}</h4>
+              </div>
+              
+              <div class="apps-grid-improved">
+                <div v-for="app in appInfo" :key="app.app_name" class="app-item-improved">
+                  <div class="app-icon-improved">
+                    <v-icon size="18" color="white">mdi-application-outline</v-icon>
+                  </div>
+                  <div class="app-details-improved">
+                    <div class="app-name-improved">{{ app.app_name }}</div>
+                    <div class="app-version-improved">v{{ app.installed_version }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </v-card-text>
+        
+        <v-card-actions class="dialog-actions-improved pa-4">
+          <div class="footer-info-improved">
+            <span class="footer-text-improved">
+              <v-icon start size="16" color="error">mdi-heart</v-icon>
+              {{ __('Built with Frappe') }}
+            </span>
+          </div>
+          <v-spacer></v-spacer>
+          <v-btn color="primary" @click="showAboutDialog = false" class="close-btn-action-improved">
+            {{ __('Close') }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </nav>
 </template>
 
@@ -182,7 +286,25 @@ export default {
       serverConnecting: false,         // Boolean: Indicates if the client is currently attempting to establish a connection to the server via WebSocket
       socket: null,                    // Instance of the Socket.IO client, used for real-time communication with the server
       offlineMessageShown: false,      // Flag to avoid repeating offline warnings
-      showOfflineInvoices: false       // Controls the Offline Invoices dialog
+      showOfflineInvoices: false,      // Controls the Offline Invoices dialog
+      showAboutDialog: false,          // Controls the About dialog
+      loadingAppInfo: false,           // Loading state for app info
+      appInfoError: false,             // Error state for app info
+      appInfo: [],                     // Stores application information
+      appHeaders: [                    // Table headers for applications
+        {
+          title: this.__('Application'),
+          value: 'app_name',
+          align: 'start',
+          sortable: true,
+        },
+        {
+          title: this.__('Version'),
+          value: 'installed_version',
+          align: 'center',
+          sortable: true,
+        }
+      ]
     };
   },
   computed: {
@@ -576,48 +698,33 @@ export default {
       // Add a one-time event listener to the new window to trigger print once it's loaded
       win.addEventListener('load', () => win.print(), { once: true });
     },
-    /**
-     * Fetches and displays information about all installed applications from the Frappe backend.
-     * It presents this information in a formatted table within a Frappe message dialog.
-     */
     goAbout() {
-      frappe.call({
-        method: 'posawesome.posawesome.api.posapp.get_app_info', // API method to call
-        callback: r => {
-          if (Array.isArray(r.message.apps)) {
-            // Build an HTML table string dynamically from the fetched app data
-            let html = `
-              <table style="width:100%; border-collapse:collapse; text-align:left;">
-                <thead>
-                  <tr><th style="padding:8px;">${__('Application')}</th>
-                      <th style="padding:8px;">${__('Version')}</th></tr>
-                </thead><tbody>
-            `;
-            r.message.apps.forEach(app => {
-              html += `
-                <tr>
-                  <td style="padding:8px;"><strong>${app.app_name}</strong></td>
-                  <td style="padding:8px;">${app.installed_version}</td>
-                </tr>
-              `;
-            });
-            html += `</tbody></table>`;
+      this.showAboutDialog = true;
+      this.loadAppInfo();
+    },
 
-            // Display the generated HTML table in a Frappe message print dialog
-            frappe.msgprint({
-              title: __('Installed Applications'),
-              indicator: 'blue', // Blue indicator for informational message
-              message: html
-            });
+    loadAppInfo() {
+      this.loadingAppInfo = true;
+      this.appInfoError = false;
+
+      frappe.call({
+        method: 'posawesome.posawesome.api.posapp.get_app_info',
+        callback: r => {
+          this.loadingAppInfo = false;
+          if (Array.isArray(r.message.apps)) {
+            this.appInfo = r.message.apps;
+          } else {
+            this.appInfoError = true;
           }
         },
-        error: () => frappe.msgprint({ // Error callback if API call fails
-          title: __('Error'),
-          indicator: 'red', // Red indicator for error message
-          message: __('Failed to retrieve app info')
-        })
+        error: () => {
+          this.loadingAppInfo = false;
+          this.appInfoError = true;
+        }
       });
     },
+
+
     /**
      * Logs out the current user from the Frappe system.
      * Upon successful logout, it redirects the user to the Frappe home page and reloads.
@@ -854,7 +961,8 @@ export default {
   border-bottom: 2px solid #e3f2fd !important;
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
-  padding-bottom: 4px !important; /* Reduced bottom padding */
+  padding-bottom: 4px !important;
+  /* Reduced bottom padding */
 }
 
 .navbar-enhanced:hover {
@@ -872,8 +980,10 @@ export default {
 }
 
 .logo-container {
-  margin: 0 8px; /* Reduced margin */
-  padding: 2px; /* Reduced padding */
+  margin: 0 8px;
+  /* Reduced margin */
+  padding: 2px;
+  /* Reduced padding */
   border-radius: 8px;
   background: linear-gradient(135deg, #1976d2, #42a5f5);
   display: flex;
@@ -917,7 +1027,8 @@ export default {
 /* Navigation Icon */
 .nav-icon {
   border-radius: 12px;
-  padding: 6px; /* Reduced padding */
+  padding: 6px;
+  /* Reduced padding */
   transition: all 0.3s ease;
 }
 
@@ -928,12 +1039,14 @@ export default {
 
 /* Profile Section */
 .profile-section {
-  margin: 0 8px; /* Reduced margin */
+  margin: 0 8px;
+  /* Reduced margin */
 }
 
 .profile-chip {
   font-weight: 500;
-  padding: 6px 12px; /* Reduced padding */
+  padding: 6px 12px;
+  /* Reduced padding */
   border-radius: 20px;
   transition: all 0.3s ease;
 }
@@ -947,15 +1060,18 @@ export default {
 .status-section-enhanced {
   display: flex;
   align-items: center;
-  gap: 8px; /* Reduced gap */
-  margin-right: 8px; /* Reduced margin */
+  gap: 8px;
+  /* Reduced gap */
+  margin-right: 8px;
+  /* Reduced margin */
 }
 
 .status-btn-enhanced {
   background: rgba(25, 118, 210, 0.1) !important;
   border: 1px solid rgba(25, 118, 210, 0.3);
   transition: all 0.3s ease;
-  padding: 4px; /* Reduced padding */
+  padding: 4px;
+  /* Reduced padding */
 }
 
 .status-btn-enhanced:hover {
@@ -992,60 +1108,293 @@ export default {
   margin-top: 2px;
 }
 
-/* Enhanced Menu Button */
-.menu-btn-enhanced {
-  margin-left: 8px; /* Reduced margin */
-  padding: 6px 16px; /* Reduced padding */
+/* Compact Menu Button - Better Navbar Integration */
+.menu-btn-compact {
+  margin-left: 8px;
+  margin-right: 4px;
+  padding: 6px 16px;
   border-radius: 20px;
   font-weight: 600;
   text-transform: none;
-  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
-  transition: all 0.3s ease;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+  min-width: 90px;
+  height: 36px;
 }
 
-.menu-btn-enhanced:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(25, 118, 210, 0.4);
+.menu-btn-compact:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+  background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%);
 }
 
-/* Enhanced Menu Card */
-.menu-card-enhanced {
+/* Compact Menu Card - Smaller and Better Positioned */
+.menu-card-compact {
   border-radius: 16px;
   overflow: hidden;
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  border: 1px solid rgba(25, 118, 210, 0.1);
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(8px);
+  min-width: 260px;
+  max-width: 280px;
+  margin-top: 2px;
 }
 
-.menu-list-enhanced {
-  padding: 6px; /* Reduced padding */
+/* Compact Menu Header */
+.menu-header-compact {
+  padding: 12px 16px 10px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(25, 118, 210, 0.06);
 }
 
-.menu-item-enhanced {
+.menu-header-text-compact {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1976d2;
+  letter-spacing: 0.3px;
+}
+
+/* Compact Menu List */
+.menu-list-compact {
+  padding: 8px 6px 12px;
+  background: #ffffff;
+}
+
+/* Compact Menu Items */
+.menu-item-compact {
   border-radius: 12px;
-  margin: 2px 0; /* Reduced margin */
-  padding: 8px 12px; /* Reduced padding */
-  transition: all 0.3s ease;
+  margin: 3px 0;
+  padding: 12px 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.menu-item-enhanced:hover {
-  background: linear-gradient(135deg, rgba(25, 118, 210, 0.1), rgba(66, 165, 245, 0.1));
-  transform: translateX(4px);
+.menu-item-compact::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  transition: all 0.3s ease;
+  z-index: 0;
+  border-radius: 12px;
 }
 
-.menu-item-enhanced.logout-item:hover {
-  background: linear-gradient(135deg, rgba(244, 67, 54, 0.1), rgba(255, 82, 82, 0.1));
+.menu-item-compact:hover::before {
+  background: linear-gradient(135deg, rgba(25, 118, 210, 0.05) 0%, rgba(66, 165, 245, 0.08) 100%);
 }
 
-.menu-item-enhanced .v-list-item-title {
-  font-weight: 500;
+.menu-item-compact:hover {
+  transform: translateX(3px) scale(1.01);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Compact Icon Wrapper */
+.menu-icon-wrapper-compact {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+/* Compact Content Wrapper */
+.menu-content-compact {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Compact Icon Colors */
+.primary-icon {
+  background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+  box-shadow: 0 2px 6px rgba(25, 118, 210, 0.2);
+}
+
+.secondary-icon {
+  background: linear-gradient(135deg, #7b1fa2 0%, #ba68c8 100%);
+  box-shadow: 0 2px 6px rgba(123, 31, 162, 0.2);
+}
+
+.info-icon {
+  background: linear-gradient(135deg, #0288d1 0%, #4fc3f7 100%);
+  box-shadow: 0 2px 6px rgba(2, 136, 209, 0.2);
+}
+
+.neutral-icon {
+  background: linear-gradient(135deg, #616161 0%, #9e9e9e 100%);
+  box-shadow: 0 2px 6px rgba(97, 97, 97, 0.2);
+}
+
+.danger-icon {
+  background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
+  box-shadow: 0 2px 6px rgba(211, 47, 47, 0.2);
+}
+
+/* Compact Text Styling */
+.menu-item-title-compact {
+  font-weight: 600;
+  font-size: 14px;
+  color: #212121;
+  line-height: 1.2;
+  margin-bottom: 1px;
+}
+
+.menu-item-subtitle-compact {
+  font-size: 11px;
+  color: #666666;
+  line-height: 1.3;
+  font-weight: 400;
+}
+
+/* Compact Section Divider */
+.menu-section-divider-compact {
+  margin: 8px 10px;
+  opacity: 0.12;
+  border-color: #1976d2;
+}
+
+/* Compact Hover Effects */
+.primary-action:hover .primary-icon {
+  transform: scale(1.1) rotate(5deg);
+  box-shadow: 0 3px 8px rgba(25, 118, 210, 0.25);
+}
+
+.secondary-action:hover .secondary-icon {
+  transform: scale(1.1) rotate(-5deg);
+  box-shadow: 0 3px 8px rgba(123, 31, 162, 0.25);
+}
+
+.info-action:hover .info-icon {
+  transform: scale(1.1) rotate(360deg);
+  box-shadow: 0 3px 8px rgba(2, 136, 209, 0.25);
+}
+
+.neutral-action:hover .neutral-icon {
+  transform: scale(1.1);
+  box-shadow: 0 3px 8px rgba(97, 97, 97, 0.25);
+}
+
+.danger-action:hover .danger-icon {
+  transform: scale(1.1) rotate(-5deg);
+  box-shadow: 0 3px 8px rgba(211, 47, 47, 0.25);
+}
+
+.danger-action:hover::before {
+  background: linear-gradient(135deg, rgba(211, 47, 47, 0.05) 0%, rgba(244, 67, 54, 0.08) 100%) !important;
+}
+
+/* Compact Responsive Design */
+@media (max-width: 768px) {
+  .menu-card-compact {
+    min-width: 240px;
+    max-width: 260px;
+    border-radius: 14px;
+  }
+
+  .menu-item-compact {
+    padding: 10px 14px;
+    min-height: 52px;
+    gap: 10px;
+  }
+
+  .menu-icon-wrapper-compact {
+    width: 30px;
+    height: 30px;
+  }
+
+  .menu-header-compact {
+    padding: 10px 14px 8px;
+  }
+
+  .menu-btn-compact {
+    margin-left: 6px;
+    padding: 5px 14px;
+    min-width: 85px;
+    height: 34px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .menu-card-compact {
+    min-width: 220px;
+    max-width: 240px;
+  }
+
+  .menu-item-compact {
+    padding: 9px 12px;
+    min-height: 48px;
+    gap: 9px;
+  }
+
+  .menu-header-compact {
+    padding: 9px 12px 7px;
+  }
+
+  .menu-btn-compact {
+    min-width: 80px;
+    height: 32px;
+  }
+}
+
+/* Compact Animation for Menu Appearance */
+.v-overlay__content {
+  animation: menuSlideInCompact 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes menuSlideInCompact {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Compact Focus States */
+.menu-item-compact:focus-visible {
+  outline: 1px solid #1976d2;
+  outline-offset: 1px;
+}
+
+.menu-btn-compact:focus-visible {
+  outline: 1px solid #1976d2;
+  outline-offset: 2px;
 }
 
 /* Offline Invoices Button Enhancement */
 .offline-invoices-btn {
   position: relative;
   transition: all 0.3s ease;
-  padding: 4px; /* Reduced padding */
+  padding: 4px;
+  /* Reduced padding */
 }
 
 .offline-invoices-btn:hover {
@@ -1060,9 +1409,11 @@ export default {
   0% {
     box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.4);
   }
+
   70% {
     box-shadow: 0 0 0 8px rgba(244, 67, 54, 0);
   }
+
   100% {
     box-shadow: 0 0 0 0 rgba(244, 67, 54, 0);
   }
@@ -1104,7 +1455,8 @@ export default {
   }
 
   .status-section-enhanced {
-    margin-right: 4px; /* Further reduced for mobile */
+    margin-right: 4px;
+    /* Further reduced for mobile */
   }
 }
 
@@ -1116,5 +1468,252 @@ export default {
   .brand-title {
     font-size: 1rem !important;
   }
+}
+
+/* About Dialog - Improved Compact Styling */
+.about-dialog-card-improved {
+  border-radius: 16px !important;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+  max-height: 90vh;
+}
+
+/* Improved Header with Better Spacing */
+.about-header-improved {
+  background: white;
+  color: #1a1a1a;
+  border-bottom: 1px solid #f0f0f0;
+  position: relative;
+  min-height: auto !important;
+}
+
+.about-header-improved::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #1976d2 0%, #42a5f5 100%);
+}
+
+.header-content-improved {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-right: 60px; /* Space for close button */
+}
+
+.header-icon-wrapper-improved {
+  background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+  border-radius: 14px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+}
+
+.header-icon {
+  color: white;
+}
+
+.header-text-improved {
+  flex: 1;
+}
+
+.header-title-improved {
+  margin: 0 0 4px 0;
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.header-subtitle-improved {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.header-stats-improved {
+  display: flex;
+  gap: 8px;
+}
+
+.status-chip-improved {
+  font-weight: 600;
+  border-radius: 10px;
+  height: 28px !important;
+}
+
+.close-btn-improved {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  color: #666 !important;
+}
+
+.white-background {
+  background: white;
+}
+
+/* Improved Content */
+.content-container-improved {
+  padding: 20px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.empty-state-improved {
+  padding: 30px;
+}
+
+/* Apps List - Improved Grid Layout */
+.apps-list-improved {
+  width: 100%;
+}
+
+.apps-header-improved {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.apps-grid-improved {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.app-item-improved {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  border: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+}
+
+.app-item-improved:hover {
+  background: #e3f2fd;
+  border-color: #1976d2;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.15);
+}
+
+.app-icon-improved {
+  background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+}
+
+.app-details-improved {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-name-improved {
+  font-weight: 500;
+  font-size: 14px;
+  color: #1a1a1a;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-version-improved {
+  font-size: 12px;
+  color: #666;
+  font-weight: 400;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+/* Improved Footer */
+.dialog-actions-improved {
+  background: #f8f9fa;
+  border-top: 1px solid #f0f0f0;
+  min-height: auto !important;
+}
+
+.footer-info-improved {
+  display: flex;
+  align-items: center;
+}
+
+.footer-text-improved {
+  font-size: 13px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.close-btn-action-improved {
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: none;
+  height: 36px;
+  padding: 0 20px;
+}
+
+/* Responsive Design */
+@media (max-width: 700px) {
+  .about-dialog-card-improved {
+    margin: 16px;
+    max-height: 85vh;
+  }
+  
+  .apps-grid-improved {
+    grid-template-columns: 1fr;
+    max-height: 300px;
+  }
+  
+  .header-content-improved {
+    gap: 12px;
+    padding-right: 50px;
+  }
+  
+  .content-container-improved {
+    padding: 16px;
+    max-height: 50vh;
+  }
+}
+
+/* Scrollbar Styling */
+.content-container-improved::-webkit-scrollbar,
+.apps-grid-improved::-webkit-scrollbar {
+  width: 6px;
+}
+
+.content-container-improved::-webkit-scrollbar-track,
+.apps-grid-improved::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.content-container-improved::-webkit-scrollbar-thumb,
+.apps-grid-improved::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.content-container-improved::-webkit-scrollbar-thumb:hover,
+.apps-grid-improved::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 </style>
