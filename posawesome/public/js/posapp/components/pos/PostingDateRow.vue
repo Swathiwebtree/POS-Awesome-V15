@@ -14,7 +14,7 @@
         @update:model-value="onUpdate"
       />
     </v-col>
-    <v-col v-if="pos_profile.posa_enable_price_list_dropdown" cols="8" class="pb-2 d-flex align-center">
+    <v-col v-if="pos_profile.posa_enable_price_list_dropdown" cols="6" class="pb-2 d-flex align-center">
       <v-select
         density="comfortable"
         variant="outlined"
