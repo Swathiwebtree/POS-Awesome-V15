@@ -5426,7 +5426,7 @@
     "dt": "POS Profile",
     "fieldname": "posa_decimal_precision",
     "fieldtype": "Select",
-    "insert_after": "posa_allow_multi_currency",
+    "insert_after": "hide_expected_amount",
     "label": "Decimal Precision",
     "options": "0\n1\n2\n3\n4\n5",
   "default": "2",
