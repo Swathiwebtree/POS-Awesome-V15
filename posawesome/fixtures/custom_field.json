@@ -5441,7 +5441,7 @@
     "columns": 0,
     "default": "0",
     "depends_on": null,
-    "description": "Reload items from server when customer or price list changes",
+    "description": "Reload price list Rate from server when customer changes",
     "docstatus": 0,
     "doctype": "Custom Field",
     "dt": "POS Profile",
