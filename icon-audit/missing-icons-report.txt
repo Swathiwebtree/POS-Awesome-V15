@@ -1,2 +1,0 @@
-icons: File not found
-sprite: File not found

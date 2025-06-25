@@ -62,57 +62,48 @@
 
       <!-- Enhanced expandable row with modern design -->
       <template v-slot:expanded-row="{ columns: headers, item }">
-        <td :colspan="headers.length" class="ma-0 pa-0">
-          <div class="expanded-content">
-            <!-- Action buttons with improved layout and visual feedback -->
-            <div class="action-panel">
-              <div class="action-button-group">
-                <v-btn :disabled="!!item.posa_is_replace" icon="mdi-trash-can-outline" size="large" color="error"
-                  variant="tonal" class="item-action-btn delete-btn" @click.stop="removeItem(item)">
-                  <v-icon size="large">mdi-trash-can-outline</v-icon>
-                  <span class="action-label">{{ __('Remove') }}</span>
-                </v-btn>
-              </div>
-              
-              <div class="action-button-group">
-                <v-btn :disabled="!!item.posa_is_replace" size="large" color="warning" variant="tonal"
-                  class="item-action-btn minus-btn" @click.stop="subtractOne(item)">
-                  <v-icon size="large">mdi-minus-circle-outline</v-icon>
-                  <span class="action-label">{{ __('Decrease') }}</span>
-                </v-btn>
-                <v-btn :disabled="!!item.posa_is_replace" size="large" color="success" variant="tonal"
-                  class="item-action-btn plus-btn" @click.stop="addOne(item)">
-                  <v-icon size="large">mdi-plus-circle-outline</v-icon>
-                  <span class="action-label">{{ __('Increase') }}</span>
-                </v-btn>
-              </div>
-            </div>
+        <td :colspan="headers.length" class="ma-0 pa-2">
+          <v-row class="mb-3 action-buttons-container" dense>
+            <v-col cols="auto">
+              <v-btn :disabled="!!item.posa_is_replace" icon="mdi-trash-can-outline" size="large" color="error"
+                variant="tonal" class="item-action-btn delete-btn mr-2" @click.stop="removeItem(item)">
+                <v-icon size="large">mdi-trash-can-outline</v-icon>
+              </v-btn>
+            </v-col>
+            <v-spacer></v-spacer>
+            <v-col cols="auto" class="action-group">
+              <v-btn :disabled="!!item.posa_is_replace" size="large" color="warning" variant="tonal"
+                class="item-action-btn minus-btn mr-2" @click.stop="subtractOne(item)">
+                <v-icon size="large">mdi-minus-circle-outline</v-icon>
+              </v-btn>
+              <v-btn :disabled="!!item.posa_is_replace" size="large" color="success" variant="tonal"
+                class="item-action-btn plus-btn ml-2" @click.stop="addOne(item)">
+                <v-icon size="large">mdi-plus-circle-outline</v-icon>
+              </v-btn>
+            </v-col>
+          </v-row>
 
-            <!-- Item details form with improved layout -->
-            <div class="item-details-form">
-              <!-- First row of fields -->
-              <div class="form-row">
-                <div class="form-field">
-                  <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Item Code')"
-                    :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details v-model="item.item_code" disabled
-                    prepend-inner-icon="mdi-barcode"></v-text-field>
-                </div>
-                <div class="form-field">
-                  <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('QTY')"
-                    :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details :model-value="formatFloat(item.qty)" @change="[
-                      setFormatedQty(item, 'qty', null, false, $event.target.value),
-                      calcStockQty(item, item.qty),
-                    ]" :rules="[isNumber]" :disabled="!!item.posa_is_replace"
-                    prepend-inner-icon="mdi-numeric"></v-text-field>
-                </div>
-                <div class="form-field">
-                  <v-select density="compact" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" :label="frappe._('UOM')" v-model="item.uom"
-                    :items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom" hide-details
-                    @update:model-value="calcUom(item, $event)"
-                    :disabled="!!item.posa_is_replace || (isReturnInvoice && invoice_doc.return_against)"
-                    prepend-inner-icon="mdi-weight"></v-select>
-                </div>
-              </div>
+          <v-row dense class="item-details-form mb-2">
+            <v-col cols="12" sm="4" class="field-with-icon">
+              <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Item Code')"
+                :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details v-model="item.item_code" disabled
+                prepend-inner-icon="mdi-barcode"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="4" class="field-with-icon">
+              <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('QTY')"
+                :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details :model-value="formatFloat(item.qty)" @change="[
+                  setFormatedQty(item, 'qty', null, false, $event.target.value),
+                  calcStockQty(item, item.qty),
+                ]" :rules="[isNumber]" :disabled="!!item.posa_is_replace"
+                prepend-inner-icon="mdi-numeric"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="4" class="field-with-icon">
+              <v-select density="compact" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" :label="frappe._('UOM')" v-model="item.uom"
+                :items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom" hide-details
+                @update:model-value="calcUom(item, $event)"
+                :disabled="!!item.posa_is_replace || (isReturnInvoice && invoice_doc.return_against)"
+                prepend-inner-icon="mdi-weight"></v-select>
+            </v-col>
 
               <!-- Second row of fields -->
               <div class="form-row">

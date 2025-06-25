@@ -1,27 +1,9 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
-import { createSvgIconsPlugin } from 'vite-plugin-svg-icons'
 
 export default defineConfig({
-    plugins: [
-        vue(),
-        createSvgIconsPlugin({
-            // Specify the icon folder to be cached
-            iconDirs: [resolve(__dirname, 'posawesome/public/icons/mdi')],
-            // Specify symbolId format
-            symbolId: 'mdi-[name]',
-            // Generate corresponding components
-            svgoOptions: {
-                plugins: [
-                    {
-                        name: 'removeAttrs',
-                        params: { attrs: ['class', 'data-name', 'fill', 'stroke'] }
-                    }
-                ]
-            }
-        })
-    ],
+    plugins: [vue()],
     build: {
         target: 'esnext',
         lib: {
