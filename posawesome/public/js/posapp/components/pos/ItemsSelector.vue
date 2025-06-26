@@ -559,32 +559,15 @@ export default {
               if (vm.pos_profile.pose_use_limit_search) {
                 vm.enter_event();
               }
-              // Handle empty result
-              if (!vm.items || vm.items.length === 0) {
-                vm.loading = false;
-                vm.items_loaded = false;
-                vm.eventBus.emit("show_message", {
-                  title: "No items found.",
-                  color: "warning",
-                });
-              }
             } else if (ev.data.type === "error") {
               console.error('Item worker parse error:', ev.data.error);
               vm.loading = false;
-              vm.eventBus.emit("show_message", {
-                title: "Error occurred while loading items.",
-                color: "error",
-              });
             }
           };
           this.itemWorker.postMessage({ type: 'parse_and_cache', json: text, priceList: vm.customer_price_list });
         } catch (err) {
           console.error('Failed to fetch items', err);
           vm.loading = false;
-          vm.eventBus.emit("show_message", {
-            title: "Error occurred while loading items.",
-            color: "error",
-          });
         }
       } else {
         frappe.call({
@@ -653,30 +636,7 @@ export default {
             if (vm.pos_profile.pose_use_limit_search) {
               vm.enter_event();
             }
-            // Handle empty result
-            if (!vm.items || vm.items.length === 0) {
-              vm.loading = false;
-              vm.items_loaded = false;
-              vm.eventBus.emit("show_message", {
-                title: "No items found.",
-                color: "warning",
-              });
-            }
-          } else {
-            vm.loading = false;
-            vm.items_loaded = false;
-            vm.eventBus.emit("show_message", {
-              title: "No items found.",
-              color: "warning",
-            });
           }
-        },
-        error: function (err) {
-          vm.loading = false;
-          vm.eventBus.emit("show_message", {
-            title: "Error occurred while loading items.",
-            color: "error",
-          });
         }
       });
       }
