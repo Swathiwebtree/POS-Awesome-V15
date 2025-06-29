@@ -6,9 +6,10 @@ db.version(1).stores({ keyval: "&key" });
 
 let persistWorker = null;
 if (typeof Worker !== "undefined") {
-	try {
-		const workerUrl = "/assets/posawesome/js/posapp/workers/itemWorker.js?worker";
-		persistWorker = new Worker(workerUrl, { type: "classic" });
+        try {
+                // Use the plain URL so the service worker cache matches when offline
+                const workerUrl = "/assets/posawesome/js/posapp/workers/itemWorker.js";
+                persistWorker = new Worker(workerUrl, { type: "classic" });
 	} catch (e) {
 		console.error("Failed to init persist worker", e);
 		persistWorker = null;
@@ -122,13 +123,19 @@ export const initPromise = new Promise((resolve) => {
 });
 
 function persist(key) {
-	if (persistWorker) {
-		persistWorker.postMessage({ type: "persist", key, value: memory[key] });
-		return;
-	}
-	db.table("keyval")
-		.put({ key, value: memory[key] })
-		.catch((e) => console.error(`Failed to persist ${key}`, e));
+        if (persistWorker) {
+                let clean = memory[key];
+                try {
+                        clean = JSON.parse(JSON.stringify(memory[key]));
+                } catch (e) {
+                        console.error("Failed to serialize", key, e);
+                }
+                persistWorker.postMessage({ type: "persist", key, value: clean });
+                return;
+        }
+        db.table("keyval")
+                .put({ key, value: memory[key] })
+                .catch((e) => console.error(`Failed to persist ${key}`, e));
 
 	if (typeof localStorage !== "undefined") {
 		try {
@@ -634,17 +641,29 @@ export function clearExpiredCustomerBalances() {
 
 // Price list items caching functions
 export function savePriceListItems(priceList, items) {
-	try {
-		const cache = memory.price_list_cache || {};
-		cache[priceList] = {
-			items,
-			timestamp: Date.now(),
-		};
-		memory.price_list_cache = cache;
-		persist("price_list_cache");
-	} catch (e) {
-		console.error("Failed to cache price list items", e);
-	}
+        try {
+                const cache = memory.price_list_cache || {};
+
+                // Clone the items to remove any Vue reactivity objects.
+                // Reactive proxies cannot be structured cloned and will
+                // trigger a DataCloneError when sent to a Web Worker.
+                let cleanItems;
+                try {
+                        cleanItems = JSON.parse(JSON.stringify(items));
+                } catch (err) {
+                        console.error("Failed to serialize price list items", err);
+                        cleanItems = [];
+                }
+
+                cache[priceList] = {
+                        items: cleanItems,
+                        timestamp: Date.now(),
+                };
+                memory.price_list_cache = cache;
+                persist("price_list_cache");
+        } catch (e) {
+                console.error("Failed to cache price list items", e);
+        }
 }
 
 export function getCachedPriceListItems(priceList) {
@@ -673,21 +692,28 @@ export function clearPriceListCache() {
 
 // Item details caching functions
 export function saveItemDetailsCache(profileName, priceList, items) {
-	try {
-		const cache = memory.item_details_cache || {};
-		const profileCache = cache[profileName] || {};
-		const priceCache = profileCache[priceList] || {};
-		items.forEach((item) => {
-			priceCache[item.item_code] = {
-				data: item,
-				timestamp: Date.now(),
-			};
-		});
-		profileCache[priceList] = priceCache;
-		cache[profileName] = profileCache;
-		memory.item_details_cache = cache;
-		persist("item_details_cache");
-	} catch (e) {
+        try {
+                const cache = memory.item_details_cache || {};
+                const profileCache = cache[profileName] || {};
+                const priceCache = profileCache[priceList] || {};
+                let cleanItems;
+                try {
+                        cleanItems = JSON.parse(JSON.stringify(items));
+                } catch (err) {
+                        console.error("Failed to serialize item details", err);
+                        cleanItems = [];
+                }
+                cleanItems.forEach((item) => {
+                        priceCache[item.item_code] = {
+                                data: item,
+                                timestamp: Date.now(),
+                        };
+                });
+                profileCache[priceList] = priceCache;
+                cache[profileName] = profileCache;
+                memory.item_details_cache = cache;
+                persist("item_details_cache");
+        } catch (e) {
 		console.error("Failed to cache item details", e);
 	}
 }
@@ -858,8 +884,13 @@ export function getItemsStorage() {
 }
 
 export function setItemsStorage(items) {
-	memory.items_storage = items;
-	persist("items_storage");
+        try {
+                memory.items_storage = JSON.parse(JSON.stringify(items));
+        } catch (e) {
+                console.error("Failed to serialize items for storage", e);
+                memory.items_storage = [];
+        }
+        persist("items_storage");
 }
 
 export function getCustomerStorage() {

@@ -1,4 +1,4 @@
-import { isOffline, saveCustomerBalance, getCachedCustomerBalance, getCachedPriceListItems } from "../../../offline.js";
+import { isOffline, saveCustomerBalance, getCachedCustomerBalance, getCachedPriceListItems } from "../../../offline/index.js";
 
 export default {
 
@@ -276,7 +276,7 @@ export default {
       var vm = this;
       if (doc.name && this.pos_profile.posa_allow_delete) {
         await frappe.call({
-          method: "posawesome.posawesome.api.posapp.delete_invoice",
+        method: "posawesome.posawesome.api.invoices.delete_invoice",
           args: { invoice: doc.name },
           async: true,
           callback: function (r) {
@@ -667,7 +667,7 @@ export default {
       if (this.invoice_doc.doctype == "Sales Order") {
         await frappe.call({
           method:
-            "posawesome.posawesome.api.posapp.create_sales_invoice_from_order",
+          "posawesome.posawesome.api.invoices.create_sales_invoice_from_order",
           args: {
             sales_order: this.invoice_doc.name,
           },
@@ -912,7 +912,7 @@ export default {
         return vm.invoice_doc;
       }
       frappe.call({
-        method: "posawesome.posawesome.api.posapp.update_invoice",
+      method: "posawesome.posawesome.api.invoices.update_invoice",
         args: {
           data: doc,
         },
@@ -935,7 +935,7 @@ export default {
         return vm.invoice_doc;
       }
       frappe.call({
-        method: "posawesome.posawesome.api.posapp.update_invoice_from_order",
+        method: "posawesome.posawesome.api.invoices.update_invoice_from_order",
         args: {
           data: doc,
         },
@@ -1256,7 +1256,7 @@ export default {
     get_draft_invoices() {
       var vm = this;
       frappe.call({
-        method: "posawesome.posawesome.api.posapp.get_draft_invoices",
+        method: "posawesome.posawesome.api.invoices.get_draft_invoices",
         args: {
           pos_opening_shift: this.pos_opening_shift.name,
         },
@@ -1273,7 +1273,7 @@ export default {
     get_draft_orders() {
       var vm = this;
       frappe.call({
-        method: "posawesome.posawesome.api.posapp.search_orders",
+      method: "posawesome.posawesome.api.sales_orders.search_orders",
         args: {
           company: this.pos_profile.company,
           currency: this.pos_profile.currency,
@@ -1304,7 +1304,7 @@ export default {
 
       try {
         const response = await frappe.call({
-          method: "posawesome.posawesome.api.posapp.get_items_details",
+          method: "posawesome.posawesome.api.items.get_items_details",
           args: {
             pos_profile: JSON.stringify(this.pos_profile),
             items_data: JSON.stringify(items)
@@ -1349,7 +1349,7 @@ export default {
       // }
 
       frappe.call({
-        method: "posawesome.posawesome.api.posapp.get_item_detail",
+        method: "posawesome.posawesome.api.items.get_item_detail",
         args: {
           warehouse: this.pos_profile.warehouse,
           doc: this.get_invoice_doc(),
@@ -1399,10 +1399,11 @@ export default {
             // First save base rates if not exists or if in default currency
             if (!item.base_rate || vm.selected_currency === vm.pos_profile.currency) {
               // Always store base rates from server in base currency
-              item.base_price_list_rate = data.price_list_rate;
-
-              if (!item.posa_offer_applied) {
-                item.base_rate = data.price_list_rate;
+              if (data.price_list_rate !== 0 || !item.base_price_list_rate) {
+                item.base_price_list_rate = data.price_list_rate;
+                if (!item.posa_offer_applied) {
+                  item.base_rate = data.price_list_rate;
+                }
               }
             }
 
@@ -1501,7 +1502,7 @@ export default {
       if (this.customer) {
         try {
           const r = await frappe.call({
-            method: "posawesome.posawesome.api.posapp.get_customer_info",
+          method: "posawesome.posawesome.api.customers.get_customer_info",
             args: {
               customer: vm.customer,
             },
@@ -1558,21 +1559,29 @@ export default {
           const ci = map[item.item_code];
           if (!ci) return;
 
-          item.base_price_list_rate = ci.rate || ci.price_list_rate;
-          if (!item._manual_rate_set) {
-            item.base_rate = ci.rate || ci.price_list_rate;
+          const newRate = ci.rate || ci.price_list_rate;
+          if (newRate !== 0 || !item.base_price_list_rate) {
+            item.base_price_list_rate = newRate;
+            if (!item._manual_rate_set) {
+              item.base_rate = newRate;
+            }
           }
 
           if (this.selected_currency !== this.pos_profile.currency) {
             const conv = this.exchange_rate || 1;
-            item.price_list_rate = this.flt((ci.rate || ci.price_list_rate) / conv, this.currency_precision);
-            if (!item._manual_rate_set) {
-              item.rate = this.flt((ci.rate || ci.price_list_rate) / conv, this.currency_precision);
+            const convRate = this.flt((newRate) / conv, this.currency_precision);
+            if (newRate !== 0 || !item.price_list_rate) {
+              item.price_list_rate = convRate;
+            }
+            if (!item._manual_rate_set && (newRate !== 0 || !item.rate)) {
+              item.rate = convRate;
             }
           } else {
-            item.price_list_rate = ci.rate || ci.price_list_rate;
-            if (!item._manual_rate_set) {
-              item.rate = ci.rate || ci.price_list_rate;
+            if (newRate !== 0 || !item.price_list_rate) {
+              item.price_list_rate = newRate;
+            }
+            if (!item._manual_rate_set && (newRate !== 0 || !item.rate)) {
+              item.rate = newRate;
             }
           }
 
