@@ -1,4 +1,4 @@
-import { isOffline, saveCustomerBalance, getCachedCustomerBalance, getCachedPriceListItems } from "../../../offline/index.js";
+import { isOffline, saveCustomerBalance, getCachedCustomerBalance, getCachedPriceListItems, getItemUOMs } from "../../../offline/index.js";
 
 export default {
 
@@ -63,7 +63,8 @@ export default {
           new_item.qty = -Math.abs(new_item.qty || 1);
         }
         this.items.unshift(new_item);
-        this.update_item_detail(new_item);
+        // Force update of item rates when item is first added
+        this.update_item_detail(new_item, true);
 
         // Expand new item if it has batch or serial number
         if ((!this.pos_profile.posa_auto_set_batch && new_item.has_batch_no) || new_item.has_serial_no) {
@@ -489,9 +490,16 @@ export default {
 
       // Currency related fields
       doc.currency = this.selected_currency || this.pos_profile.currency;
-      doc.conversion_rate = this.exchange_rate || 1;
-      doc.plc_conversion_rate = this.exchange_rate || 1;
-      doc.price_list_currency = doc.currency;
+      doc.conversion_rate =
+        (this.invoice_doc && this.invoice_doc.conversion_rate) ||
+        this.exchange_rate ||
+        1;
+      doc.plc_conversion_rate =
+        (this.invoice_doc && this.invoice_doc.plc_conversion_rate) ||
+        doc.conversion_rate;
+
+      // Use actual price list currency if available
+      doc.price_list_currency = this.price_list_currency || doc.currency;
 
       // Other fields
       doc.campaign = doc.campaign || this.pos_profile.campaign;
@@ -610,7 +618,9 @@ export default {
 
       // Add flags to ensure proper rate handling
       doc.ignore_pricing_rule = 1;
-      doc.price_list_currency = doc.currency;
+
+      // Preserve the real price list currency
+      doc.price_list_currency = this.price_list_currency || doc.currency;
       doc.plc_conversion_rate = doc.conversion_rate;
       doc.ignore_default_fields = 1;  // Add this to prevent default field updates
 
@@ -1036,23 +1046,31 @@ export default {
         invoice_doc.currency = this.selected_currency || this.pos_profile.currency;
         invoice_doc.conversion_rate = this.exchange_rate || 1;
 
-        // Update totals in invoice_doc to match current calculations
-        invoice_doc.total = this.Total;
-        invoice_doc.grand_total = this.subtotal;
+        // Preserve totals calculated on the server to ensure taxes are included
+        // The process_invoice method already updates the invoice with taxes and
+        // totals via the backend. Overriding those values here caused the
+        // payment dialog to display amounts without taxes applied. Simply use
+        // the values returned from the server instead of recalculating them on
+        // the client side.
 
-        // Apply rounding to get rounded total unless disabled in POS Profile
-        if (this.pos_profile.disable_rounded_total) {
-          invoice_doc.rounded_total = flt(this.subtotal, this.currency_precision);
-        } else {
-          invoice_doc.rounded_total = this.roundAmount(this.subtotal);
-        }
-        invoice_doc.base_total = this.Total * (1 / this.exchange_rate || 1);
-        invoice_doc.base_grand_total = this.subtotal * (1 / this.exchange_rate || 1);
-        if (this.pos_profile.disable_rounded_total) {
-          invoice_doc.base_rounded_total = flt(invoice_doc.base_grand_total, this.currency_precision);
-        } else {
-          invoice_doc.base_rounded_total = this.roundAmount(invoice_doc.base_grand_total);
-        }
+        // Update totals on the client has been disabled. The original code is
+        // kept below for reference and is intentionally commented out to avoid
+        // overriding the server calculated values.
+        // invoice_doc.total = this.Total;
+        // invoice_doc.grand_total = this.subtotal;
+
+        // if (this.pos_profile.disable_rounded_total) {
+        //   invoice_doc.rounded_total = flt(this.subtotal, this.currency_precision);
+        // } else {
+        //   invoice_doc.rounded_total = this.roundAmount(this.subtotal);
+        // }
+        // invoice_doc.base_total = this.Total * (1 / this.exchange_rate || 1);
+        // invoice_doc.base_grand_total = this.subtotal * (1 / this.exchange_rate || 1);
+        // if (this.pos_profile.disable_rounded_total) {
+        //   invoice_doc.base_rounded_total = flt(invoice_doc.base_grand_total, this.currency_precision);
+        // } else {
+        //   invoice_doc.base_rounded_total = this.roundAmount(invoice_doc.base_grand_total);
+        // }
 
         // Check if this is a return invoice
         if (this.isReturnInvoice || invoice_doc.is_return) {
@@ -1336,7 +1354,7 @@ export default {
     },
 
     // Update details for a single item (fetch from backend)
-    update_item_detail(item) {
+    update_item_detail(item, force_update = false) {
       if (!item.item_code) {
         return;
       }
@@ -1396,8 +1414,8 @@ export default {
               vm.set_batch_qty(item, null, false);
             }
 
-            // First save base rates if not exists or if in default currency
-            if (!item.base_rate || vm.selected_currency === vm.pos_profile.currency) {
+            // First save base rates if not exists, in default currency, or when force update is requested
+            if (force_update || !item.base_rate || vm.selected_currency === vm.pos_profile.currency) {
               // Always store base rates from server in base currency
               if (data.price_list_rate !== 0 || !item.base_price_list_rate) {
                 item.base_price_list_rate = data.price_list_rate;
@@ -1560,28 +1578,43 @@ export default {
           if (!ci) return;
 
           const newRate = ci.rate || ci.price_list_rate;
-          if (newRate !== 0 || !item.base_price_list_rate) {
-            item.base_price_list_rate = newRate;
-            if (!item._manual_rate_set) {
-              item.base_rate = newRate;
-            }
-          }
+          const priceCurrency = ci.currency || this.selected_currency;
 
-          if (this.selected_currency !== this.pos_profile.currency) {
-            const conv = this.exchange_rate || 1;
-            const convRate = this.flt((newRate) / conv, this.currency_precision);
-            if (newRate !== 0 || !item.price_list_rate) {
-              item.price_list_rate = convRate;
+          if (priceCurrency === this.selected_currency) {
+            // Rate already in selected currency
+            item.base_price_list_rate = newRate * this.exchange_rate;
+            if (!item._manual_rate_set) {
+              item.base_rate = newRate * this.exchange_rate;
             }
-            if (!item._manual_rate_set && (newRate !== 0 || !item.rate)) {
-              item.rate = convRate;
+            item.price_list_rate = newRate;
+            if (!item._manual_rate_set) {
+              item.rate = newRate;
             }
           } else {
-            if (newRate !== 0 || !item.price_list_rate) {
-              item.price_list_rate = newRate;
+            // Rate in base currency
+            if (newRate !== 0 || !item.base_price_list_rate) {
+              item.base_price_list_rate = newRate;
+              if (!item._manual_rate_set) {
+                item.base_rate = newRate;
+              }
             }
-            if (!item._manual_rate_set && (newRate !== 0 || !item.rate)) {
-              item.rate = newRate;
+
+            if (this.selected_currency !== this.pos_profile.currency) {
+              const conv = this.exchange_rate || 1;
+              const convRate = this.flt(newRate / conv, this.currency_precision);
+              if (newRate !== 0 || !item.price_list_rate) {
+                item.price_list_rate = convRate;
+              }
+              if (!item._manual_rate_set && (newRate !== 0 || !item.rate)) {
+                item.rate = convRate;
+              }
+            } else {
+              if (newRate !== 0 || !item.price_list_rate) {
+                item.price_list_rate = newRate;
+              }
+              if (!item._manual_rate_set && (newRate !== 0 || !item.rate)) {
+                item.rate = newRate;
+              }
             }
           }
 
@@ -1786,7 +1819,24 @@ export default {
 
     // Update UOM (unit of measure) for an item and recalculate prices
     calc_uom(item, value) {
-      const new_uom = item.item_uoms.find((element) => element.uom == value);
+      let new_uom = item.item_uoms.find((element) => element.uom == value);
+
+      // try cached uoms when not found on item
+      if (!new_uom) {
+        const cached = getItemUOMs(item.item_code);
+        if (cached.length) {
+          item.item_uoms = cached;
+          new_uom = cached.find(u => u.uom == value);
+        }
+      }
+
+      // fallback to stock uom
+      if (!new_uom && item.stock_uom === value) {
+        new_uom = { uom: item.stock_uom, conversion_factor: 1 };
+        if (!item.item_uoms) item.item_uoms = [];
+        item.item_uoms.push(new_uom);
+      }
+
       if (!new_uom) {
         this.eventBus.emit("show_message", {
           title: __("UOM not found"),

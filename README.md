@@ -24,8 +24,8 @@ After switching branches or pulling latest changes:
 
 1. Supports Erpnext Version 15
 2. Supports Multi-Currency Transactions.
-   Customers can be invoiced in different currencies
-   Exchange Rate is fetched automatically based on selected currency
+   Customers can be invoiced in different currencies.
+   Exchange Rate is fetched automatically based on selected currency. When a price list has its own exchange rate set, POS Awesome uses that rate and falls back to the standard ERPNext rate otherwise.
    Invoices made with posawesome display Grand Total in both base and selected currency in erpnext.
 3. Supports offline mode for creating invoices and customers, saves data locally with stock validation, and syncs automatically when reconnected. If **Allow Negative Stock** is enabled in Stock Settings, offline invoices can still be saved even when quantities are below zero.
 4. User-friendly and provides a good user experience and speed of use
@@ -48,7 +48,7 @@ After switching branches or pulling latest changes:
 21. Search and add items by Serial Number
 22. Create Sales Orders from POS directly
 23. Supports template items with variants
-24. Supports multiple languages
+24. Supports multiple languages with language selection per POS Profile (English, Arabic, Portuguese and Spanish provided)
 25. Supports Mpesa mobile payment
 26. POS Coupons
 27. Supports Referral Code

@@ -19,7 +19,7 @@
     >
       <!-- Custom cell renderers for numeric values with proper alignment -->
       <template v-slot:item.qty="{ item }">
-        <div class="amount-value">{{ formatFloat(item.qty) }}</div>
+        <div class="amount-value">{{ formatFloat(item.qty, hide_qty_decimals ? 0 : undefined) }}</div>
       </template>
 
       <template v-slot:item.rate="{ item }">
@@ -99,7 +99,7 @@
                 </div>
                 <div class="form-field">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('QTY')"
-                    :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details :model-value="formatFloat(item.qty)" @change="[
+                    :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details :model-value="formatFloat(item.qty, hide_qty_decimals ? 0 : undefined)" @change="[
                       setFormatedQty(item, 'qty', null, false, $event.target.value),
                       calcStockQty(item, item.qty),
                     ]" :rules="[isNumber]" :disabled="!!item.posa_is_replace"
@@ -118,7 +118,7 @@
               <div class="form-row">
                 <div class="form-field">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Rate')"
-                    :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details :prefix="currencySymbol(pos_profile.currency)"
+                    :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details :prefix="currencySymbol(displayCurrency)"
                     :model-value="formatCurrency(item.rate)" @change="[
                       setFormatedCurrency(item, 'rate', null, false, $event),
                       calcPrices(item, $event.target.value, $event),
@@ -144,7 +144,7 @@
                     @change="(event) => { if (expanded && expanded.length === 1 && expanded[0] === item.posa_row_id) { calcPrices(item, event.target.value, { target: { id: 'discount_amount' } }); } }"
                     :rules="['isNumber']" id="discount_amount"
                     :disabled="!!item.posa_is_replace || item.posa_offer_applied || !pos_profile.posa_allow_user_to_edit_item_discount || (isReturnInvoice && invoice_doc.return_against)"
-                    :prefix="currencySymbol(pos_profile.currency)"></v-text-field>
+                    :prefix="currencySymbol(displayCurrency)"></v-text-field>
                 </div>
               </div>
 
@@ -154,12 +154,12 @@
                   <v-text-field density="compact" variant="outlined" color="primary"
                     :label="frappe._('Price list Rate')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details
                     :model-value="formatCurrency(item.price_list_rate)" disabled
-                    :prefix="currencySymbol(pos_profile.currency)"></v-text-field>
+                    :prefix="currencySymbol(displayCurrency)"></v-text-field>
                 </div>
                 <div class="form-field">
                   <v-text-field density="compact" variant="outlined" color="primary"
                     :label="frappe._('Available QTY')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details
-                    :model-value="formatFloat(item.actual_qty)" disabled></v-text-field>
+                    :model-value="formatFloat(item.actual_qty, hide_qty_decimals ? 0 : undefined)" disabled></v-text-field>
                 </div>
                 <div class="form-field">
                   <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Group')"
@@ -208,7 +208,7 @@
                   <div class="form-field">
                     <v-text-field density="compact" variant="outlined" color="primary"
                       :label="frappe._('Batch No. Available QTY')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" hide-details
-                      :model-value="formatFloat(item.actual_batch_qty)" disabled></v-text-field>
+                      :model-value="formatFloat(item.actual_batch_qty, hide_qty_decimals ? 0 : undefined)" disabled></v-text-field>
                   </div>
                   <div class="form-field">
                     <v-text-field density="compact" variant="outlined" color="primary"
@@ -293,6 +293,18 @@ export default {
     },
     isDarkTheme() {
       return this.$theme.current === 'dark';
+    },
+    hide_qty_decimals() {
+      try {
+        const saved = localStorage.getItem('posawesome_item_selector_settings');
+        if (saved) {
+          const opts = JSON.parse(saved);
+          return !!opts.hide_qty_decimals;
+        }
+      } catch (e) {
+        console.error('Failed to load item selector settings:', e);
+      }
+      return false;
     },
   },
 };

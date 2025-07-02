@@ -336,13 +336,14 @@ def get_items(
 
         if items_data:
             items = [d.item_code for d in items_data]
+            price_list_currency = frappe.db.get_value("Price List", price_list, "currency")
             item_prices_data = frappe.get_all(
                 "Item Price",
                 fields=["item_code", "price_list_rate", "currency", "uom"],
                 filters={
                     "price_list": price_list,
                     "item_code": ["in", items],
-                    "currency": pos_profile.get("currency"),
+                    "currency": price_list_currency or pos_profile.get("currency"),
                     "selling": 1,
                     "valid_from": ["<=", today],
                     "customer": ["in", ["", None, customer]],
@@ -441,6 +442,7 @@ def get_items(
                         {
                             "rate": item_price.get("price_list_rate") or 0,
                             "currency": item_price.get("currency")
+                            or price_list_currency
                             or pos_profile.get("currency"),
                             "item_barcode": item_barcode or [],
                             "actual_qty": item_stock_qty or 0,
@@ -694,15 +696,31 @@ def update_invoice(data):
         # Get default conversion rate from ERPNext if currency is different from company currency
         if invoice_doc.currency != frappe.get_cached_value("Company", invoice_doc.company, "default_currency"):
             company_currency = frappe.get_cached_value("Company", invoice_doc.company, "default_currency")
-            # Get exchange rate from selected currency to base currency
-            exchange_rate = get_exchange_rate(
-                invoice_doc.currency,
-                company_currency,
-                invoice_doc.posting_date
-            )
+
+            exchange_rate = None
+            if invoice_doc.selling_price_list:
+                try:
+                    exchange_rate = frappe.db.get_value(
+                        "Price List",
+                        invoice_doc.selling_price_list,
+                        "exchange_rate",
+                    )
+                except Exception:
+                    exchange_rate = None
+
+            if not exchange_rate:
+                # Get exchange rate from selected currency to base currency
+                exchange_rate = get_exchange_rate(
+                    invoice_doc.currency,
+                    company_currency,
+                    invoice_doc.posting_date,
+                )
             invoice_doc.conversion_rate = exchange_rate
             invoice_doc.plc_conversion_rate = exchange_rate
-            invoice_doc.price_list_currency = selected_currency
+
+            # Preserve provided price list currency if different from selected
+            price_list_currency = data.get("price_list_currency") or selected_currency
+            invoice_doc.price_list_currency = price_list_currency
 
             # Update rates and amounts for all items using multiplication
             for item in invoice_doc.items:
@@ -1153,13 +1171,14 @@ def get_items_details(pos_profile, items_data, price_list=None):
 
         item_codes = [item.get("item_code") for item in items_data]
 
+        price_list_currency = frappe.db.get_value("Price List", price_list, "currency")
         item_prices_data = frappe.get_all(
             "Item Price",
             fields=["item_code", "price_list_rate", "currency", "uom"],
             filters={
                 "price_list": price_list,
                 "item_code": ["in", item_codes],
-                "currency": pos_profile.get("currency"),
+                "currency": price_list_currency or pos_profile.get("currency"),
                 "selling": 1,
                 "valid_from": ["<=", today],
             },
@@ -1259,6 +1278,9 @@ def get_items_details(pos_profile, items_data, price_list=None):
                         "has_serial_no": has_serial_no,
                         "rate": item_price.get("price_list_rate") or 0,
                         "price_list_rate": item_price.get("price_list_rate") or 0,
+                        "currency": item_price.get("currency")
+                        or price_list_currency
+                        or pos_profile.get("currency"),
                     }
                 )
 

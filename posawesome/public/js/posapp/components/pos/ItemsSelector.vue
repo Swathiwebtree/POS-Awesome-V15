@@ -34,6 +34,36 @@
             <v-checkbox v-model="new_line" color="accent" value="true" label="NLine" density="default"
               hide-details></v-checkbox>
           </v-col>
+          <v-col cols="12" class="dynamic-margin-xs">
+            <div class="settings-container">
+              <v-btn density="compact" variant="text" color="primary" prepend-icon="mdi-cog-outline"
+                @click="toggleItemSettings" class="settings-btn">
+                {{ __('Settings') }}
+              </v-btn>
+
+              <v-dialog v-model="show_item_settings" max-width="400px">
+                <v-card>
+                  <v-card-title class="text-h6 pa-4 d-flex align-center">
+                    <span>{{ __('Item Selector Settings') }}</span>
+                    <v-spacer></v-spacer>
+                    <v-btn icon="mdi-close" variant="text" density="compact" @click="show_item_settings = false"></v-btn>
+                  </v-card-title>
+                  <v-divider></v-divider>
+                  <v-card-text class="pa-4">
+                    <v-switch v-model="temp_hide_qty_decimals" :label="__('Hide quantity decimals')" hide-details
+                      density="compact" color="primary" class="mb-2"></v-switch>
+                    <v-switch v-model="temp_hide_zero_rate_items" :label="__('Hide zero rated items')" hide-details
+                      density="compact" color="primary"></v-switch>
+                  </v-card-text>
+                  <v-card-actions class="pa-4 pt-0">
+                    <v-btn color="error" variant="text" @click="cancelItemSettings">{{ __('Cancel') }}</v-btn>
+                    <v-spacer></v-spacer>
+                    <v-btn color="primary" variant="tonal" @click="applyItemSettings">{{ __('Apply') }}</v-btn>
+                  </v-card-actions>
+                </v-card>
+              </v-dialog>
+            </div>
+          </v-col>
           <v-col cols="12" class="pt-0 mt-0">
             <div fluid class="items-grid dynamic-scroll" ref="itemsContainer" v-if="items_view == 'card'"
               :style="{ maxHeight: 'calc(' + responsiveStyles['--container-height'] + ' - 80px)' }">
@@ -47,8 +77,8 @@
                 </v-img>
                 <v-card-text class="text--primary pa-1">
                   <div class="text-caption text-primary truncate">
-                    {{ currencySymbol(pos_profile.currency) || "" }}
-                    {{ format_currency(item.rate, pos_profile.currency, ratePrecision(item.rate)) }}
+                    {{ currencySymbol(item.currency || pos_profile.currency) || "" }}
+                    {{ format_currency(item.rate, item.currency || pos_profile.currency, ratePrecision(item.rate)) }}
                   </div>
                   <div v-if="pos_profile.posa_allow_multi_currency && selected_currency !== pos_profile.currency"
                     class="text-caption text-success truncate">
@@ -57,7 +87,7 @@
                       ratePrecision(getConvertedRate(item))) }}
                   </div>
                   <div class="text-caption golden--text truncate">
-                    {{ format_number(item.actual_qty, 4) || 0 }}
+                    {{ format_number(item.actual_qty, hide_qty_decimals ? 0 : 4) || 0 }}
                     {{ item.stock_uom || "" }}
                   </div>
                 </v-card-text>
@@ -70,8 +100,8 @@
 
                 <template v-slot:item.rate="{ item }">
                   <div>
-                    <div class="text-primary">{{ currencySymbol(pos_profile.currency) }}
-                      {{ format_currency(item.rate, pos_profile.currency, ratePrecision(item.rate)) }}</div>
+                    <div class="text-primary">{{ currencySymbol(item.currency || pos_profile.currency) }}
+                      {{ format_currency(item.rate, item.currency || pos_profile.currency, ratePrecision(item.rate)) }}</div>
                     <div v-if="pos_profile.posa_allow_multi_currency && selected_currency !== pos_profile.currency"
                       class="text-success">
                       {{ currencySymbol(selected_currency) }}
@@ -81,7 +111,7 @@
                   </div>
                 </template>
                 <template v-slot:item.actual_qty="{ item }">
-                  <span class="golden--text">{{ format_number(item.actual_qty, 4) }}</span>
+                  <span class="golden--text">{{ format_number(item.actual_qty, hide_qty_decimals ? 0 : 4) }}</span>
                 </template>
               </v-data-table-virtual>
             </div>
@@ -112,13 +142,7 @@
               __("Coupons")
             }}</v-btn>
         </v-col>
-        <v-col cols="5" class="dynamic-margin-xs">
-          <v-btn size="small" block color="primary" variant="text" @click="show_offers" class="action-btn-consistent">{{
-            offersCount }} {{
-              __("Offers") }}
-            : {{ appliedOffersCount }}
-            {{ __("Applied") }}</v-btn>
-        </v-col>
+        
       </v-row>
     </v-card>
 
@@ -173,6 +197,11 @@ export default {
     prePopulateInProgress: false,
     itemWorker: null,
     items_request_token: 0,
+    show_item_settings: false,
+    hide_qty_decimals: false,
+    temp_hide_qty_decimals: false,
+    hide_zero_rate_items: false,
+    temp_hide_zero_rate_items: false,
   }),
 
   watch: {
@@ -260,6 +289,16 @@ export default {
         this.search_onchange(val);
       }
     }, 300),
+
+    // Refresh item prices whenever the user changes currency
+    selected_currency() {
+      this.applyCurrencyConversionToItems();
+    },
+
+    // Also react when exchange rate is adjusted manually
+    exchange_rate() {
+      this.applyCurrencyConversionToItems();
+    },
   },
 
   methods: {
@@ -384,7 +423,7 @@ export default {
       const vm = this;
       this.loading = true;
 
-      console.log("trying to load items")
+      // Removed noisy debug log
       let search = this.get_search(this.first_search);
       let gr = vm.item_group !== "ALL" ? vm.item_group.toLowerCase() : "";
       let sr = search || "";
@@ -403,7 +442,7 @@ export default {
         this.loading = false;
         return;
       }
-      console.log("trying to load items2")
+      // Removed noisy debug log
 
       // Attempt to load cached items for the current price list
       if (
@@ -464,7 +503,7 @@ export default {
         }
         return;
       }
-      console.log("trying to load items3")
+      // Removed noisy debug log
 
       if (this.itemWorker) {
 
@@ -493,7 +532,6 @@ export default {
           const text = await res.text();
           // console.log(text)
           this.itemWorker.onmessage = async (ev) => {
-            console.log("trying to load items6")
             if (this.items_request_token !== request_token) return;
             if (ev.data.type === "parsed") {
               const parsed = ev.data.items;
@@ -549,6 +587,13 @@ export default {
 
               if (vm.pos_profile.pose_use_limit_search) {
                 vm.enter_event();
+              }
+
+              // Terminate the worker after items are parsed to
+              // release memory held by the worker thread.
+              if (vm.itemWorker) {
+                vm.itemWorker.terminate();
+                vm.itemWorker = null;
               }
             } else if (ev.data.type === "error") {
               console.error('Item worker parse error:', ev.data.error);
@@ -710,24 +755,26 @@ export default {
           }
         }
 
-        // Convert rate if multi-currency is enabled
-        if (this.pos_profile.posa_allow_multi_currency &&
-          this.selected_currency !== this.pos_profile.currency) {
-          // Store original rate as base_rate
-          item.base_rate = item.rate;
-          item.base_price_list_rate = item.price_list_rate;
+        // Ensure correct rate based on selected currency
+        if (this.pos_profile.posa_allow_multi_currency) {
+          this.applyCurrencyConversionToItem(item);
 
-          // Set converted rates
-          item.rate = this.getConvertedRate(item);
-          item.price_list_rate = this.getConvertedRate(item);
-
-          // Set currency
-          item.currency = this.selected_currency;
+          // Compute base rates from original values
+          const base_rate =
+            item.original_currency === this.pos_profile.currency
+              ? item.original_rate
+              : item.original_rate * (item.plc_conversion_rate || this.exchange_rate);
+          item.base_rate = base_rate;
+          item.base_price_list_rate = base_rate;
         }
 
         if (!item.qty || item.qty === 1) {
-          const qtyVal = this.qty != null ? this.qty : 1;
-          item.qty = Math.abs(qtyVal);
+          let qtyVal = this.qty != null ? this.qty : 1;
+          qtyVal = Math.abs(qtyVal);
+          if (this.hide_qty_decimals) {
+            qtyVal = Math.trunc(qtyVal);
+          }
+          item.qty = qtyVal;
         }
         this.eventBus.emit("add_item", item);
         this.qty = 1;
@@ -833,6 +880,9 @@ export default {
         }
         scal_qty = pesokg;
       }
+      if (this.hide_qty_decimals) {
+        scal_qty = Math.trunc(scal_qty);
+      }
       return scal_qty;
     },
     get_search(first_search) {
@@ -886,6 +936,13 @@ export default {
               item.price_list_rate = det.price_list_rate || det.rate;
             }
           }
+
+          if (!item.original_rate) {
+            item.original_rate = item.rate;
+            item.original_currency = item.currency || vm.pos_profile.currency;
+          }
+
+          vm.applyCurrencyConversionToItem(item);
         }
       });
 
@@ -981,6 +1038,7 @@ export default {
               // Apply all updates in one batch
               updatedItems.forEach(({ item, updates }) => {
                 Object.assign(item, updates);
+                vm.applyCurrencyConversionToItem(item);
               });
 
               // Update local stock cache with latest quantities
@@ -1056,6 +1114,38 @@ export default {
         this.prePopulateInProgress = false;
       }
     },
+
+    applyCurrencyConversionToItems() {
+      if (!this.items || !this.items.length) return;
+      this.items.forEach(it => this.applyCurrencyConversionToItem(it));
+    },
+
+    applyCurrencyConversionToItem(item) {
+      if (!item) return;
+      const base = this.pos_profile.currency;
+
+      if (!item.original_rate) {
+        item.original_rate = item.rate;
+        item.original_currency = item.currency || base;
+      }
+
+      let base_rate;
+      if (item.original_currency === base) {
+        base_rate = item.original_rate;
+      } else {
+        base_rate = item.original_rate * (item.plc_conversion_rate || this.exchange_rate);
+      }
+
+      if (this.selected_currency === base) {
+        item.rate = this.flt(base_rate, this.currency_precision);
+        item.currency = base;
+      } else {
+        item.rate = this.flt(base_rate / this.exchange_rate, this.currency_precision);
+        item.currency = this.selected_currency;
+      }
+
+      item.price_list_rate = item.rate;
+    },
     scan_barcoud() {
       const vm = this;
       try {
@@ -1084,15 +1174,24 @@ export default {
       }
     },
     trigger_onscan(sCode) {
-      if (this.filtered_items.length == 0) {
-        this.eventBus.emit("show_message", {
-          title: `No Item has this barcode "${sCode}"`,
-          color: "error",
-        });
-        frappe.utils.play_sound("error");
-      } else {
-        this.enter_event();
-      }
+      // apply scanned code as search term
+      this.first_search = sCode;
+      this.search = sCode;
+
+      this.$nextTick(() => {
+        if (this.filtered_items.length == 0) {
+          this.eventBus.emit("show_message", {
+            title: `No Item has this barcode "${sCode}"`,
+            color: "error",
+          });
+          frappe.utils.play_sound("error");
+        } else {
+          this.enter_event();
+        }
+
+        // clear search field for next scan
+        this.clearSearch();
+      });
     },
     generateWordCombinations(inputString) {
       const words = inputString.split(" ");
@@ -1292,11 +1391,12 @@ export default {
       if (!item.rate) return 0;
       if (!this.exchange_rate) return item.rate;
 
-      // If exchange rate is 300 PKR = 1 USD
-      // To convert PKR to USD: divide by exchange rate
-      // Example: 3000 PKR / 300 = 10 USD
-      const convertedRate = item.rate / this.exchange_rate;
-      return this.flt(convertedRate, 4);
+      if (this.selected_currency !== this.pos_profile.currency) {
+        // item.rate currently in selected currency, convert back to base currency
+        return this.flt(item.rate * this.exchange_rate, 4);
+      }
+
+      return this.flt(item.rate / this.exchange_rate, 4);
     },
     currencySymbol(currency) {
       return get_currency_symbol(currency);
@@ -1322,6 +1422,48 @@ export default {
         return !Number.isInteger(convertedValue);
       }
       return !Number.isInteger(value);
+    },
+
+    toggleItemSettings() {
+      this.temp_hide_qty_decimals = this.hide_qty_decimals;
+      this.temp_hide_zero_rate_items = this.hide_zero_rate_items;
+      this.show_item_settings = true;
+    },
+    cancelItemSettings() {
+      this.show_item_settings = false;
+    },
+    applyItemSettings() {
+      this.hide_qty_decimals = this.temp_hide_qty_decimals;
+      this.hide_zero_rate_items = this.temp_hide_zero_rate_items;
+      this.saveItemSettings();
+      this.show_item_settings = false;
+    },
+    saveItemSettings() {
+      try {
+        const settings = { 
+          hide_qty_decimals: this.hide_qty_decimals,
+          hide_zero_rate_items: this.hide_zero_rate_items,
+        };
+        localStorage.setItem('posawesome_item_selector_settings', JSON.stringify(settings));
+      } catch (e) {
+        console.error('Failed to save item selector settings:', e);
+      }
+    },
+    loadItemSettings() {
+      try {
+        const saved = localStorage.getItem('posawesome_item_selector_settings');
+        if (saved) {
+          const opts = JSON.parse(saved);
+          if (typeof opts.hide_qty_decimals === 'boolean') {
+            this.hide_qty_decimals = opts.hide_qty_decimals;
+          }
+          if (typeof opts.hide_zero_rate_items === 'boolean') {
+            this.hide_zero_rate_items = opts.hide_zero_rate_items;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load item selector settings:', e);
+      }
     },
   },
 
@@ -1354,6 +1496,10 @@ export default {
               .slice(0, this.itemsPerPage);
           } else {
             filtered = filtred_group_list.slice(0, this.itemsPerPage);
+          }
+
+          if (this.hide_zero_rate_items) {
+            filtered = filtered.filter(item => parseFloat(item.rate) !== 0);
           }
 
           // Ensure quantities are defined
@@ -1433,6 +1579,10 @@ export default {
           final_filtered_list = filtred_list.slice(0, this.itemsPerPage);
         }
 
+        if (this.hide_zero_rate_items) {
+          final_filtered_list = final_filtered_list.filter(item => parseFloat(item.rate) !== 0);
+        }
+
         // Ensure quantities are defined for each item
         final_filtered_list.forEach(item => {
           if (item.actual_qty === undefined) {
@@ -1458,6 +1608,10 @@ export default {
           }
         });
 
+        if (this.hide_zero_rate_items) {
+          return items_list.filter(item => parseFloat(item.rate) !== 0);
+        }
+
         return items_list;
       }
     },
@@ -1472,12 +1626,16 @@ export default {
     debounce_qty: {
       get() {
         // Display the raw quantity while typing to avoid forced decimal format
-        return this.qty === null || this.qty === '' ? '' : this.qty;
+        if (this.qty === null || this.qty === '') return '';
+        return this.hide_qty_decimals ? Math.trunc(this.qty) : this.qty;
       },
       set: _.debounce(function (value) {
         let parsed = parseFloat(String(value).replace(/,/g, ''));
         if (isNaN(parsed)) {
           parsed = null;
+        }
+        if (this.hide_qty_decimals && parsed != null) {
+          parsed = Math.trunc(parsed);
         }
         this.qty = parsed;
       }, 200),
@@ -1491,6 +1649,7 @@ export default {
   },
 
   created: function () {
+    this.loadItemSettings();
     if (typeof Worker !== 'undefined') {
       try {
         // Use the plain URL so the service worker can match the cached file
@@ -1563,6 +1722,10 @@ export default {
     this.eventBus.on("update_currency", (data) => {
       this.selected_currency = data.currency;
       this.exchange_rate = data.exchange_rate;
+
+      // Refresh visible item prices when currency changes
+      this.applyCurrencyConversionToItems();
+      this.update_cur_items_details();
     });
   },
 
@@ -1603,6 +1766,12 @@ export default {
 
     this.eventBus.off("update_currency");
     this.eventBus.off("server-online");
+    this.eventBus.off("register_pos_profile");
+    this.eventBus.off("update_cur_items_details");
+    this.eventBus.off("update_offers_counters");
+    this.eventBus.off("update_coupons_counters");
+    this.eventBus.off("update_customer_price_list");
+    this.eventBus.off("update_customer");
   },
 };
 </script>
@@ -1660,6 +1829,11 @@ export default {
 
 .sleek-data-table:hover {
   box-shadow: var(--shadow-md) !important;
+}
+
+.settings-container {
+  display: flex;
+  align-items: center;
 }
 
 .truncate {

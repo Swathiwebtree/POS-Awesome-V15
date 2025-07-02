@@ -165,6 +165,7 @@ export default {
       available_currencies: [], // List of available currencies
       price_lists: [], // Available selling price lists
       selected_price_list: "", // Currently selected price list
+      price_list_currency: "", // Currency of the selected price list
       selected_columns: [], // Selected columns for items table
       temp_selected_columns: [], // Temporary array for column selection
       available_columns: [], // All available columns
@@ -438,121 +439,27 @@ export default {
       if (!this.selected_price_list) {
         this.selected_price_list = this.pos_profile.selling_price_list;
       }
+
+      // Fetch and store currency for the applied price list
+      try {
+        const r = await frappe.call({
+          method: "posawesome.posawesome.api.invoices.get_price_list_currency",
+          args: { price_list: this.selected_price_list }
+        });
+        if (r && r.message) {
+          this.price_list_currency = r.message;
+        }
+      } catch (error) {
+        console.error("Failed fetching price list currency", error);
+      }
+
       return this.price_lists;
     },
 
     async update_currency(currency) {
       if (!currency) return;
-      if (currency === this.pos_profile.currency) {
-        this.exchange_rate = 1;
-        // Emit currency update
-        this.eventBus.emit("update_currency", {
-          currency: currency,
-          exchange_rate: 1
-        });
-
-        // First ensure base rates exist for all items
-        this.items.forEach(item => {
-          if (!item.base_rate) {
-            item.base_rate = item.rate;
-            item.base_price_list_rate = item.price_list_rate;
-            item.base_discount_amount = item.discount_amount || 0;
-          }
-        });
-
-        // Then update all item rates
-        this.update_item_rates();
-        return;
-      }
-
-      try {
-        console.log('Updating currency exchange rate...');
-        console.log('Selected:', currency, 'Base:', this.pos_profile.currency, 'Date:', this.posting_date);
-
-        // First ensure base rates exist for all items
-        this.items.forEach(item => {
-          if (!item.base_rate) {
-            // Store original rates in base currency before switching
-            item.base_rate = item.rate;
-            item.base_price_list_rate = item.price_list_rate;
-            item.base_discount_amount = item.discount_amount || 0;
-            console.log(`Stored base rates for ${item.item_code}:`, {
-              base_rate: item.base_rate,
-              base_price_list_rate: item.base_price_list_rate
-            });
-          }
-        });
-
-        // Get rate from selected to base currency
-        const response = await frappe.call({
-          method: "erpnext.setup.utils.get_exchange_rate",
-          args: {
-            from_currency: currency,         // Selected currency (e.g. USD)
-            to_currency: this.pos_profile.currency,  // Base currency (e.g. PKR)
-            transaction_date: this.posting_date || frappe.datetime.nowdate()
-          }
-        });
-
-        if (response.message) {
-          const rate = response.message;
-          // Store the rate directly without inverting
-          this.exchange_rate = this.flt(rate, 6);
-          console.log("Exchange rate updated:", this.exchange_rate);
-
-          // Emit currency update
-          this.eventBus.emit("update_currency", {
-            currency: currency,
-            exchange_rate: this.exchange_rate
-          });
-
-          // Update the currency title in the dropdown to show the rate
-          const currencyIndex = this.available_currencies.findIndex(c => c.value === currency);
-          if (currencyIndex !== -1) {
-            this.available_currencies[currencyIndex].title = `${currency} (1 = ${this.flt(rate, 6)} ${this.pos_profile.currency})`;
-            this.available_currencies[currencyIndex].rate = rate;
-          }
-
-          // Force update of all items immediately
-          this.update_item_rates();
-
-          // Log updated items for debugging
-          console.log(`Updated all ${this.items.length} items to currency ${currency} with rate ${rate}`);
-
-          // Show success message
-          this.eventBus.emit("show_message", {
-            title: __(`Exchange rate updated: 1 ${currency} = ${this.flt(rate, 6)} ${this.pos_profile.currency}`),
-            color: "success"
-          });
-        } else {
-          throw new Error("No exchange rate returned");
-        }
-      } catch (error) {
-        console.error("Error updating exchange rate:", error);
-        // Reset currency selection to base currency
-        this.selected_currency = this.pos_profile.currency;
-        this.exchange_rate = 1;
-
-        // Emit currency update for reset
-        this.eventBus.emit("update_currency", {
-          currency: this.pos_profile.currency,
-          exchange_rate: 1
-        });
-
-        // Reset the currency title in the dropdown
-        const currencyIndex = this.available_currencies.findIndex(c => c.value === currency);
-        if (currencyIndex !== -1) {
-          this.available_currencies[currencyIndex].title = currency;
-          this.available_currencies[currencyIndex].rate = null;
-        }
-
-        // Restore all items to base currency rates
-        this.update_item_rates();
-
-        this.eventBus.emit("show_message", {
-          title: __(`Error: Could not fetch exchange rate from ${currency} to ${this.pos_profile.currency}. Please set up the exchange rate first.`),
-          color: "error"
-        });
-      }
+      this.selected_currency = currency;
+      await this.update_currency_and_rate();
     },
 
     update_exchange_rate() {
@@ -666,8 +573,40 @@ export default {
     // Update currency and exchange rate when currency is changed
     async update_currency_and_rate() {
       if (this.selected_currency) {
+        const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+
+        if (!this.items.length) {
+          if (this.selected_currency === baseCurrency) {
+            this.exchange_rate = 1;
+            this.sync_exchange_rate();
+          } else {
+            try {
+              const r = await frappe.call({
+                method: "posawesome.posawesome.api.invoices.fetch_exchange_rate_pair",
+                args: {
+                  from_currency: this.selected_currency,
+                  to_currency: baseCurrency,
+                  posting_date: this.formatDateForBackend(this.posting_date_display)
+                },
+              });
+              if (r && r.message) {
+                this.exchange_rate = r.message;
+                this.sync_exchange_rate();
+              }
+            } catch (error) {
+              console.error("Error updating currency:", error);
+              this.eventBus.emit("show_message", {
+                text: "Error updating currency",
+                color: "error",
+              });
+            }
+          }
+          return;
+        }
+
         const doc = this.get_invoice_doc();
         doc.currency = this.selected_currency;
+        doc.price_list_currency = baseCurrency;
 
         try {
           const response = await this.update_invoice(doc);
@@ -687,6 +626,11 @@ export default {
 
     async update_exchange_rate_on_server() {
       if (this.exchange_rate) {
+        if (!this.items.length) {
+          this.sync_exchange_rate();
+          return;
+        }
+
         const doc = this.get_invoice_doc();
         doc.conversion_rate = this.exchange_rate;
         try {
@@ -777,19 +721,20 @@ export default {
       this.initializeItemsHeaders();
 
       // Add this block to handle currency initialization
-      if (this.pos_profile.posa_allow_multi_currency) {
-        this.fetch_available_currencies().then(() => {
-          // Set default currency after currencies are loaded
-          this.selected_currency = this.pos_profile.currency;
-          this.exchange_rate = 1;
-        }).catch(error => {
-          console.error("Error initializing currencies:", error);
-          this.eventBus.emit("show_message", {
-            title: __("Error loading currencies"),
-            color: "error"
+        if (this.pos_profile.posa_allow_multi_currency) {
+          this.fetch_available_currencies().then(async () => {
+            // Set default currency after currencies are loaded
+            this.selected_currency = this.pos_profile.currency;
+            // Fetch proper exchange rate from server
+            await this.update_currency_and_rate();
+          }).catch(error => {
+            console.error("Error initializing currencies:", error);
+            this.eventBus.emit("show_message", {
+              title: __("Error loading currencies"),
+              color: "error"
+            });
           });
-        });
-      }
+        }
 
       this.fetch_price_lists();
       this.update_price_list();
