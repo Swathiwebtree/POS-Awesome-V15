@@ -532,8 +532,8 @@ export default {
       this.socket = null; // Clear the socket instance to prevent stale references
     }
   },
-    methods: {
 
+    methods: {
     /**
      * Initializes a Socket.IO connection, adapting the URL based on the environment:
      * - Development: localhost / 127.0.0.1
