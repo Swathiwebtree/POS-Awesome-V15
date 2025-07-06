@@ -142,10 +142,11 @@ export default {
       new_item.price_list_rate = item.rate;
 
       // Setup base rates properly for multi-currency
-      if (this.selected_currency !== this.pos_profile.currency) {
+      const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+      if (this.selected_currency !== baseCurrency) {
         // Store original base currency values
-        new_item.base_price_list_rate = item.base_price_list_rate || (item.rate * this.exchange_rate);
-        new_item.base_rate = item.base_rate || (item.rate * this.exchange_rate);
+        new_item.base_price_list_rate = item.base_price_list_rate || (item.rate / this.exchange_rate);
+        new_item.base_rate = item.base_rate || (item.rate / this.exchange_rate);
         new_item.base_discount_amount = 0;
       } else {
         // In base currency, base rates = displayed rates
@@ -492,14 +493,15 @@ export default {
       doc.currency = this.selected_currency || this.pos_profile.currency;
       doc.conversion_rate =
         (this.invoice_doc && this.invoice_doc.conversion_rate) ||
-        this.exchange_rate ||
+        this.conversion_rate ||
         1;
-      doc.plc_conversion_rate =
-        (this.invoice_doc && this.invoice_doc.plc_conversion_rate) ||
-        doc.conversion_rate;
 
       // Use actual price list currency if available
       doc.price_list_currency = this.price_list_currency || doc.currency;
+
+      doc.plc_conversion_rate =
+        (this.invoice_doc && this.invoice_doc.plc_conversion_rate) ||
+        (doc.price_list_currency === doc.currency ? 1 : this.exchange_rate);
 
       // Other fields
       doc.campaign = doc.campaign || this.pos_profile.campaign;
@@ -621,24 +623,24 @@ export default {
 
       // Preserve the real price list currency
       doc.price_list_currency = this.price_list_currency || doc.currency;
-      doc.plc_conversion_rate = doc.conversion_rate;
+      doc.plc_conversion_rate = this.exchange_rate || doc.conversion_rate;
       doc.ignore_default_fields = 1;  // Add this to prevent default field updates
 
       // Add custom fields to track offer rates
       doc.posa_is_offer_applied = this.posa_offers.length > 0 ? 1 : 0;
 
       // Calculate base amounts using the exchange rate
-      if (this.selected_currency !== this.pos_profile.currency) {
+      const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+      if (this.selected_currency !== baseCurrency) {
         // For returns, we need to ensure negative values
         const multiplier = isReturn ? -1 : 1;
 
-        // If exchange rate is 300 PKR = 1 USD
-        // To convert PKR to USD multiply by exchange rate
-        doc.base_total = total * this.exchange_rate * multiplier;
-        doc.base_net_total = total * this.exchange_rate * multiplier;
-        doc.base_discount_amount = discountAmount * this.exchange_rate * multiplier;
-        doc.base_grand_total = grandTotal * this.exchange_rate * multiplier;
-        doc.base_rounded_total = grandTotal * this.exchange_rate * multiplier;
+        // Convert amounts back to the base currency
+        doc.base_total = total / this.exchange_rate * multiplier;
+        doc.base_net_total = total / this.exchange_rate * multiplier;
+        doc.base_discount_amount = discountAmount / this.exchange_rate * multiplier;
+        doc.base_grand_total = grandTotal / this.exchange_rate * multiplier;
+        doc.base_rounded_total = grandTotal / this.exchange_rate * multiplier;
       } else {
         // Same currency, just ensure negative values for returns
         const multiplier = isReturn ? -1 : 1;
@@ -653,9 +655,9 @@ export default {
       // Ensure payments have correct base amounts
       if (doc.payments && doc.payments.length) {
         doc.payments.forEach(payment => {
-          if (this.selected_currency !== this.pos_profile.currency) {
+          if (this.selected_currency !== baseCurrency) {
             // Convert payment amount to base currency
-            payment.base_amount = payment.amount * this.exchange_rate;
+            payment.base_amount = payment.amount / this.exchange_rate;
           } else {
             payment.base_amount = payment.amount;
           }
@@ -773,25 +775,26 @@ export default {
         }
 
         // Handle currency conversion for rates and amounts
-        if (this.selected_currency !== this.pos_profile.currency) {
+        const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+        if (this.selected_currency !== baseCurrency) {
           // If exchange rate is 300 PKR = 1 USD
           // item.rate is in USD (e.g. 10 USD)
           // base_rate should be in PKR (e.g. 3000 PKR)
           new_item.rate = flt(item.rate);  // Keep rate in USD
 
           // Use pre-stored base_rate if available, otherwise calculate
-          new_item.base_rate = item.base_rate || flt(item.rate * this.exchange_rate);
+          new_item.base_rate = item.base_rate || flt(item.rate / this.exchange_rate);
 
           new_item.price_list_rate = flt(item.price_list_rate);  // Keep price list rate in USD
-          new_item.base_price_list_rate = item.base_price_list_rate || flt(item.price_list_rate * this.exchange_rate);
+          new_item.base_price_list_rate = item.base_price_list_rate || flt(item.price_list_rate / this.exchange_rate);
 
           // Calculate amounts
           new_item.amount = flt(item.qty) * new_item.rate;  // Amount in USD
-          new_item.base_amount = new_item.amount * this.exchange_rate;  // Convert to base currency
+          new_item.base_amount = new_item.amount / this.exchange_rate;  // Convert to base currency
 
           // Handle discount amount
           new_item.discount_amount = flt(item.discount_amount);  // Keep discount in USD
-          new_item.base_discount_amount = item.base_discount_amount || flt(item.discount_amount * this.exchange_rate);
+          new_item.base_discount_amount = item.base_discount_amount || flt(item.discount_amount / this.exchange_rate);
         } else {
           // Same currency (base currency), make sure we use base rates if available
           new_item.rate = flt(item.rate);
@@ -873,7 +876,8 @@ export default {
         // amount is in USD (e.g. 10 USD)
         // base_amount should be in PKR (e.g. 3000 PKR)
         // So multiply by exchange rate to get base_amount
-        const base_amount = this.selected_currency !== this.pos_profile.currency ?
+        const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+        const base_amount = this.selected_currency !== baseCurrency ?
           this.flt(adjusted_amount / (this.exchange_rate || 1), this.currency_precision) :
           adjusted_amount;
 
@@ -885,7 +889,7 @@ export default {
           account: payment.account || "",
           type: payment.type || "Cash",
           currency: this.selected_currency || this.pos_profile.currency,
-          conversion_rate: this.exchange_rate || 1
+          conversion_rate: this.conversion_rate || 1
         });
 
         remaining_amount -= payment_amount;
@@ -905,10 +909,11 @@ export default {
     },
 
     // Convert amount to selected currency
-    convert_amount(amount) {
-      if (this.selected_currency === this.pos_profile.currency) {
-        return amount;
-      }
+      convert_amount(amount) {
+        const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+        if (this.selected_currency === baseCurrency) {
+          return amount;
+        }
       return this.flt(amount * this.exchange_rate, this.currency_precision);
     },
 
@@ -932,6 +937,18 @@ export default {
             vm.invoice_doc = r.message;
             if (r.message.exchange_rate_date) {
               vm.exchange_rate_date = r.message.exchange_rate_date;
+              const posting_backend = vm.formatDateForBackend(vm.posting_date_display);
+              if (posting_backend !== vm.exchange_rate_date) {
+                vm.eventBus.emit("show_message", {
+                  title: __(
+                    "Exchange rate date " +
+                      vm.exchange_rate_date +
+                      " differs from posting date " +
+                      posting_backend
+                  ),
+                  color: "warning",
+                });
+              }
             }
           }
         },
@@ -956,6 +973,21 @@ export default {
         callback: function (r) {
           if (r.message) {
             vm.invoice_doc = r.message;
+            if (r.message.exchange_rate_date) {
+              vm.exchange_rate_date = r.message.exchange_rate_date;
+              const posting_backend = vm.formatDateForBackend(vm.posting_date_display);
+              if (posting_backend !== vm.exchange_rate_date) {
+                vm.eventBus.emit("show_message", {
+                  title: __(
+                    "Exchange rate date " +
+                      vm.exchange_rate_date +
+                      " differs from posting date " +
+                      posting_backend
+                  ),
+                  color: "warning",
+                });
+              }
+            }
           }
         },
       });
@@ -1047,7 +1079,8 @@ export default {
 
         // Update invoice_doc with current currency info
         invoice_doc.currency = this.selected_currency || this.pos_profile.currency;
-        invoice_doc.conversion_rate = this.exchange_rate || 1;
+        invoice_doc.conversion_rate = this.conversion_rate || 1;
+        invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
 
         // Preserve totals calculated on the server to ensure taxes are included
         // The process_invoice method already updates the invoice with taxes and
@@ -1402,6 +1435,17 @@ export default {
         callback: function (r) {
           if (r.message) {
             const data = r.message;
+            // Ensure price list currency is synced from server response
+            if (data.price_list_currency) {
+              vm.price_list_currency = data.price_list_currency;
+            }
+
+            if (!item.original_currency) {
+              item.original_currency = data.price_list_currency || vm.price_list_currency || vm.selected_currency;
+            }
+            if (!item.original_rate) {
+              item.original_rate = data.price_list_rate;
+            }
             if (data.batch_no_data) {
               item.batch_no_data = data.batch_no_data;
             }
@@ -1433,27 +1477,37 @@ export default {
 
             // Only update rates if no offer is applied
             if (!item.posa_offer_applied) {
-              // Convert to selected currency if needed
-              if (vm.selected_currency !== vm.pos_profile.currency) {
+              const companyCurrency = vm.pos_profile.currency;
+              const baseCurrency = companyCurrency;
+
+              if (vm.selected_currency === vm.price_list_currency && vm.selected_currency !== companyCurrency) {
+                const conv = vm.conversion_rate || 1;
+                item.price_list_rate = vm.flt(item.base_price_list_rate / conv, vm.currency_precision);
+
+                if (!item._manual_rate_set) {
+                  item.rate = vm.flt(item.base_rate / conv, vm.currency_precision);
+                }
+              } else if (vm.selected_currency !== baseCurrency) {
                 const exchange_rate = vm.exchange_rate || 1;
-                // Convert base rates to the selected currency
                 item.price_list_rate = vm.flt(item.base_price_list_rate * exchange_rate, vm.currency_precision);
 
-                // In multi-currency mode, update the rate from base_rate
                 item.rate = vm.flt(item.base_rate * exchange_rate, vm.currency_precision);
               } else {
-                // When in default currency, use base rates directly for price_list_rate
                 item.price_list_rate = item.base_price_list_rate;
 
-                // IMPORTANT: For default currency, only set rate if it's not already set
-                // This preserves manually entered rates
                 if (!item._manual_rate_set) {
                   item.rate = item.base_rate;
                 }
               }
             } else {
               // For items with offers, only update price_list_rate
-              if (vm.selected_currency !== vm.pos_profile.currency) {
+              const companyCurrency = vm.pos_profile.currency;
+              const baseCurrency = companyCurrency;
+
+              if (vm.selected_currency === vm.price_list_currency && vm.selected_currency !== companyCurrency) {
+                const conv = vm.conversion_rate || 1;
+                item.price_list_rate = vm.flt(item.base_price_list_rate / conv, vm.currency_precision);
+              } else if (vm.selected_currency !== baseCurrency) {
                 const exchange_rate = vm.exchange_rate || 1;
                 item.price_list_rate = vm.flt(item.base_price_list_rate * exchange_rate, vm.currency_precision);
               } else {
@@ -1587,11 +1641,26 @@ export default {
           const newRate = ci.rate || ci.price_list_rate;
           const priceCurrency = ci.currency || this.selected_currency;
 
+          if (!item.original_currency) {
+            item.original_currency = priceCurrency;
+          }
+          if (!item.original_rate) {
+            item.original_rate = newRate;
+          }
+
           if (priceCurrency === this.selected_currency) {
-            // Rate already in selected currency
-            item.base_price_list_rate = newRate * this.exchange_rate;
-            if (!item._manual_rate_set) {
-              item.base_rate = newRate * this.exchange_rate;
+            const companyCurrency = this.pos_profile.currency;
+            if (priceCurrency !== companyCurrency) {
+              const conv = this.conversion_rate || 1;
+              item.base_price_list_rate = newRate * conv;
+              if (!item._manual_rate_set) {
+                item.base_rate = newRate * conv;
+              }
+            } else {
+              item.base_price_list_rate = newRate;
+              if (!item._manual_rate_set) {
+                item.base_rate = newRate;
+              }
             }
             item.price_list_rate = newRate;
             if (!item._manual_rate_set) {
@@ -1606,8 +1675,9 @@ export default {
               }
             }
 
-            if (this.selected_currency !== this.pos_profile.currency) {
-              const conv = this.exchange_rate || 1;
+              const baseCurrency = this.pos_profile.currency;
+              if (this.selected_currency !== baseCurrency) {
+                const conv = this.exchange_rate || 1;
               const convRate = this.flt(newRate * conv, this.currency_precision);
               if (newRate !== 0 || !item.price_list_rate) {
                 item.price_list_rate = convRate;
@@ -1615,7 +1685,7 @@ export default {
               if (!item._manual_rate_set && (newRate !== 0 || !item.rate)) {
                 item.rate = convRate;
               }
-            } else {
+              } else {
               if (newRate !== 0 || !item.price_list_rate) {
                 item.price_list_rate = newRate;
               }
@@ -1674,7 +1744,8 @@ export default {
         }
 
         // Convert price_list_rate to current currency for calculations
-        const converted_price_list_rate = this.selected_currency !== this.pos_profile.currency ?
+        const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+        const converted_price_list_rate = this.selected_currency !== baseCurrency ?
           this.flt(item.price_list_rate * this.exchange_rate, this.currency_precision) :
           item.price_list_rate;
 
@@ -1781,7 +1852,7 @@ export default {
           }
 
           // Convert to selected currency
-          if (this.selected_currency !== this.pos_profile.currency) {
+          if (this.selected_currency !== baseCurrency) {
           // Convert base currency values to the selected currency
           item.price_list_rate = this.flt(item.base_price_list_rate * this.exchange_rate, this.currency_precision);
           item.rate = this.flt(item.base_rate * this.exchange_rate, this.currency_precision);
@@ -1802,20 +1873,22 @@ export default {
         item.rate = this.flt(price_list_rate - discount_amount, this.currency_precision);
 
         // Store base discount amount
-        if (this.selected_currency !== this.pos_profile.currency) {
+        const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+        if (this.selected_currency !== baseCurrency) {
           // Convert discount amount back to base currency by multiplying by exchange rate
-          item.base_discount_amount = this.flt(discount_amount * this.exchange_rate, this.currency_precision);
+          item.base_discount_amount = this.flt(discount_amount / this.exchange_rate, this.currency_precision);
         } else {
           item.base_discount_amount = item.discount_amount;
         }
       }
 
       // Calculate amounts
-      item.amount = this.flt(item.qty * item.rate, this.currency_precision);
-      if (this.selected_currency !== this.pos_profile.currency) {
-        // Convert amount back to base currency by multiplying by exchange rate
-        item.base_amount = this.flt(item.amount * this.exchange_rate, this.currency_precision);
-      } else {
+        item.amount = this.flt(item.qty * item.rate, this.currency_precision);
+        const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+      if (this.selected_currency !== baseCurrency) {
+          // Convert amount back to base currency by dividing by exchange rate
+          item.base_amount = this.flt(item.amount / this.exchange_rate, this.currency_precision);
+        } else {
         item.base_amount = item.amount;
       }
 
@@ -1889,7 +1962,8 @@ export default {
           item.base_price_list_rate = converted_rate;
 
           // Convert to selected currency
-          if (this.selected_currency !== this.pos_profile.currency) {
+          const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+          if (this.selected_currency !== baseCurrency) {
           // Convert base currency values using the current exchange rate
           item.rate = this.flt(converted_rate * this.exchange_rate, this.currency_precision);
           item.price_list_rate = item.rate;
@@ -1919,7 +1993,7 @@ export default {
           item.base_rate = this.flt(updated_base_price - base_discount, this.currency_precision);
 
           // Convert to selected currency if needed
-          if (this.selected_currency !== this.pos_profile.currency) {
+            if (this.selected_currency !== baseCurrency) {
           item.price_list_rate = this.flt(updated_base_price * this.exchange_rate, this.currency_precision);
           item.discount_amount = this.flt(base_discount * this.exchange_rate, this.currency_precision);
           item.rate = this.flt(item.base_rate * this.exchange_rate, this.currency_precision);
@@ -1940,7 +2014,8 @@ export default {
         }
 
         // Convert to selected currency
-        if (this.selected_currency !== this.pos_profile.currency) {
+        const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+        if (this.selected_currency !== baseCurrency) {
           // Convert base currency values to the selected currency
           item.rate = this.flt(item.base_rate * this.exchange_rate, this.currency_precision);
           item.price_list_rate = this.flt(item.base_price_list_rate * this.exchange_rate, this.currency_precision);
@@ -2038,7 +2113,7 @@ export default {
           item.base_batch_price = batch_to_use.batch_price;
 
           // Convert batch price to selected currency if needed
-          if (this.selected_currency !== this.pos_profile.currency) {
+          if (this.selected_currency !== baseCurrency) {
             // Convert base batch price using the current exchange rate
             item.batch_price = this.flt(batch_to_use.batch_price * this.exchange_rate, this.currency_precision);
           } else {
@@ -2049,7 +2124,7 @@ export default {
           item.base_price_list_rate = item.base_batch_price;
           item.base_rate = item.base_batch_price;
 
-          if (this.selected_currency !== this.pos_profile.currency) {
+            if (this.selected_currency !== baseCurrency) {
             item.price_list_rate = item.batch_price;
             item.rate = item.batch_price;
           } else {
