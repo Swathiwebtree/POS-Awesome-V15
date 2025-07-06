@@ -68,6 +68,9 @@
             <div fluid class="items-grid dynamic-scroll" ref="itemsContainer" v-if="items_view == 'card'"
               :style="{ maxHeight: 'calc(' + responsiveStyles['--container-height'] + ' - 80px)' }">
               <v-card v-for="item in filtered_items" :key="item.item_code" hover class="dynamic-item-card"
+                :draggable="true"
+                @dragstart="onDragStart($event, item)"
+                @dragend="onDragEnd"
                 @click="add_item(item)">
                 <v-img :src="item.image ||
                         '/assets/posawesome/js/posapp/components/pos/placeholder-image.png'
@@ -218,6 +221,9 @@ export default {
     temp_hide_qty_decimals: false,
     hide_zero_rate_items: false,
     temp_hide_zero_rate_items: false,
+    isDragging: false,
+    // Track if the current search was triggered by a scanner
+    search_from_scanner: false,
   }),
 
   watch: {
@@ -301,11 +307,10 @@ export default {
         this.update_items_details(new_value);
       }
     },
-    // Auto-trigger search when limit search is enabled and the query changes
+    // Automatically search and add item whenever the query changes
     first_search: _.debounce(function (val) {
-      if (this.pos_profile && this.pos_profile.pose_use_limit_search) {
-        this.search_onchange(val);
-      }
+      // Call without arguments so search_onchange treats it like an Enter key
+      this.search_onchange();
     }, 300),
 
     // Refresh item prices whenever the user changes currency
@@ -850,12 +855,27 @@ export default {
         this.flags.serial_no = null;
         this.flags.batch_no = null;
         this.qty = 1;
+        // Clear search field after successfully adding an item
+        this.clearSearch();
         this.$refs.debounce_search.focus();
       }
     },
     search_onchange: _.debounce(function (newSearchTerm) {
       const vm = this;
-      if (newSearchTerm) vm.search = newSearchTerm;
+
+      // Determine the actual query string and trim whitespace
+      const query = typeof newSearchTerm === "string"
+        ? newSearchTerm
+        : vm.first_search;
+
+      vm.search = (query || "").trim();
+
+      if (!vm.search) {
+        vm.search_from_scanner = false;
+        return;
+      }
+
+      const fromScanner = vm.search_from_scanner;
 
       if (vm.pos_profile.pose_use_limit_search) {
         // Only trigger search when query length meets minimum threshold
@@ -875,6 +895,13 @@ export default {
             vm.update_items_details(vm.filtered_items);
           }, 300);
         }
+      }
+
+      // Clear the input only when triggered via scanner
+      if (fromScanner) {
+        vm.clearSearch();
+        vm.$refs.debounce_search && vm.$refs.debounce_search.focus();
+        vm.search_from_scanner = false;
       }
     }, 300),
     get_item_qty(first_search) {
@@ -1149,12 +1176,21 @@ export default {
 
       // original_rate is in price list currency
       const price_list_rate = item.original_rate;
+
+      // Determine base rate using available conversion info
       const base_rate = price_list_rate * (item.plc_conversion_rate || 1);
 
       item.base_rate = base_rate;
       item.base_price_list_rate = price_list_rate;
 
-      item.rate = this.flt(price_list_rate * (this.exchange_rate || 1), this.currency_precision);
+      // If the price list currency matches the selected currency,
+      // don't apply any conversion
+      const converted_rate =
+        item.original_currency === this.selected_currency
+          ? price_list_rate
+          : price_list_rate * (this.exchange_rate || 1);
+
+      item.rate = this.flt(converted_rate, this.currency_precision);
       item.currency = this.selected_currency;
       item.price_list_rate = item.rate;
     },
@@ -1187,6 +1223,8 @@ export default {
       }
     },
     trigger_onscan(sCode) {
+      // indicate this search came from a scanner
+      this.search_from_scanner = true;
       // apply scanned code as search term
       this.first_search = sCode;
       this.search = sCode;
@@ -1261,6 +1299,9 @@ export default {
     },
     onBarcodeScanned(scannedCode) {
       console.log('Barcode scanned:', scannedCode);
+
+      // mark this search as coming from a scanner
+      this.search_from_scanner = true;
 
       // Clear any previous search
       this.search = '';
@@ -1440,6 +1481,27 @@ export default {
       this.saveItemSettings();
       this.show_item_settings = false;
     },
+    onDragStart(event, item) {
+      this.isDragging = true;
+      
+      // Set drag data
+      event.dataTransfer.setData('application/json', JSON.stringify({
+        type: 'item-from-selector',
+        item: item
+      }));
+      
+      // Set drag effect
+      event.dataTransfer.effectAllowed = 'copy';
+      
+      // Emit event to show drop feedback in ItemsTable
+      this.eventBus.emit('item-drag-start', item);
+    },
+    onDragEnd(event) {
+      this.isDragging = false;
+      
+      // Emit event to hide drop feedback
+      this.eventBus.emit('item-drag-end');
+    },
     saveItemSettings() {
       try {
         const settings = { 
@@ -1474,7 +1536,7 @@ export default {
       return this.getItemsHeaders();
     },
     filtered_items() {
-      this.search = this.get_search(this.first_search);
+      this.search = this.get_search(this.first_search).trim();
       if (!this.pos_profile.pose_use_limit_search) {
         let filtred_list = [];
         let filtred_group_list = [];
@@ -1622,7 +1684,7 @@ export default {
         return this.first_search;
       },
       set: _.debounce(function (newValue) {
-        this.first_search = newValue;
+        this.first_search = (newValue || '').trim();
       }, 200),
     },
     debounce_qty: {

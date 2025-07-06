@@ -81,14 +81,15 @@
           </v-dialog>
         </div>
 
-        <!-- ItemsTable component remains the same -->
+        <!-- ItemsTable component with reorder event handler -->
         <ItemsTable :headers="items_headers" :items="items" :expanded="expanded" :itemsPerPage="itemsPerPage"
           :itemSearch="itemSearch" :pos_profile="pos_profile" :invoice_doc="invoice_doc" :invoiceType="invoiceType"
           :displayCurrency="displayCurrency" :formatFloat="formatFloat" :formatCurrency="formatCurrency"
           :currencySymbol="currencySymbol" :isNumber="isNumber" :setFormatedQty="setFormatedQty"
           :calcStockQty="calc_stock_qty" :setFormatedCurrency="setFormatedCurrency" :calcPrices="calc_prices"
           :calcUom="calc_uom" :removeItem="remove_item" :subtractOne="subtract_one" :addOne="add_one"
-          @update:expanded="expanded = $event" />
+          @update:expanded="expanded = $event" @reorder-items="handleItemReorder" @add-item-from-drag="handleItemDrop"
+          @show-drop-feedback="showDropFeedback" @item-dropped="showDropFeedback(false)" />
       </div>
     </v-card>
     <!-- Payment Section -->
@@ -117,9 +118,13 @@ import InvoiceSummary from "./InvoiceSummary.vue";
 import ItemsTable from "./ItemsTable.vue";
 import invoiceComputed from "./invoiceComputed";
 import invoiceWatchers from "./invoiceWatchers";
-import itemMethods from "./invoiceItemMethods";
+import itemAddition from "./invoice-item/itemAddition";
+import batchSerial from "./invoice-item/batchSerial";
+import discountMethods from "./invoice-item/discounts";
+import stockUtils from "./invoice-item/stockUtils";
 import offerMethods from "./invoiceOfferMethods";
 import shortcutMethods from "./invoiceShortcuts";
+import invoiceItemMethods from "./invoiceItemMethods";
 import { isOffline, saveCustomerBalance, getCachedCustomerBalance } from "../../../offline";
 
 export default {
@@ -195,8 +200,12 @@ export default {
 
   methods: {
     ...shortcutMethods,
-    ...itemMethods,
+    ...itemAddition,
+    ...batchSerial,
+    ...discountMethods,
+    ...stockUtils,
     ...offerMethods,
+    ...invoiceItemMethods,
     initializeItemsHeaders() {
       // Define all available columns
       this.available_columns = [
@@ -226,7 +235,32 @@ export default {
       // Generate headers based on selected columns
       this.updateHeadersFromSelection();
     },
+    // Handle item dropped from ItemsSelector to ItemsTable
+    handleItemDrop(item) {
+      console.log('Item dropped:', item);
 
+      // Use the existing add_item method to add the dropped item
+      this.add_item(item);
+
+      // Show success feedback
+      this.eventBus.emit("show_message", {
+        title: __(`Item {0} added to invoice`, [item.item_name]),
+        color: "success",
+      });
+    },
+
+    // Show visual feedback when item is being dragged over drop zone
+    showDropFeedback(isDragging) {
+      // Add visual feedback class to the items table
+      const itemsTable = this.$el.querySelector('.modern-items-table');
+      if (itemsTable) {
+        if (isDragging) {
+          itemsTable.classList.add('drag-over');
+        } else {
+          itemsTable.classList.remove('drag-over');
+        }
+      }
+    },
     toggleColumnSelection() {
       // Create a copy of selected columns for temporary editing
       this.temp_selected_columns = [...this.selected_columns];
@@ -523,6 +557,15 @@ export default {
           item.price_list_rate = item.base_price_list_rate;
           item.rate = item.base_rate;
           item.discount_amount = item.base_discount_amount;
+        } else if (item.original_currency === this.selected_currency) {
+          // When selected currency matches the price list currency,
+          // no conversion should be applied
+          console.log(
+            `Using original currency rates for ${item.item_code}`
+          );
+          item.price_list_rate = item.base_price_list_rate;
+          item.rate = item.base_rate;
+          item.discount_amount = item.base_discount_amount;
         } else {
           // When switching to another currency, convert from base rates
           console.log(`Converting rates for ${item.item_code} to ${this.selected_currency}`);
@@ -587,65 +630,54 @@ export default {
 
     // Update currency and exchange rate when currency is changed
     async update_currency_and_rate() {
-      if (this.selected_currency) {
-        const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+      if (!this.selected_currency) return;
 
-        if (!this.items.length) {
-          if (this.selected_currency === baseCurrency) {
-            this.exchange_rate = 1;
-            this.sync_exchange_rate();
-          } else {
-            try {
-              const r = await frappe.call({
-                method: "posawesome.posawesome.api.invoices.fetch_exchange_rate_pair",
-                args: {
-                  from_currency: baseCurrency,
-                  to_currency: this.selected_currency
-                },
-              });
-              if (r && r.message) {
-                this.exchange_rate = r.message.exchange_rate;
-                this.exchange_rate_date = r.message.date;
-                this.sync_exchange_rate();
-                const posting_backend = this.formatDateForBackend(this.posting_date_display);
-                if (this.exchange_rate_date && posting_backend !== this.exchange_rate_date) {
-                this.eventBus.emit("show_message", {
-                    title: __("Exchange rate date " + this.exchange_rate_date + " differs from posting date " + posting_backend),
-                    color: "warning",
-                  });
-                }
-              }
-            } catch (error) {
-              console.error("Error updating currency:", error);
-              this.eventBus.emit("show_message", {
-                title: "Error updating currency",
-                color: "error",
-              });
-            }
+      const priceListCurrency = this.price_list_currency;
+      let baseCurrency = this.pos_profile.currency;
+      // Use price list currency when available so that exchange rate is 1 when
+      // it matches the selected currency
+      if (priceListCurrency) {
+        baseCurrency = priceListCurrency;
+      }
+
+      // Always fetch the latest exchange rate for the selected currency
+      try {
+        if (this.selected_currency === baseCurrency) {
+          this.exchange_rate = 1;
+          this.exchange_rate_date = this.formatDateForBackend(this.posting_date_display);
+        } else {
+          const r = await frappe.call({
+            method: "posawesome.posawesome.api.invoices.fetch_exchange_rate_pair",
+            args: {
+              from_currency: baseCurrency,
+              to_currency: this.selected_currency,
+            },
+          });
+          if (r && r.message) {
+            this.exchange_rate = r.message.exchange_rate;
+            this.exchange_rate_date = r.message.date;
           }
-          return;
         }
+      } catch (error) {
+        console.error("Error updating currency:", error);
+        this.eventBus.emit("show_message", {
+          title: "Error updating currency",
+          color: "error",
+        });
+      }
 
+      this.sync_exchange_rate();
+
+      // If items already exist, update the invoice on the server so that
+      // the document currency and rates remain consistent
+      if (this.items.length) {
         const doc = this.get_invoice_doc();
         doc.currency = this.selected_currency;
-        doc.price_list_currency = baseCurrency;
-
+        doc.price_list_currency = priceListCurrency || this.pos_profile.currency;
         try {
-          const response = await this.update_invoice(doc);
-          if (response && response.conversion_rate) {
-            this.exchange_rate = response.conversion_rate;
-            this.exchange_rate_date = response.exchange_rate_date;
-            this.sync_exchange_rate();
-            const posting_backend = this.formatDateForBackend(this.posting_date_display);
-            if (this.exchange_rate_date && posting_backend !== this.exchange_rate_date) {
-              this.eventBus.emit("show_message", {
-                title: __("Exchange rate date " + this.exchange_rate_date + " differs from posting date " + posting_backend),
-                color: "warning",
-              });
-            }
-          }
+          await this.update_invoice(doc);
         } catch (error) {
-          console.error("Error updating currency:", error);
+          console.error("Error updating invoice currency:", error);
           this.eventBus.emit("show_message", {
             title: "Error updating currency",
             color: "error",
@@ -738,11 +770,47 @@ export default {
       this.calc_stock_qty(item, item.qty);
       this.$forceUpdate();
     },
+
+    // Handle item reordering from drag and drop
+    handleItemReorder(reorderData) {
+      const { fromIndex, toIndex } = reorderData;
+
+      if (fromIndex === toIndex) return;
+
+      // Create a copy of the items array
+      const newItems = [...this.items];
+
+      // Remove the item from its original position
+      const [movedItem] = newItems.splice(fromIndex, 1);
+
+      // Insert the item at its new position
+      newItems.splice(toIndex, 0, movedItem);
+
+      // Update the items array
+      this.items = newItems;
+
+      // Show success feedback
+      this.eventBus.emit("show_message", {
+        title: __("Item order updated"),
+        color: "success",
+      });
+
+      // Optionally, you can also update the idx field for each item
+      this.items.forEach((item, index) => {
+        item.idx = index + 1;
+      });
+    },
   },
 
   mounted() {
     // Load saved column preferences
     this.loadColumnPreferences();
+    this.eventBus.on("item-drag-start", (item) => {
+      this.showDropFeedback(true);
+    });
+    this.eventBus.on("item-drag-end", () => {
+      this.showDropFeedback(false);
+    });
 
     // Register event listeners for POS profile, items, customer, offers, etc.
     this.eventBus.on("register_pos_profile", (data) => {
@@ -761,20 +829,20 @@ export default {
       this.initializeItemsHeaders();
 
       // Add this block to handle currency initialization
-        if (this.pos_profile.posa_allow_multi_currency) {
-          this.fetch_available_currencies().then(async () => {
-            // Set default currency after currencies are loaded
-            this.selected_currency = this.pos_profile.currency;
-            // Fetch proper exchange rate from server
-            await this.update_currency_and_rate();
-          }).catch(error => {
-            console.error("Error initializing currencies:", error);
-            this.eventBus.emit("show_message", {
-              title: __("Error loading currencies"),
-              color: "error"
-            });
+      if (this.pos_profile.posa_allow_multi_currency) {
+        this.fetch_available_currencies().then(async () => {
+          // Set default currency after currencies are loaded
+          this.selected_currency = this.pos_profile.currency;
+          // Fetch proper exchange rate from server
+          await this.update_currency_and_rate();
+        }).catch(error => {
+          console.error("Error initializing currencies:", error);
+          this.eventBus.emit("show_message", {
+            title: __("Error loading currencies"),
+            color: "error"
           });
-        }
+        });
+      }
 
       this.fetch_price_lists();
       this.update_price_list();
@@ -865,6 +933,12 @@ export default {
     });
     this.eventBus.on("open_variants_model", this.open_variants_model);
     this.eventBus.on("calc_uom", this.calc_uom);
+    this.eventBus.on("item-drag-start", (item) => {
+      this.showDropFeedback(true);
+    });
+    this.eventBus.on("item-drag-end", () => {
+      this.showDropFeedback(false);
+    });
   },
   // Cleanup event listeners before component is destroyed
   beforeUnmount() {
