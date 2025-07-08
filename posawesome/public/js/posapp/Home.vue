@@ -20,7 +20,18 @@
 import Navbar from './components/Navbar.vue';
 import POS from './components/pos/Pos.vue';
 import Payments from './components/payments/Pay.vue';
-import { getOpeningStorage, getCacheUsageEstimate, checkDbHealth, queueHealthCheck, purgeOldQueueEntries, MAX_QUEUE_ITEMS } from '../offline/index.js';
+import {
+  getOpeningStorage,
+  getCacheUsageEstimate,
+  checkDbHealth,
+  queueHealthCheck,
+  purgeOldQueueEntries,
+  MAX_QUEUE_ITEMS,
+  initPromise,
+  memoryInitPromise,
+  toggleManualOffline,
+  isManualOffline,
+} from '../offline/index.js';
 import { silentPrint } from './plugins/print.js';
 
 export default {
@@ -71,7 +82,9 @@ export default {
       this.page = page;
     },
 
-    initializeData() {
+    async initializeData() {
+      await initPromise;
+      await memoryInitPromise;
       checkDbHealth().catch(() => {});
       // Load POS profile from cache or storage
       const openingData = getOpeningStorage();
@@ -92,6 +105,14 @@ export default {
 
       // Check if running on IP host
       this.isIpHost = /^\d+\.\d+\.\d+\.\d+/.test(window.location.hostname);
+
+      // Initialize manual offline state from cached value
+      this.manualOffline = isManualOffline();
+      if (this.manualOffline) {
+        this.networkOnline = false;
+        this.serverOnline = false;
+        window.serverOnline = false;
+      }
     },
 
     setupNetworkListeners() {
@@ -106,6 +127,7 @@ export default {
       window.addEventListener('offline', () => {
         this.networkOnline = false;
         this.serverOnline = false;
+        window.serverOnline = false;
         console.log('Network: Offline');
         this.$forceUpdate();
       });
@@ -176,11 +198,13 @@ export default {
         if (isConnected) {
           this.networkOnline = true;
           this.serverOnline = true;
+          window.serverOnline = true;
           this.serverConnecting = false;
           console.log('Network: Connected');
         } else {
           this.networkOnline = navigator.onLine;
           this.serverOnline = false;
+          window.serverOnline = false;
           this.serverConnecting = false;
           console.log('Network: Disconnected');
         }
@@ -192,6 +216,7 @@ export default {
         console.warn('Network connectivity check failed:', error);
         this.networkOnline = navigator.onLine;
         this.serverOnline = false;
+        window.serverOnline = false;
         this.serverConnecting = false;
         this.$forceUpdate();
       }
@@ -356,6 +381,7 @@ export default {
       if (frappe.realtime) {
         frappe.realtime.on('connect', () => {
           this.serverOnline = true;
+          window.serverOnline = true;
           this.serverConnecting = false;
           console.log('Server: Connected via WebSocket');
           this.$forceUpdate();
@@ -363,6 +389,7 @@ export default {
 
         frappe.realtime.on('disconnect', () => {
           this.serverOnline = false;
+          window.serverOnline = false;
           this.serverConnecting = false;
           console.log('Server: Disconnected from WebSocket');
           // Trigger connectivity check to verify if it's just WebSocket or full network
@@ -377,6 +404,7 @@ export default {
 
         frappe.realtime.on('reconnect', () => {
           console.log('Server: Reconnected to WebSocket');
+          window.serverOnline = true;
           this.checkNetworkConnectivity();
         });
       }
@@ -437,7 +465,15 @@ export default {
     },
 
     handleToggleOffline() {
-      this.manualOffline = !this.manualOffline;
+      toggleManualOffline();
+      this.manualOffline = isManualOffline();
+      if (this.manualOffline) {
+        this.networkOnline = false;
+        this.serverOnline = false;
+        window.serverOnline = false;
+      } else {
+        this.checkNetworkConnectivity();
+      }
     },
 
     handleToggleTheme() {
@@ -489,12 +525,15 @@ export default {
 
 <style scoped>
 .container1 {
-  height: 100vh;
+  /* Use dynamic viewport units for better mobile support */
+  height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
 }
 
 .main-content {
-  height: 100vh;
+  /* Fill the available height of the container */
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -509,6 +548,7 @@ export default {
 :deep(.v-main__wrap) {
   display: flex;
   flex-direction: column;
+  min-height: 100%;
   height: 100%;
 }
 </style>

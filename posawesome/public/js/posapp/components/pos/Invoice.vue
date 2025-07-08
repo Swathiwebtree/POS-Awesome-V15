@@ -6,8 +6,8 @@
 
     <!-- Main Invoice Card (contains all invoice content) -->
     <v-card
-      :style="{ height: 'var(--container-height)', maxHeight: 'var(--container-height)', backgroundColor: isDarkTheme ? '#121212' : '' }"
-      :class="['cards my-0 py-0 mt-3', isDarkTheme ? '' : 'bg-grey-lighten-5', { 'return-mode': isReturnInvoice }]">
+      :style="{ height: 'var(--container-height)', maxHeight: 'var(--container-height)', backgroundColor: isDarkTheme ? '#121212' : '', resize: 'vertical', overflow: 'auto' }"
+      :class="['cards my-0 py-0 mt-3 resizable', isDarkTheme ? '' : 'bg-grey-lighten-5', { 'return-mode': isReturnInvoice }]">
 
       <!-- Dynamic padding wrapper -->
       <div class="dynamic-padding">
@@ -19,8 +19,8 @@
           </v-col>
           <!-- Invoice Type Selection (Only shown if sales orders are allowed) -->
           <v-col v-if="pos_profile.posa_allow_sales_order" cols="3" class="pb-4">
-            <v-select density="compact" hide-details variant="outlined" color="primary"
-              :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field" :items="invoiceTypes"
+            <v-select density="compact" hide-details variant="solo" color="primary"
+              :bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field" :items="invoiceTypes"
               :label="frappe._('Type')" v-model="invoiceType" :disabled="invoiceType == 'Return'"></v-select>
           </v-col>
         </v-row>
@@ -49,12 +49,13 @@
           @update:conversion_rate="(val) => { conversion_rate = val; update_conversion_rate(); }" />
 
         <!-- Items Table Section (Main items list for invoice) -->
-        <!-- Add this right before the ItemsTable component -->
-        <div class="column-selector-container">
-          <v-btn density="compact" variant="text" color="primary" prepend-icon="mdi-cog-outline"
-            @click="toggleColumnSelection" class="column-selector-btn">
-            {{ __('Columns') }}
-          </v-btn>
+        <div class="items-table-wrapper">
+          <!-- Column selector button moved outside the table -->
+          <div class="column-selector-container">
+            <v-btn density="compact" variant="text" color="primary" prepend-icon="mdi-cog-outline"
+              @click="toggleColumnSelection" class="column-selector-btn">
+              {{ __('Columns') }}
+            </v-btn>
 
           <v-dialog v-model="show_column_selector" max-width="500px">
             <v-card>
@@ -81,14 +82,14 @@
               </v-card-actions>
             </v-card>
           </v-dialog>
-        </div>
+          </div>
 
-        <!-- ItemsTable component with reorder event handler -->
-        <ItemsTable
-          :headers="items_headers"
-          :items="items"
-          :expanded="expanded"
-          :itemsPerPage="itemsPerPage"
+          <!-- ItemsTable component with reorder event handler -->
+          <ItemsTable
+            :headers="items_headers"
+            :items="items"
+            :expanded="expanded"
+            :itemsPerPage="itemsPerPage"
           :itemSearch="itemSearch"
           :pos_profile="pos_profile"
           :invoice_doc="invoice_doc"
@@ -116,6 +117,7 @@
           @show-drop-feedback="showDropFeedback"
           @item-dropped="showDropFeedback(false)"
         />
+        </div>
       </div>
     </v-card>
     <!-- Payment Section -->
@@ -1101,13 +1103,15 @@ export default {
 
 /* Dynamic padding for responsive layout */
 .dynamic-padding {
-  padding: var(--dynamic-xs) var(--dynamic-sm) var(--dynamic-xs) var(--dynamic-sm);
+  /* Uniform spacing for better alignment */
+  padding: var(--dynamic-sm);
 }
 
 /* Responsive breakpoints */
 @media (max-width: 768px) {
   .dynamic-padding {
-    padding: var(--dynamic-xs) var(--dynamic-xs) var(--dynamic-xs) var(--dynamic-xs);
+    /* Smaller uniform padding on tablets */
+    padding: var(--dynamic-xs);
   }
 
   .dynamic-padding .v-row {
@@ -1121,7 +1125,7 @@ export default {
 
 @media (max-width: 480px) {
   .dynamic-padding {
-    padding: var(--dynamic-xs) var(--dynamic-xs) var(--dynamic-xs) var(--dynamic-xs);
+    padding: var(--dynamic-xs);
   }
 
   .dynamic-padding .v-row {
@@ -1139,6 +1143,10 @@ export default {
   padding: 8px 16px;
   background-color: var(--surface-secondary);
   border-radius: 8px 8px 0 0;
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translateY(-100%);
 }
 
 :deep(.dark-theme) .column-selector-container,
@@ -1148,6 +1156,10 @@ export default {
 
 .column-selector-btn {
   font-size: 0.875rem;
+}
+
+.items-table-wrapper {
+  position: relative;
 }
 
 /* New styles for improved column switches */
@@ -1167,5 +1179,4 @@ export default {
 :deep(.column-switch .v-label) {
   opacity: 0.9;
   font-size: 0.95rem;
-}
-</style>
+}</style>
