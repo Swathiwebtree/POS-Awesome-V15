@@ -1,4 +1,5 @@
-import { db, persist } from './core.js';
+import { db, persist, checkDbHealth } from './core.js';
+import Dexie from 'dexie';
 
 // Memory cache object
 export const memory = {
@@ -23,8 +24,9 @@ export const memory = {
 
 // Initialize memory from IndexedDB
 (async () => {
-	try {
-		for (const key of Object.keys(memory)) {
+        try {
+                await checkDbHealth();
+                for (const key of Object.keys(memory)) {
 			const stored = await db.table("keyval").get(key);
 			if (stored && stored.value !== undefined) {
 				memory[key] = stored.value;
@@ -155,15 +157,16 @@ export function toggleManualOffline() {
 }
 
 export async function clearAllCache() {
-	try {
-		if (db.isOpen()) {
-			await db.close();
-		}
-		await Dexie.delete('posawesome_offline');
-		await db.open();
-	} catch (e) {
-		console.error('Failed to clear IndexedDB cache', e);
-	}
+        try {
+                await checkDbHealth();
+                if (db.isOpen()) {
+                        await db.close();
+                }
+                await Dexie.delete('posawesome_offline');
+                await db.open();
+        } catch (e) {
+                console.error('Failed to clear IndexedDB cache', e);
+        }
 
 	if (typeof localStorage !== 'undefined') {
 		Object.keys(localStorage).forEach((key) => {
@@ -198,6 +201,7 @@ export async function clearAllCache() {
  */
 export async function getCacheUsageEstimate() {
   try {
+    await checkDbHealth();
     // Calculate localStorage size
     let localStorageSize = 0;
     if (typeof localStorage !== "undefined") {
