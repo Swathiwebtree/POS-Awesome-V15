@@ -1,4 +1,4 @@
-import { isOffline, saveCustomerBalance, getCachedCustomerBalance, getCachedPriceListItems, getItemUOMs } from "../../../offline/index.js";
+import { isOffline, saveCustomerBalance, getCachedCustomerBalance, getCachedPriceListItems, getItemUOMs, getCustomerStorage, getOfflineCustomers, getTaxTemplate, getTaxInclusiveSetting } from "../../../offline/index.js";
 
 export default {
 
@@ -537,7 +537,7 @@ export default {
       if (isReturn && total > 0) total = -Math.abs(total);
 
       doc.total = total;
-      doc.net_total = total;  // Net total is same as total before taxes
+      doc.net_total = total;  // Will adjust later if taxes are inclusive
       doc.base_total = total * (this.exchange_rate || 1);
       doc.base_net_total = total * (this.exchange_rate || 1);
 
@@ -556,13 +556,68 @@ export default {
       // Calculate grand total with correct sign for returns
       let grandTotal = this.subtotal;
 
-      // Add taxes to grand total
+      // Prepare taxes array
+      doc.taxes = [];
       if (this.invoice_doc && this.invoice_doc.taxes) {
+        let totalTax = 0;
         this.invoice_doc.taxes.forEach(tax => {
           if (tax.tax_amount) {
             grandTotal += flt(tax.tax_amount);
+            totalTax += flt(tax.tax_amount);
           }
+          doc.taxes.push({
+            account_head: tax.account_head,
+            charge_type: tax.charge_type || "On Net Total",
+            description: tax.description,
+            rate: tax.rate,
+            included_in_print_rate: tax.included_in_print_rate || 0,
+            tax_amount: tax.tax_amount,
+            total: tax.total,
+            base_tax_amount: tax.tax_amount * (this.exchange_rate || 1),
+            base_total: tax.total * (this.exchange_rate || 1)
+          });
         });
+        doc.total_taxes_and_charges = totalTax;
+      } else if (isOffline()) {
+        const tmpl = getTaxTemplate(this.pos_profile.taxes_and_charges);
+        if (tmpl && Array.isArray(tmpl.taxes)) {
+          const inclusive = getTaxInclusiveSetting();
+          let runningTotal = grandTotal;
+          let totalTax = 0;
+          tmpl.taxes.forEach(row => {
+            let tax_amount = 0;
+            if (row.charge_type === 'Actual') {
+              tax_amount = flt(row.tax_amount || 0);
+            } else if (inclusive) {
+              tax_amount = flt(doc.total * flt(row.rate) / 100);
+            } else {
+              tax_amount = flt(doc.net_total * flt(row.rate) / 100);
+            }
+            if (!inclusive) {
+              runningTotal += tax_amount;
+            }
+            totalTax += tax_amount;
+            doc.taxes.push({
+              account_head: row.account_head,
+              charge_type: row.charge_type || 'On Net Total',
+              description: row.description,
+              rate: row.rate,
+              included_in_print_rate: inclusive ? 1 : 0,
+              tax_amount: tax_amount,
+              total: runningTotal,
+              base_tax_amount: tax_amount * (this.exchange_rate || 1),
+              base_total: runningTotal * (this.exchange_rate || 1)
+            });
+          });
+          if (inclusive) {
+            doc.net_total = doc.total - totalTax;
+            doc.base_net_total = doc.net_total * (this.exchange_rate || 1);
+            grandTotal = doc.total;
+          } else {
+            grandTotal = runningTotal;
+          }
+          doc.total_taxes_and_charges = totalTax;
+        }
       }
 
       if (isReturn && grandTotal > 0) grandTotal = -Math.abs(grandTotal);
@@ -582,23 +637,6 @@ export default {
       // Add POS specific fields
       doc.posa_pos_opening_shift = this.pos_opening_shift.name;
       doc.payments = this.get_payments();
-
-      // Copy existing taxes if available
-      doc.taxes = [];
-      if (this.invoice_doc && this.invoice_doc.taxes) {
-        doc.taxes = this.invoice_doc.taxes.map(tax => {
-          return {
-            account_head: tax.account_head,
-            charge_type: tax.charge_type || "On Net Total",
-            description: tax.description,
-            rate: tax.rate,
-            tax_amount: tax.tax_amount,
-            total: tax.total,
-            base_tax_amount: tax.tax_amount * (this.exchange_rate || 1),
-            base_total: tax.total * (this.exchange_rate || 1)
-          };
-        });
-      }
 
       // Handle return specific fields
       if (isReturn) {
@@ -1607,31 +1645,62 @@ export default {
     // Fetch customer details (info, price list, etc)
     async fetch_customer_details() {
       var vm = this;
-      if (this.customer) {
+      if (!this.customer) return;
+
+      if (isOffline()) {
         try {
-          const r = await frappe.call({
-          method: "posawesome.posawesome.api.customers.get_customer_info",
-            args: {
-              customer: vm.customer,
-            },
-          });
-          const message = r.message;
-          if (!r.exc) {
-            vm.customer_info = {
-              ...message,
-            };
+          const cached = (getCustomerStorage() || []).find(
+            (c) => c.name === vm.customer || c.customer_name === vm.customer
+          );
+          if (cached) {
+            vm.customer_info = { ...cached };
+            if (vm.pos_profile.posa_force_reload_items && cached.customer_price_list) {
+              vm.selected_price_list = cached.customer_price_list;
+              vm.eventBus.emit("update_customer_price_list", cached.customer_price_list);
+              vm.apply_cached_price_list(cached.customer_price_list);
+            }
+            return;
           }
-          // When force reload is enabled, automatically switch to the
-          // customer's default price list so that item rates are fetched
-          // correctly from the server.
-          if (vm.pos_profile.posa_force_reload_items && message.customer_price_list) {
-            vm.selected_price_list = message.customer_price_list;
-            vm.eventBus.emit("update_customer_price_list", message.customer_price_list);
-            vm.apply_cached_price_list(message.customer_price_list);
+          const queued = (getOfflineCustomers() || [])
+            .map((e) => e.args)
+            .find((c) => c.customer_name === vm.customer);
+          if (queued) {
+            vm.customer_info = { ...queued, name: queued.customer_name };
+            if (vm.pos_profile.posa_force_reload_items && queued.customer_price_list) {
+              vm.selected_price_list = queued.customer_price_list;
+              vm.eventBus.emit("update_customer_price_list", queued.customer_price_list);
+              vm.apply_cached_price_list(queued.customer_price_list);
+            }
+            return;
           }
         } catch (error) {
-          console.error("Failed to fetch customer details", error);
+          console.error("Failed to fetch cached customer", error);
         }
+      }
+
+      try {
+        const r = await frappe.call({
+          method: "posawesome.posawesome.api.customers.get_customer_info",
+          args: {
+            customer: vm.customer,
+          },
+        });
+        const message = r.message;
+        if (!r.exc) {
+          vm.customer_info = {
+            ...message,
+          };
+        }
+        // When force reload is enabled, automatically switch to the
+        // customer's default price list so that item rates are fetched
+        // correctly from the server.
+        if (vm.pos_profile.posa_force_reload_items && message.customer_price_list) {
+          vm.selected_price_list = message.customer_price_list;
+          vm.eventBus.emit("update_customer_price_list", message.customer_price_list);
+          vm.apply_cached_price_list(message.customer_price_list);
+        }
+      } catch (error) {
+        console.error("Failed to fetch customer details", error);
       }
     },
 

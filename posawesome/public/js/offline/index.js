@@ -22,10 +22,14 @@ export {
 	getOpeningStorage,
 	setOpeningStorage,
 	clearOpeningStorage,
-	getOpeningDialogStorage,
-	setOpeningDialogStorage,
-	setLastSyncTotals,
+        getOpeningDialogStorage,
+        setOpeningDialogStorage,
+        getTaxTemplate,
+        setTaxTemplate,
+        setLastSyncTotals,
         getLastSyncTotals,
+        getTaxInclusiveSetting,
+        setTaxInclusiveSetting,
         isManualOffline,
         setManualOffline,
         toggleManualOffline,
@@ -90,8 +94,9 @@ export {
 
 // Customers exports
 export {
-	saveCustomerBalance,
-	getCachedCustomerBalance,
-	clearCustomerBalanceCache,
-	clearExpiredCustomerBalances
+        saveCustomerBalance,
+        getCachedCustomerBalance,
+        clearCustomerBalanceCache,
+        clearExpiredCustomerBalances
 } from './customers.js';
+

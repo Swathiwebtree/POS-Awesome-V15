@@ -40,6 +40,11 @@
                 @click="toggleItemSettings" class="settings-btn">
                 {{ __('Settings') }}
               </v-btn>
+              <v-spacer></v-spacer>
+              <v-btn density="compact" variant="text" color="primary" prepend-icon="mdi-refresh"
+                @click="forceReloadItems" class="settings-btn">
+                {{ __('Reload Items') }}
+              </v-btn>
 
               <v-dialog v-model="show_item_settings" max-width="400px">
                 <v-card>
@@ -322,9 +327,23 @@ export default {
     exchange_rate() {
       this.applyCurrencyConversionToItems();
     },
+    windowWidth(val) {
+      this.adjustItemsPerPage(val, this.windowHeight);
+    },
+    windowHeight(val) {
+      this.adjustItemsPerPage(this.windowWidth, val);
+    },
   },
 
   methods: {
+    adjustItemsPerPage(width, height = this.windowHeight) {
+      const cardWidth = 200; // approximate width of each item card
+      const cardHeight = 160; // approximate height including margins
+      const containerHeight = height * 0.68; // card container is ~68% of viewport
+      const columns = Math.max(1, Math.floor(width / cardWidth));
+      const rows = Math.max(1, Math.floor(containerHeight / cardHeight));
+      this.itemsPerPage = columns * rows;
+    },
     refreshPricesForVisibleItems() {
       const vm = this;
       if (!vm.filtered_items || vm.filtered_items.length === 0) return;
@@ -430,6 +449,10 @@ export default {
     },
     show_coupons() {
       this.eventBus.emit("show_coupons", "true");
+    },
+    forceReloadItems() {
+      this.items_loaded = false;
+      this.get_items(true);
     },
     async get_items(force_server = false) {
       await initPromise;
@@ -1655,12 +1678,9 @@ export default {
           }
         });
 
-        // Force request quantity update for filtered items
-        if (final_filtered_list.length > 0) {
-          setTimeout(() => {
-            this.update_items_details(final_filtered_list);
-          }, 100);
-        }
+        // Item details will be refreshed via watchers when the filtered
+        // list length changes. Removing the automatic call here prevents
+        // redundant requests each time this computed property re-evaluates.
 
         return final_filtered_list;
       } else {
@@ -1768,6 +1788,12 @@ export default {
       this.customer = data;
     });
 
+    // Manually trigger a full item reload when requested
+    this.eventBus.on("force_reload_items", async () => {
+      this.items_loaded = false;
+      await this.get_items(true);
+    });
+
     // Refresh item quantities when connection to server is restored
     this.eventBus.on("server-online", async () => {
       if (this.items && this.items.length > 0) {
@@ -1797,7 +1823,8 @@ export default {
 
   mounted() {
     this.scan_barcoud();
-    // grid layout adjusts automatically with CSS, no width tracking needed
+    // grid layout adjusts automatically with CSS, set items per page based on device size
+    this.adjustItemsPerPage(this.windowWidth, this.windowHeight);
   },
 
   beforeUnmount() {
@@ -1838,6 +1865,7 @@ export default {
     this.eventBus.off("update_coupons_counters");
     this.eventBus.off("update_customer_price_list");
     this.eventBus.off("update_customer");
+    this.eventBus.off("force_reload_items");
   },
 };
 </script>
