@@ -72,6 +72,7 @@ export default {
   watch: {
     networkOnline(newVal, oldVal) {
       if (newVal && !oldVal) {
+        this.refreshTaxInclusiveSetting();
         this.eventBus.emit('network-online');
         this.handleSyncInvoices();
       }
@@ -108,6 +109,9 @@ export default {
       const openingData = getOpeningStorage();
       if (openingData && openingData.pos_profile) {
         this.posProfile = openingData.pos_profile;
+        if (navigator.onLine) {
+          await this.refreshTaxInclusiveSetting();
+        }
       }
 
       if (queueHealthCheck()) {
@@ -385,6 +389,9 @@ export default {
       if (this.eventBus) {
         this.eventBus.on('register_pos_profile', (data) => {
           this.posProfile = data.pos_profile || {};
+          if (navigator.onLine) {
+            this.refreshTaxInclusiveSetting();
+          }
         });
 
         // Track last submitted invoice id
@@ -554,6 +561,37 @@ export default {
           this.cacheUsageLoading = false;
         });
 
+    },
+
+    async refreshTaxInclusiveSetting() {
+      if (!this.posProfile || !this.posProfile.name || !navigator.onLine) {
+        return;
+      }
+      try {
+        const r = await frappe.call({
+          method: 'posawesome.posawesome.api.utilities.get_pos_profile_tax_inclusive',
+          args: {
+            pos_profile: this.posProfile.name,
+          }
+        });
+        if (r.message !== undefined) {
+          const val = r.message;
+          try {
+            localStorage.setItem('posa_tax_inclusive', JSON.stringify(val));
+          } catch (err) {
+            console.warn('Failed to cache tax inclusive setting', err);
+          }
+          import('../offline/index.js')
+            .then(m => {
+              if (m && m.setTaxInclusiveSetting) {
+                m.setTaxInclusiveSetting(val);
+              }
+            })
+            .catch(() => {});
+        }
+      } catch (e) {
+        console.warn('Failed to refresh tax inclusive setting', e);
+      }
     },
 
     handleUpdateAfterDelete() {

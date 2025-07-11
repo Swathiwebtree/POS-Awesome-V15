@@ -50,27 +50,11 @@ frappe.pages['posapp'].on_page_load = async function (wrapper) {
                                 }
                         };
 
-                        if (cachedValue !== null) {
-                                try {
-                                        const val = JSON.parse(cachedValue);
-                                        applySetting(val);
-                                        import('/assets/posawesome/js/offline/index.js').then(m => {
-                                                if (m && m.setTaxInclusiveSetting) {
-                                                        m.setTaxInclusiveSetting(val);
-                                                }
-                                        }).catch(() => {});
-                                        return;
-                                } catch (e) {
-                                        console.warn('Failed to parse cached tax inclusive value', e);
-                                }
-                        }
-
+                        const fetchAndCache = () => {
                         frappe.call({
-                                method: 'frappe.get_cached_value',
+                                method: 'posawesome.posawesome.api.utilities.get_pos_profile_tax_inclusive',
                                 args: {
-                                        doctype: 'POS Profile',
-                                        name: posProfile,
-                                        fieldname: 'posa_tax_inclusive'
+                                        pos_profile: posProfile,
                                 },
                                 callback: function(response) {
                                         if (response.message !== undefined) {
@@ -91,6 +75,29 @@ frappe.pages['posapp'].on_page_load = async function (wrapper) {
                                        }
                                }
                        });
+                        };
+
+                        if (navigator.onLine) {
+                                fetchAndCache();
+                                return;
+                        }
+
+                        if (cachedValue !== null) {
+                                try {
+                                        const val = JSON.parse(cachedValue);
+                                        applySetting(val);
+                                        import('/assets/posawesome/js/offline/index.js').then(m => {
+                                                if (m && m.setTaxInclusiveSetting) {
+                                                        m.setTaxInclusiveSetting(val);
+                                                }
+                                        }).catch(() => {});
+                                } catch (e) {
+                                        console.warn('Failed to parse cached tax inclusive value', e);
+                                }
+                                return;
+                        }
+
+                        fetchAndCache();
                 };
 
                 update_totals_based_on_tax_inclusive();
