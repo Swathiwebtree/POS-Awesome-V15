@@ -941,7 +941,31 @@ export default {
 		async add_item(item) {
 			item = { ...item };
 			if (item.has_variants) {
-				this.eventBus.emit("open_variants_model", item, this.items);
+				let variants = this.items.filter((it) => it.variant_of == item.item_code);
+				if (!variants.length) {
+					try {
+						const res = await frappe.call({
+							method: "posawesome.posawesome.api.items.get_item_variants",
+							args: {
+								pos_profile: JSON.stringify(this.pos_profile),
+								parent_item_code: item.item_code,
+								price_list: this.active_price_list,
+								customer: this.customer,
+							},
+						});
+						if (res.message) {
+							variants = res.message;
+							this.items.push(...variants);
+						}
+					} catch (e) {
+						console.error("Failed to fetch variants", e);
+					}
+				}
+				this.eventBus.emit("show_message", {
+					title: __("This is an item template. Please choose a variant."),
+					color: "warning",
+				});
+				this.eventBus.emit("open_variants_model", item, variants, this.pos_profile);
 			} else {
 				if (item.actual_qty === 0 && this.pos_profile.posa_display_items_in_stock) {
 					this.eventBus.emit("show_message", {
@@ -1198,7 +1222,14 @@ export default {
 
 			vm.abortController = new AbortController();
 
-			const itemsToFetch = items.filter((it) => cacheResult.missing.includes(it.item_code));
+			const itemsToFetch = items.filter(
+				(it) => cacheResult.missing.includes(it.item_code) && !it.has_variants,
+			);
+
+			if (itemsToFetch.length === 0) {
+				vm.itemDetailsRetryCount = 0;
+				return;
+			}
 
 			try {
 				vm.currentRequest = await frappe.call({

@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) 2020, Youssef Restom and contributors
 # For license information, please see license.txt
 
-from __future__ import unicode_literals
 import json
 import frappe
+from frappe import _
 from frappe.utils import nowdate, flt, cstr
 from erpnext.stock.get_item_details import get_item_details
 from erpnext.accounts.doctype.pos_profile.pos_profile import get_item_groups
@@ -427,11 +426,69 @@ def get_items_groups():
 
 
 @frappe.whitelist()
+def get_item_variants(pos_profile, parent_item_code, price_list=None, customer=None):
+	pos_profile = json.loads(pos_profile)
+	price_list = price_list or pos_profile.get("selling_price_list")
+
+	fields = [
+		"name as item_code",
+		"item_name",
+		"description",
+		"stock_uom",
+		"image",
+		"is_stock_item",
+		"has_variants",
+		"variant_of",
+		"item_group",
+		"idx",
+		"has_batch_no",
+		"has_serial_no",
+		"max_discount",
+		"brand",
+	]
+
+	items_data = frappe.get_all(
+		"Item",
+		filters={"variant_of": parent_item_code, "disabled": 0},
+		fields=fields,
+		order_by="item_name asc",
+	)
+
+	if not items_data:
+		return []
+
+	details = get_items_details(
+		json.dumps(pos_profile),
+		json.dumps(items_data),
+		price_list=price_list,
+	)
+
+	detail_map = {d["item_code"]: d for d in details}
+	result = []
+	for item in items_data:
+		item_barcode = frappe.get_all(
+			"Item Barcode",
+			filters={"parent": item["item_code"]},
+			fields=["barcode", "posa_uom"],
+		)
+		item["item_barcode"] = item_barcode or []
+		if detail_map.get(item["item_code"]):
+			item.update(detail_map[item["item_code"]])
+		result.append(item)
+
+	return result
+
+
+@frappe.whitelist()
 def get_items_details(pos_profile, items_data, price_list=None):
 	pos_profile = json.loads(pos_profile)
 	items_data = json.loads(items_data)
 	warehouse = pos_profile.get("warehouse")
-	company = pos_profile.get("company")
+	company = (
+	pos_profile.get("company")
+	or frappe.defaults.get_user_default("Company")
+	or frappe.defaults.get_global_default("company")
+	)
 	result = []
 
 	if items_data:
@@ -498,9 +555,11 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
 	# Ensure conversion rate exists when price list currency differs from
 	# company currency to avoid ValidationError from ERPNext. Also provide
 	# sensible defaults when price list or currency is missing.
-	if company and price_list:
+	if company:
 		company_currency = frappe.db.get_value("Company", company, "default_currency")
-		price_list_currency = frappe.db.get_value("Price List", price_list, "currency") or company_currency
+		price_list_currency = company_currency
+		if price_list:
+			price_list_currency = frappe.db.get_value("Price List", price_list, "currency") or company_currency
 
 		exchange_rate = 1
 		if price_list_currency != company_currency and allow_multi_currency:
@@ -676,3 +735,35 @@ def search_serial_or_batch_or_barcode_number(search_value, search_serial_no):
 			}
 
 	return {}
+
+@frappe.whitelist()
+def update_price_list_rate(item_code, price_list, rate, uom=None):
+    """Create or update Item Price for the given item and price list."""
+    if not item_code or not price_list:
+        frappe.throw(_("Item Code and Price List are required"))
+
+    rate = flt(rate)
+    filters = {"item_code": item_code, "price_list": price_list}
+    if uom:
+        filters["uom"] = uom
+    else:
+        filters["uom"] = ["", None]
+
+    name = frappe.db.exists("Item Price", filters)
+    if name:
+        doc = frappe.get_doc("Item Price", name)
+        doc.price_list_rate = rate
+        doc.save(ignore_permissions=True)
+    else:
+        doc = frappe.get_doc({
+            "doctype": "Item Price",
+            "item_code": item_code,
+            "price_list": price_list,
+            "uom": uom,
+            "price_list_rate": rate,
+            "selling": 1,
+        })
+        doc.insert(ignore_permissions=True)
+
+    frappe.db.commit()
+    return _("Item Price has been added or updated")

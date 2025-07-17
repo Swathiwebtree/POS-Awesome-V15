@@ -205,6 +205,7 @@
 						:subtractOne="subtract_one"
 						:addOne="add_one"
 						:toggleOffer="toggleOffer"
+						:changePriceListRate="change_price_list_rate"
 						@update:expanded="expanded = $event"
 						@reorder-items="handleItemReorder"
 						@add-item-from-drag="handleItemDrop"
@@ -1148,8 +1149,7 @@ export default {
 		this.eventBus.on("reset_posting_date", () => {
 			this.posting_date = frappe.datetime.nowdate();
 		});
-		this.eventBus.on("open_variants_model", this.open_variants_model);
-		this.eventBus.on("calc_uom", this.calc_uom);
+               this.eventBus.on("calc_uom", this.calc_uom);
 		this.eventBus.on("item-drag-start", (item) => {
 			this.showDropFeedback(true);
 		});
