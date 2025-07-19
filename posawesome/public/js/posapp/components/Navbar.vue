@@ -36,6 +36,8 @@
 					:pos-profile="posProfile"
 					:last-invoice-id="lastInvoiceId"
 					:manual-offline="manualOffline"
+					:network-online="networkOnline"
+					:server-online="serverOnline"
 					:is-dark="isDark"
 					@close-shift="openCloseShift"
 					@print-last-invoice="printLastInvoice"
@@ -96,7 +98,9 @@ import StatusIndicator from "./navbar/StatusIndicator.vue";
 import CacheUsageMeter from "./navbar/CacheUsageMeter.vue";
 import AboutDialog from "./navbar/AboutDialog.vue";
 import OfflineInvoices from "./OfflineInvoices.vue";
-import { clearAllCache } from "../../offline/cache.js";
+import { forceClearAllCache } from "../../offline/cache.js";
+import { clearAllCaches } from "../../utils/clearAllCaches.js";
+import { isOffline } from "../../offline/index.js";
 
 export default {
 	name: "NavBar",
@@ -231,12 +235,26 @@ export default {
 			this.$emit("toggle-offline");
 		},
 		async clearCache() {
+			if (isOffline()) {
+				this.showMessage({
+					color: "warning",
+					title: this.__("Cannot clear cache while offline"),
+				});
+				return;
+			}
 			try {
-				await clearAllCache();
-				this.showMessage({ color: "success", title: this.__("Cache cleared successfully") });
+				await forceClearAllCache();
+				await clearAllCaches({ confirmBeforeClear: false }).catch(() => {});
+				this.showMessage({
+					color: "success",
+					title: this.__("Cache cleared successfully"),
+				});
 			} catch (e) {
 				console.error("Failed to clear cache", e);
-				this.showMessage({ color: "error", title: this.__("Failed to clear cache") });
+				this.showMessage({
+					color: "error",
+					title: this.__("Failed to clear cache"),
+				});
 			} finally {
 				setTimeout(() => location.reload(), 1000);
 			}

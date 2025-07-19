@@ -1,4 +1,4 @@
-import { db, persist, checkDbHealth } from "./core.js";
+import { db, persist, checkDbHealth, terminatePersistWorker, initPersistWorker } from "./core.js";
 import { getAllByCursor } from "./db-utils.js";
 import Dexie from "dexie";
 
@@ -217,11 +217,13 @@ export function purgeOldQueueEntries(limit = MAX_QUEUE_ITEMS) {
 export async function clearAllCache() {
 	try {
 		await checkDbHealth();
+		terminatePersistWorker();
 		if (db.isOpen()) {
 			await db.close();
 		}
 		await Dexie.delete("posawesome_offline");
 		await db.open();
+		initPersistWorker();
 	} catch (e) {
 		console.error("Failed to clear IndexedDB cache", e);
 	}
@@ -253,6 +255,46 @@ export async function clearAllCache() {
 	memory.tax_template_cache = {};
 	memory.tax_inclusive = false;
 	memory.manual_offline = false;
+}
+
+// Faster cache clearing without reopening the database
+export async function forceClearAllCache() {
+	terminatePersistWorker();
+	if (typeof localStorage !== "undefined") {
+		Object.keys(localStorage).forEach((key) => {
+			if (key.startsWith("posa_")) {
+				localStorage.removeItem(key);
+			}
+		});
+	}
+
+	memory.offline_invoices = [];
+	memory.offline_customers = [];
+	memory.offline_payments = [];
+	memory.pos_last_sync_totals = { pending: 0, synced: 0, drafted: 0 };
+	memory.uom_cache = {};
+	memory.offers_cache = [];
+	memory.customer_balance_cache = {};
+	memory.local_stock_cache = {};
+	memory.stock_cache_ready = false;
+	memory.items_storage = [];
+	memory.customer_storage = [];
+	memory.pos_opening_storage = null;
+	memory.opening_dialog_storage = null;
+	memory.sales_persons_storage = [];
+	memory.price_list_cache = {};
+	memory.item_details_cache = {};
+	memory.tax_template_cache = {};
+	memory.tax_inclusive = false;
+	memory.manual_offline = false;
+
+	// Delete the IndexedDB database in the background
+	try {
+		await Dexie.delete("posawesome_offline");
+		initPersistWorker();
+	} catch (e) {
+		console.error("Failed to clear IndexedDB cache", e);
+	}
 }
 
 /**
