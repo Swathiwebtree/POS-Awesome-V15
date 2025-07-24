@@ -1,7 +1,21 @@
-importScripts("/assets/posawesome/js/libs/dexie.min.js");
-
-const db = new Dexie("posawesome_offline");
-db.version(1).stores({ keyval: "&key" });
+let db;
+(async () => {
+	let DexieLib;
+	try {
+		importScripts("/assets/posawesome/js/libs/dexie.min.js?v=1");
+		DexieLib = { default: Dexie };
+	} catch (e) {
+		// Fallback to dynamic import when importScripts fails
+		DexieLib = await import("/assets/posawesome/js/libs/dexie.min.js?v=1");
+	}
+	db = new DexieLib.default("posawesome_offline");
+	db.version(1).stores({ keyval: "&key" });
+	try {
+		await db.open();
+	} catch (err) {
+		console.error("Failed to open IndexedDB in worker", err);
+	}
+})();
 
 async function persist(key, value) {
 	try {
@@ -9,7 +23,6 @@ async function persist(key, value) {
 			await db.open();
 		}
 		await db.table("keyval").put({ key, value });
-		await db.close();
 	} catch (e) {
 		console.error("Worker persist failed", e);
 	}
@@ -52,7 +65,6 @@ self.onmessage = async (event) => {
 				}
 				const stored = await db.table("keyval").get("price_list_cache");
 				if (stored && stored.value) cache = stored.value;
-				await db.close();
 			} catch (e) {
 				console.error("Failed to read cache in worker", e);
 			}
