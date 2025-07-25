@@ -12,9 +12,11 @@
           <v-icon size="16" color="info" class="mr-1">mdi-database-settings</v-icon>
           {{ __("Database Health") }}
         </div>
+        <v-divider class="my-2" />
         <div v-if="loading" class="db-tooltip-detail">{{ __("Loading database stats...") }}</div>
         <div v-else-if="error" class="db-tooltip-warning">{{ error }}</div>
         <div v-else>
+          <div class="db-tooltip-section-title mb-1">{{ __("Database Info") }}</div>
           <div class="db-tooltip-sparkline mb-2">
             <svg :width="120" :height="32" class="db-sparkline">
               <polyline
@@ -30,6 +32,8 @@
             <b>{{ dbStats.db_engine }}</b>
             <span class="ml-2">{{ dbStats.db_version }}</span>
           </div>
+          <v-divider class="my-2" />
+          <div class="db-tooltip-section-title mb-1">{{ __("Usage Stats") }}</div>
           <div class="db-tooltip-detail flex items-center mb-1">
             <v-icon size="14" color="info" class="mr-1">mdi-database</v-icon>
             {{ __("Size:") }} <b>{{ formattedDbSize }}</b>
@@ -41,10 +45,11 @@
             {{ __("Connections:") }} <b>{{ dbStats.db_connections }}</b>
             <span class="ml-2 flex items-center"><v-icon size="14" color="warning" class="mr-1">mdi-timer-sand</v-icon>{{ __("Slow Queries:") }} <b>{{ dbStats.db_slow_queries }}</b></span>
           </div>
-          <div class="db-tooltip-detail mb-1" v-if="dbStats.db_top_tables && dbStats.db_top_tables.length">
-            <div class="db-tooltip-subtitle flex items-center mb-1">
+          <v-divider class="my-2" />
+          <div v-if="dbStats.db_top_tables && dbStats.db_top_tables.length">
+            <div class="db-tooltip-section-title mb-1 flex items-center">
               <v-icon size="14" color="info" class="mr-1">mdi-database-outline</v-icon>
-              {{ __("Top Tables:") }}
+              {{ __("Top Tables") }}
             </div>
             <ul class="db-top-tables ml-2">
               <li v-for="t in dbStats.db_top_tables" :key="t.name" class="flex items-center mb-1">
@@ -54,6 +59,7 @@
             </ul>
           </div>
         </div>
+        <v-divider class="my-2" />
         <div class="db-tooltip-tip mt-2 flex items-center">
           <v-icon size="14" color="primary" class="mr-1">mdi-lightbulb-on-outline</v-icon>
           {{ __("Tip: Monitor slow queries and table size for optimal performance.") }}
@@ -133,6 +139,13 @@ const sparklinePoints = computed(() => {
   font-size: 12px;
   margin-bottom: 8px;
   line-height: 1.5;
+}
+.db-tooltip-section-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: var(--primary);
+  opacity: 0.85;
 }
 .db-tooltip-subtitle {
   font-size: 12px;

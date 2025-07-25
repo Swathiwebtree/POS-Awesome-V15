@@ -12,6 +12,8 @@
           <v-icon size="16" color="primary" class="mr-1">mdi-server</v-icon>
           {{ __("Server Health") }}
         </div>
+        <v-divider class="my-2" />
+        <div class="cpu-tooltip-section-title mb-1">{{ __("Server Metrics") }}</div>
         <div class="cpu-tooltip-peak mb-1">
           <v-icon size="14" color="success" class="mr-1">mdi-arrow-up-bold</v-icon>
           {{ __("Peak:") }}
@@ -78,6 +80,22 @@
             {{ __("Server Uptime:") }} <b>{{ formatUptime(serverUptime) }}</b>
           </div>
         </div>
+        <v-divider class="my-2" />
+        <div class="cpu-tooltip-section-title mb-1">{{ __("Client Metrics") }}</div>
+        <div class="cpu-tooltip-detail">
+          <v-icon size="14" color="primary" class="mr-1">mdi-monitor</v-icon>
+          {{ __("Client CPU Lag:") }} <b>{{ cpuLag.toFixed(1) }}</b> ms
+        </div>
+        <div class="cpu-tooltip-detail">
+          <v-icon size="14" color="primary" class="mr-1">mdi-memory</v-icon>
+          {{ __("Client Memory Usage:") }} <b>{{ formatBytes(memoryUsage) }}</b>
+        </div>
+        <div class="cpu-tooltip-detail">
+          <v-icon size="14" color="primary" class="mr-1">mdi-chip</v-icon>
+          {{ __("CPU Cores:") }} <b>{{ device.cores }}</b>
+          <span v-if="device.gbMemory" class="ml-2">{{ __("Device Memory:") }} <b>{{ device.gbMemory }} GB</b></span>
+        </div>
+        <v-divider class="my-2" />
         <div class="cpu-tooltip-tip mt-2">
           <v-icon size="14" color="primary" class="mr-1">mdi-lightbulb-on-outline</v-icon>
           {{ __("Tip: Close unused tabs or apps to reduce lag.") }}
@@ -100,7 +118,7 @@ import { computed, inject } from "vue";
 import { useClientLoad } from "../../composables/useClientLoad";
 import { useServerStats } from "../../composables/useServerStats";
 
-const { cpuLag, history } = useClientLoad(1000, 60);
+const { cpuLag, history, memoryUsage, device } = useClientLoad(1000, 60);
 const __ = inject("__", (txt: string) => txt);
 
 // Use the composable for server CPU and memory
@@ -348,5 +366,12 @@ const peakPercent = computed(() => Math.round(Math.min(peakLag.value, 100)));
 :deep(.dark-theme) .cpu-tooltip-action,
 :deep(.v-theme--dark) .cpu-tooltip-action {
   color: #fff !important;
+}
+.cpu-tooltip-section-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: var(--primary);
+  opacity: 0.85;
 }
 </style> 
