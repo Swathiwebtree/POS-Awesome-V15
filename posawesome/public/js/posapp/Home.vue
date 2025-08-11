@@ -16,6 +16,9 @@
 				:cache-usage-loading="cacheUsageLoading"
 				:cache-usage-details="cacheUsageDetails"
 				:cache-ready="cacheReady"
+				:loading-progress="loadingProgress"
+				:loading-active="loadingActive"
+				:loading-message="loadingMessage"
 				@change-page="setPage($event)"
 				@nav-click="handleNavClick"
 				@close-shift="handleCloseShift"
@@ -38,6 +41,13 @@
 import Navbar from "./components/Navbar.vue";
 import POS from "./components/pos/Pos.vue";
 import Payments from "./components/payments/Pay.vue";
+import {
+        loadingState,
+        initLoadingSources,
+        setSourceProgress,
+        markSourceLoaded,
+        clearLoadingTimeout,
+} from "./utils/loading.js";
 import {
 	getOpeningStorage,
 	getCacheUsageEstimate,
@@ -92,13 +102,24 @@ export default {
 			cacheUsageLoading: false,
 			cacheUsageDetails: { total: 0, indexedDB: 0, localStorage: 0 },
 			cacheReady: false,
+
+                        // Loading progress handled via utility
 		};
 	},
-	computed: {
-		isDark() {
-			return this.$theme?.current === "dark";
-		},
-	},
+        computed: {
+                isDark() {
+                        return this.$theme?.current === "dark";
+                },
+                loadingProgress() {
+                        return loadingState.progress;
+                },
+                loadingActive() {
+                        return loadingState.active;
+                },
+                loadingMessage() {
+                        return loadingState.message;
+                },
+        },
 	watch: {
 		networkOnline(newVal, oldVal) {
 			if (newVal && !oldVal) {
@@ -122,8 +143,9 @@ export default {
 	mounted() {
 		this.remove_frappe_nav();
 		// Initialize cache ready state early from stored value
-		this.cacheReady = isCacheReady();
-		this.initializeData();
+                this.cacheReady = isCacheReady();
+                initLoadingSources(["init", "items", "customers"]);
+                this.initializeData();
 		this.setupNetworkListeners();
 		this.setupEventListeners();
 		this.handleRefreshCacheUsage();
@@ -136,10 +158,10 @@ export default {
 		checkFrappePing,
 		checkCurrentOrigin,
 		checkExternalConnectivity,
-		checkWebSocketConnectivity,
-		setPage(page) {
-			this.page = page;
-		},
+                checkWebSocketConnectivity,
+        setPage(page) {
+                this.page = page;
+        },
 
 		async initializeData() {
 			await initPromise;
@@ -175,13 +197,24 @@ export default {
 			this.isIpHost = /^\d+\.\d+\.\d+\.\d+/.test(window.location.hostname);
 
 			// Initialize manual offline state from cached value
-			this.manualOffline = isManualOffline();
-			if (this.manualOffline) {
-				this.networkOnline = false;
-				this.serverOnline = false;
-				window.serverOnline = false;
-			}
-		},
+                        this.manualOffline = isManualOffline();
+                        if (this.manualOffline) {
+                                this.networkOnline = false;
+                                this.serverOnline = false;
+                                window.serverOnline = false;
+                        }
+
+                        markSourceLoaded("init");
+                        
+                        // Fallback: if items/customers don't load within 10 seconds, mark them as loaded
+                        setTimeout(() => {
+                                if (loadingState.active) {
+                                        console.warn("Forcing items/customers to complete due to delay");
+                                        markSourceLoaded("items");
+                                        markSourceLoaded("customers");
+                                }
+                        }, 10000);
+                },
 
 		setupEventListeners() {
 			// Listen for POS profile registration
@@ -197,6 +230,13 @@ export default {
 				this.eventBus.on("set_last_invoice", (invoiceId) => {
 					this.lastInvoiceId = invoiceId;
 				});
+
+                                this.eventBus.on("data-loaded", (name) => {
+                                        markSourceLoaded(name);
+                                });
+                                this.eventBus.on("data-load-progress", ({ name, progress }) => {
+                                        setSourceProgress(name, progress);
+                                });
 
 				// Allow other components to trigger printing
 				this.eventBus.on("print_last_invoice", () => {
@@ -412,11 +452,16 @@ export default {
 				$(".navbar.navbar-default.navbar-fixed-top").remove();
 			});
 		},
+
+
 	},
 	beforeUnmount() {
 		if (this.eventBus) {
 			this.eventBus.off("pending_invoices_changed");
+			this.eventBus.off("data-loaded");
 		}
+		// Clear loading timeout when component unmounts
+		clearLoadingTimeout();
 	},
 	created: function () {
 		setTimeout(() => {
@@ -454,4 +499,6 @@ export default {
 	min-height: 100%;
 	height: 100%;
 }
+
+
 </style>
