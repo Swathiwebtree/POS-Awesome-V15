@@ -1,107 +1,56 @@
 <template>
 	<div :style="responsiveStyles">
-		<v-card
-			:class="[
-				'selection mx-auto my-0 py-0 mt-3 pos-card dynamic-card resizable',
-				isDarkTheme ? '' : 'bg-grey-lighten-5',
-			]"
-			:style="{
-				height: responsiveStyles['--container-height'],
-				maxHeight: responsiveStyles['--container-height'],
-				backgroundColor: isDarkTheme ? '#121212' : '',
-				resize: 'vertical',
-				overflow: 'auto',
-			}"
-		>
-			<v-progress-linear
-				:active="loading"
-				:indeterminate="loading"
-				absolute
-				location="top"
-				color="info"
-			></v-progress-linear>
+		<v-card :class="[
+			'selection mx-auto my-0 py-0 mt-3 pos-card dynamic-card resizable',
+			isDarkTheme ? '' : 'bg-grey-lighten-5',
+			rtlClasses
+		]" :style="{
+			height: responsiveStyles['--container-height'],
+			maxHeight: responsiveStyles['--container-height'],
+			backgroundColor: isDarkTheme ? '#121212' : '',
+			resize: 'vertical',
+			overflow: 'auto',
+		}">
+			<v-progress-linear :active="loading" :indeterminate="loading" absolute location="top"
+				color="info"></v-progress-linear>
 
 			<!-- Add dynamic-padding wrapper like Invoice component -->
 			<div class="dynamic-padding">
 				<div class="sticky-header">
 					<v-row class="items">
 						<v-col class="pb-0">
-							<v-text-field
-								density="compact"
-								clearable
-								autofocus
-								variant="solo"
-								color="primary"
+							<v-text-field density="compact" clearable autofocus variant="solo" color="primary"
 								:label="frappe._('Search Items')"
-								hint="Search by item code, serial number, batch no or barcode"
-								hide-details
-								v-model="debounce_search"
-								@keydown.esc="esc_event"
-								@keydown.enter="search_onchange"
-								@click:clear="clearSearch"
-								prepend-inner-icon="mdi-magnify"
-								@focus="handleItemSearchFocus"
-								ref="debounce_search"
-							>
+								hint="Search by item code, serial number, batch no or barcode" hide-details
+								v-model="debounce_search" @keydown.esc="esc_event" @keydown.enter="search_onchange"
+								@click:clear="clearSearch" prepend-inner-icon="mdi-magnify"
+								@focus="handleItemSearchFocus" ref="debounce_search">
 								<!-- Add camera scan button if enabled -->
 								<template v-slot:append-inner v-if="pos_profile.posa_enable_camera_scanning">
-									<v-btn
-										icon="mdi-camera"
-										size="small"
-										color="primary"
-										variant="text"
-										@click="startCameraScanning"
-										:title="__('Scan with Camera')"
-									>
+									<v-btn icon="mdi-camera" size="small" color="primary" variant="text"
+										@click="startCameraScanning" :title="__('Scan with Camera')">
 									</v-btn>
 								</template>
 							</v-text-field>
 						</v-col>
 						<v-col cols="3" class="pb-0" v-if="pos_profile.posa_input_qty">
-							<v-text-field
-								density="compact"
-								variant="solo"
-								color="primary"
-								:label="frappe._('QTY')"
-								hide-details
-								v-model="debounce_qty"
-								type="text"
-								@keydown.enter="enter_event"
-								@keydown.esc="esc_event"
-								@focus="clearQty"
-							></v-text-field>
+							<v-text-field density="compact" variant="solo" color="primary" :label="frappe._('QTY')"
+								hide-details v-model="debounce_qty" type="text" @keydown.enter="enter_event"
+								@keydown.esc="esc_event" @focus="clearQty"></v-text-field>
 						</v-col>
 						<v-col cols="2" class="pb-0" v-if="pos_profile.posa_new_line">
-							<v-checkbox
-								v-model="new_line"
-								color="accent"
-								value="true"
-								label="NLine"
-								density="default"
-								hide-details
-							></v-checkbox>
+							<v-checkbox v-model="new_line" color="accent" value="true" label="NLine" density="default"
+								hide-details></v-checkbox>
 						</v-col>
 						<v-col cols="12" class="dynamic-margin-xs">
 							<div class="settings-container">
-								<v-btn
-									density="compact"
-									variant="text"
-									color="primary"
-									prepend-icon="mdi-cog-outline"
-									@click="toggleItemSettings"
-									class="settings-btn"
-								>
+								<v-btn density="compact" variant="text" color="primary" prepend-icon="mdi-cog-outline"
+									@click="toggleItemSettings" class="settings-btn">
 									{{ __("Settings") }}
 								</v-btn>
 								<v-spacer></v-spacer>
-								<v-btn
-									density="compact"
-									variant="text"
-									color="primary"
-									prepend-icon="mdi-refresh"
-									@click="forceReloadItems"
-									class="settings-btn"
-								>
+								<v-btn density="compact" variant="text" color="primary" prepend-icon="mdi-refresh"
+									@click="forceReloadItems" class="settings-btn">
 									{{ __("Reload Items") }}
 								</v-btn>
 
@@ -110,71 +59,39 @@
 										<v-card-title class="text-h6 pa-4 d-flex align-center">
 											<span>{{ __("Item Selector Settings") }}</span>
 											<v-spacer></v-spacer>
-											<v-btn
-												icon="mdi-close"
-												variant="text"
-												density="compact"
-												@click="show_item_settings = false"
-											>
+											<v-btn icon="mdi-close" variant="text" density="compact"
+												@click="show_item_settings = false">
 											</v-btn>
 										</v-card-title>
 										<v-divider></v-divider>
 										<v-card-text class="pa-4">
-											<v-switch
-												v-model="temp_hide_qty_decimals"
-												:label="__('Hide quantity decimals')"
-												hide-details
-												density="compact"
-												color="primary"
-												class="mb-2"
-											></v-switch>
-											<v-switch
-												v-model="temp_hide_zero_rate_items"
-												:label="__('Hide zero rated items')"
-												hide-details
-												density="compact"
-												color="primary"
-											></v-switch>
-											<v-switch
-												v-model="temp_enable_custom_items_per_page"
-												:label="__('Custom items per page')"
-												hide-details
-												density="compact"
-												color="primary"
-												class="mb-2"
-											>
+											<v-switch v-model="temp_hide_qty_decimals"
+												:label="__('Hide quantity decimals')" hide-details density="compact"
+												color="primary" class="mb-2"></v-switch>
+											<v-switch v-model="temp_hide_zero_rate_items"
+												:label="__('Hide zero rated items')" hide-details density="compact"
+												color="primary"></v-switch>
+											<v-switch v-model="temp_enable_custom_items_per_page"
+												:label="__('Custom items per page')" hide-details density="compact"
+												color="primary" class="mb-2">
 											</v-switch>
-											<v-checkbox
-												v-model="temp_force_server_items"
-												:label="
-													__('Always fetch items from server (ignore local cache)')
-												"
-												hide-details
-												density="compact"
-												color="primary"
-												class="mb-2"
-											></v-checkbox>
-											<v-text-field
-												v-if="temp_enable_custom_items_per_page"
-												v-model="temp_items_per_page"
-												type="number"
-												density="compact"
-												variant="outlined"
-												color="primary"
-												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												hide-details
-												:label="__('Items per page')"
-												class="mb-2 dark-field"
-											>
+											<v-checkbox v-model="temp_force_server_items" :label="__('Always fetch items from server (ignore local cache)')
+												" hide-details density="compact" color="primary" class="mb-2"></v-checkbox>
+											<v-text-field v-if="temp_enable_custom_items_per_page"
+												v-model="temp_items_per_page" type="number" density="compact"
+												variant="outlined" color="primary"
+												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" hide-details
+												:label="__('Items per page')" class="mb-2 dark-field">
 											</v-text-field>
 										</v-card-text>
 										<v-card-actions class="pa-4 pt-0">
-											<v-btn color="error" variant="text" @click="cancelItemSettings"
-												>{{ __("Cancel") }}
+											<v-btn color="error" variant="text" @click="cancelItemSettings">{{
+												__("Cancel")
+											}}
 											</v-btn>
 											<v-spacer></v-spacer>
-											<v-btn color="primary" variant="tonal" @click="applyItemSettings"
-												>{{ __("Apply") }}
+											<v-btn color="primary" variant="tonal" @click="applyItemSettings">{{
+												__("Apply") }}
 											</v-btn>
 										</v-card-actions>
 									</v-card>
@@ -185,87 +102,76 @@
 				</div>
 				<v-row class="items">
 					<v-col cols="12" class="pt-0 mt-0">
-						<div
-							fluid
-							class="items-grid dynamic-scroll"
-							ref="itemsContainer"
-							v-if="items_view == 'card'"
-							:class="{ 'item-container': isOverflowing }"
-							@scroll.passive="onCardScroll"
-						>
-							<v-card
-								v-for="item in filtered_items"
-								:key="item.item_code"
-								hover
-								class="dynamic-item-card"
-								:draggable="true"
-								@dragstart="onDragStart($event, item)"
-								@dragend="onDragEnd"
-								@click="add_item(item)"
-							>
-								<v-img
-									:src="
-										item.image ||
-										'/assets/posawesome/js/posapp/components/pos/placeholder-image.png'
-									"
-									class="text-white align-end"
-									gradient="to bottom, rgba(0,0,0,0), rgba(0,0,0,0.4)"
-									height="100px"
-								>
-									<v-card-text class="text-caption px-1 pb-0 truncate">{{
-										item.item_name
-									}}</v-card-text>
-								</v-img>
-								<v-card-text class="text--primary pa-1">
-									<div class="text-caption text-primary truncate">
-										{{
-											currencySymbol(item.original_currency || pos_profile.currency) ||
-											""
-										}}
-										{{
-											format_currency(
-												item.base_price_list_rate || item.rate,
-												item.original_currency || pos_profile.currency,
-												ratePrecision(item.base_price_list_rate || item.rate),
-											)
-										}}
+						<div v-if="items_view == 'card'" class="items-card-container">
+							<div class="items-card-grid" ref="itemsContainer" @scroll.passive="onCardScroll"
+								:class="{ 'item-container': isOverflowing }">
+								<div v-for="item in filtered_items" :key="item.item_code" 
+									class="card-item-card" @click="add_item(item)"
+									:draggable="true" @dragstart="onDragStart($event, item)" @dragend="onDragEnd">
+									<div class="card-item-image-container">
+										<v-img :src="item.image || '/assets/posawesome/js/posapp/components/pos/placeholder-image.png'"
+											class="card-item-image" aspect-ratio="1"
+											:alt="item.item_name">
+											<template v-slot:placeholder>
+												<div class="image-placeholder">
+													<v-icon size="40" color="grey-lighten-2">mdi-image</v-icon>
+												</div>
+											</template>
+										</v-img>
 									</div>
-									<div
-										v-if="
-											pos_profile.posa_allow_multi_currency &&
-											selected_currency !== pos_profile.currency
-										"
-										class="text-caption text-success truncate"
-									>
-										{{ currencySymbol(selected_currency) || "" }}
-										{{
-											format_currency(
-												item.rate,
-												selected_currency,
-												ratePrecision(item.rate),
-											)
-										}}
+									<div class="card-item-content">
+										<div class="card-item-header">
+											<h4 class="card-item-name">{{ item.item_name }}</h4>
+											<span class="card-item-code">{{ item.item_code }}</span>
+										</div>
+										<div class="card-item-details">
+											<div class="card-item-price">
+												<div class="primary-price">
+													<span class="currency-symbol">
+														{{ currencySymbol(item.original_currency || pos_profile.currency) }}
+													</span>
+													<span class="price-amount">
+														{{
+															format_currency(
+																item.base_price_list_rate || item.rate,
+																item.original_currency || pos_profile.currency,
+																ratePrecision(item.base_price_list_rate || item.rate),
+															)
+														}}
+													</span>
+												</div>
+												<div v-if="pos_profile.posa_allow_multi_currency && selected_currency !== pos_profile.currency"
+													class="secondary-price">
+													<span class="currency-symbol">{{ currencySymbol(selected_currency) }}</span>
+													<span class="price-amount">
+														{{
+															format_currency(
+																item.rate,
+																selected_currency,
+																ratePrecision(item.rate),
+															)
+														}}
+													</span>
+												</div>
+											</div>
+											<div class="card-item-stock">
+												<v-icon size="small" class="stock-icon">mdi-package-variant</v-icon>
+												<span class="stock-amount" :class="{ 'negative-number': isNegative(item.actual_qty) }">
+													{{ format_number(item.actual_qty, hide_qty_decimals ? 0 : 4) || 0 }}
+												</span>
+												<span class="stock-uom">{{ item.stock_uom || "" }}</span>
+											</div>
+										</div>
 									</div>
-									<div class="text-caption golden--text truncate">
-										{{ format_number(item.actual_qty, hide_qty_decimals ? 0 : 4) || 0 }}
-										{{ item.stock_uom || "" }}
-									</div>
-								</v-card-text>
-							</v-card>
+								</div>
+							</div>
 						</div>
 						<div v-else class="items-table-container">
-							<v-data-table-virtual
-								:headers="headers"
-								:items="filtered_items"
-								class="sleek-data-table overflow-y-auto"
-								:style="{ height: 'calc(100% - 80px)' }"
-								item-key="item_code"
-								fixed-header
-								height="100%"
-								:header-props="headerProps"
-								@click:row="click_item_row"
-								@scroll.passive="onListScroll"
-							>
+							<v-data-table-virtual :headers="headers" :items="filtered_items"
+								class="sleek-data-table overflow-y-auto" :style="{ height: 'calc(100% - 80px)' }"
+								item-key="item_code" fixed-header height="100%" :header-props="headerProps"
+								:no-data-text="__('No items found')" @click:row="click_item_row"
+								@scroll.passive="onListScroll">
 								<template v-slot:item.rate="{ item }">
 									<div>
 										<div class="text-primary">
@@ -280,13 +186,10 @@
 												)
 											}}
 										</div>
-										<div
-											v-if="
-												pos_profile.posa_allow_multi_currency &&
-												selected_currency !== pos_profile.currency
-											"
-											class="text-success"
-										>
+										<div v-if="
+											pos_profile.posa_allow_multi_currency &&
+											selected_currency !== pos_profile.currency
+										" class="text-success">
 											{{ currencySymbol(selected_currency) }}
 											{{
 												format_currency(
@@ -299,9 +202,10 @@
 									</div>
 								</template>
 								<template v-slot:item.actual_qty="{ item }">
-									<span class="golden--text">{{
-										format_number(item.actual_qty, hide_qty_decimals ? 0 : 4)
-									}}</span>
+									<span class="golden--text"
+										:class="{ 'negative-number': isNegative(item.actual_qty) }">{{
+											format_number(item.actual_qty, hide_qty_decimals ? 0 : 4)
+										}}</span>
 								</template>
 							</v-data-table-virtual>
 						</div>
@@ -312,25 +216,12 @@
 		<v-card class="cards mb-0 mt-3 dynamic-padding resizable" style="resize: vertical; overflow: auto">
 			<v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
 				<v-col cols="12" class="mb-2">
-					<v-select
-						:items="items_group"
-						:label="frappe._('Items Group')"
-						density="compact"
-						variant="solo"
-						hide-details
-						v-model="item_group"
-					></v-select>
+					<v-select :items="items_group" :label="frappe._('Items Group')" density="compact" variant="solo"
+						hide-details v-model="item_group"></v-select>
 				</v-col>
 				<v-col cols="12" class="mb-2" v-if="pos_profile.posa_enable_price_list_dropdown !== false">
-					<v-text-field
-						density="compact"
-						variant="solo"
-						color="primary"
-						:label="frappe._('Price List')"
-						hide-details
-						:model-value="active_price_list"
-						readonly
-					></v-text-field>
+					<v-text-field density="compact" variant="solo" color="primary" :label="frappe._('Price List')"
+						hide-details :model-value="active_price_list" readonly></v-text-field>
 				</v-col>
 				<v-col cols="3" class="dynamic-margin-xs">
 					<v-btn-toggle v-model="items_view" color="primary" group density="compact" rounded>
@@ -339,38 +230,21 @@
 					</v-btn-toggle>
 				</v-col>
 				<v-col cols="5" class="dynamic-margin-xs">
-					<v-btn
-						size="small"
-						block
-						color="warning"
-						variant="text"
-						@click="show_offers"
-						class="action-btn-consistent"
-					>
+					<v-btn size="small" block color="warning" variant="text" @click="show_offers"
+						class="action-btn-consistent">
 						{{ offersCount }} {{ __("Offers") }}
 					</v-btn>
 				</v-col>
 				<v-col cols="4" class="dynamic-margin-xs">
-					<v-btn
-						size="small"
-						block
-						color="primary"
-						variant="text"
-						@click="show_coupons"
-						class="action-btn-consistent"
-						>{{ couponsCount }} {{ __("Coupons") }}</v-btn
-					>
+					<v-btn size="small" block color="primary" variant="text" @click="show_coupons"
+						class="action-btn-consistent">{{ couponsCount }} {{ __("Coupons") }}</v-btn>
 				</v-col>
 			</v-row>
 		</v-card>
 
 		<!-- Camera Scanner Component -->
-		<CameraScanner
-			v-if="pos_profile.posa_enable_camera_scanning"
-			ref="cameraScanner"
-			:scan-type="pos_profile.posa_camera_scan_type || 'Both'"
-			@barcode-scanned="onBarcodeScanned"
-		/>
+		<CameraScanner v-if="pos_profile.posa_enable_camera_scanning" ref="cameraScanner"
+			:scan-type="pos_profile.posa_camera_scan_type || 'Both'" @barcode-scanned="onBarcodeScanned" />
 	</div>
 </template>
 
@@ -409,11 +283,14 @@ import {
 	forceClearAllCache,
 } from "../../../offline/index.js";
 import { useResponsive } from "../../composables/useResponsive.js";
+import { useRtl } from "../../composables/useRtl.js";
 
 export default {
 	mixins: [format],
 	setup() {
-		return useResponsive();
+		const responsive = useResponsive();
+		const rtl = useRtl();
+		return { ...responsive, ...rtl };
 	},
 	components: {
 		CameraScanner,
@@ -868,6 +745,7 @@ export default {
 				}
 			});
 		},
+
 		checkItemContainerOverflow() {
 			const el = this.$refs.itemsContainer;
 			if (!el) {
@@ -1147,8 +1025,6 @@ export default {
 			const search = this.get_search(this.first_search);
 			const gr = vm.item_group !== "ALL" ? vm.item_group.toLowerCase() : "";
 			const sr = search || "";
-			const request_token = ++this.items_request_token;
-			const limit = this.itemsPageLimit;
 
 			// Skip if already loading the same data
 			if (!force_server && this.items_loaded && this.items.length > 0) {
@@ -1169,7 +1045,7 @@ export default {
 						item_group: gr,
 						search_value: sr,
 						customer: vm.customer,
-						limit,
+						limit: 1000,
 						offset: 0,
 					},
 				});
@@ -1177,12 +1053,11 @@ export default {
 				const items = response.message || [];
 
 				// Process items
-				items.forEach((item) => {
+				items.forEach(item => {
 					// Ensure UOMs
 					if (!item.item_uoms || item.item_uoms.length === 0) {
-						item.item_uoms = item.stock_uom
-							? [{ uom: item.stock_uom, conversion_factor: 1.0 }]
-							: [];
+						item.item_uoms = item.stock_uom ?
+							[{ uom: item.stock_uom, conversion_factor: 1.0 }] : [];
 					}
 
 					// Set default quantity
@@ -1192,28 +1067,9 @@ export default {
 				});
 
 				vm.items = items;
-				if (
-					vm.pos_profile &&
-					vm.pos_profile.posa_local_storage &&
-					vm.storageAvailable &&
-					!vm.pos_profile.pose_use_limit_search
-				) {
-					try {
-						await saveItemsBulk(items);
-					} catch (e) {
-						console.error(e);
-						vm.markStorageUnavailable();
-					}
-				}
+				vm.items_loaded = true;
 				vm.eventBus.emit("set_all_items", vm.items);
-				if (items.length === limit) {
-					const progress = Math.min(99, Math.round((items.length / (items.length + limit)) * 100));
-					vm.eventBus.emit("data-load-progress", { name: "items", progress });
-					await vm.backgroundLoadItems(limit, null, false, request_token, items.length);
-				} else {
-					vm.items_loaded = true;
-					vm.eventBus.emit("data-load-progress", { name: "items", progress: 100 });
-				}
+				vm.eventBus.emit("data-load-progress", { name: "items", progress: 100 });
 			} catch (error) {
 				console.error("Failed to load items:", error);
 				frappe.msgprint(__("Failed to load items. Please try again."));
@@ -2053,7 +1909,7 @@ export default {
 						this.searchCache.clear();
 					}
 
-					await saveItemsBulk(this.items);
+					await saveItems(this.items);
 					await savePriceListItems(this.customer_price_list, this.items);
 					this.eventBus.emit("set_all_items", this.items);
 					await this.update_items_details([newItem]);
@@ -2063,7 +1919,7 @@ export default {
 
 				frappe.show_alert(
 					{
-						message: `Item not found: ${scannedCode}`,
+						message: `${this.__("Item not found")}: ${scannedCode}`,
 						indicator: "red",
 					},
 					5,
@@ -2073,7 +1929,7 @@ export default {
 				console.error("Error fetching item from barcode:", e);
 				frappe.show_alert(
 					{
-						message: `Item not found: ${scannedCode}`,
+						message: `${this.__("Item not found")}: ${scannedCode}`,
 						indicator: "red",
 					},
 					5,
@@ -2218,7 +2074,7 @@ export default {
 		},
 		format_currency(value, currency, precision) {
 			const prec = typeof precision === "number" ? precision : this.currency_precision;
-			return this.formatCurrency(value, prec);
+			return this.formatCurrencyPlain(value, prec);
 		},
 		ratePrecision(value) {
 			const numericValue = typeof value === "string" ? parseFloat(value) : value;
@@ -2226,7 +2082,7 @@ export default {
 		},
 		format_number(value, precision) {
 			const prec = typeof precision === "number" ? precision : this.float_precision;
-			return this.formatFloat(value, prec);
+			return this.formatFloatPlain(value, prec);
 		},
 		hasDecimalPrecision(value) {
 			// Check if the value has any decimal precision when converted by exchange rate
@@ -2381,31 +2237,33 @@ export default {
 
 			// Apply search filter
 			if (searchTerm) {
-				filteredItems = filteredItems.filter((item) => {
-					const searchFields = [item.item_code, item.item_name, item.barcode, item.description]
-						.filter(Boolean)
-						.map((field) => field.toLowerCase());
+				filteredItems = filteredItems.filter(item => {
+					const searchFields = [
+						item.item_code,
+						item.item_name,
+						item.barcode,
+						item.description
+					].filter(Boolean).map(field => field.toLowerCase());
 
-					return searchFields.some((field) => field.includes(searchTerm));
+					return searchFields.some(field => field.includes(searchTerm));
 				});
 			}
 
 			// Apply item group filter
 			if (this.item_group !== "ALL") {
-				filteredItems = filteredItems.filter(
-					(item) =>
-						item.item_group && item.item_group.toLowerCase() === this.item_group.toLowerCase(),
+				filteredItems = filteredItems.filter(item =>
+					item.item_group && item.item_group.toLowerCase() === this.item_group.toLowerCase()
 				);
 			}
 
 			// Apply zero rate filter
 			if (this.hide_zero_rate_items) {
-				filteredItems = filteredItems.filter((item) => parseFloat(item.rate || 0) > 0);
+				filteredItems = filteredItems.filter(item => parseFloat(item.rate || 0) > 0);
 			}
 
 			// Apply template/variant filter
 			if (this.pos_profile?.posa_show_template_items && this.pos_profile?.posa_hide_variants_items) {
-				filteredItems = filteredItems.filter((item) => !item.variant_of);
+				filteredItems = filteredItems.filter(item => !item.variant_of);
 			}
 
 			// Apply pagination
@@ -2413,7 +2271,7 @@ export default {
 			filteredItems = filteredItems.slice(0, limit);
 
 			// Ensure quantities are defined
-			filteredItems.forEach((item) => {
+			filteredItems.forEach(item => {
 				if (item.actual_qty === undefined || item.actual_qty === null) {
 					item.actual_qty = 0;
 				}
@@ -2543,6 +2401,27 @@ export default {
 				await this.update_items_details(this.items);
 			}
 		});
+
+		if (typeof Worker !== "undefined") {
+			try {
+				// Use the plain URL so the service worker can match the cached file
+				// even when offline. Using a query string causes cache lookups to fail
+				// which results in "Failed to fetch a worker script" errors.
+				const workerUrl = "/assets/posawesome/js/posapp/workers/itemWorker.js";
+				this.itemWorker = new Worker(workerUrl, { type: "classic" });
+
+				this.itemWorker.onerror = function (event) {
+					console.error("Worker error:", event);
+					console.error("Message:", event.message);
+					console.error("Filename:", event.filename);
+					console.error("Line number:", event.lineno);
+				};
+				console.log("Created worker");
+			} catch (e) {
+				console.error("Failed to start item worker", e);
+				this.itemWorker = null;
+			}
+		}
 
 		if (typeof Worker !== "undefined") {
 			try {
@@ -2722,6 +2601,279 @@ export default {
 	color: #4caf50 !important;
 }
 
+/* Enhanced Arabic number support for ItemsSelector */
+.text-primary,
+.text-success,
+.golden--text {
+	/* Enhanced Arabic number font stack for maximum clarity */
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+	/* Force lining numbers for consistent height and alignment */
+	font-variant-numeric: lining-nums tabular-nums;
+	/* Additional OpenType features for better Arabic number rendering */
+	font-feature-settings: "tnum" 1, "lnum" 1, "kern" 1;
+	/* Ensure crisp rendering */
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	/* Better number spacing */
+	letter-spacing: 0.02em;
+}
+
+/* Enhanced negative number styling for Arabic context */
+.negative-number {
+	color: #d32f2f !important;
+	font-weight: 600;
+	/* Same enhanced font stack for negative numbers */
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+	font-variant-numeric: lining-nums tabular-nums;
+	font-feature-settings: "tnum" 1, "lnum" 1, "kern" 1;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Enhanced input fields for Arabic number support */
+.v-text-field :deep(input),
+.v-select :deep(input),
+.v-autocomplete :deep(input) {
+	/* Enhanced Arabic number font stack for input fields */
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+	font-variant-numeric: lining-nums tabular-nums;
+	font-feature-settings: "tnum" 1, "lnum" 1, "kern" 1;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	letter-spacing: 0.01em;
+}
+
+/* Enhanced card text for better Arabic number display */
+.dynamic-item-card .v-card-text {
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+	font-variant-numeric: lining-nums tabular-nums;
+	font-feature-settings: "tnum" 1, "lnum" 1, "kern" 1;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Enhanced Card View Grid Layout - 3 items per row */
+.items-card-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 16px;
+	padding: 16px;
+	height: calc(100% - 80px);
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.items-card-grid::-webkit-scrollbar {
+	width: 8px;
+}
+
+.items-card-grid::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.items-card-grid::-webkit-scrollbar-thumb {
+	background-color: rgba(0, 0, 0, 0.2);
+	border-radius: 4px;
+}
+
+.card-item-card {
+	background-color: var(--surface-secondary, #ffffff);
+	border-radius: 12px;
+	border: 1px solid rgba(0, 0, 0, 0.08);
+	overflow: hidden;
+	transition: all 0.3s ease;
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	height: auto;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.card-item-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+	border-color: var(--primary-color, #1976d2);
+}
+
+.card-item-image-container {
+	position: relative;
+	height: 120px;
+	overflow: hidden;
+	background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.card-item-image {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform 0.3s ease;
+}
+
+.card-item-card:hover .card-item-image {
+	transform: scale(1.05);
+}
+
+.image-placeholder {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	background: linear-gradient(135deg, #f5f5f5 0%, #eeeeee 100%);
+}
+
+.card-item-content {
+	padding: 12px 16px 16px;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.card-item-header {
+	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+	padding-bottom: 8px;
+	margin-bottom: 4px;
+}
+
+.card-item-name {
+	font-size: 0.9rem;
+	font-weight: 600;
+	color: var(--text-primary, #2c3e50);
+	margin: 0 0 4px 0;
+	line-height: 1.3;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	/* Enhanced Arabic font support */
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+}
+
+.card-item-code {
+	font-size: 0.75rem;
+	color: var(--text-secondary, #6c757d);
+	font-weight: 500;
+	background: rgba(0, 0, 0, 0.04);
+	padding: 2px 6px;
+	border-radius: 4px;
+	/* Enhanced Arabic font support */
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+}
+
+.card-item-details {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	flex: 1;
+}
+
+.card-item-price {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.primary-price {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	font-weight: 600;
+	color: var(--primary-color, #1976d2);
+}
+
+.secondary-price {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	font-weight: 500;
+	color: #4caf50;
+	font-size: 0.875rem;
+}
+
+.currency-symbol {
+	opacity: 0.8;
+	font-size: 0.85em;
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+}
+
+.price-amount {
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+	font-variant-numeric: lining-nums tabular-nums;
+	font-feature-settings: "tnum" 1, "lnum" 1, "kern" 1;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+.card-item-stock {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
+	background: rgba(0, 0, 0, 0.02);
+	border-radius: 6px;
+	margin-top: auto;
+}
+
+.stock-icon {
+	color: var(--text-secondary, #6c757d);
+}
+
+.stock-amount {
+	font-weight: 600;
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+	font-variant-numeric: lining-nums tabular-nums;
+	font-feature-settings: "tnum" 1, "lnum" 1, "kern" 1;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+.stock-uom {
+	font-size: 0.75rem;
+	color: var(--text-secondary, #6c757d);
+	font-weight: 500;
+}
+
+/* Dark theme support for card view */
+:deep([data-theme="dark"]) .card-item-card,
+:deep(.v-theme--dark) .card-item-card {
+	background-color: var(--surface-secondary, #2c2c2c);
+	border-color: rgba(255, 255, 255, 0.12);
+}
+
+:deep([data-theme="dark"]) .card-item-card:hover,
+:deep(.v-theme--dark) .card-item-card:hover {
+	border-color: var(--primary-color, #90caf9);
+}
+
+:deep([data-theme="dark"]) .card-item-image-container,
+:deep(.v-theme--dark) .card-item-image-container {
+	background: linear-gradient(135deg, #3a3a3a 0%, #2c2c2c 100%);
+}
+
+:deep([data-theme="dark"]) .image-placeholder,
+:deep(.v-theme--dark) .image-placeholder {
+	background: linear-gradient(135deg, #404040 0%, #353535 100%);
+}
+
+:deep([data-theme="dark"]) .card-item-name,
+:deep(.v-theme--dark) .card-item-name {
+	color: var(--text-primary, #ffffff);
+}
+
+:deep([data-theme="dark"]) .card-item-code,
+:deep(.v-theme--dark) .card-item-code {
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--text-secondary, #b0b0b0);
+}
+
+:deep([data-theme="dark"]) .card-item-stock,
+:deep(.v-theme--dark) .card-item-stock {
+	background: rgba(255, 255, 255, 0.05);
+}
+
 .sleek-data-table {
 	/* composes: pos-table; */
 	margin: 0;
@@ -2739,7 +2891,7 @@ export default {
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }
 
-/* Enhanced table header styling with modern gradients */
+/* Enhanced table header styling with modern gradients and Arabic support */
 .sleek-data-table :deep(th) {
 	font-weight: 700;
 	font-size: 0.875rem;
@@ -2757,6 +2909,12 @@ export default {
 	-webkit-backdrop-filter: blur(10px);
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 	text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+	/* Enhanced Arabic number font stack */
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+	font-variant-numeric: lining-nums tabular-nums;
+	font-feature-settings: "tnum" 1, "lnum" 1, "kern" 1;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 }
 
 /* Enhanced dark theme header styling */
@@ -2789,7 +2947,8 @@ export default {
 /* Table body should scroll while header stays fixed */
 .sleek-data-table :deep(.v-data-table__wrapper tbody) {
 	overflow-y: auto;
-	max-height: calc(100% - 60px); /* Adjust based on header height */
+	max-height: calc(100% - 60px);
+	/* Adjust based on header height */
 }
 
 /* Table row styling with gray theme */
@@ -2805,11 +2964,18 @@ export default {
 	box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-/* Table cell styling */
+/* Table cell styling with Arabic number support */
 .sleek-data-table :deep(td) {
 	padding: 12px 16px;
 	vertical-align: middle;
 	color: #424242;
+	/* Enhanced Arabic number font stack */
+	font-family: "SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma", sans-serif;
+	font-variant-numeric: lining-nums tabular-nums;
+	font-feature-settings: "tnum" 1, "lnum" 1, "kern" 1;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	letter-spacing: 0.01em;
 }
 
 /* Dark theme row styling */
@@ -2869,6 +3035,14 @@ export default {
 }
 
 /* Responsive breakpoints */
+@media (max-width: 1200px) {
+	.items-card-grid {
+		grid-template-columns: repeat(2, 1fr);
+		gap: 12px;
+		padding: 12px;
+	}
+}
+
 @media (max-width: 768px) {
 	.dynamic-padding {
 		/* Reduce spacing uniformly on smaller screens */
@@ -2882,6 +3056,28 @@ export default {
 	.action-btn-consistent {
 		padding: var(--dynamic-xs) !important;
 		font-size: 0.875rem !important;
+	}
+
+	.items-card-grid {
+		grid-template-columns: 1fr;
+		gap: 10px;
+		padding: 10px;
+	}
+
+	.card-item-image-container {
+		height: 100px;
+	}
+
+	.card-item-content {
+		padding: 10px 12px 12px;
+	}
+
+	.card-item-name {
+		font-size: 0.85rem;
+	}
+
+	.card-item-code {
+		font-size: 0.7rem;
 	}
 }
 
