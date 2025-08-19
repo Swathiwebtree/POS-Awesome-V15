@@ -1,3 +1,10 @@
+## [15.4.13](https://github.com/defendicon/POS-Awesome-V15/compare/15.4.12...15.4.13) (2025-08-19)
+
+
+### Bug Fixes
+
+* ensure sales return payments are negative ([#1850](https://github.com/defendicon/POS-Awesome-V15/issues/1850)) ([#1851](https://github.com/defendicon/POS-Awesome-V15/issues/1851)) ([0e0fa46](https://github.com/defendicon/POS-Awesome-V15/commit/0e0fa46591c765a27467f466d4d603560d507715))
+
 ## [15.4.12](https://github.com/defendicon/POS-Awesome-V15/compare/15.4.11...15.4.12) (2025-08-19)
 
 
