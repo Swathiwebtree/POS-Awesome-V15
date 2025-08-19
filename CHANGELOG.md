@@ -1,3 +1,11 @@
+## [15.4.11](https://github.com/defendicon/POS-Awesome-V15/compare/15.4.10...15.4.11) (2025-08-19)
+
+
+### Reverts
+
+* Revert "chore: configure semantic-release ([#1836](https://github.com/defendicon/POS-Awesome-V15/issues/1836)) ([#1837](https://github.com/defendicon/POS-Awesome-V15/issues/1837))" ([#1838](https://github.com/defendicon/POS-Awesome-V15/issues/1838)) ([21de6f6](https://github.com/defendicon/POS-Awesome-V15/commit/21de6f62b772d00d484f580ba29b769558fe85f3))
+* Revert "Sementic release ([#1841](https://github.com/defendicon/POS-Awesome-V15/issues/1841))" ([#1844](https://github.com/defendicon/POS-Awesome-V15/issues/1844)) ([f933f38](https://github.com/defendicon/POS-Awesome-V15/commit/f933f3861d5460ba2cefc709afa10638cdbca532))
+
 # 1.0.0 (2025-08-19)
 
 
