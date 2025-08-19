@@ -1,3 +1,10 @@
+# [15.5.0](https://github.com/defendicon/POS-Awesome-V15/compare/15.4.13...15.5.0) (2025-08-19)
+
+
+### Features
+
+* enforce stock availability in POS ([#1852](https://github.com/defendicon/POS-Awesome-V15/issues/1852)) ([#1860](https://github.com/defendicon/POS-Awesome-V15/issues/1860)) ([402bae3](https://github.com/defendicon/POS-Awesome-V15/commit/402bae32cb1a01d58fc4051e1eb670321b9a609f)), closes [#1853](https://github.com/defendicon/POS-Awesome-V15/issues/1853) [#1853](https://github.com/defendicon/POS-Awesome-V15/issues/1853) [#1855](https://github.com/defendicon/POS-Awesome-V15/issues/1855) [#1854](https://github.com/defendicon/POS-Awesome-V15/issues/1854) [#1854](https://github.com/defendicon/POS-Awesome-V15/issues/1854) [#1856](https://github.com/defendicon/POS-Awesome-V15/issues/1856) [#1857](https://github.com/defendicon/POS-Awesome-V15/issues/1857) [#1857](https://github.com/defendicon/POS-Awesome-V15/issues/1857) [#1858](https://github.com/defendicon/POS-Awesome-V15/issues/1858) [#1859](https://github.com/defendicon/POS-Awesome-V15/issues/1859)
+
 ## [15.4.13](https://github.com/defendicon/POS-Awesome-V15/compare/15.4.12...15.4.13) (2025-08-19)
 
 
