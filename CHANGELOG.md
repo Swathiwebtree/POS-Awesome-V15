@@ -1,3 +1,10 @@
+## [15.4.12](https://github.com/defendicon/POS-Awesome-V15/compare/15.4.11...15.4.12) (2025-08-19)
+
+
+### Bug Fixes
+
+* stub get_formatted for offline invoice ([#1848](https://github.com/defendicon/POS-Awesome-V15/issues/1848)) ([#1849](https://github.com/defendicon/POS-Awesome-V15/issues/1849)) ([4bb42dd](https://github.com/defendicon/POS-Awesome-V15/commit/4bb42dd090c95836a69613c207ec52007b6beb9a))
+
 ## [15.4.11](https://github.com/defendicon/POS-Awesome-V15/compare/15.4.10...15.4.11) (2025-08-19)
 
 
