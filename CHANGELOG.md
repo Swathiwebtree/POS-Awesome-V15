@@ -1,3 +1,10 @@
+# [15.6.0](https://github.com/defendicon/POS-Awesome-V15/compare/15.5.0...15.6.0) (2025-08-20)
+
+
+### Features
+
+* allow line item name override ([#1862](https://github.com/defendicon/POS-Awesome-V15/issues/1862)) ([#1863](https://github.com/defendicon/POS-Awesome-V15/issues/1863)) ([6f8b575](https://github.com/defendicon/POS-Awesome-V15/commit/6f8b57529a3a38246a3fc1063534943122833bed))
+
 # [15.5.0](https://github.com/defendicon/POS-Awesome-V15/compare/15.4.13...15.5.0) (2025-08-19)
 
 
