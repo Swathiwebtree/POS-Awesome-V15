@@ -1,3 +1,10 @@
+# [15.8.0](https://github.com/defendicon/POS-Awesome-V15/compare/15.7.0...15.8.0) (2025-08-21)
+
+
+### Features
+
+* support serial and batch searches ([#1873](https://github.com/defendicon/POS-Awesome-V15/issues/1873)) ([#1874](https://github.com/defendicon/POS-Awesome-V15/issues/1874)) ([4a0120d](https://github.com/defendicon/POS-Awesome-V15/commit/4a0120d61c02f1e6601a9ec88682ea4ad26cc58e))
+
 # [15.7.0](https://github.com/defendicon/POS-Awesome-V15/compare/15.6.0...15.7.0) (2025-08-21)
 
 
