@@ -1,3 +1,10 @@
+# [15.7.0](https://github.com/defendicon/POS-Awesome-V15/compare/15.6.0...15.7.0) (2025-08-21)
+
+
+### Features
+
+* Create Invoices as POS Invoices Rather Than Sales Invoice ([#1872](https://github.com/defendicon/POS-Awesome-V15/issues/1872)) ([977b29d](https://github.com/defendicon/POS-Awesome-V15/commit/977b29dae73e2ec8ff71f8769280fa84b668ff17)), closes [#1867](https://github.com/defendicon/POS-Awesome-V15/issues/1867) [#1868](https://github.com/defendicon/POS-Awesome-V15/issues/1868) [#1869](https://github.com/defendicon/POS-Awesome-V15/issues/1869) [#1870](https://github.com/defendicon/POS-Awesome-V15/issues/1870) [#1871](https://github.com/defendicon/POS-Awesome-V15/issues/1871)
+
 # [15.6.0](https://github.com/defendicon/POS-Awesome-V15/compare/15.5.0...15.6.0) (2025-08-20)
 
 
