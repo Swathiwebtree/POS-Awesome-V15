@@ -1,3 +1,10 @@
+## [15.8.1](https://github.com/defendicon/POS-Awesome-V15/compare/15.8.0...15.8.1) (2025-08-23)
+
+
+### Bug Fixes
+
+* batch returns without invoice and restrict items by profile groups ([#1883](https://github.com/defendicon/POS-Awesome-V15/issues/1883)) ([2c20610](https://github.com/defendicon/POS-Awesome-V15/commit/2c20610928f5005ef61ebb66850f89d4b34d43f4)), closes [#1881](https://github.com/defendicon/POS-Awesome-V15/issues/1881) [#1882](https://github.com/defendicon/POS-Awesome-V15/issues/1882)
+
 # [15.8.0](https://github.com/defendicon/POS-Awesome-V15/compare/15.7.0...15.8.0) (2025-08-21)
 
 
