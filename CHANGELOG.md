@@ -1,3 +1,10 @@
+## [15.8.2](https://github.com/defendicon/POS-Awesome-V15/compare/15.8.1...15.8.2) (2025-08-25)
+
+
+### Bug Fixes
+
+* add product bundle support in POS ([#1888](https://github.com/defendicon/POS-Awesome-V15/issues/1888)) ([#1889](https://github.com/defendicon/POS-Awesome-V15/issues/1889)) ([1ad65d9](https://github.com/defendicon/POS-Awesome-V15/commit/1ad65d93fde184dd9d74edfe68d8d480c08674d9))
+
 ## [15.8.1](https://github.com/defendicon/POS-Awesome-V15/compare/15.8.0...15.8.1) (2025-08-23)
 
 
