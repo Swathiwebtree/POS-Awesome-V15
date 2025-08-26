@@ -1,3 +1,10 @@
+## [15.8.3](https://github.com/defendicon/POS-Awesome-V15/compare/15.8.2...15.8.3) (2025-08-26)
+
+
+### Bug Fixes
+
+* make release workflow manual ([#1898](https://github.com/defendicon/POS-Awesome-V15/issues/1898)) ([1503b24](https://github.com/defendicon/POS-Awesome-V15/commit/1503b242ddae75c0f198275f3fed94accfdbf357))
+
 ## [15.8.2](https://github.com/defendicon/POS-Awesome-V15/compare/15.8.1...15.8.2) (2025-08-25)
 
 
