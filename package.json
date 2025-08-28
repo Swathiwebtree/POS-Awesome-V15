@@ -1,6 +1,6 @@
 {
   "name": "posawesome",
-  "version": "15.8.4",
+  "version": "15.8.5",
   "scripts": {
     "dev": "cd frontend && yarn dev",
     "build": "cd frontend && yarn build",
