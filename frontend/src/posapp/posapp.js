@@ -10,11 +10,15 @@ import themePlugin from "./plugins/theme.js";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import Home from "./Home.vue";
+import $ from "jquery";
 
 // Expose Dexie globally for libraries that expect a global Dexie instance
 if (typeof window !== "undefined" && !window.Dexie) {
 	window.Dexie = Dexie;
 }
+
+// Ensure frappe is defined (import or assign from global)
+const frappe = window.frappe || {};
 
 frappe.provide("frappe.PosApp");
 

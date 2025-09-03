@@ -8,7 +8,27 @@
 		<MpesaPayments></MpesaPayments>
 		<Variants></Variants>
 		<OpeningDialog v-if="dialog" :dialog="dialog"></OpeningDialog>
-		<v-row v-show="!dialog" dense class="ma-0 dynamic-main-row">
+		<!-- PIN Dialog -->
+		<PinDialog v-model="showPin" :expectedPin="pos_settings && pos_settings.cashier_login_code"
+			@success="onPinSuccess" />
+
+		<!-- Main Screen -->
+		<div v-if="!dialog && showMainMenu">
+			<MainMenu @open-transactions="handleOpenTransactions" @open-module="handleOpenModule" />
+		</div>
+
+		<!-- Transactions Sub-Menu -->
+		<div v-else-if="!dialog && showTransactions">
+			<TransactionsMenu @back="() => { showTransactions = false }" @select="handleSelectSubmodule" />
+		</div>
+
+		<!-- POS Main Screen for a selected work order -->
+		<div v-else-if="!dialog && selectedWorkOrder">
+			<PosMain :work-order="selectedWorkOrder" />
+		</div>
+
+		<!-- Original POS UI -->
+		<v-row v-else dense class="ma-0 dynamic-main-row">
 			<v-col v-show="!payment && !showOffers && !coupons" xl="5" lg="5" md="5" sm="5" cols="12"
 				class="pos dynamic-col">
 				<ItemsSelector></ItemsSelector>
@@ -27,6 +47,7 @@
 				<Invoice></Invoice>
 			</v-col>
 		</v-row>
+
 	</div>
 </template>
 
@@ -44,6 +65,9 @@ import NewAddress from "./NewAddress.vue";
 import Variants from "./Variants.vue";
 import Returns from "./Returns.vue";
 import MpesaPayments from "./Mpesa-Payments.vue";
+import MainMenu from "./MainMenu.vue";
+import TransactionsMenu from "./TransactionsMenu.vue";
+import PinDialog from "./PinDialog.vue";
 import {
 	getOpeningStorage,
 	setOpeningStorage,
@@ -82,6 +106,13 @@ export default {
 			coupons: false,
 			itemsLoaded: false,
 			customersLoaded: false,
+
+			showMainMenu: true,     
+			showTransactions: false, 
+			isAuthed: false,        
+			showPin: false,          
+			pendingAction: null,     
+			pos_settings: null,     
 		};
 	},
 
@@ -100,6 +131,10 @@ export default {
 		Variants,
 		MpesaPayments,
 		SalesOrders,
+
+		MainMenu,
+		TransactionsMenu,
+		PinDialog,
 	},
 
 	methods: {
@@ -116,6 +151,48 @@ export default {
 				console.info("Loading completed");
 			}
 		},
+		requireAuth(cb) {
+			if (this.isAuthed) {
+				cb && cb();
+			} else {
+				this.pendingAction = cb;
+				this.showPin = true;
+			}
+		},
+		onPinSuccess() {
+			this.isAuthed = true;
+			if (typeof this.pendingAction === "function") {
+				const fn = this.pendingAction;
+				this.pendingAction = null;
+				fn();
+			}
+		},
+		handleOpenTransactions() {
+			this.requireAuth(() => {
+				this.showTransactions = true;
+			});
+		},
+		handleOpenModule(key) {
+			this.requireAuth(() => {
+				if (key === "exit") {
+					window.location.href = "/app"; // exits POS
+					return;
+				}
+				frappe.msgprint(`Module "${key}" is not wired yet.`);
+			});
+		},
+		handleSelectSubmodule(key) {
+			this.requireAuth(() => {
+				if (key === "item_inquiry") {
+					// Hide menus and show POS UI
+					this.showTransactions = false;
+					this.showMainMenu = false;
+					return;
+				}
+				frappe.msgprint(`Sub-module "${key}" is not wired yet.`);
+			});
+		},
+
 	},
 
 	mounted: function () {
@@ -168,6 +245,9 @@ export default {
 			this.eventBus.on("customers_loaded", () => {
 				this.customersLoaded = true;
 				this.checkLoadingComplete();
+			});
+			this.eventBus.on("set_pos_settings", (doc) => {
+				this.pos_settings = doc;
 			});
 		});
 	},

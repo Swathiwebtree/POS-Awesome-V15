@@ -31,7 +31,7 @@
 				@update-after-delete="handleUpdateAfterDelete"
 			/>
 			<div class="page-content">
-				<component v-bind:is="page" class="mx-4 md-4"></component>
+				<component v-bind:is="page" v-bind="pageProps" class="mx-4 md-4"></component>
 			</div>
 		</v-main>
 	</v-app>
@@ -39,9 +39,12 @@
 
 <script>
 /* global frappe */
+import $ from "jquery";
 import Navbar from "./components/Navbar.vue";
 import POS from "./components/pos/Pos.vue";
 import Payments from "./components/payments/Pay.vue";
+import CashierLogin from "./components/pos/CashierLogin.vue";
+import Dashboard from "./components/pos/Dashboard.vue";
 import {
 	loadingState,
 	initLoadingSources,
@@ -91,6 +94,7 @@ export default {
 	data: function () {
 		return {
 			page: "POS",
+			pageProps: {},
 			// POS Profile data
 			posProfile: {},
 			pendingInvoices: 0,
@@ -149,6 +153,8 @@ export default {
 		Navbar,
 		POS,
 		Payments,
+		CashierLogin,
+		Dashboard,
 	},
 	mounted() {
 		this.remove_frappe_nav();
@@ -159,6 +165,8 @@ export default {
 		this.setupNetworkListeners();
 		this.setupEventListeners();
 		this.handleRefreshCacheUsage();
+		this.setPageFromUrl();
+		window.addEventListener("popstate", this.setPageFromUrl); 
 	},
 	methods: {
 		setupNetworkListeners,
@@ -469,6 +477,43 @@ export default {
 				$(".navbar.navbar-default.navbar-fixed-top").remove();
 			});
 		},
+
+		setPageFromUrl() {
+			const path = window.location.pathname;
+
+			if (path.startsWith("/login")) {
+				this.page = "CashierLogin";
+				this.pageProps = {};
+			} else if (path.startsWith("/dashboard")) {
+				this.page = "Dashboard";
+				this.pageProps = {};
+			} else if (path.startsWith("/pos")) {
+				this.page = "POS";
+				// workOrder
+				const parts = path.split("/");
+				const workOrder = parts[2] || null;
+				this.pageProps = { workOrder };
+			} else {
+				this.page = "POS";
+				this.pageProps = {};
+			}
+		},
+
+		goToPage(pageName, props = {}) {
+			this.page = pageName;
+			this.pageProps = props;
+
+			// update browser URL
+			let url = "/";
+			if (pageName === "CashierLogin") url = "/login";
+			if (pageName === "Dashboard") url = "/dashboard";
+			if (pageName === "POS") {
+				url = "/pos";
+				if (props.workOrder) url += `/${props.workOrder}`;
+			}
+			window.history.pushState({}, "", url);
+		},
+
 	},
 	beforeUnmount() {
 		if (this.eventBus) {
@@ -477,6 +522,8 @@ export default {
 		}
 		// Clear loading timeout when component unmounts
 		clearLoadingTimeout();
+
+		window.removeEventListener("popstate", this.setPageFromUrl);
 	},
 	created: function () {
 		setTimeout(() => {
