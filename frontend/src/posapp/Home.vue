@@ -1,5 +1,6 @@
 <template>
 	<v-app class="container1" :class="rtlClasses">
+		<AppLoadingOverlay :visible="globalLoading" />
 		<v-main class="main-content">
 			<Navbar
 				:pos-profile="posProfile"
@@ -38,24 +39,19 @@
 </template>
 
 <script>
-/* global frappe */
+/* global frappe, $ */
 import Navbar from "./components/Navbar.vue";
 import POS from "./components/pos/Pos.vue";
 import Payments from "./components/payments/Pay.vue";
-import {
-	loadingState,
-	initLoadingSources,
-	setSourceProgress,
-	markSourceLoaded,
-	clearLoadingTimeout,
-} from "./utils/loading.js";
+import AppLoadingOverlay from "./components/ui/LoadingOverlay.vue";
+import { useLoading } from "./composables/useLoading.js";
+import { loadingState, initLoadingSources, setSourceProgress, markSourceLoaded } from "./utils/loading.js";
 import {
 	getOpeningStorage,
 	getCacheUsageEstimate,
 	checkDbHealth,
 	queueHealthCheck,
 	purgeOldQueueEntries,
-	MAX_QUEUE_ITEMS,
 	initPromise,
 	memoryInitPromise,
 	isCacheReady,
@@ -82,10 +78,12 @@ import { useRtl } from "./composables/useRtl.js";
 export default {
 	setup() {
 		const { isRtl, rtlStyles, rtlClasses } = useRtl();
+		const { overlayVisible } = useLoading();
 		return {
 			isRtl,
 			rtlStyles,
 			rtlClasses,
+			globalLoading: overlayVisible,
 		};
 	},
 	data: function () {
@@ -149,6 +147,7 @@ export default {
 		Navbar,
 		POS,
 		Payments,
+		AppLoadingOverlay,
 	},
 	mounted() {
 		this.remove_frappe_nav();
@@ -475,8 +474,6 @@ export default {
 			this.eventBus.off("pending_invoices_changed");
 			this.eventBus.off("data-loaded");
 		}
-		// Clear loading timeout when component unmounts
-		clearLoadingTimeout();
 	},
 	created: function () {
 		setTimeout(() => {
