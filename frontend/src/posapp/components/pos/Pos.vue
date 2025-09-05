@@ -1,5 +1,9 @@
 <template>
-	<div class="pos-main-container dynamic-container" :class="rtlClasses" :style="[responsiveStyles, rtlStyles]">
+	<div
+		class="pos-main-container dynamic-container"
+		:class="rtlClasses"
+		:style="[responsiveStyles, rtlStyles]"
+	>
 		<ClosingDialog></ClosingDialog>
 		<Drafts></Drafts>
 		<SalesOrders></SalesOrders>
@@ -8,18 +12,36 @@
 		<MpesaPayments></MpesaPayments>
 		<Variants></Variants>
 		<OpeningDialog v-if="dialog" :dialog="dialog"></OpeningDialog>
+
 		<!-- PIN Dialog -->
-		<PinDialog v-model="showPin" :expectedPin="pos_settings && pos_settings.cashier_login_code"
-			@success="onPinSuccess" />
+		<!-- <PinDialog
+			v-model="showPin"
+			:expectedPin="pos_settings && pos_settings.custom_cashier_code_"
+			@success="onPinSuccess"
+		/> -->
 
 		<!-- Main Screen -->
-		<div v-if="!dialog && showMainMenu">
-			<MainMenu @open-transactions="handleOpenTransactions" @open-module="handleOpenModule" />
+		<div v-if="!dialog && showMainMenu && !currentSubmodule">
+			<MainMenu
+				@open-transactions="handleOpenTransactions"
+				@open-module="handleOpenModule"
+			/>
 		</div>
 
 		<!-- Transactions Sub-Menu -->
-		<div v-else-if="!dialog && showTransactions">
-			<TransactionsMenu @back="() => { showTransactions = false }" @select="handleSelectSubmodule" />
+		<div v-else-if="!dialog && showTransactions && !currentSubmodule">
+			<TransactionsMenu
+				@back="() => { showTransactions = false }"
+				@select="handleSelectSubmodule"
+			/>
+		</div>
+
+		<!-- Submodules Screens -->
+		<div v-else-if="currentSubmodule">
+			<component
+				:is="currentSubmodule"
+				@back="closeSubmodule"
+			/>
 		</div>
 
 		<!-- POS Main Screen for a selected work order -->
@@ -28,26 +50,67 @@
 		</div>
 
 		<!-- Original POS UI -->
-		<v-row v-else dense class="ma-0 dynamic-main-row">
-			<v-col v-show="!payment && !showOffers && !coupons" xl="5" lg="5" md="5" sm="5" cols="12"
-				class="pos dynamic-col">
+		<v-row
+			v-else
+			dense
+			class="ma-0 dynamic-main-row"
+		>
+			<v-col
+				v-show="!payment && !showOffers && !coupons"
+				xl="5"
+				lg="5"
+				md="5"
+				sm="5"
+				cols="12"
+				class="pos dynamic-col"
+			>
 				<ItemsSelector></ItemsSelector>
 			</v-col>
-			<v-col v-show="showOffers" xl="5" lg="5" md="5" sm="5" cols="12" class="pos dynamic-col">
+			<v-col
+				v-show="showOffers"
+				xl="5"
+				lg="5"
+				md="5"
+				sm="5"
+				cols="12"
+				class="pos dynamic-col"
+			>
 				<PosOffers></PosOffers>
 			</v-col>
-			<v-col v-show="coupons" xl="5" lg="5" md="5" sm="5" cols="12" class="pos dynamic-col">
+			<v-col
+				v-show="coupons"
+				xl="5"
+				lg="5"
+				md="5"
+				sm="5"
+				cols="12"
+				class="pos dynamic-col"
+			>
 				<PosCoupons></PosCoupons>
 			</v-col>
-			<v-col v-show="payment" xl="5" lg="5" md="5" sm="5" cols="12" class="pos dynamic-col">
+			<v-col
+				v-show="payment"
+				xl="5"
+				lg="5"
+				md="5"
+				sm="5"
+				cols="12"
+				class="pos dynamic-col"
+			>
 				<Payments></Payments>
 			</v-col>
 
-			<v-col xl="7" lg="7" md="7" sm="7" cols="12" class="pos dynamic-col">
+			<v-col
+				xl="7"
+				lg="7"
+				md="7"
+				sm="7"
+				cols="12"
+				class="pos dynamic-col"
+			>
 				<Invoice></Invoice>
 			</v-col>
 		</v-row>
-
 	</div>
 </template>
 
@@ -67,7 +130,21 @@ import Returns from "./Returns.vue";
 import MpesaPayments from "./Mpesa-Payments.vue";
 import MainMenu from "./MainMenu.vue";
 import TransactionsMenu from "./TransactionsMenu.vue";
-import PinDialog from "./PinDialog.vue";
+// import PinDialog from "./PinDialog.vue";
+
+// Import your sub-modules 
+import VehicleService from "./VehicleService.vue";
+import VehiclesMaster from "./VehiclesMaster.vue";
+
+const ServiceIssueNote = { template: '<div class="pa-4"><v-btn variant="text" @click="$emit(`back`)">← Back</v-btn><h2>Service Issue Note</h2></div>' };
+const Quotation = { template: '<div class="pa-4"><v-btn variant="text" @click="$emit(`back`)">← Back</v-btn><h2>Quotation</h2></div>' };
+const PettyCash = { template: '<div class="pa-4"><v-btn variant="text" @click="$emit(`back`)">← Back</v-btn><h2>Petty Cash</h2></div>' };
+const ReceiptVoucher = { template: '<div class="pa-4"><v-btn variant="text" @click="$emit(`back`)">← Back</v-btn><h2>Receipt Voucher</h2></div>' };
+const ItemInquiry = { template: '<div class="pa-4"><v-btn variant="text" @click="$emit(`back`)">← Back</v-btn><h2>Item Inquiry</h2></div>' };
+const SalesByPayment = { template: '<div class="pa-4"><v-btn variant="text" @click="$emit(`back`)">← Back</v-btn><h2>Sales by Payment</h2></div>' };
+const VehicleHistory = { template: '<div class="pa-4"><v-btn variant="text" @click="$emit(`back`)">← Back</v-btn><h2>Vehicle History</h2></div>' };
+const RedeemedCouponPoints = { template: '<div class="pa-4"><v-btn variant="text" @click="$emit(`back`)">← Back</v-btn><h2>Redeemed Coupon Points</h2></div>' };
+
 import {
 	getOpeningStorage,
 	setOpeningStorage,
@@ -79,12 +156,42 @@ import {
 import { getCurrentInstance } from "vue";
 import { usePosShift } from "../../composables/usePosShift.js";
 import { useOffers } from "../../composables/useOffers.js";
-// Import the cache cleanup function
 import { clearExpiredCustomerBalances } from "../../../offline/index.js";
 import { useResponsive } from "../../composables/useResponsive.js";
 import { useRtl } from "../../composables/useRtl.js";
 
 export default {
+	components: {
+		ItemsSelector,
+		Invoice,
+		OpeningDialog,
+		Payments,
+		Drafts,
+		ClosingDialog,
+		Returns,
+		PosOffers,
+		PosCoupons,
+		NewAddress,
+		Variants,
+		MpesaPayments,
+		SalesOrders,
+		MainMenu,
+		TransactionsMenu,
+		// PinDialog,
+
+		// submodules
+		VehicleService,
+		VehiclesMaster,
+		ServiceIssueNote,
+		Quotation,
+		PettyCash,
+		ReceiptVoucher,
+		ItemInquiry,
+		SalesByPayment,
+		VehicleHistory,
+		RedeemedCouponPoints,
+	},
+
 	setup() {
 		const instance = getCurrentInstance();
 		const responsive = useResponsive();
@@ -97,46 +204,26 @@ export default {
 		const offers = useOffers();
 		return { ...responsive, ...rtl, ...shift, ...offers };
 	},
-	data: function () {
+	data() {
 		return {
 			dialog: false,
-
 			payment: false,
 			showOffers: false,
 			coupons: false,
 			itemsLoaded: false,
 			customersLoaded: false,
 
-			showMainMenu: true,     
-			showTransactions: false, 
-			isAuthed: false,        
-			showPin: false,          
-			pendingAction: null,     
-			pos_settings: null,     
+			showMainMenu: true,
+			showTransactions: false,
+			isAuthed: false,
+			// showPin: false,
+			pendingAction: null,
+			// pos_settings: null,
+
+			selectedWorkOrder: null,
+			currentSubmodule: null, // Track which submodule is open
 		};
 	},
-
-	components: {
-		ItemsSelector,
-		Invoice,
-		OpeningDialog,
-		Payments,
-		Drafts,
-		ClosingDialog,
-
-		Returns,
-		PosOffers,
-		PosCoupons,
-		NewAddress,
-		Variants,
-		MpesaPayments,
-		SalesOrders,
-
-		MainMenu,
-		TransactionsMenu,
-		PinDialog,
-	},
-
 	methods: {
 		create_opening_voucher() {
 			this.dialog = true;
@@ -152,21 +239,32 @@ export default {
 			}
 		},
 		requireAuth(cb) {
-			if (this.isAuthed) {
-				cb && cb();
-			} else {
-				this.pendingAction = cb;
-				this.showPin = true;
-			}
+			// Always allow — skip PIN and cashier code
+			if (cb) cb();
 		},
+
 		onPinSuccess() {
+			// No PIN needed, just mark as authenticated
 			this.isAuthed = true;
-			if (typeof this.pendingAction === "function") {
-				const fn = this.pendingAction;
-				this.pendingAction = null;
-				fn();
-			}
 		},
+
+		// requireAuth(cb) {
+		// 	if (this.isAuthed) {
+		// 		cb && cb();
+		// 	} else {
+		// 		this.pendingAction = cb;
+		// 		this.showPin = true;
+		// 	}
+		// },
+		// onPinSuccess() {
+		// 	this.isAuthed = true;
+		// 	if (typeof this.pendingAction === "function") {
+		// 		const fn = this.pendingAction;
+		// 		this.pendingAction = null;
+		// 		fn();
+		// 	}
+		// },
+
 		handleOpenTransactions() {
 			this.requireAuth(() => {
 				this.showTransactions = true;
@@ -183,21 +281,34 @@ export default {
 		},
 		handleSelectSubmodule(key) {
 			this.requireAuth(() => {
-				if (key === "item_inquiry") {
-					// Hide menus and show POS UI
-					this.showTransactions = false;
-					this.showMainMenu = false;
-					return;
-				}
-				frappe.msgprint(`Sub-module "${key}" is not wired yet.`);
+				this.currentSubmodule = this.mapKeyToComponent(key);
+				this.showTransactions = false;
+				this.showMainMenu = false;
 			});
 		},
-
+		mapKeyToComponent(key) {
+			const map = {
+				vehicle_service: "VehicleService",
+				vehicles_master: "VehiclesMaster",
+				service_issue_note: "ServiceIssueNote",
+				quotation: "Quotation",
+				petty_cash: "PettyCash",
+				receipt_voucher: "ReceiptVoucher",
+				item_inquiry: "ItemInquiry",
+				sales_by_payment: "SalesByPayment",
+				vehicle_history: "VehicleHistory",
+				redeemed_coupon_points: "RedeemedCouponPoints",
+			};
+			return map[key] || null;
+		},
+		closeSubmodule() {
+			this.currentSubmodule = null;
+			this.showTransactions = true; // go back to transaction menu
+		},
 	},
-
-	mounted: function () {
+	mounted() {
 		this.$nextTick(function () {
-			this.check_opening_entry();
+			this.check_opening_entry?.();
 			this.get_pos_setting();
 			this.eventBus.on("close_opening_dialog", () => {
 				this.dialog = false;
@@ -209,8 +320,6 @@ export default {
 				this.eventBus.emit("register_pos_profile", data);
 				console.info("LoadPosProfile");
 			});
-			// When profile is registered directly from composables,
-			// ensure offers are fetched as well
 			this.eventBus.on("register_pos_profile", (data) => {
 				if (data && data.pos_profile) {
 					this.get_offers(data.pos_profile.name, data.pos_profile);
@@ -232,10 +341,10 @@ export default {
 				this.payment = false;
 			});
 			this.eventBus.on("open_closing_dialog", () => {
-				this.get_closing_data();
+				this.get_closing_data?.();
 			});
 			this.eventBus.on("submit_closing_pos", (data) => {
-				this.submit_closing_pos(data);
+				this.submit_closing_pos?.(data);
 			});
 
 			this.eventBus.on("items_loaded", () => {
@@ -263,43 +372,12 @@ export default {
 		this.eventBus.off("items_loaded");
 		this.eventBus.off("customers_loaded");
 	},
-	// In the created() or mounted() lifecycle hook
 	created() {
-		// Clean up expired customer balance cache on POS load
 		clearExpiredCustomerBalances();
+		if (this.$route?.params?.workOrder) {
+			this.selectedWorkOrder = this.$route.params.workOrder;
+			this.showMainMenu = false;
+		}
 	},
 };
 </script>
-
-<style scoped>
-.dynamic-container {
-	/* add space for the navbar with better spacing */
-	/*padding-top: calc(25px + var(--dynamic-lg));*/
-	/* Navbar height (25px) + larger spacing */
-	transition: all 0.3s ease;
-}
-
-.dynamic-main-row {
-	padding: 0;
-	margin: 0;
-}
-
-.dynamic-col {
-	padding: var(--dynamic-sm);
-	transition: padding 0.3s ease;
-	margin-top: var(--dynamic-sm);
-	/* Add top margin for better separation */
-}
-
-@media (max-width: 768px) {
-	.dynamic-container {
-		padding-top: calc(56px + var(--dynamic-md));
-		/* Consistent navbar height + medium spacing */
-	}
-
-	.dynamic-col {
-		padding: var(--dynamic-xs);
-		margin-top: var(--dynamic-xs);
-	}
-}
-</style>
