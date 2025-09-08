@@ -46,8 +46,10 @@ export default {
   methods: {
     async fetchWorkOrders() {
       try {
-        const res = await apiClient.get("/pos/work_orders");
-        this.workOrders = res.data;
+        const res = await apiClient.get(
+          "/method/posawesome.api.posapp.get_work_orders"
+        );
+        this.workOrders = res.data.message; // frappe returns data under .message
       } catch (err) {
         console.error("Error fetching work orders:", err);
       }
