@@ -2,14 +2,12 @@
 	<div :style="responsiveStyles">
 		<v-card
 			:class="[
-				'selection mx-auto my-0 py-0 mt-3 pos-card dynamic-card resizable',
-				isDarkTheme ? '' : 'bg-grey-lighten-5',
+				'selection mx-auto my-0 py-0 mt-3 pos-card dynamic-card resizable pos-themed-card',
 				rtlClasses,
 			]"
 			:style="{
 				height: responsiveStyles['--container-height'],
 				maxHeight: responsiveStyles['--container-height'],
-				backgroundColor: isDarkTheme ? '#121212' : '',
 				resize: 'vertical',
 				overflow: 'auto',
 				position: 'relative',
@@ -163,10 +161,9 @@
 												density="compact"
 												variant="outlined"
 												color="primary"
-												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												hide-details
 												:label="__('Items per page')"
-												class="mb-2 dark-field"
+												class="mb-2 dark-field pos-themed-input"
 											>
 											</v-text-field>
 										</v-card-text>
@@ -242,11 +239,13 @@
 													<span class="price-amount">
 														{{
 															format_currency(
-																item.base_price_list_rate || item.rate,
+																item.base_price_list_rate ?? item.rate ?? 0,
 																item.original_currency ||
 																	pos_profile.currency,
 																ratePrecision(
-																	item.base_price_list_rate || item.rate,
+																	item.base_price_list_rate ??
+																		item.rate ??
+																		0,
 																),
 															)
 														}}
@@ -319,9 +318,11 @@
 											}}
 											{{
 												format_currency(
-													item.base_price_list_rate || item.rate,
+													item.base_price_list_rate ?? item.rate ?? 0,
 													item.original_currency || pos_profile.currency,
-													ratePrecision(item.base_price_list_rate || item.rate),
+													ratePrecision(
+														item.base_price_list_rate ?? item.rate ?? 0,
+													),
 												)
 											}}
 										</div>
@@ -640,8 +641,13 @@ export default {
 					this.items.forEach((it) => {
 						const ci = map[it.item_code];
 						if (ci) {
-							it.rate = ci.rate;
-							it.price_list_rate = ci.price_list_rate || ci.rate;
+							const force =
+								this.pos_profile?.posa_force_price_from_customer_price_list !== false;
+							const price = ci.price_list_rate ?? ci.rate ?? 0;
+							if (force || price) {
+								it.rate = price;
+								it.price_list_rate = price;
+							}
 						}
 					});
 					this.eventBus.emit("set_all_items", this.items);
@@ -1062,9 +1068,11 @@ export default {
 						saveItemUOMs(item.item_code, det.item_uoms);
 					}
 					if (det.rate !== undefined) {
-						if (det.rate !== 0 || !item.rate) {
-							upd.rate = det.rate;
-							upd.price_list_rate = det.price_list_rate || det.rate;
+						const force = vm.pos_profile?.posa_force_price_from_customer_price_list !== false;
+						const price = det.price_list_rate ?? det.rate ?? 0;
+						if (force || price) {
+							upd.rate = price;
+							upd.price_list_rate = price;
 						}
 					}
 					if (det.currency) {
@@ -1096,9 +1104,11 @@ export default {
 							saveItemUOMs(item.item_code, updItem.item_uoms);
 						}
 						if (updItem.rate !== undefined) {
-							if (updItem.rate !== 0 || !item.rate) {
-								upd.rate = updItem.rate;
-								upd.price_list_rate = updItem.price_list_rate || updItem.rate;
+							const force = vm.pos_profile?.posa_force_price_from_customer_price_list !== false;
+							const price = updItem.price_list_rate ?? updItem.rate ?? 0;
+							if (force || price) {
+								upd.rate = price;
+								upd.price_list_rate = price;
 							}
 						}
 						if (updItem.currency) {
@@ -1349,6 +1359,8 @@ export default {
 					}
 				}
 
+				await savePriceListItems(vm.customer_price_list || vm.pos_profile.selling_price_list, items);
+
 				if (hasMore) {
 					const last = items[items.length - 1]?.item_name || null;
 					console.log("[ItemsSelector] more items available, starting background load", {
@@ -1487,7 +1499,7 @@ export default {
 						this.itemWorker.postMessage({
 							type: "parse_and_cache",
 							json: text,
-							priceList: this.customer_price_list || "",
+							priceList: this.active_price_list || "",
 						});
 					});
 					if (this.items_request_token !== requestToken) {
@@ -1981,9 +1993,11 @@ export default {
 						saveItemUOMs(item.item_code, det.item_uoms);
 					}
 					if (det.rate !== undefined) {
-						if (det.rate !== 0 || !item.rate) {
-							item.rate = det.rate;
-							item.price_list_rate = det.price_list_rate || det.rate;
+						const force = vm.pos_profile?.posa_force_price_from_customer_price_list !== false;
+						const price = det.price_list_rate ?? det.rate ?? 0;
+						if (force || price) {
+							item.rate = price;
+							item.price_list_rate = price;
 						}
 					}
 					if (det.currency) {
@@ -2821,9 +2835,6 @@ export default {
 				this.qty = parsed;
 			}, 200),
 		},
-		isDarkTheme() {
-			return this.$theme.current === "dark";
-		},
 		active_price_list() {
 			return this.customer_price_list || (this.pos_profile && this.pos_profile.selling_price_list);
 		},
@@ -3078,16 +3089,24 @@ export default {
 	background-color: var(--surface-primary, #fff);
 	padding: var(--dynamic-sm);
 	margin: 0;
-	border-bottom: 1px solid #e0e0e0;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+	/* Performance optimizations for theme switching */
+	contain: layout style;
+	will-change: background-color;
+	transition:
+		background-color 0.15s ease,
+		border-color 0.15s ease;
 }
 
 [data-theme="dark"] .sticky-header {
 	background-color: var(--surface-primary, #1e1e1e);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .dynamic-scroll {
-	transition: max-height var(--transition-normal);
+	transition: max-height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 	padding-bottom: var(--dynamic-sm);
+	contain: layout style;
 }
 
 .item-container {
@@ -3105,21 +3124,28 @@ export default {
 }
 
 .dynamic-item-card {
-	transition: var(--transition-normal);
+	transition:
+		transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		box-shadow 0.2s ease;
 	background-color: var(--surface-secondary);
 	display: flex;
 	flex-direction: column;
 	height: auto;
 	max-width: 180px;
 	box-sizing: border-box;
+	will-change: transform;
+	backface-visibility: hidden;
+	transform: translate3d(0, 0, 0);
 }
 
 .dynamic-item-card .v-img {
 	object-fit: contain;
+	will-change: auto;
 }
 
 .dynamic-item-card:hover {
-	transform: scale(calc(1 + 0.02 * var(--font-scale)));
+	transform: translate3d(0, -2px, 0) scale(1.02);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .text-success {
@@ -3207,6 +3233,10 @@ export default {
 	overflow-y: auto;
 	scrollbar-width: thin;
 	scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+	/* Performance optimizations */
+	contain: layout style;
+	will-change: scroll-position;
+	transform: translate3d(0, 0, 0);
 }
 
 .items-card-grid::-webkit-scrollbar {
@@ -3227,16 +3257,22 @@ export default {
 	border-radius: 12px;
 	border: 1px solid rgba(0, 0, 0, 0.08);
 	overflow: hidden;
-	transition: all 0.3s ease;
+	transition:
+		transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		box-shadow 0.2s ease,
+		border-color 0.2s ease;
 	cursor: pointer;
 	display: flex;
 	flex-direction: column;
 	height: auto;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+	will-change: transform;
+	backface-visibility: hidden;
+	transform: translate3d(0, 0, 0);
 }
 
 .card-item-card:hover {
-	transform: translateY(-2px);
+	transform: translate3d(0, -2px, 0);
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 	border-color: var(--primary-color, #1976d2);
 }
@@ -3252,11 +3288,13 @@ export default {
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
-	transition: transform 0.3s ease;
+	transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	will-change: transform;
+	backface-visibility: hidden;
 }
 
 .card-item-card:hover .card-item-image {
-	transform: scale(1.05);
+	transform: scale3d(1.05, 1.05, 1);
 }
 
 .image-placeholder {
@@ -3301,7 +3339,7 @@ export default {
 
 .card-item-code {
 	font-size: 0.75rem;
-	color: var(--text-secondary, #6c757d);
+	color: var(--pos-text-secondary, #6c757d);
 	font-weight: 500;
 	background: rgba(0, 0, 0, 0.04);
 	padding: 2px 6px;
@@ -3374,7 +3412,7 @@ export default {
 }
 
 .stock-icon {
-	color: var(--text-secondary, #6c757d);
+	color: var(--pos-text-secondary, #6c757d);
 }
 
 .stock-amount {
@@ -3393,7 +3431,7 @@ export default {
 
 .stock-uom {
 	font-size: 0.75rem;
-	color: var(--text-secondary, #6c757d);
+	color: var(--pos-text-secondary, #6c757d);
 	font-weight: 500;
 }
 
@@ -3427,7 +3465,7 @@ export default {
 :deep([data-theme="dark"]) .card-item-code,
 :deep(.v-theme--dark) .card-item-code {
 	background: rgba(255, 255, 255, 0.08);
-	color: var(--text-secondary, #b0b0b0);
+	color: var(--pos-text-secondary, #e0e0e0);
 }
 
 :deep([data-theme="dark"]) .card-item-stock,
@@ -3659,6 +3697,89 @@ export default {
 
 	.cards {
 		padding: var(--dynamic-xs) !important;
+	}
+}
+
+/* ===============================================================
+   PERFORMANCE OPTIMIZATIONS FOR THEME SWITCHING
+   =============================================================== */
+
+/* Reduce paint and layout operations during theme transitions */
+* {
+	/* Optimize font rendering to reduce repaints */
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Enable hardware acceleration for better performance */
+.dynamic-item-card,
+.card-item-card,
+.items-card-grid,
+.sticky-header {
+	/* Force hardware acceleration */
+	transform: translate3d(0, 0, 0);
+	-webkit-transform: translate3d(0, 0, 0);
+	/* Improve compositing performance */
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+}
+
+/* Optimize theme-sensitive elements */
+[data-theme] .dynamic-item-card,
+[data-theme] .card-item-card,
+[data-theme] .sticky-header {
+	/* Minimize reflow during theme changes */
+	will-change: background-color, border-color, color;
+	transition:
+		background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+		border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+		color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Prevent layout shifts during image loading */
+.card-item-image,
+.dynamic-item-card .v-img {
+	content-visibility: auto;
+	contain-intrinsic-size: 120px 120px;
+}
+
+/* Optimize scrolling performance */
+.items-card-grid,
+.item-container {
+	/* Improve scroll performance */
+	overscroll-behavior: contain;
+	scroll-behavior: smooth;
+	/* Enable scroll anchoring */
+	overflow-anchor: auto;
+}
+
+/* Defer non-critical paint operations */
+.card-item-content,
+.dynamic-item-card .v-card-text {
+	contain: style;
+	will-change: auto;
+}
+
+/* Reduce complexity of hover effects */
+@media (hover: hover) {
+	.dynamic-item-card:hover,
+	.card-item-card:hover {
+		/* Use GPU-accelerated transforms only */
+		transition:
+			transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+			box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+}
+
+/* Disable animations on reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+	.dynamic-item-card,
+	.card-item-card,
+	.card-item-image,
+	.sticky-header {
+		transition: none !important;
+		animation: none !important;
+		transform: none !important;
 	}
 }
 </style>

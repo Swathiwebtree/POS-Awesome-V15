@@ -10,15 +10,10 @@
 			:style="{
 				height: invoiceHeight || 'var(--container-height)',
 				maxHeight: invoiceHeight || 'var(--container-height)',
-				backgroundColor: isDarkTheme ? '#121212' : '',
 				resize: 'vertical',
 				overflow: 'auto',
 			}"
-			:class="[
-				'cards my-0 py-0 mt-3 resizable',
-				isDarkTheme ? '' : 'bg-grey-lighten-5',
-				{ 'return-mode': isReturnInvoice },
-			]"
+			:class="['cards my-0 py-0 mt-3 resizable', 'pos-themed-card', { 'return-mode': isReturnInvoice }]"
 			@mouseup="saveInvoiceHeight"
 			@touchend="saveInvoiceHeight"
 		>
@@ -45,8 +40,7 @@
 							hide-details
 							variant="solo"
 							color="primary"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
+							class="dark-field sleek-field pos-themed-input"
 							:items="invoiceTypes"
 							:label="frappe._('Type')"
 							v-model="invoiceType"
@@ -377,6 +371,7 @@ export default {
 			available_stock_cache: {},
 			brand_cache: {},
 			delivery_charges: [], // List of delivery charges
+			base_delivery_charges_rate: 0, // Delivery charge in company currency
 			delivery_charges_rate: 0, // Selected delivery charge rate
 			selected_delivery_charge: "", // Selected delivery charge object
 			invoice_posting_date: false, // Posting date dialog
@@ -422,9 +417,6 @@ export default {
 	},
 	computed: {
 		...invoiceComputed,
-		isDarkTheme() {
-			return this.$theme.current === "dark";
-		},
 	},
 
 	methods: {
@@ -435,14 +427,21 @@ export default {
 			// Define all available columns
 			this.available_columns = [
 				{ title: __("Name"), align: "start", sortable: true, key: "item_name", required: true },
-				{ title: __("QTY"), key: "qty", align: "start", required: true },
-				{ title: __("UOM"), key: "uom", align: "start", required: false },
-				{ title: __("Price List Rate"), key: "price_list_rate", align: "start", required: false },
-				{ title: __("Discount %"), key: "discount_value", align: "start", required: false },
-				{ title: __("Discount Amount"), key: "discount_amount", align: "start", required: false },
-				{ title: __("Rate"), key: "rate", align: "start", required: true },
-				{ title: __("Amount"), key: "amount", align: "start", required: true },
+				{ title: __("QTY"), key: "qty", align: "center", required: true },
+				{ title: __("UOM"), key: "uom", align: "center", required: false },
+				{
+					title: __("Price List Rate"),
+					key: "price_list_rate",
+					align: "end",
+					required: false,
+					width: "120px",
+				},
+				{ title: __("Discount %"), key: "discount_value", align: "end", required: false },
+				{ title: __("Discount Amount"), key: "discount_amount", align: "end", required: false },
+				{ title: __("Rate"), key: "rate", align: "center", required: true },
+				{ title: __("Amount"), key: "amount", align: "center", required: true },
 				{ title: __("Offer?"), key: "posa_is_offer", align: "center", required: false },
+				{ title: __("Actions"), key: "actions", align: "center", required: true, sortable: false },
 			];
 
 			// Initialize selected columns if empty
@@ -619,10 +618,12 @@ export default {
 			var vm = this;
 			if (!this.pos_profile || !this.customer || !this.pos_profile.posa_use_delivery_charges) {
 				this.delivery_charges = [];
+				this.base_delivery_charges_rate = 0;
 				this.delivery_charges_rate = 0;
 				this.selected_delivery_charge = "";
 				return;
 			}
+			this.base_delivery_charges_rate = 0;
 			this.delivery_charges_rate = 0;
 			this.selected_delivery_charge = "";
 			try {
@@ -651,7 +652,18 @@ export default {
 		},
 		update_delivery_charges() {
 			if (this.selected_delivery_charge) {
-				this.delivery_charges_rate = this.selected_delivery_charge.rate;
+				this.base_delivery_charges_rate = this.selected_delivery_charge.rate;
+			} else {
+				this.base_delivery_charges_rate = 0;
+			}
+			this.update_delivery_charges_rate();
+		},
+		update_delivery_charges_rate() {
+			if (this.base_delivery_charges_rate) {
+				this.delivery_charges_rate = this.flt(
+					this.base_delivery_charges_rate / (this.conversion_rate || 1),
+					this.currency_precision,
+				);
 			} else {
 				this.delivery_charges_rate = 0;
 			}
@@ -1072,6 +1084,7 @@ export default {
 			});
 
 			this.update_item_rates();
+			this.update_delivery_charges_rate();
 		},
 
 		// Add new rounding function
@@ -1431,6 +1444,14 @@ export default {
 	.dynamic-padding .v-col {
 		padding: 2px 4px;
 	}
+
+	.items-table-wrapper {
+		/* Adjust for smaller padding on tablets */
+		margin-left: calc(-1 * var(--dynamic-xs));
+		margin-right: calc(-1 * var(--dynamic-xs));
+		width: calc(100% + 2 * var(--dynamic-xs));
+		max-width: calc(100% + 2 * var(--dynamic-xs));
+	}
 }
 
 @media (max-width: 480px) {
@@ -1444,6 +1465,14 @@ export default {
 
 	.dynamic-padding .v-col {
 		padding: 1px 2px;
+	}
+
+	.items-table-wrapper {
+		/* Adjust for smallest screens */
+		margin-left: calc(-1 * var(--dynamic-xs));
+		margin-right: calc(-1 * var(--dynamic-xs));
+		width: calc(100% + 2 * var(--dynamic-xs));
+		max-width: calc(100% + 2 * var(--dynamic-xs));
 	}
 }
 
@@ -1471,6 +1500,12 @@ export default {
 .items-table-wrapper {
 	position: relative;
 	margin-top: var(--dynamic-xl);
+	/* Override parent padding to make table full-width */
+	margin-left: calc(-1 * var(--dynamic-sm));
+	margin-right: calc(-1 * var(--dynamic-sm));
+	width: calc(100% + 2 * var(--dynamic-sm));
+	max-width: calc(100% + 2 * var(--dynamic-sm));
+	box-sizing: border-box;
 }
 
 /* New styles for improved column switches */
