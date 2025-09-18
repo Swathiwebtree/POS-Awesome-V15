@@ -54,6 +54,9 @@ After switching branches or pulling latest changes:
 5. bench build --app posawesome
 6. bench --site your.site migrate
 
+Go to developer tools in browser, then go to application tab, then go to storage and clear site data. 
+After clearing site data go to browser settings and delete cache and images data in history also. 
+
 ### Main Features
 
 1. Supports Erpnext Version 15
