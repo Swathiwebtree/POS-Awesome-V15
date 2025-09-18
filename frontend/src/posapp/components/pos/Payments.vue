@@ -607,6 +607,7 @@
 						size="large"
 						color="primary"
 						theme="dark"
+						class="submit-btn"
 						@click="submit"
 						:loading="loading"
 						:disabled="loading || vaildatPayment"
@@ -1040,10 +1041,13 @@ export default {
 	},
 	methods: {
 		// Go back to invoice view and reset customer readonly
-		back_to_invoice() {
-			this.eventBus.emit("show_payment", "false");
-			this.eventBus.emit("set_customer_readonly", false);
-		},
+                back_to_invoice() {
+                        this.eventBus.emit("show_payment", "false");
+                        this.eventBus.emit("set_customer_readonly", false);
+                        this.$nextTick(() => {
+                                this.eventBus.emit("focus_item_search");
+                        });
+                },
 		// Highlight and focus the submit button when payment screen opens
 		handleShowPayment(data) {
 			if (data === "true") {
@@ -1297,15 +1301,16 @@ export default {
 						title: __("Invoice saved offline"),
 						color: "warning",
 					});
-					if (print) {
-						this.print_offline_invoice(this.invoice_doc);
-					}
-					vm.eventBus.emit("clear_invoice");
-					vm.eventBus.emit("reset_posting_date");
-					vm.back_to_invoice();
-					vm.loading = false;
-					return;
-				} catch (error) {
+                                        if (print) {
+                                                this.print_offline_invoice(this.invoice_doc);
+                                        }
+                                        vm.eventBus.emit("clear_invoice");
+                                        vm.eventBus.emit("focus_item_search");
+                                        vm.eventBus.emit("reset_posting_date");
+                                        vm.back_to_invoice();
+                                        vm.loading = false;
+                                        return;
+                                } catch (error) {
 					vm.eventBus.emit("show_message", {
 						title: __("Cannot Save Offline Invoice: ") + (error.message || __("Unknown error")),
 						color: "error",
@@ -1388,14 +1393,15 @@ export default {
 					frappe.utils.play_sound("submit");
 					// Update local stock quantities immediately after successful
 					// invoice submission so item availability reflects changes
-					updateLocalStock(vm.invoice_doc.items || []);
-					vm.addresses = [];
-					vm.eventBus.emit("clear_invoice");
-					vm.eventBus.emit("reset_posting_date");
-					vm.back_to_invoice();
-					vm.loading = false;
-				},
-			});
+                                        updateLocalStock(vm.invoice_doc.items || []);
+                                        vm.addresses = [];
+                                        vm.eventBus.emit("clear_invoice");
+                                        vm.eventBus.emit("focus_item_search");
+                                        vm.eventBus.emit("reset_posting_date");
+                                        vm.back_to_invoice();
+                                        vm.loading = false;
+                                },
+                        });
 		},
 		// Set full amount for a payment method (or negative for returns)
 		set_full_amount(idx) {
@@ -2061,8 +2067,34 @@ export default {
 	background-color: var(--surface-secondary) !important;
 }
 
+.submit-btn {
+        position: relative;
+}
+
+.submit-btn:hover,
+.submit-btn:focus,
+.submit-btn:focus-visible,
+.submit-btn:active {
+        background-color: rgb(var(--v-theme-primary)) !important;
+        color: rgb(var(--v-theme-on-primary)) !important;
+        box-shadow: none;
+}
+
+.submit-btn:focus-visible {
+        outline: 2px solid rgb(var(--v-theme-primary));
+        outline-offset: 2px;
+}
+
+.submit-btn::before,
+.submit-btn:hover::before,
+.submit-btn:focus::before,
+.submit-btn:focus-visible::before,
+.submit-btn:active::before {
+        opacity: 0 !important;
+}
+
 .submit-highlight {
-	box-shadow: 0 0 0 4px rgb(var(--v-theme-primary));
-	transition: box-shadow 0.3s ease-in-out;
+        box-shadow: 0 0 0 4px rgb(var(--v-theme-primary));
+        transition: box-shadow 0.3s ease-in-out;
 }
 </style>

@@ -64,6 +64,15 @@ export function useItemAddition() {
 		}
 	};
 
+	const moveItemToTop = (context, target) => {
+		if (!target) return;
+		const currentIndex = context.items.findIndex((item) => item.posa_row_id === target.posa_row_id);
+		if (currentIndex > 0) {
+			const [existing] = context.items.splice(currentIndex, 1);
+			context.items.unshift(existing);
+		}
+	};
+
 	// Add item to invoice
 	const addItem = async (item, context) => {
 		if (!item.uom) {
@@ -239,6 +248,7 @@ export function useItemAddition() {
 				}
 			} else {
 				const cur_item = context.items[index];
+				const previousQty = cur_item.qty;
 				if (context.update_items_details) context.update_items_details([cur_item]);
 				// Merge serial numbers if any
 				if (new_item.serial_no_selected && new_item.serial_no_selected.length) {
@@ -268,9 +278,13 @@ export function useItemAddition() {
 				if (context.fetch_available_qty) {
 					context.fetch_available_qty(cur_item);
 				}
+				if (cur_item.qty > previousQty) {
+					moveItemToTop(context, cur_item);
+				}
 			}
 		} else {
 			const cur_item = context.items[index];
+			const previousQty = cur_item.qty;
 			if (context.update_items_details) context.update_items_details([cur_item]);
 			// Serial number logic for existing item
 			if (item.has_serial_no && item.to_set_serial_no) {
@@ -308,6 +322,9 @@ export function useItemAddition() {
 
 			if (context.fetch_available_qty) {
 				context.fetch_available_qty(cur_item);
+			}
+			if (cur_item.qty > previousQty) {
+				moveItemToTop(context, cur_item);
 			}
 		}
 		if (context.forceUpdate) context.forceUpdate();
@@ -429,10 +446,14 @@ export function useItemAddition() {
 		// Always reset to default customer after invoice
 		context.customer = context.pos_profile.customer;
 
-		context.eventBus.emit("set_customer_readonly", false);
-		context.invoiceType = context.pos_profile.posa_default_sales_order ? "Order" : "Invoice";
-		context.invoiceTypes = ["Invoice", "Order", "Quotation"];
-	};
+                context.eventBus.emit("set_customer_readonly", false);
+                context.invoiceType = context.pos_profile.posa_default_sales_order ? "Order" : "Invoice";
+                context.invoiceTypes = ["Invoice", "Order", "Quotation"];
+
+                if (Object.prototype.hasOwnProperty.call(context, "itemSearch")) {
+                        context.itemSearch = "";
+                }
+        };
 
 	// Add this utility for grouping logic, matching ItemsTable.vue
 	function groupAndAddItem(items, newItem) {

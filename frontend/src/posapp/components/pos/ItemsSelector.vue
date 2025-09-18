@@ -1,5 +1,34 @@
 <template>
 	<div :style="responsiveStyles">
+		<v-dialog
+			v-model="scanErrorDialog"
+			persistent
+			max-width="420"
+			content-class="scan-error-dialog"
+		>
+			<v-card>
+				<v-card-title class="d-flex align-center text-error text-h6">
+					<v-icon color="error" class="mr-2">mdi-alert-octagon</v-icon>
+					{{ __("Scan Error") }}
+				</v-card-title>
+				<v-divider></v-divider>
+				<v-card-text>
+					<p class="scan-error-message">{{ scanErrorMessage }}</p>
+					<p v-if="scanErrorCode" class="scan-error-code mt-2 mb-0">
+						<strong>{{ __("Scanned Code:") }}</strong>
+						<span>{{ scanErrorCode }}</span>
+					</p>
+					<p v-if="scanErrorDetails" class="scan-error-details mt-4 mb-0">
+						{{ scanErrorDetails }}
+					</p>
+				</v-card-text>
+				<v-card-actions class="justify-end">
+					<v-btn color="primary" variant="tonal" autofocus @click="acknowledgeScanError">
+						{{ __("OK") }}
+					</v-btn>
+				</v-card-actions>
+			</v-card>
+		</v-dialog>
 		<v-card
 			:class="[
 				'selection mx-auto my-0 py-0 mt-3 pos-card dynamic-card resizable pos-themed-card',
@@ -50,8 +79,13 @@
 										size="small"
 										color="primary"
 										variant="text"
+										:disabled="scannerLocked"
 										@click="startCameraScanning"
-										:title="__('Scan with Camera')"
+										:title="
+											scannerLocked
+												? __('Acknowledge the error to resume scanning')
+												: __('Scan with Camera')
+										"
 									>
 									</v-btn>
 								</template>
@@ -478,6 +512,7 @@ export default {
 	},
 	data: () => ({
 		pos_profile: {},
+		stock_settings: {},
 		flags: {},
 		items_view: "list",
 		item_group: "ALL",
@@ -547,6 +582,14 @@ export default {
 		pendingItemSearch: null,
 		loadProgress: 0,
 		totalItemCount: 0,
+		scanErrorDialog: false,
+		scanErrorMessage: "",
+		scanErrorDetails: "",
+		scanErrorCode: "",
+		scannerLocked: false,
+		scanAudioContext: null,
+		pendingScanCode: "",
+		awaitingScanResult: false,
 	}),
 
 	watch: {
@@ -1226,10 +1269,20 @@ export default {
 				console.error("Error checking item count:", err);
 			}
 		},
-		async get_items(force_server = false) {
-			console.log("[ItemsSelector] get_items called", {
-				force_server,
-				first_search: this.first_search,
+               async get_items(force_server = false) {
+                       if (this.isBackgroundLoading) {
+                               if (this.pendingGetItems) {
+                                       this.pendingGetItems.force_server =
+                                               this.pendingGetItems.force_server || force_server;
+                               } else {
+                                       this.pendingGetItems = { force_server };
+                               }
+                               return;
+                       }
+
+                       console.log("[ItemsSelector] get_items called", {
+                               force_server,
+                               first_search: this.first_search,
 				item_group: this.item_group,
 			});
 			// Ensure POS profile is available
@@ -1377,17 +1430,25 @@ export default {
 				console.log("[ItemsSelector] get_items finished");
 			}
 		},
-		finishBackgroundLoad() {
-			this.isBackgroundLoading = false;
-			if (this.pendingItemSearch) {
-				const pending = this.pendingItemSearch;
-				this.pendingItemSearch = null;
-				this.search_onchange(pending);
-				if (this.search_onchange.flush) {
-					this.search_onchange.flush();
-				}
-			}
-		},
+               finishBackgroundLoad() {
+                       this.isBackgroundLoading = false;
+
+                       const pendingSearch = this.pendingItemSearch;
+                       this.pendingItemSearch = null;
+                       if (pendingSearch) {
+                               this.search_onchange(pendingSearch);
+                               if (this.search_onchange.flush) {
+                                       this.search_onchange.flush();
+                               }
+                               return;
+                       }
+
+                       if (this.pendingGetItems) {
+                               const { force_server: forceServer } = this.pendingGetItems;
+                               this.pendingGetItems = null;
+                               this.get_items(!!forceServer);
+                       }
+               },
 		async backgroundLoadItems(startAfter, syncSince, clearBefore = false, requestToken, loaded = 0) {
 			this.isBackgroundLoading = true;
 			console.log("[ItemsSelector] backgroundLoadItems called", {
@@ -1850,13 +1911,82 @@ export default {
 			}
 
 			if (match) {
-				await this.add_item(new_item);
+				const fromScanner = this.search_from_scanner;
+				const scannedCodeForDisplay = this.pendingScanCode || this.first_search || search;
+				const availableQty =
+					typeof new_item.available_qty === "number"
+						? new_item.available_qty
+						: typeof new_item.actual_qty === "number"
+						? new_item.actual_qty
+						: null;
+				const requestedQty = Math.abs(new_item.qty || 1);
+
+                                if (availableQty !== null && availableQty < requestedQty) {
+                                        const negativeStockEnabled = this.isNegativeStockEnabled();
+                                        const shouldBlock =
+                                                !negativeStockEnabled &&
+                                                (this.pos_profile?.posa_block_sale_beyond_available_qty || availableQty <= 0);
+
+                                        if (shouldBlock || negativeStockEnabled) {
+                                                const formattedAvailable = this.format_number
+                                                        ? this.format_number(availableQty, this.hide_qty_decimals ? 0 : this.float_precision)
+                                                        : availableQty;
+                                                const formattedRequested = this.format_number
+                                                        ? this.format_number(requestedQty, this.hide_qty_decimals ? 0 : this.float_precision)
+                                                        : requestedQty;
+
+                                                if (shouldBlock) {
+                                                        this.showScanError({
+                                                                message: this.__("Quantity not available for {0}", [new_item.item_name || scannedCodeForDisplay]),
+                                                                code: scannedCodeForDisplay,
+                                                                details: this.__("Available: {0}. Requested: {1}.", [
+                                                                        formattedAvailable,
+                                                                        formattedRequested,
+                                                                ]),
+                                                        });
+                                                        return;
+                                                }
+
+                                                this.eventBus.emit("show_message", {
+                                                        title: this.__(
+                                                                "Available stock {0} is less than requested {1}. Negative stock setting allows continuing.",
+                                                                [formattedAvailable, formattedRequested],
+                                                        ),
+                                                        color: "warning",
+                                                });
+                                        }
+                                }
+
+				if (fromScanner) {
+					this.awaitingScanResult = true;
+				}
+
+				try {
+					await this.add_item(new_item);
+					if (fromScanner) {
+						this.playScanTone("success");
+						this.scannerLocked = false;
+						this.pendingScanCode = "";
+					}
+				} finally {
+					if (fromScanner) {
+						this.awaitingScanResult = false;
+					}
+				}
+
 				this.flags.serial_no = null;
 				this.flags.batch_no = null;
 				this.qty = 1;
-				// Clear search field after successfully adding an item
-				this.clearSearch();
-				this.$refs.debounce_search.focus();
+
+				if (fromScanner) {
+					this.search_from_scanner = false;
+				}
+
+				if (!this.scanErrorDialog) {
+					// Clear search field after successfully adding an item
+					this.clearSearch();
+					this.$refs.debounce_search.focus();
+				}
 			}
 		},
 		search_onchange: _.debounce(async function (newSearchTerm) {
@@ -2242,11 +2372,13 @@ export default {
 						oEvent.preventDefault();
 						return onScan.decodeKeyEvent(oEvent);
 					},
-					onScan: function (sCode) {
-						setTimeout(() => {
-							vm.trigger_onscan(sCode);
-						}, 300);
-					},
+                                        onScan: function (sCode) {
+                                                if (vm.scannerLocked) {
+                                                        vm.playScanTone("error");
+                                                        return;
+                                                }
+                                                vm.trigger_onscan(sCode);
+                                        },
 				});
 
 				// Mark document as having scanner attached
@@ -2256,11 +2388,16 @@ export default {
 			}
 		},
 		trigger_onscan(sCode) {
+			if (this.scannerLocked) {
+				this.playScanTone("error");
+				return;
+			}
 			// indicate this search came from a scanner
 			this.search_from_scanner = true;
 			// apply scanned code as search term
 			this.first_search = sCode;
 			this.search = sCode;
+			this.pendingScanCode = sCode;
 
 			this.$nextTick(() => {
 				if (this.filtered_items.length == 0) {
@@ -2268,14 +2405,20 @@ export default {
 						title: `No Item has this barcode "${sCode}"`,
 						color: "error",
 					});
-					frappe.utils.play_sound("error");
+					this.showScanError({
+						message: `${this.__("Item not found")}: ${sCode}`,
+						code: sCode,
+						details: this.__("Please verify the barcode or search manually."),
+					});
 				} else {
 					this.enter_event();
 				}
 
 				// clear search field for next scan and refocus input
-				this.clearSearch();
-				this.$refs.debounce_search && this.$refs.debounce_search.focus();
+				if (!this.scanErrorDialog) {
+					this.clearSearch();
+					this.$refs.debounce_search && this.$refs.debounce_search.focus();
+				}
 			});
 		},
 		generateWordCombinations(inputString) {
@@ -2300,15 +2443,35 @@ export default {
 
 			return combinations;
 		},
-		clearSearch() {
-			this.search_backup = this.first_search;
-			this.first_search = "";
-			this.search = "";
-			// Reset the visible items to the full list
-			this.loadVisibleItems(true);
-			// Refresh items from the server if needed
-			this.get_items();
-		},
+               clearSearch() {
+                       this.search_backup = this.first_search;
+                       this.first_search = "";
+                       this.search = "";
+
+                       if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
+                               this.loadVisibleItems(true);
+                               if (!this.isBackgroundLoading) {
+                                       this.verifyServerItemCount();
+                               }
+                               return;
+                       }
+
+                       if (this.isBackgroundLoading) {
+                               if (this.pendingGetItems) {
+                                       this.pendingGetItems.force_server =
+                                               this.pendingGetItems.force_server || false;
+                               } else {
+                                       this.pendingGetItems = { force_server: false };
+                               }
+                               return;
+                       }
+
+                       if (!this.items_loaded || !this.items.length) {
+                               this.get_items(true);
+                       } else {
+                               this.eventBus.emit("set_all_items", this.items);
+                       }
+               },
 
 		restoreSearch() {
 			if (this.first_search === "") {
@@ -2317,24 +2480,126 @@ export default {
 				// No need to reload items when focus is lost
 			}
 		},
-		handleItemSearchFocus() {
-			this.first_search = "";
-			this.search = "";
-			// Optionally, you might want to also clear search_backup if the behaviour should be a full reset on focus
-			// this.search_backup = "";
-		},
+                handleItemSearchFocus() {
+                        this.first_search = "";
+                        this.search = "";
+                        // Optionally, you might want to also clear search_backup if the behaviour should be a full reset on focus
+                        // this.search_backup = "";
+                },
+
+                focusItemSearch() {
+                        this.$nextTick(() => {
+                                const input = this.$refs.debounce_search;
+                                if (input && typeof input.focus === "function") {
+                                        input.focus();
+                                }
+                        });
+                },
 
 		clearQty() {
 			this.qty = null;
 		},
 
+		ensureScanAudioContext() {
+			if (typeof window === "undefined") {
+				return null;
+			}
+			if (!this.scanAudioContext) {
+				const AudioContext = window.AudioContext || window.webkitAudioContext;
+				if (!AudioContext) {
+					return null;
+				}
+				this.scanAudioContext = new AudioContext();
+			}
+			if (this.scanAudioContext?.state === "suspended") {
+				this.scanAudioContext.resume().catch(() => {});
+			}
+			return this.scanAudioContext;
+		},
+		playScanTone(type = "success") {
+			if (typeof window === "undefined") {
+				return;
+			}
+			try {
+				const ctx = this.ensureScanAudioContext();
+				if (!ctx) {
+					if (frappe?.utils?.play_sound) {
+						frappe.utils.play_sound(type === "success" ? "submit" : "error");
+					}
+					return;
+				}
+				const now = ctx.currentTime;
+				const duration = type === "success" ? 0.16 : 0.35;
+				const oscillator = ctx.createOscillator();
+				const gainNode = ctx.createGain();
+				oscillator.type = "sine";
+				oscillator.frequency.value = type === "success" ? 880 : 220;
+				gainNode.gain.setValueAtTime(type === "success" ? 0.18 : 0.28, now);
+				gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+				oscillator.connect(gainNode);
+				gainNode.connect(ctx.destination);
+				oscillator.start(now);
+				oscillator.stop(now + duration);
+			} catch (error) {
+				console.warn("Scan tone playback failed:", error);
+				if (frappe?.utils?.play_sound) {
+					frappe.utils.play_sound(type === "success" ? "submit" : "error");
+				}
+			}
+		},
+		showScanError({ message, code = "", details = "" } = {}) {
+			this.scanErrorMessage = message || this.__("Unable to add scanned item.");
+			this.scanErrorCode = code;
+			this.scanErrorDetails = details;
+			if (code) {
+				this.pendingScanCode = code;
+			}
+			this.awaitingScanResult = false;
+			this.search_from_scanner = false;
+			this.scanErrorDialog = true;
+			this.scannerLocked = true;
+			this.playScanTone("error");
+			if (frappe?.show_alert) {
+				frappe.show_alert(
+					{
+						message: this.scanErrorMessage,
+						indicator: "red",
+					},
+					5,
+				);
+			}
+		},
+		acknowledgeScanError() {
+			this.scanErrorDialog = false;
+			this.scannerLocked = false;
+			this.scanErrorMessage = "";
+			this.scanErrorCode = "";
+			this.scanErrorDetails = "";
+			this.pendingScanCode = "";
+			this.awaitingScanResult = false;
+			this.$nextTick(() => {
+				if (this.$refs.debounce_search) {
+					this.$refs.debounce_search.focus();
+				}
+			});
+		},
+
 		startCameraScanning() {
+			if (this.scannerLocked) {
+				this.playScanTone("error");
+				return;
+			}
 			if (this.$refs.cameraScanner) {
 				this.$refs.cameraScanner.startScanning();
 			}
 		},
 		onBarcodeScanned(scannedCode) {
+			if (this.scannerLocked) {
+				this.playScanTone("error");
+				return;
+			}
 			console.log("Barcode scanned:", scannedCode);
+			this.pendingScanCode = scannedCode;
 
 			// mark this search as coming from a scanner
 			this.search_from_scanner = true;
@@ -2356,12 +2621,11 @@ export default {
 				2,
 			);
 
-			// Enhanced item search and submission logic
-			setTimeout(() => {
-				this.processScannedItem(scannedCode);
-			}, 300);
-		},
+                        // Enhanced item search and submission logic
+                        this.processScannedItem(scannedCode);
+                },
 		async processScannedItem(scannedCode) {
+			this.pendingScanCode = scannedCode;
 			// Handle scale barcodes by extracting the item code and quantity
 			let searchCode = scannedCode;
 			let qtyFromBarcode = null;
@@ -2385,7 +2649,7 @@ export default {
 
 			if (foundItem) {
 				console.log("Found item by processed code:", foundItem);
-				this.addScannedItemToInvoice(foundItem, searchCode, qtyFromBarcode);
+				await this.addScannedItemToInvoice(foundItem, searchCode, qtyFromBarcode);
 				return;
 			}
 
@@ -2412,27 +2676,27 @@ export default {
 					await savePriceListItems(this.customer_price_list, this.items);
 					this.eventBus.emit("set_all_items", this.items);
 					await this.update_items_details([newItem]);
-					this.addScannedItemToInvoice(newItem, searchCode, qtyFromBarcode);
+					await this.addScannedItemToInvoice(newItem, searchCode, qtyFromBarcode);
 					return;
 				}
 
-				frappe.show_alert(
-					{
-						message: `${this.__("Item not found")}: ${scannedCode}`,
-						indicator: "red",
-					},
-					5,
-				);
+				this.first_search = scannedCode;
+				this.search = scannedCode;
+				this.showScanError({
+					message: `${this.__("Item not found")}: ${scannedCode}`,
+					code: scannedCode,
+					details: this.__("Please verify the barcode or check the item's availability."),
+				});
 				return;
 			} catch (e) {
 				console.error("Error fetching item from barcode:", e);
-				frappe.show_alert(
-					{
-						message: `${this.__("Item not found")}: ${scannedCode}`,
-						indicator: "red",
-					},
-					5,
-				);
+				this.first_search = scannedCode;
+				this.search = scannedCode;
+				this.showScanError({
+					message: `${this.__("Item not found")}: ${scannedCode}`,
+					code: scannedCode,
+					details: this.__("The system could not retrieve the item details. Please try again."),
+				});
 				return;
 			}
 		},
@@ -2497,25 +2761,95 @@ export default {
 				newItem._barcode_qty = true;
 			}
 
-			// Use existing add_item method with enhanced feedback
-			await this.add_item(newItem);
+			const requestedQtyRaw =
+				qtyFromBarcode !== null && !isNaN(qtyFromBarcode)
+					? qtyFromBarcode
+					: newItem.qty ?? 1;
+			const requestedQty = Math.abs(requestedQtyRaw || 1);
+                        const availableQty =
+                                typeof newItem.available_qty === "number"
+                                        ? newItem.available_qty
+                                        : typeof newItem.actual_qty === "number"
+                                        ? newItem.actual_qty
+                                        : null;
 
-			// Show success message
-			frappe.show_alert(
-				{
-					message: `Added: ${item.item_name}`,
-					indicator: "green",
-				},
-				3,
-			);
+                        if (availableQty !== null && availableQty < requestedQty) {
+                                const formattedAvailable = this.format_number
+                                        ? this.format_number(availableQty, this.hide_qty_decimals ? 0 : this.float_precision)
+                                        : availableQty;
+                                const formattedRequested = this.format_number
+                                        ? this.format_number(requestedQty, this.hide_qty_decimals ? 0 : this.float_precision)
+                                        : requestedQty;
+                                const negativeStockEnabled = this.isNegativeStockEnabled();
+                                const shouldBlock =
+                                        !negativeStockEnabled &&
+                                        (this.pos_profile?.posa_block_sale_beyond_available_qty || availableQty <= 0);
 
-			// Clear search after successful addition and refocus input
-			this.clearSearch();
-			this.$refs.debounce_search && this.$refs.debounce_search.focus();
-		},
-		showMultipleItemsDialog(items, scannedCode) {
-			// Create a dialog to let user choose from multiple matches
-			const dialog = new frappe.ui.Dialog({
+                                if (shouldBlock) {
+                                        this.showScanError({
+                                                message: this.__("Quantity not available for {0}", [
+                                                        newItem.item_name || scannedCode,
+                                                ]),
+                                                code: scannedCode,
+                                                details: this.__("Available: {0}. Requested: {1}.", [
+                                                        formattedAvailable,
+                                                        formattedRequested,
+                                                ]),
+                                        });
+                                        return;
+                                }
+
+                                if (negativeStockEnabled) {
+                                        this.eventBus.emit("show_message", {
+                                                title: this.__(
+                                                        "Available stock {0} is less than requested {1}. Negative stock setting allows continuing.",
+                                                        [formattedAvailable, formattedRequested],
+                                                ),
+                                                color: "warning",
+                                        });
+                                }
+                        }
+
+			this.awaitingScanResult = true;
+
+			try {
+				// Use existing add_item method with enhanced feedback
+				await this.add_item(newItem);
+				this.playScanTone("success");
+				this.scannerLocked = false;
+				this.search_from_scanner = false;
+				this.pendingScanCode = "";
+
+				// Show success message
+				frappe.show_alert(
+					{
+						message: `Added: ${item.item_name}`,
+						indicator: "green",
+					},
+					3,
+				);
+
+				// Clear search after successful addition and refocus input
+				this.clearSearch();
+				this.$refs.debounce_search && this.$refs.debounce_search.focus();
+                        } finally {
+                                this.awaitingScanResult = false;
+                        }
+                },
+                isNegativeStockEnabled() {
+                        const setting = this.stock_settings?.allow_negative_stock;
+                        if (setting === undefined || setting === null) {
+                                return false;
+                        }
+                        if (typeof setting === "string") {
+                                const normalized = setting.toLowerCase();
+                                return normalized === "1" || normalized === "true" || normalized === "yes";
+                        }
+                        return Boolean(setting);
+                },
+                showMultipleItemsDialog(items, scannedCode) {
+                        // Create a dialog to let user choose from multiple matches
+                        const dialog = new frappe.ui.Dialog({
 				title: __("Multiple Items Found"),
 				fields: [
 					{
@@ -2567,17 +2901,13 @@ export default {
 		handleItemNotFound(scannedCode) {
 			console.warn("Item not found for scanned code:", scannedCode);
 
-			// Show error message
-			frappe.show_alert(
-				{
-					message: `Item not found: ${scannedCode}`,
-					indicator: "red",
-				},
-				5,
-			);
-
-			// Keep the search term for manual search
-			this.trigger_onscan(scannedCode);
+			this.first_search = scannedCode;
+			this.search = scannedCode;
+			this.showScanError({
+				message: `${this.__("Item not found")}: ${scannedCode}`,
+				code: scannedCode,
+				details: this.__("This barcode could not be matched to any item."),
+			});
 		},
 
 		currencySymbol(currency) {
@@ -2887,12 +3217,13 @@ export default {
 		});
 
 		// Event listeners
-		this.eventBus.on("register_pos_profile", async (data) => {
-			this.pos_profile = data.pos_profile;
-			this.get_items_groups();
-			await this.initializeItems();
-			this.items_view = this.pos_profile.posa_default_card_view ? "card" : "list";
-		});
+                this.eventBus.on("register_pos_profile", async (data) => {
+                        this.pos_profile = data.pos_profile;
+                        this.stock_settings = data.stock_settings || {};
+                        this.get_items_groups();
+                        await this.initializeItems();
+                        this.items_view = this.pos_profile.posa_default_card_view ? "card" : "list";
+                });
 		this.eventBus.on("update_cur_items_details", () => {
 			this.update_cur_items_details();
 		});
@@ -2907,13 +3238,17 @@ export default {
 		this.eventBus.on("update_customer_price_list", (data) => {
 			this.customer_price_list = data;
 		});
-		this.eventBus.on("update_customer", (data) => {
-			this.customer = data;
-		});
+                this.eventBus.on("update_customer", (data) => {
+                        this.customer = data;
+                });
 
-		// Manually trigger a full item reload when requested
-		this.eventBus.on("force_reload_items", async () => {
-			await this.ensureStorageHealth();
+                this.eventBus.on("focus_item_search", () => {
+                        this.focusItemSearch();
+                });
+
+                // Manually trigger a full item reload when requested
+                this.eventBus.on("force_reload_items", async () => {
+                        await this.ensureStorageHealth();
 			this.items_loaded = false;
 			if (!isOffline()) {
 				if (this.pos_profile && (!this.pos_profile.posa_local_storage || !this.storageAvailable)) {
@@ -3061,17 +3396,27 @@ export default {
 			this.itemWorker.terminate();
 		}
 
+		if (this.scanAudioContext) {
+			try {
+				this.scanAudioContext.close();
+			} catch (error) {
+				console.warn("Scan audio context close failed:", error);
+			}
+			this.scanAudioContext = null;
+		}
+
 		this.eventBus.off("update_currency");
 		this.eventBus.off("server-online");
 		this.eventBus.off("register_pos_profile");
 		this.eventBus.off("update_cur_items_details");
 		this.eventBus.off("update_offers_counters");
-		this.eventBus.off("update_coupons_counters");
-		this.eventBus.off("update_customer_price_list");
-		this.eventBus.off("update_customer");
-		this.eventBus.off("force_reload_items");
-		window.removeEventListener("resize", this.checkItemContainerOverflow);
-	},
+                this.eventBus.off("update_coupons_counters");
+                this.eventBus.off("update_customer_price_list");
+                this.eventBus.off("update_customer");
+                this.eventBus.off("force_reload_items");
+                this.eventBus.off("focus_item_search");
+                window.removeEventListener("resize", this.checkItemContainerOverflow);
+        },
 };
 </script>
 
@@ -3080,6 +3425,42 @@ export default {
 .dynamic-padding {
 	/* Equal spacing on all sides for consistent alignment */
 	padding: var(--dynamic-sm);
+}
+
+.scan-error-dialog {
+	border-radius: 16px;
+}
+
+.scan-error-dialog .scan-error-message {
+	font-weight: 600;
+	font-size: 1.05rem;
+	margin: 0;
+}
+
+.scan-error-dialog .scan-error-code {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-family: "Roboto Mono", "Fira Code", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+	font-size: 0.95rem;
+	padding: 6px 10px;
+	border-radius: 6px;
+	background-color: rgba(244, 67, 54, 0.12);
+}
+
+.scan-error-dialog .scan-error-details {
+	margin-top: 12px;
+	color: rgba(0, 0, 0, 0.72);
+	line-height: 1.4;
+}
+
+:deep(.v-theme--dark) .scan-error-dialog .scan-error-code {
+	background-color: rgba(244, 67, 54, 0.25);
+	color: #ffebee;
+}
+
+:deep(.v-theme--dark) .scan-error-dialog .scan-error-details {
+	color: rgba(255, 255, 255, 0.7);
 }
 
 .sticky-header {
