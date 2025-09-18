@@ -1,11 +1,6 @@
 <template>
 	<div :style="responsiveStyles">
-		<v-dialog
-			v-model="scanErrorDialog"
-			persistent
-			max-width="420"
-			content-class="scan-error-dialog"
-		>
+		<v-dialog v-model="scanErrorDialog" persistent max-width="420" content-class="scan-error-dialog">
 			<v-card>
 				<v-card-title class="d-flex align-center text-error text-h6">
 					<v-icon color="error" class="mr-2">mdi-alert-octagon</v-icon>
@@ -1269,20 +1264,19 @@ export default {
 				console.error("Error checking item count:", err);
 			}
 		},
-               async get_items(force_server = false) {
-                       if (this.isBackgroundLoading) {
-                               if (this.pendingGetItems) {
-                                       this.pendingGetItems.force_server =
-                                               this.pendingGetItems.force_server || force_server;
-                               } else {
-                                       this.pendingGetItems = { force_server };
-                               }
-                               return;
-                       }
+		async get_items(force_server = false) {
+			if (this.isBackgroundLoading) {
+				if (this.pendingGetItems) {
+					this.pendingGetItems.force_server = this.pendingGetItems.force_server || force_server;
+				} else {
+					this.pendingGetItems = { force_server };
+				}
+				return;
+			}
 
-                       console.log("[ItemsSelector] get_items called", {
-                               force_server,
-                               first_search: this.first_search,
+			console.log("[ItemsSelector] get_items called", {
+				force_server,
+				first_search: this.first_search,
 				item_group: this.item_group,
 			});
 			// Ensure POS profile is available
@@ -1430,25 +1424,25 @@ export default {
 				console.log("[ItemsSelector] get_items finished");
 			}
 		},
-               finishBackgroundLoad() {
-                       this.isBackgroundLoading = false;
+		finishBackgroundLoad() {
+			this.isBackgroundLoading = false;
 
-                       const pendingSearch = this.pendingItemSearch;
-                       this.pendingItemSearch = null;
-                       if (pendingSearch) {
-                               this.search_onchange(pendingSearch);
-                               if (this.search_onchange.flush) {
-                                       this.search_onchange.flush();
-                               }
-                               return;
-                       }
+			const pendingSearch = this.pendingItemSearch;
+			this.pendingItemSearch = null;
+			if (pendingSearch) {
+				this.search_onchange(pendingSearch);
+				if (this.search_onchange.flush) {
+					this.search_onchange.flush();
+				}
+				return;
+			}
 
-                       if (this.pendingGetItems) {
-                               const { force_server: forceServer } = this.pendingGetItems;
-                               this.pendingGetItems = null;
-                               this.get_items(!!forceServer);
-                       }
-               },
+			if (this.pendingGetItems) {
+				const { force_server: forceServer } = this.pendingGetItems;
+				this.pendingGetItems = null;
+				this.get_items(!!forceServer);
+			}
+		},
 		async backgroundLoadItems(startAfter, syncSince, clearBefore = false, requestToken, loaded = 0) {
 			this.isBackgroundLoading = true;
 			console.log("[ItemsSelector] backgroundLoadItems called", {
@@ -1917,45 +1911,53 @@ export default {
 					typeof new_item.available_qty === "number"
 						? new_item.available_qty
 						: typeof new_item.actual_qty === "number"
-						? new_item.actual_qty
-						: null;
+							? new_item.actual_qty
+							: null;
 				const requestedQty = Math.abs(new_item.qty || 1);
 
-                                if (availableQty !== null && availableQty < requestedQty) {
-                                        const negativeStockEnabled = this.isNegativeStockEnabled();
-                                        const shouldBlock =
-                                                !negativeStockEnabled &&
-                                                (this.pos_profile?.posa_block_sale_beyond_available_qty || availableQty <= 0);
+				if (availableQty !== null && availableQty < requestedQty) {
+					const negativeStockEnabled = this.isNegativeStockEnabled();
+					const shouldBlock =
+						!negativeStockEnabled &&
+						(this.pos_profile?.posa_block_sale_beyond_available_qty || availableQty <= 0);
 
-                                        if (shouldBlock || negativeStockEnabled) {
-                                                const formattedAvailable = this.format_number
-                                                        ? this.format_number(availableQty, this.hide_qty_decimals ? 0 : this.float_precision)
-                                                        : availableQty;
-                                                const formattedRequested = this.format_number
-                                                        ? this.format_number(requestedQty, this.hide_qty_decimals ? 0 : this.float_precision)
-                                                        : requestedQty;
+					if (shouldBlock || negativeStockEnabled) {
+						const formattedAvailable = this.format_number
+							? this.format_number(
+									availableQty,
+									this.hide_qty_decimals ? 0 : this.float_precision,
+								)
+							: availableQty;
+						const formattedRequested = this.format_number
+							? this.format_number(
+									requestedQty,
+									this.hide_qty_decimals ? 0 : this.float_precision,
+								)
+							: requestedQty;
 
-                                                if (shouldBlock) {
-                                                        this.showScanError({
-                                                                message: this.__("Quantity not available for {0}", [new_item.item_name || scannedCodeForDisplay]),
-                                                                code: scannedCodeForDisplay,
-                                                                details: this.__("Available: {0}. Requested: {1}.", [
-                                                                        formattedAvailable,
-                                                                        formattedRequested,
-                                                                ]),
-                                                        });
-                                                        return;
-                                                }
+						if (shouldBlock) {
+							this.showScanError({
+								message: this.__("Quantity not available for {0}", [
+									new_item.item_name || scannedCodeForDisplay,
+								]),
+								code: scannedCodeForDisplay,
+								details: this.__("Available: {0}. Requested: {1}.", [
+									formattedAvailable,
+									formattedRequested,
+								]),
+							});
+							return;
+						}
 
-                                                this.eventBus.emit("show_message", {
-                                                        title: this.__(
-                                                                "Available stock {0} is less than requested {1}. Negative stock setting allows continuing.",
-                                                                [formattedAvailable, formattedRequested],
-                                                        ),
-                                                        color: "warning",
-                                                });
-                                        }
-                                }
+						this.eventBus.emit("show_message", {
+							title: this.__(
+								"Available stock {0} is less than requested {1}. Negative stock setting allows continuing.",
+								[formattedAvailable, formattedRequested],
+							),
+							color: "warning",
+						});
+					}
+				}
 
 				if (fromScanner) {
 					this.awaitingScanResult = true;
@@ -2372,13 +2374,13 @@ export default {
 						oEvent.preventDefault();
 						return onScan.decodeKeyEvent(oEvent);
 					},
-                                        onScan: function (sCode) {
-                                                if (vm.scannerLocked) {
-                                                        vm.playScanTone("error");
-                                                        return;
-                                                }
-                                                vm.trigger_onscan(sCode);
-                                        },
+					onScan: function (sCode) {
+						if (vm.scannerLocked) {
+							vm.playScanTone("error");
+							return;
+						}
+						vm.trigger_onscan(sCode);
+					},
 				});
 
 				// Mark document as having scanner attached
@@ -2443,35 +2445,34 @@ export default {
 
 			return combinations;
 		},
-               clearSearch() {
-                       this.search_backup = this.first_search;
-                       this.first_search = "";
-                       this.search = "";
+		clearSearch() {
+			this.search_backup = this.first_search;
+			this.first_search = "";
+			this.search = "";
 
-                       if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
-                               this.loadVisibleItems(true);
-                               if (!this.isBackgroundLoading) {
-                                       this.verifyServerItemCount();
-                               }
-                               return;
-                       }
+			if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
+				this.loadVisibleItems(true);
+				if (!this.isBackgroundLoading) {
+					this.verifyServerItemCount();
+				}
+				return;
+			}
 
-                       if (this.isBackgroundLoading) {
-                               if (this.pendingGetItems) {
-                                       this.pendingGetItems.force_server =
-                                               this.pendingGetItems.force_server || false;
-                               } else {
-                                       this.pendingGetItems = { force_server: false };
-                               }
-                               return;
-                       }
+			if (this.isBackgroundLoading) {
+				if (this.pendingGetItems) {
+					this.pendingGetItems.force_server = this.pendingGetItems.force_server || false;
+				} else {
+					this.pendingGetItems = { force_server: false };
+				}
+				return;
+			}
 
-                       if (!this.items_loaded || !this.items.length) {
-                               this.get_items(true);
-                       } else {
-                               this.eventBus.emit("set_all_items", this.items);
-                       }
-               },
+			if (!this.items_loaded || !this.items.length) {
+				this.get_items(true);
+			} else {
+				this.eventBus.emit("set_all_items", this.items);
+			}
+		},
 
 		restoreSearch() {
 			if (this.first_search === "") {
@@ -2480,21 +2481,21 @@ export default {
 				// No need to reload items when focus is lost
 			}
 		},
-                handleItemSearchFocus() {
-                        this.first_search = "";
-                        this.search = "";
-                        // Optionally, you might want to also clear search_backup if the behaviour should be a full reset on focus
-                        // this.search_backup = "";
-                },
+		handleItemSearchFocus() {
+			this.first_search = "";
+			this.search = "";
+			// Optionally, you might want to also clear search_backup if the behaviour should be a full reset on focus
+			// this.search_backup = "";
+		},
 
-                focusItemSearch() {
-                        this.$nextTick(() => {
-                                const input = this.$refs.debounce_search;
-                                if (input && typeof input.focus === "function") {
-                                        input.focus();
-                                }
-                        });
-                },
+		focusItemSearch() {
+			this.$nextTick(() => {
+				const input = this.$refs.debounce_search;
+				if (input && typeof input.focus === "function") {
+					input.focus();
+				}
+			});
+		},
 
 		clearQty() {
 			this.qty = null;
@@ -2621,9 +2622,9 @@ export default {
 				2,
 			);
 
-                        // Enhanced item search and submission logic
-                        this.processScannedItem(scannedCode);
-                },
+			// Enhanced item search and submission logic
+			this.processScannedItem(scannedCode);
+		},
 		async processScannedItem(scannedCode) {
 			this.pendingScanCode = scannedCode;
 			// Handle scale barcodes by extracting the item code and quantity
@@ -2762,53 +2763,51 @@ export default {
 			}
 
 			const requestedQtyRaw =
-				qtyFromBarcode !== null && !isNaN(qtyFromBarcode)
-					? qtyFromBarcode
-					: newItem.qty ?? 1;
+				qtyFromBarcode !== null && !isNaN(qtyFromBarcode) ? qtyFromBarcode : (newItem.qty ?? 1);
 			const requestedQty = Math.abs(requestedQtyRaw || 1);
-                        const availableQty =
-                                typeof newItem.available_qty === "number"
-                                        ? newItem.available_qty
-                                        : typeof newItem.actual_qty === "number"
-                                        ? newItem.actual_qty
-                                        : null;
+			const availableQty =
+				typeof newItem.available_qty === "number"
+					? newItem.available_qty
+					: typeof newItem.actual_qty === "number"
+						? newItem.actual_qty
+						: null;
 
-                        if (availableQty !== null && availableQty < requestedQty) {
-                                const formattedAvailable = this.format_number
-                                        ? this.format_number(availableQty, this.hide_qty_decimals ? 0 : this.float_precision)
-                                        : availableQty;
-                                const formattedRequested = this.format_number
-                                        ? this.format_number(requestedQty, this.hide_qty_decimals ? 0 : this.float_precision)
-                                        : requestedQty;
-                                const negativeStockEnabled = this.isNegativeStockEnabled();
-                                const shouldBlock =
-                                        !negativeStockEnabled &&
-                                        (this.pos_profile?.posa_block_sale_beyond_available_qty || availableQty <= 0);
+			if (availableQty !== null && availableQty < requestedQty) {
+				const formattedAvailable = this.format_number
+					? this.format_number(availableQty, this.hide_qty_decimals ? 0 : this.float_precision)
+					: availableQty;
+				const formattedRequested = this.format_number
+					? this.format_number(requestedQty, this.hide_qty_decimals ? 0 : this.float_precision)
+					: requestedQty;
+				const negativeStockEnabled = this.isNegativeStockEnabled();
+				const shouldBlock =
+					!negativeStockEnabled &&
+					(this.pos_profile?.posa_block_sale_beyond_available_qty || availableQty <= 0);
 
-                                if (shouldBlock) {
-                                        this.showScanError({
-                                                message: this.__("Quantity not available for {0}", [
-                                                        newItem.item_name || scannedCode,
-                                                ]),
-                                                code: scannedCode,
-                                                details: this.__("Available: {0}. Requested: {1}.", [
-                                                        formattedAvailable,
-                                                        formattedRequested,
-                                                ]),
-                                        });
-                                        return;
-                                }
+				if (shouldBlock) {
+					this.showScanError({
+						message: this.__("Quantity not available for {0}", [
+							newItem.item_name || scannedCode,
+						]),
+						code: scannedCode,
+						details: this.__("Available: {0}. Requested: {1}.", [
+							formattedAvailable,
+							formattedRequested,
+						]),
+					});
+					return;
+				}
 
-                                if (negativeStockEnabled) {
-                                        this.eventBus.emit("show_message", {
-                                                title: this.__(
-                                                        "Available stock {0} is less than requested {1}. Negative stock setting allows continuing.",
-                                                        [formattedAvailable, formattedRequested],
-                                                ),
-                                                color: "warning",
-                                        });
-                                }
-                        }
+				if (negativeStockEnabled) {
+					this.eventBus.emit("show_message", {
+						title: this.__(
+							"Available stock {0} is less than requested {1}. Negative stock setting allows continuing.",
+							[formattedAvailable, formattedRequested],
+						),
+						color: "warning",
+					});
+				}
+			}
 
 			this.awaitingScanResult = true;
 
@@ -2832,24 +2831,24 @@ export default {
 				// Clear search after successful addition and refocus input
 				this.clearSearch();
 				this.$refs.debounce_search && this.$refs.debounce_search.focus();
-                        } finally {
-                                this.awaitingScanResult = false;
-                        }
-                },
-                isNegativeStockEnabled() {
-                        const setting = this.stock_settings?.allow_negative_stock;
-                        if (setting === undefined || setting === null) {
-                                return false;
-                        }
-                        if (typeof setting === "string") {
-                                const normalized = setting.toLowerCase();
-                                return normalized === "1" || normalized === "true" || normalized === "yes";
-                        }
-                        return Boolean(setting);
-                },
-                showMultipleItemsDialog(items, scannedCode) {
-                        // Create a dialog to let user choose from multiple matches
-                        const dialog = new frappe.ui.Dialog({
+			} finally {
+				this.awaitingScanResult = false;
+			}
+		},
+		isNegativeStockEnabled() {
+			const setting = this.stock_settings?.allow_negative_stock;
+			if (setting === undefined || setting === null) {
+				return false;
+			}
+			if (typeof setting === "string") {
+				const normalized = setting.toLowerCase();
+				return normalized === "1" || normalized === "true" || normalized === "yes";
+			}
+			return Boolean(setting);
+		},
+		showMultipleItemsDialog(items, scannedCode) {
+			// Create a dialog to let user choose from multiple matches
+			const dialog = new frappe.ui.Dialog({
 				title: __("Multiple Items Found"),
 				fields: [
 					{
@@ -3217,13 +3216,13 @@ export default {
 		});
 
 		// Event listeners
-                this.eventBus.on("register_pos_profile", async (data) => {
-                        this.pos_profile = data.pos_profile;
-                        this.stock_settings = data.stock_settings || {};
-                        this.get_items_groups();
-                        await this.initializeItems();
-                        this.items_view = this.pos_profile.posa_default_card_view ? "card" : "list";
-                });
+		this.eventBus.on("register_pos_profile", async (data) => {
+			this.pos_profile = data.pos_profile;
+			this.stock_settings = data.stock_settings || {};
+			this.get_items_groups();
+			await this.initializeItems();
+			this.items_view = this.pos_profile.posa_default_card_view ? "card" : "list";
+		});
 		this.eventBus.on("update_cur_items_details", () => {
 			this.update_cur_items_details();
 		});
@@ -3238,17 +3237,17 @@ export default {
 		this.eventBus.on("update_customer_price_list", (data) => {
 			this.customer_price_list = data;
 		});
-                this.eventBus.on("update_customer", (data) => {
-                        this.customer = data;
-                });
+		this.eventBus.on("update_customer", (data) => {
+			this.customer = data;
+		});
 
-                this.eventBus.on("focus_item_search", () => {
-                        this.focusItemSearch();
-                });
+		this.eventBus.on("focus_item_search", () => {
+			this.focusItemSearch();
+		});
 
-                // Manually trigger a full item reload when requested
-                this.eventBus.on("force_reload_items", async () => {
-                        await this.ensureStorageHealth();
+		// Manually trigger a full item reload when requested
+		this.eventBus.on("force_reload_items", async () => {
+			await this.ensureStorageHealth();
 			this.items_loaded = false;
 			if (!isOffline()) {
 				if (this.pos_profile && (!this.pos_profile.posa_local_storage || !this.storageAvailable)) {
@@ -3410,13 +3409,13 @@ export default {
 		this.eventBus.off("register_pos_profile");
 		this.eventBus.off("update_cur_items_details");
 		this.eventBus.off("update_offers_counters");
-                this.eventBus.off("update_coupons_counters");
-                this.eventBus.off("update_customer_price_list");
-                this.eventBus.off("update_customer");
-                this.eventBus.off("force_reload_items");
-                this.eventBus.off("focus_item_search");
-                window.removeEventListener("resize", this.checkItemContainerOverflow);
-        },
+		this.eventBus.off("update_coupons_counters");
+		this.eventBus.off("update_customer_price_list");
+		this.eventBus.off("update_customer");
+		this.eventBus.off("force_reload_items");
+		this.eventBus.off("focus_item_search");
+		window.removeEventListener("resize", this.checkItemContainerOverflow);
+	},
 };
 </script>
 
@@ -3441,7 +3440,9 @@ export default {
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
-	font-family: "Roboto Mono", "Fira Code", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+	font-family:
+		"Roboto Mono", "Fira Code", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono",
+		"Courier New", monospace;
 	font-size: 0.95rem;
 	padding: 6px 10px;
 	border-radius: 6px;

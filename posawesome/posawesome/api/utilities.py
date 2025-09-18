@@ -449,6 +449,7 @@ def _set_active_session_language(lang_code: str) -> None:
         except Exception:
             pass
 
+
 # Language display names mapping (moved to module level for reuse)
 LANGUAGE_NAMES = {
     "en": "English",

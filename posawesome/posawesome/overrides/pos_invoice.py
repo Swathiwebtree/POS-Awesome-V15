@@ -24,4 +24,3 @@ class CustomPOSInvoice(ERPNextPOSInvoice):
 
         # No POS Awesome shift - use ERPNext's validation
         super().validate_pos_opening_entry()
-

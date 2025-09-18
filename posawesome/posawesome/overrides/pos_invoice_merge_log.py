@@ -56,7 +56,7 @@ class CustomPOSInvoiceMergeLog(ERPNextPOSInvoiceMergeLog):
             invoice.set_paid_amount()
             return
 
-        min_unit = 1 / (10 ** precision_paid) if precision_paid is not None else 0
+        min_unit = 1 / (10**precision_paid) if precision_paid is not None else 0
 
         for payment in payments:
             abs_amount = abs(flt(payment.amount))
@@ -64,15 +64,11 @@ class CustomPOSInvoiceMergeLog(ERPNextPOSInvoiceMergeLog):
                 abs_amount = abs(flt(payment.base_amount)) / conversion_rate if conversion_rate else 0
 
             payment.amount = invoice_sign * flt(abs_amount, precision_paid)
-            payment.base_amount = invoice_sign * flt(
-                abs_amount * conversion_rate, precision_base_paid
-            )
+            payment.base_amount = invoice_sign * flt(abs_amount * conversion_rate, precision_base_paid)
 
         invoice.set_paid_amount()
 
-        difference = (
-            abs(flt(invoice.paid_amount)) + abs(flt(invoice.write_off_amount)) - invoice_total_abs
-        )
+        difference = abs(flt(invoice.paid_amount)) + abs(flt(invoice.write_off_amount)) - invoice_total_abs
 
         if difference > tolerance:
             self._reduce_payment_difference(
@@ -99,11 +95,7 @@ class CustomPOSInvoiceMergeLog(ERPNextPOSInvoiceMergeLog):
             new_abs = current_abs - adjustment
 
             new_amount = invoice_sign * flt(new_abs, precision_paid)
-            if (
-                abs(flt(new_amount)) >= current_abs - tolerance
-                and min_unit
-                and current_abs > min_unit
-            ):
+            if abs(flt(new_amount)) >= current_abs - tolerance and min_unit and current_abs > min_unit:
                 new_amount = invoice_sign * flt(current_abs - min_unit, precision_paid)
 
             last_payment.amount = new_amount
@@ -140,18 +132,12 @@ class CustomPOSInvoiceMergeLog(ERPNextPOSInvoiceMergeLog):
             new_amount = invoice_sign * flt(new_abs, precision_paid)
             new_abs_after = abs(flt(new_amount))
 
-            if (
-                new_abs_after >= current_abs - tolerance
-                and min_unit
-                and current_abs > min_unit
-            ):
+            if new_abs_after >= current_abs - tolerance and min_unit and current_abs > min_unit:
                 new_amount = invoice_sign * flt(current_abs - min_unit, precision_paid)
                 new_abs_after = abs(flt(new_amount))
 
             payment.amount = new_amount
-            payment.base_amount = invoice_sign * flt(
-                new_abs_after * conversion_rate, precision_base_paid
-            )
+            payment.base_amount = invoice_sign * flt(new_abs_after * conversion_rate, precision_base_paid)
 
             remaining -= current_abs - new_abs_after
             if remaining <= tolerance:
@@ -177,4 +163,3 @@ class CustomPOSInvoiceMergeLog(ERPNextPOSInvoiceMergeLog):
 
         if len(cleaned) != len(invoice.get("payments", [])):
             invoice.set("payments", cleaned)
-
