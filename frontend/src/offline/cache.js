@@ -1,10 +1,10 @@
 import {
-        db,
-        persist,
-        checkDbHealth,
-        terminatePersistWorker,
-        initPersistWorker,
-        tableForKey,
+	db,
+	persist,
+	checkDbHealth,
+	terminatePersistWorker,
+	initPersistWorker,
+	tableForKey,
 } from "./core.js";
 import { clearPriceListCache } from "./items.js";
 import Dexie from "dexie/dist/dexie.mjs";
@@ -573,34 +573,28 @@ export async function forceClearAllCache() {
  * @returns {Promise<number>} estimated IndexedDB usage in bytes
  */
 async function estimateIndexedDbSizeFallback() {
-        if (!db.tables || !db.tables.length) {
-                return 0;
-        }
+	if (!db.tables || !db.tables.length) {
+		return 0;
+	}
 
-        let total = 0;
-        for (const table of db.tables) {
-                try {
-                        await db.transaction("r", db.table(table.name), async () => {
-                                await db.table(table.name).each((item) => {
-                                        try {
-                                                total += JSON.stringify(item).length * 2;
-                                        } catch (stringifyErr) {
-                                                console.warn(
-                                                        "Failed to measure IndexedDB entry size",
-                                                        stringifyErr,
-                                                );
-                                        }
-                                });
-                        });
-                } catch (tableErr) {
-                        console.warn(
-                                `Failed to inspect table ${table.name} for cache usage`,
-                                tableErr,
-                        );
-                }
-        }
+	let total = 0;
+	for (const table of db.tables) {
+		try {
+			await db.transaction("r", db.table(table.name), async () => {
+				await db.table(table.name).each((item) => {
+					try {
+						total += JSON.stringify(item).length * 2;
+					} catch (stringifyErr) {
+						console.warn("Failed to measure IndexedDB entry size", stringifyErr);
+					}
+				});
+			});
+		} catch (tableErr) {
+			console.warn(`Failed to inspect table ${table.name} for cache usage`, tableErr);
+		}
+	}
 
-        return total;
+	return total;
 }
 
 /**
@@ -608,86 +602,81 @@ async function estimateIndexedDbSizeFallback() {
  * @returns {Promise<Object>} usage breakdown for localStorage and IndexedDB
  */
 export async function getCacheUsageEstimate() {
-        if (cacheUsageEstimatePromise) {
-                return cacheUsageEstimatePromise;
-        }
+	if (cacheUsageEstimatePromise) {
+		return cacheUsageEstimatePromise;
+	}
 
-        cacheUsageEstimatePromise = (async () => {
-                try {
-                        await checkDbHealth();
-                        let localStorageSize = 0;
-                        if (typeof localStorage !== "undefined") {
-                                for (let i = 0; i < localStorage.length; i++) {
-                                        const key = localStorage.key(i);
-                                        if (key && key.startsWith("posa_")) {
-                                                const value = localStorage.getItem(key) || "";
-                                                localStorageSize += (key.length + value.length) * 2;
-                                        }
-                                }
-                        }
+	cacheUsageEstimatePromise = (async () => {
+		try {
+			await checkDbHealth();
+			let localStorageSize = 0;
+			if (typeof localStorage !== "undefined") {
+				for (let i = 0; i < localStorage.length; i++) {
+					const key = localStorage.key(i);
+					if (key && key.startsWith("posa_")) {
+						const value = localStorage.getItem(key) || "";
+						localStorageSize += (key.length + value.length) * 2;
+					}
+				}
+			}
 
-                        let totalSize = 0;
-                        let indexedDBSize = 0;
-                        let maxSize = 50 * 1024 * 1024;
+			let totalSize = 0;
+			let indexedDBSize = 0;
+			let maxSize = 50 * 1024 * 1024;
 
-                        if (typeof navigator !== "undefined" && navigator.storage && navigator.storage.estimate) {
-                                try {
-                                        const { usage, quota } = await navigator.storage.estimate();
-                                        if (typeof usage === "number" && usage >= 0) {
-                                                totalSize = usage;
-                                                indexedDBSize = Math.max(totalSize - localStorageSize, 0);
-                                        }
-                                        if (typeof quota === "number" && quota > 0) {
-                                                maxSize = quota;
-                                        }
-                                } catch (estimateErr) {
-                                        console.warn("StorageManager estimate failed", estimateErr);
-                                }
-                        }
+			if (typeof navigator !== "undefined" && navigator.storage && navigator.storage.estimate) {
+				try {
+					const { usage, quota } = await navigator.storage.estimate();
+					if (typeof usage === "number" && usage >= 0) {
+						totalSize = usage;
+						indexedDBSize = Math.max(totalSize - localStorageSize, 0);
+					}
+					if (typeof quota === "number" && quota > 0) {
+						maxSize = quota;
+					}
+				} catch (estimateErr) {
+					console.warn("StorageManager estimate failed", estimateErr);
+				}
+			}
 
-                        if (!totalSize) {
-                                if (!db.isOpen()) {
-                                        try {
-                                                await db.open();
-                                        } catch (openErr) {
-                                                console.warn("Failed to open IndexedDB for cache estimation", openErr);
-                                                return {
-                                                        total: localStorageSize,
-                                                        localStorage: localStorageSize,
-                                                        indexedDB: 0,
-                                                        percentage: Math.min(
-                                                                100,
-                                                                Math.round((localStorageSize / maxSize) * 100),
-                                                        ),
-                                                };
-                                        }
-                                }
-                                indexedDBSize = await estimateIndexedDbSizeFallback();
-                                totalSize = localStorageSize + indexedDBSize;
-                        }
+			if (!totalSize) {
+				if (!db.isOpen()) {
+					try {
+						await db.open();
+					} catch (openErr) {
+						console.warn("Failed to open IndexedDB for cache estimation", openErr);
+						return {
+							total: localStorageSize,
+							localStorage: localStorageSize,
+							indexedDB: 0,
+							percentage: Math.min(100, Math.round((localStorageSize / maxSize) * 100)),
+						};
+					}
+				}
+				indexedDBSize = await estimateIndexedDbSizeFallback();
+				totalSize = localStorageSize + indexedDBSize;
+			}
 
-                        const usagePercentage = maxSize
-                                ? Math.min(100, Math.round((totalSize / maxSize) * 100))
-                                : 0;
+			const usagePercentage = maxSize ? Math.min(100, Math.round((totalSize / maxSize) * 100)) : 0;
 
-                        return {
-                                total: totalSize,
-                                localStorage: localStorageSize,
-                                indexedDB: indexedDBSize,
-                                percentage: usagePercentage,
-                        };
-                } catch (e) {
-                        console.error("Failed to estimate cache usage", e);
-                        return {
-                                total: 0,
-                                localStorage: 0,
-                                indexedDB: 0,
-                                percentage: 0,
-                        };
-                } finally {
-                        cacheUsageEstimatePromise = null;
-                }
-        })();
+			return {
+				total: totalSize,
+				localStorage: localStorageSize,
+				indexedDB: indexedDBSize,
+				percentage: usagePercentage,
+			};
+		} catch (e) {
+			console.error("Failed to estimate cache usage", e);
+			return {
+				total: 0,
+				localStorage: 0,
+				indexedDB: 0,
+				percentage: 0,
+			};
+		} finally {
+			cacheUsageEstimatePromise = null;
+		}
+	})();
 
-        return cacheUsageEstimatePromise;
+	return cacheUsageEstimatePromise;
 }
