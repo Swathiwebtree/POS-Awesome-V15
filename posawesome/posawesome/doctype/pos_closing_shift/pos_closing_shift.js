@@ -36,8 +36,8 @@ frappe.ui.form.on("POS Closing Shift", {
 	},
 
 	set_opening_amounts(frm) {
-		return frappe
-			.db.get_doc("POS Opening Shift", frm.doc.pos_opening_shift)
+		return frappe.db
+			.get_doc("POS Opening Shift", frm.doc.pos_opening_shift)
 			.then(({ balance_details }) => {
 				balance_details.forEach((detail) => {
 					frm.add_child("payment_reconciliation", {
@@ -156,12 +156,7 @@ function add_to_payments(d, frm, conversion_rate) {
 			frm.add_child("payment_reconciliation", {
 				mode_of_payment: p.mode_of_payment,
 				opening_amount: 0,
-				expected_amount: get_base_value(
-					p,
-					"amount",
-					"base_amount",
-					conversion_rate,
-				),
+				expected_amount: get_base_value(p, "amount", "base_amount", conversion_rate),
 			});
 		}
 	});
@@ -185,9 +180,7 @@ function add_to_taxes(d, frm, conversion_rate) {
 	d.taxes.forEach((t) => {
 		const tax = frm.doc.taxes.find((tx) => tx.account_head === t.account_head && tx.rate === t.rate);
 		if (tax) {
-			tax.amount += flt(
-				get_base_value(t, "tax_amount", "base_tax_amount", conversion_rate),
-			);
+			tax.amount += flt(get_base_value(t, "tax_amount", "base_tax_amount", conversion_rate));
 		} else {
 			frm.add_child("taxes", {
 				account_head: t.account_head,
@@ -248,11 +241,7 @@ const get_value = (doctype, name, field) => {
 };
 
 const get_conversion_rate = (doc) =>
-	doc.conversion_rate ||
-	doc.exchange_rate ||
-	doc.target_exchange_rate ||
-	doc.plc_conversion_rate ||
-	1;
+	doc.conversion_rate || doc.exchange_rate || doc.target_exchange_rate || doc.plc_conversion_rate || 1;
 
 const get_base_value = (doc, field, base_field, conversion_rate) => {
 	const base_fieldname = base_field || `base_${field}`;

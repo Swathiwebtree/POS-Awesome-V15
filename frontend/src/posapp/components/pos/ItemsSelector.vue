@@ -783,9 +783,9 @@ export default {
 
 	methods: {
 		// Performance optimization: Memoized search function
-               memoizedSearch(searchTerm, itemGroup) {
-                       const normalizedSearch = this.normalizeSearchTerm(searchTerm);
-                       const cacheKey = `${normalizedSearch || ""}_${itemGroup || "ALL"}`;
+		memoizedSearch(searchTerm, itemGroup) {
+			const normalizedSearch = this.normalizeSearchTerm(searchTerm);
+			const cacheKey = `${normalizedSearch || ""}_${itemGroup || "ALL"}`;
 
 			// Check if we have a cached result
 			if (this.searchCache && this.searchCache.has(cacheKey)) {
@@ -794,7 +794,7 @@ export default {
 			}
 
 			// Perform the search
-                       const result = this.performSearch(normalizedSearch, itemGroup);
+			const result = this.performSearch(normalizedSearch, itemGroup);
 
 			// Cache the result
 			if (this.searchCache) {
@@ -804,33 +804,29 @@ export default {
 			return result;
 		},
 
-               normalizeSearchTerm(searchTerm) {
-                       if (!searchTerm || !String(searchTerm).trim()) {
-                               return "";
-                       }
+		normalizeSearchTerm(searchTerm) {
+			if (!searchTerm || !String(searchTerm).trim()) {
+				return "";
+			}
 
-                       const words = String(searchTerm)
-                               .toLowerCase()
-                               .trim()
-                               .split(/\s+/)
-                               .filter(Boolean);
+			const words = String(searchTerm).toLowerCase().trim().split(/\s+/).filter(Boolean);
 
-                       if (!words.length) {
-                               return "";
-                       }
+			if (!words.length) {
+				return "";
+			}
 
-                       // Sort to make cache keys consistent regardless of order and remove duplicates
-                       const uniqueWords = [...new Set(words)].sort();
+			// Sort to make cache keys consistent regardless of order and remove duplicates
+			const uniqueWords = [...new Set(words)].sort();
 
-                       return uniqueWords.join(" ");
-               },
+			return uniqueWords.join(" ");
+		},
 
-               performSearch(searchTerm, itemGroup) {
-                       if (!this.items || !this.items.length) {
-                               return [];
-                       }
+		performSearch(searchTerm, itemGroup) {
+			if (!this.items || !this.items.length) {
+				return [];
+			}
 
-                       let filtered = this.items;
+			let filtered = this.items;
 
 			// Filter by item group
 			if (itemGroup !== "ALL") {
@@ -841,48 +837,45 @@ export default {
 			}
 
 			// Filter by search term only if it exists and is long enough
-                       if (searchTerm && searchTerm.trim() && searchTerm.trim().length >= 3) {
-                               const searchWords = searchTerm
-                                       .toLowerCase()
-                                       .split(/\s+/)
-                                       .filter(Boolean);
+			if (searchTerm && searchTerm.trim() && searchTerm.trim().length >= 3) {
+				const searchWords = searchTerm.toLowerCase().split(/\s+/).filter(Boolean);
 
-                               filtered = filtered.filter((item) => {
-                                       if (!searchWords.length) {
-                                               return true;
-                                       }
+				filtered = filtered.filter((item) => {
+					if (!searchWords.length) {
+						return true;
+					}
 
-                                       const name = (item.item_name || "").toLowerCase();
-                                       const code = (item.item_code || "").toLowerCase();
+					const name = (item.item_name || "").toLowerCase();
+					const code = (item.item_code || "").toLowerCase();
 
-                                       const barcodeValues = [];
-                                       if (Array.isArray(item.item_barcode)) {
-                                               item.item_barcode.forEach((b) => {
-                                                       if (b?.barcode) {
-                                                               barcodeValues.push(String(b.barcode).toLowerCase());
-                                                       }
-                                               });
-                                       }
-                                       if (Array.isArray(item.barcodes)) {
-                                               item.barcodes.forEach((bc) => {
-                                                       if (bc) {
-                                                               barcodeValues.push(String(bc).toLowerCase());
-                                                       }
-                                               });
-                                       }
-                                       if (item.barcode) {
-                                               barcodeValues.push(String(item.barcode).toLowerCase());
-                                       }
+					const barcodeValues = [];
+					if (Array.isArray(item.item_barcode)) {
+						item.item_barcode.forEach((b) => {
+							if (b?.barcode) {
+								barcodeValues.push(String(b.barcode).toLowerCase());
+							}
+						});
+					}
+					if (Array.isArray(item.barcodes)) {
+						item.barcodes.forEach((bc) => {
+							if (bc) {
+								barcodeValues.push(String(bc).toLowerCase());
+							}
+						});
+					}
+					if (item.barcode) {
+						barcodeValues.push(String(item.barcode).toLowerCase());
+					}
 
-                                       return searchWords.every((word) => {
-                                               return (
-                                                       code.includes(word) ||
-                                                       name.includes(word) ||
-                                                       barcodeValues.some((barcode) => barcode.includes(word))
-                                               );
-                                       });
-                               });
-                       }
+					return searchWords.every((word) => {
+						return (
+							code.includes(word) ||
+							name.includes(word) ||
+							barcodeValues.some((barcode) => barcode.includes(word))
+						);
+					});
+				});
+			}
 
 			return filtered;
 		},
@@ -993,37 +986,37 @@ export default {
 			}
 			return dbHealthy;
 		},
-               async loadVisibleItems(reset = false) {
-                       this.loadProgress = 0;
-                       this.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
-                       await initPromise;
-                       await this.ensureStorageHealth();
-                       if (reset) {
-                               this.currentPage = 0;
-                       }
-                       const search = this.get_search(this.first_search);
-                       const itemGroup = this.item_group !== "ALL" ? this.item_group.toLowerCase() : "";
-                       const pageItems = await searchStoredItems({
-                               search,
-                               itemGroup,
-                               limit: this.itemsPerPage,
-                               offset: this.currentPage * this.itemsPerPage,
-                       });
-                       const total = pageItems.length || 1;
-                       const updatedItems = reset ? [] : [...this.items];
-                       pageItems.forEach((it, idx) => {
-                               updatedItems.push(it);
-                               const progress = Math.round(((idx + 1) / total) * 100);
-                               this.loadProgress = progress;
-                               this.eventBus.emit("data-load-progress", {
-                                       name: "items",
-                                       progress,
-                               });
-                       });
-                       this.items = updatedItems;
-                       this.eventBus.emit("set_all_items", this.items);
-                       if (pageItems.length) this.update_items_details(pageItems);
-               },
+		async loadVisibleItems(reset = false) {
+			this.loadProgress = 0;
+			this.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
+			await initPromise;
+			await this.ensureStorageHealth();
+			if (reset) {
+				this.currentPage = 0;
+			}
+			const search = this.get_search(this.first_search);
+			const itemGroup = this.item_group !== "ALL" ? this.item_group.toLowerCase() : "";
+			const pageItems = await searchStoredItems({
+				search,
+				itemGroup,
+				limit: this.itemsPerPage,
+				offset: this.currentPage * this.itemsPerPage,
+			});
+			const total = pageItems.length || 1;
+			const updatedItems = reset ? [] : [...this.items];
+			pageItems.forEach((it, idx) => {
+				updatedItems.push(it);
+				const progress = Math.round(((idx + 1) / total) * 100);
+				this.loadProgress = progress;
+				this.eventBus.emit("data-load-progress", {
+					name: "items",
+					progress,
+				});
+			});
+			this.items = updatedItems;
+			this.eventBus.emit("set_all_items", this.items);
+			if (pageItems.length) this.update_items_details(pageItems);
+		},
 		onListScroll(event) {
 			if (this.scrollThrottle) return;
 
@@ -3118,19 +3111,19 @@ export default {
 				return [];
 			}
 
-                       const rawSearchTerm = this.get_search(this.first_search).trim();
-                       const searchTerm = this.normalizeSearchTerm(rawSearchTerm);
-                       let filteredItems = [...this.items];
+			const rawSearchTerm = this.get_search(this.first_search).trim();
+			const searchTerm = this.normalizeSearchTerm(rawSearchTerm);
+			let filteredItems = [...this.items];
 
-                        // Apply search filter only for queries with at least three characters
-                       if (searchTerm.length >= 3) {
-                               const searchWords = searchTerm.split(/\s+/).filter(Boolean);
+			// Apply search filter only for queries with at least three characters
+			if (searchTerm.length >= 3) {
+				const searchWords = searchTerm.split(/\s+/).filter(Boolean);
 
-                               filteredItems = filteredItems.filter((item) => {
-                                        const barcodeList = [];
-                                        if (Array.isArray(item.item_barcode)) {
-                                                barcodeList.push(...item.item_barcode.map((b) => b.barcode).filter(Boolean));
-                                        } else if (item.item_barcode) {
+				filteredItems = filteredItems.filter((item) => {
+					const barcodeList = [];
+					if (Array.isArray(item.item_barcode)) {
+						barcodeList.push(...item.item_barcode.map((b) => b.barcode).filter(Boolean));
+					} else if (item.item_barcode) {
 						barcodeList.push(String(item.item_barcode));
 					}
 					if (Array.isArray(item.barcodes)) {
@@ -3149,19 +3142,17 @@ export default {
 						...(this.pos_profile?.posa_search_batch_no && Array.isArray(item.batch_no_data)
 							? item.batch_no_data.map((b) => b.batch_no)
 							: []),
-                                        ]
-                                                .filter(Boolean)
-                                                .map((field) => String(field).toLowerCase());
+					]
+						.filter(Boolean)
+						.map((field) => String(field).toLowerCase());
 
-                                        if (!searchWords.length) {
-                                                return true;
-                                        }
+					if (!searchWords.length) {
+						return true;
+					}
 
-                                        return searchWords.every((word) =>
-                                                searchFields.some((field) => field.includes(word)),
-                                        );
-                                });
-                        }
+					return searchWords.every((word) => searchFields.some((field) => field.includes(word)));
+				});
+			}
 
 			// Apply item group filter
 			if (this.item_group !== "ALL") {
