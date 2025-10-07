@@ -8,9 +8,14 @@ import "../style.css";
 import "./styles/theme.css";
 import eventBus from "./bus";
 import themePlugin from "./plugins/theme.js";
+import { pinia } from "./stores/index.js";
+import "../sw-updater.js"; // Initialize service worker auto-updater
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import Home from "./Home.vue";
+import { attachProfilerHelpers, initLongTaskObserver, isPerfEnabled } from "./utils/perf.js";
+
+attachProfilerHelpers();
 
 // Expose Dexie globally for libraries that expect a global Dexie instance
 if (typeof window !== "undefined" && !window.Dexie) {
@@ -84,10 +89,15 @@ frappe.PosApp.posapp = class {
 		});
 		const app = createApp(Home);
 		app.component("VueDatePicker", VueDatePicker);
-		app.use(eventBus);
-		app.use(vuetify);
-		app.use(themePlugin, { vuetify });
-		app.mount(this.$el[0]);
+                app.use(pinia);
+                app.use(eventBus);
+                app.use(vuetify);
+                app.use(themePlugin, { vuetify });
+                app.mount(this.$el[0]);
+
+                if (isPerfEnabled()) {
+                        initLongTaskObserver("posapp");
+                }
 
 		if (!document.querySelector('link[rel="manifest"]')) {
 			const link = document.createElement("link");
@@ -102,7 +112,10 @@ frappe.PosApp.posapp = class {
 			window.location.hostname === "127.0.0.1"
 		) {
 			navigator.serviceWorker
-				.register("/sw.js")
+				.register("/assets/posawesome/dist/www/sw.js")
+				.then((registration) => {
+					console.log("SW registered successfully", registration);
+				})
 				.catch((err) => console.error("SW registration failed", err));
 		}
 	}
