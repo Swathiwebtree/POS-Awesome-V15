@@ -34,26 +34,24 @@
 			<template v-slot:item.item_name="{ item }">
 				<div class="d-flex align-center">
 					<span>{{ item.item_name }}</span>
-					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">{{
-						__("Bundle")
-					}}</v-chip>
-					<v-chip v-if="item.name_overridden" color="primary" size="x-small" class="ml-1">{{
-						__("Edited")
-					}}</v-chip>
+					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">
+						{{ __("Bundle") }}
+					</v-chip>
+					<v-chip v-if="item.name_overridden" color="primary" size="x-small" class="ml-1">
+						{{ __("Edited") }}
+					</v-chip>
 					<v-icon
 						v-if="pos_profile.posa_allow_line_item_name_override && !item.posa_is_replace"
 						size="x-small"
 						class="ml-1"
 						@click.stop="openNameDialog(item)"
-						>mdi-pencil</v-icon
-					>
+					>mdi-pencil</v-icon>
 					<v-icon
 						v-if="item.name_overridden"
 						size="x-small"
 						class="ml-1"
 						@click.stop="resetItemName(item)"
-						>mdi-undo</v-icon
-					>
+					>mdi-undo</v-icon>
 				</div>
 			</template>
 
@@ -64,7 +62,7 @@
 						:disabled="!!item.posa_is_replace"
 						size="small"
 						variant="flat"
-						class="pos-table__qty-btn pos-table__qty-btn--minus"
+						class="pos-table__qty-btn pos-table__qty-btn--minus minus-btn qty-control-btn"
 						@click.stop="handleMinusClick(item)"
 					>
 						<v-icon size="small">mdi-minus</v-icon>
@@ -89,7 +87,7 @@
 						"
 						size="small"
 						variant="flat"
-						class="pos-table__qty-btn pos-table__qty-btn--plus"
+						class="pos-table__qty-btn pos-table__qty-btn--plus plus-btn qty-control-btn"
 						@click.stop="addOne(item)"
 					>
 						<v-icon size="small">mdi-plus</v-icon>
@@ -101,9 +99,9 @@
 			<template v-slot:item.rate="{ item }">
 				<div class="currency-display right-aligned">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
-					<span class="amount-value" :class="{ 'negative-number': isNegative(item.rate) }">{{
-						formatCurrency(item.rate)
-					}}</span>
+					<span class="amount-value" :class="{ 'negative-number': isNegative(item.rate) }">
+						{{ formatCurrency(item.rate) }}
+					</span>
 				</div>
 			</template>
 
@@ -114,24 +112,23 @@
 					<span
 						class="amount-value"
 						:class="{ 'negative-number': isNegative(item.qty * item.rate) }"
-						>{{ formatCurrency(item.qty * item.rate) }}</span
-					>
+					>{{ formatCurrency(item.qty * item.rate) }}</span>
 				</div>
 			</template>
 
 			<!-- Discount percentage column -->
 			<template v-slot:item.discount_value="{ item }">
 				<div class="currency-display right-aligned">
-					<span class="amount-value"
-						>{{
+					<span class="amount-value">
+						{{
 							formatFloat(
 								item.discount_percentage ||
 									(item.price_list_rate
 										? (item.discount_amount / item.price_list_rate) * 100
 										: 0),
 							)
-						}}%</span
-					>
+						}}%
+					</span>
 				</div>
 			</template>
 
@@ -142,8 +139,7 @@
 					<span
 						class="amount-value"
 						:class="{ 'negative-number': isNegative(item.discount_amount || 0) }"
-						>{{ formatCurrency(item.discount_amount || 0) }}</span
-					>
+					>{{ formatCurrency(item.discount_amount || 0) }}</span>
 				</div>
 			</template>
 
@@ -154,12 +150,11 @@
 					<span
 						class="amount-value"
 						:class="{ 'negative-number': isNegative(item.price_list_rate) }"
-						>{{ formatCurrency(item.price_list_rate) }}</span
-					>
+					>{{ formatCurrency(item.price_list_rate) }}</span>
 				</div>
 			</template>
 
-			<!-- Offer toggle button column -->
+			<!-- Offer toggle -->
 			<template v-slot:item.posa_is_offer="{ item }">
 				<v-btn
 					size="x-small"
@@ -171,23 +166,23 @@
 					{{ item.posa_offer_applied ? __("Remove Offer") : __("Apply Offer") }}
 				</v-btn>
 			</template>
-			<!-- Actions column -->
+
+			<!-- Actions -->
 			<template v-slot:item.actions="{ item }">
 				<v-btn
 					:disabled="!!item.posa_is_replace"
 					size="small"
 					variant="flat"
-					class="pos-table__delete-btn"
+					class="pos-table__delete-btn delete-action-btn"
 					@click.stop="removeItem(item)"
 				>
 					<v-icon size="small">mdi-delete-outline</v-icon>
 				</v-btn>
 			</template>
 
-			<!-- Expanded row content using Vuetify's built-in system -->
+			<!-- Expanded row -->
 			<template v-slot:expanded-row="{ item }">
 				<td :colspan="responsiveHeaders.length + 1" class="ma-0 pa-0 expanded-row-cell">
-					<!-- Lazy load expanded content only when item is actually expanded -->
 					<div
 						v-if="isItemExpanded(item.posa_row_id)"
 						class="expanded-content responsive-expanded-content"
@@ -621,7 +616,7 @@
 							</div>
 						</div>
 					</div>
-					<!-- Lazy loading placeholder when item is not expanded -->
+					<!-- Lazy placeholder -->
 					<div v-else class="expanded-placeholder">
 						<div class="text-center pa-4">
 							<v-progress-circular indeterminate size="small"></v-progress-circular>
@@ -631,6 +626,8 @@
 				</td>
 			</template>
 		</v-data-table-virtual>
+
+		<!-- Edit name dialog -->
 		<v-dialog v-model="editNameDialog" max-width="400">
 			<v-card>
 				<v-card-title>{{ __("Item Name") }}</v-card-title>
@@ -642,8 +639,7 @@
 						v-if="editNameTarget && editNameTarget.name_overridden"
 						variant="text"
 						@click="resetItemName(editNameTarget)"
-						>{{ __("Reset") }}</v-btn
-					>
+					>{{ __("Reset") }}</v-btn>
 					<v-spacer></v-spacer>
 					<v-btn variant="text" @click="editNameDialog = false">{{ __("Cancel") }}</v-btn>
 					<v-btn color="primary" variant="text" @click="saveItemName">{{ __("Save") }}</v-btn>
@@ -656,18 +652,23 @@
 <script>
 /* global process */
 import _ from "lodash";
+import { logComponentRender } from "../../utils/perf.js";
+import { parseBooleanSetting } from "../../utils/stock.js";
+import { useInvoiceStore } from "../../stores/invoiceStore.js";
 export default {
-	name: "ItemsTable",
-	props: {
-		headers: Array,
-		items: Array,
-		expanded: Array,
-		itemsPerPage: Number,
-		itemSearch: String,
-		pos_profile: Object,
-		invoice_doc: Object,
-		invoiceType: String,
-		stock_settings: Object,
+        name: "ItemsTable",
+        setup() {
+                const invoiceStore = useInvoiceStore();
+                return { invoiceStore };
+        },
+        props: {
+                headers: Array,
+                expanded: Array,
+                itemsPerPage: Number,
+                itemSearch: String,
+                pos_profile: Object,
+                invoiceType: String,
+                stock_settings: Object,
 		displayCurrency: String,
 		formatFloat: Function,
 		formatCurrency: Function,
@@ -710,9 +711,15 @@ export default {
 			lastUpdateTime: 0,
 		};
 	},
-	computed: {
-		// Dynamic container styles based on parent
-		containerStyles() {
+        computed: {
+                items() {
+                        return this.invoiceStore.items;
+                },
+                invoice_doc() {
+                        return this.invoiceStore.invoiceDoc || {};
+                },
+                // Dynamic container styles based on parent
+                containerStyles() {
 			return {
 				height: "calc(100% - 80px)",
 				maxHeight: "calc(100% - 80px)",
@@ -746,10 +753,9 @@ export default {
 		},
 
 		blockSaleBeyondAvailableQty() {
-			return (
-				!["Order", "Quotation"].includes(this.invoiceType) &&
-				this.pos_profile.posa_block_sale_beyond_available_qty
-			);
+		if (["Order", "Quotation"].includes(this.invoiceType)) return false;
+    const allowNegative = parseBooleanSetting(this.stock_settings?.allow_negative_stock);
+    return !allowNegative && !!this.pos_profile?.posa_block_sale_beyond_available_qty;
 		},
 
 		// Responsive headers based on container size
@@ -861,41 +867,36 @@ export default {
 				return isExpanded;
 			};
 		},
-		hide_qty_decimals() {
-			try {
-				const saved = localStorage.getItem("posawesome_item_selector_settings");
-				if (saved) {
-					const opts = JSON.parse(saved);
-					return !!opts.hide_qty_decimals;
-				}
-			} catch (e) {
-				console.error("Failed to load item selector settings:", e);
-			}
-			return false;
-		},
-		isRTL() {
-			// Multiple RTL detection methods
-			const htmlDir = document.documentElement.getAttribute("dir");
-			const bodyDir = document.body.getAttribute("dir");
-			const computedDir = window.getComputedStyle(document.documentElement).direction;
-			const lang = document.documentElement.getAttribute("lang") || navigator.language;
+                hide_qty_decimals() {
+                        try {
+                                const saved = localStorage.getItem("posawesome_item_selector_settings");
+                                if (saved) {
+                                        const opts = JSON.parse(saved);
+                                        return !!opts.hide_qty_decimals;
+                                }
+                        } catch (e) {
+                                console.error("Failed to load item selector settings:", e);
+                        }
+                        return false;
+                },
+                isRTL() {
+                        if (this._rtlComputed !== undefined) {
+                                return this._rtlComputed;
+                        }
 
-			// Check if current language is RTL
-			const rtlLanguages = ["ar", "he", "fa", "ur", "yi"];
-			const isRTLLanguage = rtlLanguages.some((rtlLang) => lang.startsWith(rtlLang));
+                        const htmlDir = document.documentElement.getAttribute("dir");
+                        const bodyDir = document.body.getAttribute("dir");
+                        const computedDir = window.getComputedStyle(document.documentElement).direction;
+                        const lang = document.documentElement.getAttribute("lang") || navigator.language;
+                        const rtlLanguages = ["ar", "he", "fa", "ur", "yi"];
+                        const isRTLLanguage = rtlLanguages.some((rtlLang) => lang.startsWith(rtlLang));
 
-			console.log("RTL Detection:", {
-				htmlDir,
-				bodyDir,
-				computedDir,
-				lang,
-				isRTLLanguage,
-				result: htmlDir === "rtl" || bodyDir === "rtl" || computedDir === "rtl" || isRTLLanguage,
-			});
+                        this._rtlComputed =
+                                htmlDir === "rtl" || bodyDir === "rtl" || computedDir === "rtl" || isRTLLanguage;
 
-			return htmlDir === "rtl" || bodyDir === "rtl" || computedDir === "rtl" || isRTLLanguage;
-		},
-	},
+                        return this._rtlComputed;
+                },
+        },
 	methods: {
 		customItemFilter(value, search, item) {
 			if (search == null) {
@@ -1177,12 +1178,15 @@ export default {
 		},
 	},
 
-	mounted() {
-		this.setupResizeObserver();
+        mounted() {
+                logComponentRender(this, "ItemsTable", "mounted", {
+                        rows: this.items?.length || 0,
+                });
+                this.setupResizeObserver();
 
-		// Performance optimization: defer non-critical initialization
-		this.$nextTick(() => {
-			this.updateContainerDimensions();
+                // Performance optimization: defer non-critical initialization
+                this.$nextTick(() => {
+                        this.updateContainerDimensions();
 
 			// Log performance metrics in development
 			if (process.env.NODE_ENV === "development") {
@@ -1199,8 +1203,14 @@ export default {
 					},
 				});
 			}
-		});
-	},
+                });
+        },
+
+        updated() {
+                logComponentRender(this, "ItemsTable", "updated", {
+                        rows: this.items?.length || 0,
+                });
+        },
 
 	beforeUnmount() {
 		this.cleanupResizeObserver();
