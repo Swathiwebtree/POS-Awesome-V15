@@ -178,8 +178,8 @@ export default {
 				this.itemsLoaded = true;
 				this.checkLoadingComplete();
 			});
-                });
-        },
+		});
+	},
 	beforeUnmount() {
 		this.eventBus.off("close_opening_dialog");
 		this.eventBus.off("register_pos_data");
@@ -190,24 +190,24 @@ export default {
 		this.eventBus.off("open_closing_dialog");
 		this.eventBus.off("submit_closing_pos");
 		this.eventBus.off("items_loaded");
-        },
+	},
 	// In the created() or mounted() lifecycle hook
-        created() {
-                // Clean up expired customer balance cache on POS load
-                clearExpiredCustomerBalances();
-                const customersStore = useCustomersStore();
-                const { customersLoaded } = storeToRefs(customersStore);
-                this.$watch(
-                        () => customersLoaded.value,
-                        (value) => {
-                                if (value) {
-                                        this.customersLoaded = true;
-                                        this.checkLoadingComplete();
-                                }
-                        },
-                        { immediate: true },
-                );
-        },
+	created() {
+		// Clean up expired customer balance cache on POS load
+		clearExpiredCustomerBalances();
+		const customersStore = useCustomersStore();
+		const { customersLoaded } = storeToRefs(customersStore);
+		this.$watch(
+			() => customersLoaded.value,
+			(value) => {
+				if (value) {
+					this.customersLoaded = true;
+					this.checkLoadingComplete();
+				}
+			},
+			{ immediate: true },
+		);
+	},
 };
 </script>
 

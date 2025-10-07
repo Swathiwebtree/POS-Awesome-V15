@@ -89,15 +89,15 @@ frappe.PosApp.posapp = class {
 		});
 		const app = createApp(Home);
 		app.component("VueDatePicker", VueDatePicker);
-                app.use(pinia);
-                app.use(eventBus);
-                app.use(vuetify);
-                app.use(themePlugin, { vuetify });
-                app.mount(this.$el[0]);
+		app.use(pinia);
+		app.use(eventBus);
+		app.use(vuetify);
+		app.use(themePlugin, { vuetify });
+		app.mount(this.$el[0]);
 
-                if (isPerfEnabled()) {
-                        initLongTaskObserver("posapp");
-                }
+		if (isPerfEnabled()) {
+			initLongTaskObserver("posapp");
+		}
 
 		if (!document.querySelector('link[rel="manifest"]')) {
 			const link = document.createElement("link");

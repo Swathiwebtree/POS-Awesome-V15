@@ -51,7 +51,8 @@ def get_offers(profile):
         "valid_from": date,
         "valid_upto": date,
     }
-    data = frappe.db.sql(
+    data = (
+        frappe.db.sql(
             """
         SELECT *
         FROM `tabPOS Offer`
@@ -63,9 +64,11 @@ def get_offers(profile):
         (valid_from is NULL OR valid_from  = '' OR  valid_from <= %(valid_from)s) AND
         (valid_upto is NULL OR valid_upto  = '' OR  valid_upto >= %(valid_upto)s)
     """,
-        values=values,
-        as_dict=1,
-    ) or []
+            values=values,
+            as_dict=1,
+        )
+        or []
+    )
 
     promotional_scheme_offers = _get_promotional_scheme_offers(pos_profile) or []
 
@@ -100,9 +103,7 @@ def _get_promotional_scheme_offers(pos_profile):
             as_dict=True,
         )
     except Exception:
-        frappe.log_error(
-            frappe.get_traceback(), "POS Awesome - Failed to fetch Promotional Schemes"
-        )
+        frappe.log_error(frappe.get_traceback(), "POS Awesome - Failed to fetch Promotional Schemes")
         return []
 
     offers = []

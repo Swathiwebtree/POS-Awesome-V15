@@ -66,84 +66,81 @@
 								prepend-inner-icon="mdi-magnify"
 								@focus="handleItemSearchFocus"
 								ref="debounce_search"
-                                                        >
-                                                                <template v-slot:append-inner>
-                                                                        <v-btn
-                                                                                :icon="
-                                                                                        showManualScanInput
-                                                                                                ? 'mdi-barcode-off'
-                                                                                                : 'mdi-barcode-scan'
-                                                                                "
-                                                                                size="small"
-                                                                                color="primary"
-                                                                                :variant="showManualScanInput ? 'tonal' : 'text'"
-                                                                                class="mr-1"
-                                                                                @click.stop="toggleManualScanInput"
-                                                                                :title="
-                                                                                        showManualScanInput
-                                                                                                ? __('Hide Manual Entry')
-                                                                                                : __('Show Manual Entry')
-                                                                                "
-                                                                        >
-                                                                        </v-btn>
-                                                                        <v-btn
-                                                                                v-if="pos_profile.posa_enable_camera_scanning"
-                                                                                icon="mdi-camera"
-                                                                                size="small"
-                                                                                color="primary"
-                                                                                variant="text"
-                                                                                :disabled="scannerLocked"
-                                                                                @click="startCameraScanning"
-                                                                                :title="
-                                                                                        scannerLocked
-                                                                                                ? __('Acknowledge the error to resume scanning')
-                                                                                                : __('Scan with Camera')
-                                                                                "
-                                                                        >
-                                                                        </v-btn>
-                                                                </template>
-                                                        </v-text-field>
-                                                        <v-expand-transition>
-                                                                <div
-                                                                        v-if="showManualScanInput"
-                                                                        class="manual-scan-container mt-2"
-                                                                >
-                                                                        <div class="manual-scan-text mb-3">
-                                                                                <div class="text-subtitle-2 font-weight-medium">
-                                                                                        {{ __("Manual or Hardware Scanner Input") }}
-                                                                                </div>
-                                                                                <div class="text-body-2 text-medium-emphasis">
-                                                                                        {{ __("Scan with a hardware scanner or type the code, then press Enter.") }}
-                                                                                </div>
-                                                                        </div>
-                                                                        <v-text-field
-                                                                                density="comfortable"
-                                                                                variant="outlined"
-                                                                                color="primary"
-                                                                                clearable
-                                                                                hide-details
-                                                                                :label="__('Enter Code Manually')"
-                                                                                v-model="manualScanValue"
-                                                                                @keydown.enter.prevent="submitManualScan"
-                                                                                @click:clear="manualScanValue = ''"
-                                                                                autocomplete="off"
-                                                                                ref="manualScanInput"
-                                                                                prepend-inner-icon="mdi-barcode-scan"
-                                                                        >
-                                                                                <template #append-inner>
-                                                                                        <v-btn
-                                                                                                icon="mdi-check"
-                                                                                                variant="tonal"
-                                                                                                color="primary"
-                                                                                                size="small"
-                                                                                                @click="submitManualScan"
-                                                                                                :title="__('Submit Code')"
-                                                                                        ></v-btn>
-                                                                                </template>
-                                                                        </v-text-field>
-                                                                </div>
-                                                        </v-expand-transition>
-                                                </v-col>
+							>
+								<template v-slot:append-inner>
+									<v-btn
+										:icon="showManualScanInput ? 'mdi-barcode-off' : 'mdi-barcode-scan'"
+										size="small"
+										color="primary"
+										:variant="showManualScanInput ? 'tonal' : 'text'"
+										class="mr-1"
+										@click.stop="toggleManualScanInput"
+										:title="
+											showManualScanInput
+												? __('Hide Manual Entry')
+												: __('Show Manual Entry')
+										"
+									>
+									</v-btn>
+									<v-btn
+										v-if="pos_profile.posa_enable_camera_scanning"
+										icon="mdi-camera"
+										size="small"
+										color="primary"
+										variant="text"
+										:disabled="scannerLocked"
+										@click="startCameraScanning"
+										:title="
+											scannerLocked
+												? __('Acknowledge the error to resume scanning')
+												: __('Scan with Camera')
+										"
+									>
+									</v-btn>
+								</template>
+							</v-text-field>
+							<v-expand-transition>
+								<div v-if="showManualScanInput" class="manual-scan-container mt-2">
+									<div class="manual-scan-text mb-3">
+										<div class="text-subtitle-2 font-weight-medium">
+											{{ __("Manual or Hardware Scanner Input") }}
+										</div>
+										<div class="text-body-2 text-medium-emphasis">
+											{{
+												__(
+													"Scan with a hardware scanner or type the code, then press Enter.",
+												)
+											}}
+										</div>
+									</div>
+									<v-text-field
+										density="comfortable"
+										variant="outlined"
+										color="primary"
+										clearable
+										hide-details
+										:label="__('Enter Code Manually')"
+										v-model="manualScanValue"
+										@keydown.enter.prevent="submitManualScan"
+										@click:clear="manualScanValue = ''"
+										autocomplete="off"
+										ref="manualScanInput"
+										prepend-inner-icon="mdi-barcode-scan"
+									>
+										<template #append-inner>
+											<v-btn
+												icon="mdi-check"
+												variant="tonal"
+												color="primary"
+												size="small"
+												@click="submitManualScan"
+												:title="__('Submit Code')"
+											></v-btn>
+										</template>
+									</v-text-field>
+								</div>
+							</v-expand-transition>
+						</v-col>
 						<v-col cols="3" class="pb-0" v-if="pos_profile.posa_input_qty">
 							<v-text-field
 								density="compact"
@@ -271,128 +268,130 @@
 				</div>
 				<v-row class="items">
 					<v-col cols="12" class="pt-0 mt-0">
-                                                <div v-if="items_view == 'card'" class="items-card-container">
-                                                        <div v-if="loading" class="items-card-grid">
-                                                                <Skeleton v-for="n in 8" :key="n" class="mb-4" height="120" />
-                                                        </div>
-                                                        <RecycleScroller
-                                                                v-else
-                                                                ref="itemsContainer"
-                                                                class="virtual-scroller"
-                                                                :list-class="['items-card-grid', { 'item-container': isOverflowing }]"
-                                                                :items="displayedItems"
-                                                                key-field="item_code"
-                                                                :item-size="cardRowHeight"
-                                                                :grid-items="cardColumns"
-                                                                :item-secondary-size="cardColumnWidth"
-                                                                :buffer="virtualScrollBuffer"
-                                                                :emit-update="true"
-                                                                @update="onVirtualRangeUpdate"
-                                                        >
-                                                                <template #default="{ item }">
-                                                                        <div
-                                                                                v-if="item"
-                                                                                :key="item.item_code"
-                                                                                class="card-item-card"
-                                                                                @click="select_item($event, item)"
-                                                                                :draggable="true"
-                                                                                @dragstart="onDragStart($event, item)"
-                                                                                @dragend="onDragEnd"
-                                                                        >
-                                                                                <div class="card-item-image-container">
-                                                                                        <v-img
-                                                                                                :src="item.image || placeholderImage"
-                                                                                                class="card-item-image"
-                                                                                                aspect-ratio="1"
-                                                                                                :alt="item.item_name"
-                                                                                        >
-                                                                                                <template #placeholder>
-                                                                                                        <div class="image-placeholder">
-                                                                                                                <v-icon size="40" color="grey-lighten-2">
-                                                                                                                        mdi-image
-                                                                                                                </v-icon>
-                                                                                                        </div>
-                                                                                                </template>
-                                                                                        </v-img>
-                                                                                </div>
-                                                                                <div class="card-item-content">
-                                                                                        <div class="card-item-header">
-                                                                                                <h4 class="card-item-name">{{ item.item_name }}</h4>
-                                                                                                <span class="card-item-code">{{ item.item_code }}</span>
-                                                                                        </div>
-                                                                                        <div class="card-item-details">
-                                                                                                <div class="card-item-price">
-                                                                                                        <div class="primary-price">
-                                                                                                                <span class="currency-symbol">
-                                                                                                                        {{
-                                                                                                                                currencySymbol(
-                                                                                                                                        item.original_currency ||
-                                                                                                                                        pos_profile.currency,
-                                                                                                                                )
-                                                                                                                        }}
-                                                                                                                </span>
-                                                                                                                <span class="price-amount">
-                                                                                                                        {{
-                                                                                                                                format_currency(
-                                                                                                                                        item.base_price_list_rate ?? item.rate ?? 0,
-                                                                                                                                        item.original_currency ||
-                                                                                                                                        pos_profile.currency,
-                                                                                                                                        ratePrecision(
-                                                                                                                                                item.base_price_list_rate ??
-                                                                                                                                                item.rate ??
-                                                                                                                                                0,
-                                                                                                                                        ),
-                                                                                                                                )
-                                                                                                                        }}
-                                                                                                                </span>
-                                                                                                        </div>
-                                                                                                        <div
-                                                                                                                v-if="
-                                                                                                                        pos_profile.posa_allow_multi_currency &&
-                                                                                                                        selected_currency !== pos_profile.currency
-                                                                                                                "
-                                                                                                                class="secondary-price"
-                                                                                                        >
-                                                                                                                <span class="currency-symbol">
-                                                                                                                        {{ currencySymbol(selected_currency) }}
-                                                                                                                </span>
-                                                                                                                <span class="price-amount">
-                                                                                                                        {{
-                                                                                                                                format_currency(
-                                                                                                                                        item.rate,
-                                                                                                                                        selected_currency,
-                                                                                                                                        ratePrecision(item.rate),
-                                                                                                                                )
-                                                                                                                        }}
-                                                                                                                </span>
-                                                                                                        </div>
-                                                                                                </div>
-                                                                                                <div class="card-item-stock">
-                                                                                                        <v-icon size="small" class="stock-icon">
-                                                                                                                mdi-package-variant
-                                                                                                        </v-icon>
-                                                                                                        <span
-                                                                                                                class="stock-amount"
-                                                                                                                :class="{
-                                                                                                                        'negative-number': isNegative(item.actual_qty),
-                                                                                                                }"
-                                                                                                        >
-                                                                                                                {{
-                                                                                                                        format_number(
-                                                                                                                                item.actual_qty,
-                                                                                                                                hide_qty_decimals ? 0 : 4,
-                                                                                                                        ) || 0
-                                                                                                                }}
-                                                                                                        </span>
-                                                                                                        <span class="stock-uom">{{ item.stock_uom || "" }}</span>
-                                                                                                </div>
-                                                                                        </div>
-                                                                                </div>
-                                                                        </div>
-                                                                </template>
-                                                        </RecycleScroller>
-                                                </div>
-                                                <div v-else class="items-table-container">
+						<div v-if="items_view == 'card'" class="items-card-container">
+							<div v-if="loading" class="items-card-grid">
+								<Skeleton v-for="n in 8" :key="n" class="mb-4" height="120" />
+							</div>
+							<RecycleScroller
+								v-else
+								ref="itemsContainer"
+								class="virtual-scroller"
+								:list-class="['items-card-grid', { 'item-container': isOverflowing }]"
+								:items="displayedItems"
+								key-field="item_code"
+								:item-size="cardRowHeight"
+								:grid-items="cardColumns"
+								:item-secondary-size="cardColumnWidth"
+								:buffer="virtualScrollBuffer"
+								:emit-update="true"
+								@update="onVirtualRangeUpdate"
+							>
+								<template #default="{ item }">
+									<div
+										v-if="item"
+										:key="item.item_code"
+										class="card-item-card"
+										@click="select_item($event, item)"
+										:draggable="true"
+										@dragstart="onDragStart($event, item)"
+										@dragend="onDragEnd"
+									>
+										<div class="card-item-image-container">
+											<v-img
+												:src="item.image || placeholderImage"
+												class="card-item-image"
+												aspect-ratio="1"
+												:alt="item.item_name"
+											>
+												<template #placeholder>
+													<div class="image-placeholder">
+														<v-icon size="40" color="grey-lighten-2">
+															mdi-image
+														</v-icon>
+													</div>
+												</template>
+											</v-img>
+										</div>
+										<div class="card-item-content">
+											<div class="card-item-header">
+												<h4 class="card-item-name">{{ item.item_name }}</h4>
+												<span class="card-item-code">{{ item.item_code }}</span>
+											</div>
+											<div class="card-item-details">
+												<div class="card-item-price">
+													<div class="primary-price">
+														<span class="currency-symbol">
+															{{
+																currencySymbol(
+																	item.original_currency ||
+																		pos_profile.currency,
+																)
+															}}
+														</span>
+														<span class="price-amount">
+															{{
+																format_currency(
+																	item.base_price_list_rate ??
+																		item.rate ??
+																		0,
+																	item.original_currency ||
+																		pos_profile.currency,
+																	ratePrecision(
+																		item.base_price_list_rate ??
+																			item.rate ??
+																			0,
+																	),
+																)
+															}}
+														</span>
+													</div>
+													<div
+														v-if="
+															pos_profile.posa_allow_multi_currency &&
+															selected_currency !== pos_profile.currency
+														"
+														class="secondary-price"
+													>
+														<span class="currency-symbol">
+															{{ currencySymbol(selected_currency) }}
+														</span>
+														<span class="price-amount">
+															{{
+																format_currency(
+																	item.rate,
+																	selected_currency,
+																	ratePrecision(item.rate),
+																)
+															}}
+														</span>
+													</div>
+												</div>
+												<div class="card-item-stock">
+													<v-icon size="small" class="stock-icon">
+														mdi-package-variant
+													</v-icon>
+													<span
+														class="stock-amount"
+														:class="{
+															'negative-number': isNegative(item.actual_qty),
+														}"
+													>
+														{{
+															format_number(
+																item.actual_qty,
+																hide_qty_decimals ? 0 : 4,
+															) || 0
+														}}
+													</span>
+													<span class="stock-uom">{{ item.stock_uom || "" }}</span>
+												</div>
+											</div>
+										</div>
+									</div>
+								</template>
+							</RecycleScroller>
+						</div>
+						<div v-else class="items-table-container">
 							<v-data-table-virtual
 								:headers="headers"
 								:items="displayedItems"
@@ -509,14 +508,14 @@
 		</v-card>
 
 		<!-- Camera Scanner Component -->
-                <CameraScanner
-                        v-if="pos_profile.posa_enable_camera_scanning"
-                        ref="cameraScanner"
-                        :scan-type="pos_profile.posa_camera_scan_type || 'Both'"
-                        @barcode-scanned="onBarcodeScanned"
-                        @scanner-opened="onScannerOpened"
-                        @scanner-closed="onScannerClosed"
-                />
+		<CameraScanner
+			v-if="pos_profile.posa_enable_camera_scanning"
+			ref="cameraScanner"
+			:scan-type="pos_profile.posa_camera_scan_type || 'Both'"
+			@barcode-scanned="onBarcodeScanned"
+			@scanner-opened="onScannerOpened"
+			@scanner-closed="onScannerClosed"
+		/>
 	</div>
 </template>
 
@@ -530,10 +529,10 @@ import { ensurePosProfile } from "../../../utils/pos_profile.js";
 import "vue-virtual-scroller/dist/vue-virtual-scroller.css";
 import { RecycleScroller } from "vue-virtual-scroller";
 import {
-        saveItemUOMs,
-        getItemUOMs,
-        getLocalStock,
-        isOffline,
+	saveItemUOMs,
+	getItemUOMs,
+	getLocalStock,
+	isOffline,
 	getStoredItemsCount,
 	initializeStockCache,
 	saveItemsBulk,
@@ -563,10 +562,7 @@ import { useFlyAnimation } from "../../composables/useFlyAnimation.js";
 import { withPerf, perfMarkStart, perfMarkEnd, scheduleFrame } from "../../utils/perf.js";
 import { useCartValidation } from "../../composables/useCartValidation.js";
 import { useItemsIntegration } from "../../composables/useItemsIntegration.js";
-import {
-  parseBooleanSetting,
-  formatStockShortageError,
-} from "../../utils/stock.js";
+import { parseBooleanSetting, formatStockShortageError } from "../../utils/stock.js";
 import placeholderImage from "./placeholder-image.png";
 import Skeleton from "../ui/Skeleton.vue";
 import { useCustomersStore } from "../../stores/customersStore.js";
@@ -574,42 +570,42 @@ import { storeToRefs } from "pinia";
 
 export default {
 	mixins: [format],
-        setup() {
-                const responsive = useResponsive();
-                const rtl = useRtl();
-                const { fly } = useFlyAnimation();
-                const cartValidation = useCartValidation();
+	setup() {
+		const responsive = useResponsive();
+		const rtl = useRtl();
+		const { fly } = useFlyAnimation();
+		const cartValidation = useCartValidation();
 
-                // Initialize Pinia store integration
-                const itemsIntegration = useItemsIntegration({
-                        enableDebounce: true,
-                        debounceDelay: 300
-                });
+		// Initialize Pinia store integration
+		const itemsIntegration = useItemsIntegration({
+			enableDebounce: true,
+			debounceDelay: 300,
+		});
 
-                const customersStore = useCustomersStore();
-                const { selectedCustomer } = storeToRefs(customersStore);
+		const customersStore = useCustomersStore();
+		const { selectedCustomer } = storeToRefs(customersStore);
 
-                return {
-                        ...responsive,
-                        ...rtl,
-                        fly,
-                        cartValidation,
-                        ...itemsIntegration,
-                        selectedCustomer
-                };
-        },
-        components: {
-                CameraScanner,
-                Skeleton,
-                RecycleScroller,
-        },
-        data: () => ({
-                pos_profile: {},
-                stock_settings: {},
-                flags: {},
-                customer: "",
-                items_view: "list",
-                first_search: "",
+		return {
+			...responsive,
+			...rtl,
+			fly,
+			cartValidation,
+			...itemsIntegration,
+			selectedCustomer,
+		};
+	},
+	components: {
+		CameraScanner,
+		Skeleton,
+		RecycleScroller,
+	},
+	data: () => ({
+		pos_profile: {},
+		stock_settings: {},
+		flags: {},
+		customer: "",
+		items_view: "list",
+		first_search: "",
 		search_backup: "",
 		// Limit the displayed items to avoid overly large lists
 		itemsPerPage: 50,
@@ -617,15 +613,15 @@ export default {
 		appliedOffersCount: 0,
 		couponsCount: 0,
 		appliedCouponsCount: 0,
-                new_line: false,
-                qty: 1,
+		new_line: false,
+		qty: 1,
 		refresh_interval: null,
 		abortController: null,
 		itemDetailsRequestCache: { key: null, promise: null, result: null },
 		itemDetailsRetryCount: 0,
 		itemDetailsRetryTimeout: null,
-                selected_currency: "",
-                exchange_rate: 1,
+		selected_currency: "",
+		exchange_rate: 1,
 		prePopulateInProgress: false,
 		itemWorker: null,
 		flyConfig: { speed: 0.6, easing: "ease-in-out" },
@@ -646,21 +642,21 @@ export default {
 		items_per_page: 50,
 		temp_items_per_page: 50,
 		temp_force_server_items: false,
-                // Performance optimizations
-                searchCache: new Map(),
-                barcodeIndex: new Map(),
-                itemCache: new Map(),
-                virtualScrollEnabled: true,
-                virtualScrollBuffer: 200,
-                renderBuffer: 10,
-                lastScrollTop: 0,
-                scrollThrottle: null,
-                searchDebounce: null,
-                // Prevent repeated server fetches when local storage is empty
-                fallbackAttempted: false,
-                cardContainerWidth: 0,
-                virtualScrollPending: false,
-                metricsRaf: null,
+		// Performance optimizations
+		searchCache: new Map(),
+		barcodeIndex: new Map(),
+		itemCache: new Map(),
+		virtualScrollEnabled: true,
+		virtualScrollBuffer: 200,
+		renderBuffer: 10,
+		lastScrollTop: 0,
+		scrollThrottle: null,
+		searchDebounce: null,
+		// Prevent repeated server fetches when local storage is empty
+		fallbackAttempted: false,
+		cardContainerWidth: 0,
+		virtualScrollPending: false,
+		metricsRaf: null,
 		// Fixed page size for incremental item loading to avoid
 		// pulling the entire catalog at once.
 		itemsPageLimit: 100,
@@ -675,39 +671,39 @@ export default {
 		totalItemCount: 0,
 		scanErrorDialog: false,
 		scanErrorMessage: "",
-                scanErrorDetails: "",
-                scanErrorCode: "",
-                scannerLocked: false,
-                cameraScannerActive: false,
-                showManualScanInput: false,
-                manualScanValue: "",
-                scanAudioContext: null,
-                pendingScanCode: "",
-                awaitingScanResult: false,
-                scanDebounceId: null,
-                scanQueuedCode: "",
-                refreshInFlight: false,
-                clearingSearch: false,
-        }),
+		scanErrorDetails: "",
+		scanErrorCode: "",
+		scannerLocked: false,
+		cameraScannerActive: false,
+		showManualScanInput: false,
+		manualScanValue: "",
+		scanAudioContext: null,
+		pendingScanCode: "",
+		awaitingScanResult: false,
+		scanDebounceId: null,
+		scanQueuedCode: "",
+		refreshInFlight: false,
+		clearingSearch: false,
+	}),
 
-        watch: {
-                showManualScanInput(newVal) {
-                        if (newVal) {
-                                this.queueManualScanFocus();
-                        } else {
-                                this.manualScanValue = "";
-                                if (!this.cameraScannerActive) {
-                                        this.$nextTick(() => this.focusItemSearch());
-                                }
-                        }
-                },
-                customer: _.debounce(function () {
+	watch: {
+		showManualScanInput(newVal) {
+			if (newVal) {
+				this.queueManualScanFocus();
+			} else {
+				this.manualScanValue = "";
+				if (!this.cameraScannerActive) {
+					this.$nextTick(() => this.focusItemSearch());
+				}
+			}
+		},
+		customer: _.debounce(function () {
 			if (this.pos_profile.posa_force_reload_items) {
 				if (this.pos_profile.posa_smart_reload_mode) {
 					// When limit search is enabled there may be no items yet.
 					// Fallback to full reload if nothing is loaded
 					if (!this.itemsLoaded || !this.displayedItems.length) {
-												if (!isOffline()) {
+						if (!isOffline()) {
 							this.get_items(true);
 						} else {
 							if (
@@ -725,7 +721,7 @@ export default {
 					}
 				} else {
 					// Fall back to full reload
-										if (!isOffline()) {
+					if (!isOffline()) {
 						this.get_items(true);
 					} else {
 						if (
@@ -758,7 +754,7 @@ export default {
 					// When limit search is enabled there may be no items yet.
 					// Fallback to full reload if nothing is loaded
 					if (!this.itemsLoaded || !this.items.length) {
-												if (!isOffline()) {
+						if (!isOffline()) {
 							this.get_items(true);
 						} else {
 							this.get_items();
@@ -769,7 +765,7 @@ export default {
 					}
 				} else {
 					// Fall back to full reload
-										if (!isOffline()) {
+					if (!isOffline()) {
 						this.get_items(true);
 					} else {
 						this.get_items();
@@ -803,7 +799,7 @@ export default {
 				}
 			}
 			// No cache found - force a reload so prices are updated
-						if (!isOffline()) {
+			if (!isOffline()) {
 				this.get_items(true);
 			} else {
 				if (this.pos_profile && (!this.pos_profile.posa_local_storage || !this.storageAvailable)) {
@@ -816,13 +812,13 @@ export default {
 		new_line() {
 			this.eventBus.emit("set_new_line", this.new_line);
 		},
-                item_group(newValue, oldValue) {
-                        if (this.usesLimitSearch && newValue !== oldValue) {
-                                if (this.pos_profile && (!this.pos_profile.posa_local_storage || !this.storageAvailable)) {
-                                        this.get_items(true);
-                                } else {
-                                        this.get_items();
-                                }
+		item_group(newValue, oldValue) {
+			if (this.usesLimitSearch && newValue !== oldValue) {
+				if (this.pos_profile && (!this.pos_profile.posa_local_storage || !this.storageAvailable)) {
+					this.get_items(true);
+				} else {
+					this.get_items();
+				}
 			} else if (this.pos_profile && this.pos_profile.posa_local_storage && newValue !== oldValue) {
 				if (this.storageAvailable) {
 					this.loadVisibleItems(true);
@@ -831,41 +827,41 @@ export default {
 				}
 			}
 		},
-                displayedItems(new_value, old_value) {
-                        // Update item details if items changed
-                        if (!this.usesLimitSearch && new_value.length !== old_value.length) {
-                                this.update_items_details(new_value);
-                        }
-                        this.$nextTick(() => {
-                                this.checkItemContainerOverflow();
-                                this.scheduleCardMetricsUpdate();
-                        });
-                },
+		displayedItems(new_value, old_value) {
+			// Update item details if items changed
+			if (!this.usesLimitSearch && new_value.length !== old_value.length) {
+				this.update_items_details(new_value);
+			}
+			this.$nextTick(() => {
+				this.checkItemContainerOverflow();
+				this.scheduleCardMetricsUpdate();
+			});
+		},
 		// Automatically search when the query has at least 3 characters
-                first_search: _.debounce(function (val, oldVal) {
-                        if (this.clearingSearch) {
-                                return;
-                        }
-                        const newLen = (val || "").trim().length;
-                        const oldLen = (oldVal || "").trim().length;
+		first_search: _.debounce(function (val, oldVal) {
+			if (this.clearingSearch) {
+				return;
+			}
+			const newLen = (val || "").trim().length;
+			const oldLen = (oldVal || "").trim().length;
 
-                        // When limit search is enabled, wait for an explicit Enter key press
-                        if (this.usesLimitSearch) {
-                                if (oldLen >= 3 && newLen === 0) {
-                                        // Reset items only when search is fully cleared
-                                        this.clearSearch();
-                                }
-                                return;
-                        }
+			// When limit search is enabled, wait for an explicit Enter key press
+			if (this.usesLimitSearch) {
+				if (oldLen >= 3 && newLen === 0) {
+					// Reset items only when search is fully cleared
+					this.clearSearch();
+				}
+				return;
+			}
 
-                        if (newLen >= 3) {
-                                // Call without arguments so search_onchange treats it like an Enter key
-                                this.search_onchange();
-                        } else if (oldLen >= 3 && newLen === 0) {
-                                // Reset items only when search is fully cleared
-                                this.clearSearch();
-                        }
-                }, 300),
+			if (newLen >= 3) {
+				// Call without arguments so search_onchange treats it like an Enter key
+				this.search_onchange();
+			} else if (oldLen >= 3 && newLen === 0) {
+				// Reset items only when search is fully cleared
+				this.clearSearch();
+			}
+		}, 300),
 
 		// Refresh item prices whenever the user changes currency
 		selected_currency() {
@@ -876,38 +872,38 @@ export default {
 		exchange_rate() {
 			this.applyCurrencyConversionToItems();
 		},
-                windowWidth() {
-                        // Keep the configured items per page on resize
-                        this.itemsPerPage = this.items_per_page;
-                        this.scheduleCardMetricsUpdate();
-                },
-                windowHeight() {
-                        // Maintain the configured items per page on resize
-                        this.itemsPerPage = this.items_per_page;
-                        this.scheduleCardMetricsUpdate();
-                },
-                itemsLoaded(val) {
-                        if (val) {
-                                this.eventBus.emit("itemsLoaded");
-                                this.eventBus.emit("data-loaded", "items");
+		windowWidth() {
+			// Keep the configured items per page on resize
+			this.itemsPerPage = this.items_per_page;
+			this.scheduleCardMetricsUpdate();
+		},
+		windowHeight() {
+			// Maintain the configured items per page on resize
+			this.itemsPerPage = this.items_per_page;
+			this.scheduleCardMetricsUpdate();
+		},
+		itemsLoaded(val) {
+			if (val) {
+				this.eventBus.emit("itemsLoaded");
+				this.eventBus.emit("data-loaded", "items");
 			}
 		},
-                items_view() {
-                        this.$nextTick(() => {
-                                if (this.items_view === "card") {
-                                        this.checkItemContainerOverflow();
-                                        this.scheduleCardMetricsUpdate();
-                                } else {
-                                        this.isOverflowing = false;
-                                }
-                        });
-                },
+		items_view() {
+			this.$nextTick(() => {
+				if (this.items_view === "card") {
+					this.checkItemContainerOverflow();
+					this.scheduleCardMetricsUpdate();
+				} else {
+					this.isOverflowing = false;
+				}
+			});
+		},
 	},
 
 	methods: {
 		// Performance optimization: Memoized search function
-                memoizedSearch(searchTerm, itemGroup) {
-                        const cacheKey = `${searchTerm || ""}_${itemGroup || "ALL"}`;
+		memoizedSearch(searchTerm, itemGroup) {
+			const cacheKey = `${searchTerm || ""}_${itemGroup || "ALL"}`;
 
 			// Check if we have a cached result
 			if (this.searchCache && this.searchCache.has(cacheKey)) {
@@ -916,7 +912,7 @@ export default {
 			}
 
 			// Perform the search
-                        const result = this.performSearch(searchTerm, itemGroup);
+			const result = this.performSearch(searchTerm, itemGroup);
 
 			// Cache the result
 			if (this.searchCache) {
@@ -926,12 +922,12 @@ export default {
 			return result;
 		},
 
-                performSearch(searchTerm, itemGroup) {
-                        const mark = perfMarkStart("pos:search-filter");
-                        if (!this.items || !this.items.length) {
-                                perfMarkEnd("pos:search-filter", mark);
-                                return [];
-                        }
+		performSearch(searchTerm, itemGroup) {
+			const mark = perfMarkStart("pos:search-filter");
+			if (!this.items || !this.items.length) {
+				perfMarkEnd("pos:search-filter", mark);
+				return [];
+			}
 
 			let filtered = this.items;
 
@@ -944,8 +940,8 @@ export default {
 			}
 
 			// Filter by search term only if it exists and is long enough
-                        if (searchTerm && searchTerm.trim() && searchTerm.trim().length >= 3) {
-                                const term = searchTerm.toLowerCase();
+			if (searchTerm && searchTerm.trim() && searchTerm.trim().length >= 3) {
+				const term = searchTerm.toLowerCase();
 				filtered = filtered.filter((item) => {
 					if (!searchWords.length) {
 						return true;
@@ -983,85 +979,80 @@ export default {
 				});
 			}
 
-                        perfMarkEnd("pos:search-filter", mark);
-                        return filtered;
-                },
+			perfMarkEnd("pos:search-filter", mark);
+			return filtered;
+		},
 
-                async fetchServerItemsTimestamp() {
-                        try {
-                                const { message } = await frappe.call({
-                                        method: "frappe.client.get_list",
-                                        args: {
-                                                doctype: "Item",
-                                                fields: ["modified"],
-                                                order_by: "modified desc",
-                                                limit_page_length: 1,
-                                        },
-                                });
-                                return message && message[0] && message[0].modified;
-                        } catch (e) {
-                                console.error("Failed to fetch server items timestamp", e);
-                                return null;
-                        }
-                },
+		async fetchServerItemsTimestamp() {
+			try {
+				const { message } = await frappe.call({
+					method: "frappe.client.get_list",
+					args: {
+						doctype: "Item",
+						fields: ["modified"],
+						order_by: "modified desc",
+						limit_page_length: 1,
+					},
+				});
+				return message && message[0] && message[0].modified;
+			} catch (e) {
+				console.error("Failed to fetch server items timestamp", e);
+				return null;
+			}
+		},
 
-                scheduleCardMetricsUpdate() {
-                        if (this.metricsRaf) {
-                                cancelAnimationFrame(this.metricsRaf);
-                        }
-                        this.metricsRaf = requestAnimationFrame(() => {
-                                this.metricsRaf = null;
-                                this.updateCardContainerMetrics();
-                        });
-                },
-                updateCardContainerMetrics() {
-                        this.$nextTick(() => {
-                                const ref = this.$refs.itemsContainer;
-                                const el = ref && ref.$el ? ref.$el : ref;
-                                if (!el || typeof el.getBoundingClientRect !== "function") {
-                                        return;
-                                }
-                                const { width } = el.getBoundingClientRect();
-                                if (width && Math.round(width) !== Math.round(this.cardContainerWidth)) {
-                                        this.cardContainerWidth = width;
-                                }
-                        });
-                },
-                async onVirtualRangeUpdate(_startIndex, _endIndex, _visibleStartIndex, visibleEndIndex) {
-                        const total = this.displayedItems ? this.displayedItems.length : 0;
-                        if (!total) {
-                                this.scheduleCardMetricsUpdate();
-                                return;
-                        }
+		scheduleCardMetricsUpdate() {
+			if (this.metricsRaf) {
+				cancelAnimationFrame(this.metricsRaf);
+			}
+			this.metricsRaf = requestAnimationFrame(() => {
+				this.metricsRaf = null;
+				this.updateCardContainerMetrics();
+			});
+		},
+		updateCardContainerMetrics() {
+			this.$nextTick(() => {
+				const ref = this.$refs.itemsContainer;
+				const el = ref && ref.$el ? ref.$el : ref;
+				if (!el || typeof el.getBoundingClientRect !== "function") {
+					return;
+				}
+				const { width } = el.getBoundingClientRect();
+				if (width && Math.round(width) !== Math.round(this.cardContainerWidth)) {
+					this.cardContainerWidth = width;
+				}
+			});
+		},
+		async onVirtualRangeUpdate(_startIndex, _endIndex, _visibleStartIndex, visibleEndIndex) {
+			const total = this.displayedItems ? this.displayedItems.length : 0;
+			if (!total) {
+				this.scheduleCardMetricsUpdate();
+				return;
+			}
 
-                        const threshold = Math.max(1, this.cardColumns * 2);
-                        const nearEnd = visibleEndIndex >= total - threshold;
+			const threshold = Math.max(1, this.cardColumns * 2);
+			const nearEnd = visibleEndIndex >= total - threshold;
 
-                        if (
-                                nearEnd &&
-                                this.hasMoreCachedItems &&
-                                !this.virtualScrollPending &&
-                                !this.loading
-                        ) {
-                                this.virtualScrollPending = true;
-                                try {
-                                        await this.appendCachedItemsPage();
-                                } catch (error) {
-                                        console.warn("Failed to append cached items page", error);
-                                } finally {
-                                        this.virtualScrollPending = false;
-                                        this.scheduleCardMetricsUpdate();
-                                }
-                        } else {
-                                this.scheduleCardMetricsUpdate();
-                        }
-                },
+			if (nearEnd && this.hasMoreCachedItems && !this.virtualScrollPending && !this.loading) {
+				this.virtualScrollPending = true;
+				try {
+					await this.appendCachedItemsPage();
+				} catch (error) {
+					console.warn("Failed to append cached items page", error);
+				} finally {
+					this.virtualScrollPending = false;
+					this.scheduleCardMetricsUpdate();
+				}
+			} else {
+				this.scheduleCardMetricsUpdate();
+			}
+		},
 
-                // Optimized scroll handler with throttling
-                onCardScroll() {
-                        if (this.scrollThrottle) return;
+		// Optimized scroll handler with throttling
+		onCardScroll() {
+			if (this.scrollThrottle) return;
 
-                        this.scrollThrottle = requestAnimationFrame(() => {
+			this.scrollThrottle = requestAnimationFrame(() => {
 				try {
 					const el = this.$refs.itemsContainer;
 					if (!el) return;
@@ -1145,37 +1136,37 @@ export default {
 			}
 			return dbHealthy;
 		},
-                async loadVisibleItems(reset = false) {
-                        this.loadProgress = 0;
-                        this.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
-                        await initPromise;
-                        await this.ensureStorageHealth();
+		async loadVisibleItems(reset = false) {
+			this.loadProgress = 0;
+			this.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
+			await initPromise;
+			await this.ensureStorageHealth();
 
-                        if (reset) {
-                                this.currentPage = 0;
-                                await this.loadItems({
-                                        searchValue: this.get_search(this.first_search),
-                                        groupFilter: this.item_group,
-                                        limit: this.usesLimitSearch ? this.limitSearchCap : undefined,
-                                });
-                        }
+			if (reset) {
+				this.currentPage = 0;
+				await this.loadItems({
+					searchValue: this.get_search(this.first_search),
+					groupFilter: this.item_group,
+					limit: this.usesLimitSearch ? this.limitSearchCap : undefined,
+				});
+			}
 
-                        const pageItems = await this.appendCachedItemsPage();
+			const pageItems = await this.appendCachedItemsPage();
 
-                        if (Array.isArray(pageItems) && pageItems.length) {
-                                this.eventBus.emit("set_all_items", this.items);
-                                await this.update_items_details(pageItems);
+			if (Array.isArray(pageItems) && pageItems.length) {
+				this.eventBus.emit("set_all_items", this.items);
+				await this.update_items_details(pageItems);
 
-                                this.loadProgress = this.totalItemCount
-                                        ? Math.round((this.items.length / this.totalItemCount) * 100)
-                                        : 100;
+				this.loadProgress = this.totalItemCount
+					? Math.round((this.items.length / this.totalItemCount) * 100)
+					: 100;
 
-                                this.eventBus.emit("data-load-progress", {
-                                        name: "items",
-                                        progress: this.loadProgress,
-                                });
-                        }
-                },
+				this.eventBus.emit("data-load-progress", {
+					name: "items",
+					progress: this.loadProgress,
+				});
+			}
+		},
 		onListScroll(event) {
 			if (this.scrollThrottle) return;
 
@@ -1194,13 +1185,13 @@ export default {
 			});
 		},
 
-                checkItemContainerOverflow() {
-                        const ref = this.$refs.itemsContainer;
-                        const el = ref && ref.$el ? ref.$el : ref;
-                        if (!el) {
-                                this.isOverflowing = false;
-                                return;
-                        }
+		checkItemContainerOverflow() {
+			const ref = this.$refs.itemsContainer;
+			const el = ref && ref.$el ? ref.$el : ref;
+			if (!el) {
+				this.isOverflowing = false;
+				return;
+			}
 
 			const containerHeight = parseFloat(getComputedStyle(el).getPropertyValue("--container-height"));
 			if (isNaN(containerHeight)) {
@@ -1210,12 +1201,12 @@ export default {
 
 			const stickyHeader = el.closest(".dynamic-padding")?.querySelector(".sticky-header");
 			const headerHeight = stickyHeader ? stickyHeader.offsetHeight : 0;
-                        const availableHeight = containerHeight - headerHeight;
+			const availableHeight = containerHeight - headerHeight;
 
-                        el.style.maxHeight = `${availableHeight}px`;
-                        this.isOverflowing = el.scrollHeight > availableHeight;
-                        this.scheduleCardMetricsUpdate();
-                },
+			el.style.maxHeight = `${availableHeight}px`;
+			this.isOverflowing = el.scrollHeight > availableHeight;
+			this.scheduleCardMetricsUpdate();
+		},
 
 		async fetchItemDetails(items) {
 			if (!items || items.length === 0) {
@@ -1283,76 +1274,74 @@ export default {
 				this.itemDetailsRequestCache.result = null;
 			}
 		},
-                async refreshPricesForVisibleItems() {
-                        const vm = this;
-                        if (!vm.displayedItems || vm.displayedItems.length === 0) return;
+		async refreshPricesForVisibleItems() {
+			const vm = this;
+			if (!vm.displayedItems || vm.displayedItems.length === 0) return;
 
-                        if (vm.refreshInFlight) {
-                                return;
-                        }
+			if (vm.refreshInFlight) {
+				return;
+			}
 
-                        vm.refreshInFlight = true;
-                        const wasLoading = vm.loading;
-                        if (!wasLoading) {
-                                vm.loading = true;
-                        }
-                        const releaseLoading = () => {
-                                if (!wasLoading) {
-                                        vm.loading = false;
-                                }
-                        };
+			vm.refreshInFlight = true;
+			const wasLoading = vm.loading;
+			if (!wasLoading) {
+				vm.loading = true;
+			}
+			const releaseLoading = () => {
+				if (!wasLoading) {
+					vm.loading = false;
+				}
+			};
 
-                        try {
-                                const itemCodes = vm.displayedItems.map((it) => it.item_code);
-                                const cacheResult = await getCachedItemDetails(
-                                vm.pos_profile.name,
-                                vm.active_price_list,
-                                itemCodes,
-                                );
-                                const updates = [];
+			try {
+				const itemCodes = vm.displayedItems.map((it) => it.item_code);
+				const cacheResult = await getCachedItemDetails(
+					vm.pos_profile.name,
+					vm.active_price_list,
+					itemCodes,
+				);
+				const updates = [];
 
-                                cacheResult.cached.forEach((det) => {
-                                        const item = vm.displayedItems.find((it) => it.item_code === det.item_code);
-                                        if (item) {
-                                                const upd = { actual_qty: det.actual_qty };
-                                                if (det.item_uoms && det.item_uoms.length > 0) {
-                                                        upd.item_uoms = det.item_uoms;
-                                                        saveItemUOMs(item.item_code, det.item_uoms);
-                                                }
-                                                if (det.rate !== undefined) {
-                                                        const force =
-                                                                vm.pos_profile?.posa_force_price_from_customer_price_list !==
-                                                                false;
-                                                        const price = det.price_list_rate ?? det.rate ?? 0;
-                                                        if (force || price) {
-                                                                upd.rate = price;
-                                                                upd.price_list_rate = price;
-                                                        }
-                                                }
-                                                if (det.currency) {
-                                                        upd.currency = det.currency;
-                                                }
-                                                updates.push({ item, upd });
-                                        }
-                                });
+				cacheResult.cached.forEach((det) => {
+					const item = vm.displayedItems.find((it) => it.item_code === det.item_code);
+					if (item) {
+						const upd = { actual_qty: det.actual_qty };
+						if (det.item_uoms && det.item_uoms.length > 0) {
+							upd.item_uoms = det.item_uoms;
+							saveItemUOMs(item.item_code, det.item_uoms);
+						}
+						if (det.rate !== undefined) {
+							const force = vm.pos_profile?.posa_force_price_from_customer_price_list !== false;
+							const price = det.price_list_rate ?? det.rate ?? 0;
+							if (force || price) {
+								upd.rate = price;
+								upd.price_list_rate = price;
+							}
+						}
+						if (det.currency) {
+							upd.currency = det.currency;
+						}
+						updates.push({ item, upd });
+					}
+				});
 
-                                if (cacheResult.missing.length === 0) {
-                                        vm.$nextTick(() => {
-                                                updates.forEach(({ item, upd }) => Object.assign(item, upd));
-                                                updateLocalStockCache(cacheResult.cached);
-                                                releaseLoading();
-                                        });
-                                        return;
-                                }
+				if (cacheResult.missing.length === 0) {
+					vm.$nextTick(() => {
+						updates.forEach(({ item, upd }) => Object.assign(item, upd));
+						updateLocalStockCache(cacheResult.cached);
+						releaseLoading();
+					});
+					return;
+				}
 
-                                const itemsToFetch = vm.displayedItems.filter((it) =>
-                                        cacheResult.missing.includes(it.item_code),
-                                );
+				const itemsToFetch = vm.displayedItems.filter((it) =>
+					cacheResult.missing.includes(it.item_code),
+				);
 
-                                const details = await vm.fetchItemDetails(itemsToFetch);
-                                details.forEach((updItem) => {
-                                        const item = vm.displayedItems.find((it) => it.item_code === updItem.item_code);
-                                        if (item) {
+				const details = await vm.fetchItemDetails(itemsToFetch);
+				details.forEach((updItem) => {
+					const item = vm.displayedItems.find((it) => it.item_code === updItem.item_code);
+					if (item) {
 						const upd = { actual_qty: updItem.actual_qty };
 						if (updItem.item_uoms && updItem.item_uoms.length > 0) {
 							upd.item_uoms = updItem.item_uoms;
@@ -1383,31 +1372,31 @@ export default {
 					updates.forEach(({ item, upd }) => Object.assign(item, upd));
 					updateLocalStockCache(details);
 					saveItemDetailsCache(vm.pos_profile.name, vm.active_price_list, details);
-                                        if (
-                                                vm.pos_profile &&
-                                                vm.pos_profile.posa_local_storage &&
-                                                vm.storageAvailable &&
-                                                !vm.usesLimitSearch
-                                        ) {
+					if (
+						vm.pos_profile &&
+						vm.pos_profile.posa_local_storage &&
+						vm.storageAvailable &&
+						!vm.usesLimitSearch
+					) {
 						try {
 							await saveItemsBulk(details);
 						} catch (e) {
 							console.error("Failed to persist item details", e);
-                                                        vm.markStorageUnavailable && vm.markStorageUnavailable();
-                                                }
-                                        }
-                                        releaseLoading();
-                                });
-                        } catch (err) {
-                                if (err.name !== "AbortError") {
-                                        console.error("Error fetching item details:", err);
-                                        releaseLoading();
-                                }
-                        } finally {
-                                vm.refreshInFlight = false;
-                                releaseLoading();
-                        }
-                },
+							vm.markStorageUnavailable && vm.markStorageUnavailable();
+						}
+					}
+					releaseLoading();
+				});
+			} catch (err) {
+				if (err.name !== "AbortError") {
+					console.error("Error fetching item details:", err);
+					releaseLoading();
+				}
+			} finally {
+				vm.refreshInFlight = false;
+				releaseLoading();
+			}
+		},
 
 		show_offers() {
 			this.eventBus.emit("show_offers", "true");
@@ -1415,32 +1404,32 @@ export default {
 		show_coupons() {
 			this.eventBus.emit("show_coupons", "true");
 		},
-                async initializeItems() {
-                        await this.ensureStorageHealth();
-                        if (
-                                this.pos_profile &&
-                                this.pos_profile.posa_local_storage &&
-                                this.storageAvailable &&
-                                !this.usesLimitSearch
-                        ) {
-                                const localCount = await getStoredItemsCount();
-                                if (localCount > 0) {
-                                        await this.loadVisibleItems(true);
-                                                                                await this.verifyServerItemCount();
-                                        return;
-                                }
-                        }
-                        await this.get_items(true);
+		async initializeItems() {
+			await this.ensureStorageHealth();
+			if (
+				this.pos_profile &&
+				this.pos_profile.posa_local_storage &&
+				this.storageAvailable &&
+				!this.usesLimitSearch
+			) {
+				const localCount = await getStoredItemsCount();
+				if (localCount > 0) {
+					await this.loadVisibleItems(true);
+					await this.verifyServerItemCount();
+					return;
+				}
+			}
+			await this.get_items(true);
 
-                        if (
-                                this.pos_profile &&
-                                this.pos_profile.posa_local_storage &&
-                                this.storageAvailable &&
-                                !this.usesLimitSearch
-                        ) {
-                                await this.verifyServerItemCount();
-                        }
-                },
+			if (
+				this.pos_profile &&
+				this.pos_profile.posa_local_storage &&
+				this.storageAvailable &&
+				!this.usesLimitSearch
+			) {
+				await this.verifyServerItemCount();
+			}
+		},
 		async forceReloadItems() {
 			console.log("[ItemsSelector] forceReloadItems called");
 			// Clear cached price list items so the reload always
@@ -1449,7 +1438,7 @@ export default {
 			console.log("[ItemsSelector] price list cache cleared");
 			await this.ensureStorageHealth();
 			console.log("[ItemsSelector] storage health ensured");
-			
+
 			// When no search term is entered, reset the search so
 			// we fetch the entire item list from the server.
 			if (!this.first_search || !this.first_search.trim()) {
@@ -1462,180 +1451,169 @@ export default {
 			await this.get_items(true);
 			console.log("[ItemsSelector] forceReloadItems finished");
 		},
-                async verifyServerItemCount() {
-                        if (this.usesLimitSearch) {
-                                console.log("[ItemsSelector] limit search enabled, skipping background reconciliation");
-                                return;
-                        }
-                        if (
-                                !this.pos_profile ||
-                                !this.pos_profile.posa_local_storage ||
-                                !this.storageAvailable
-                        ) {
-                                console.log("[ItemsSelector] local caching disabled, skipping background reconciliation");
-                                return;
-                        }
-                        if (this.isBackgroundLoading) {
-                                console.log("[ItemsSelector] background load already in progress, skipping reconciliation");
-                                return;
-                        }
-                        if (isOffline()) {
-                                console.log("[ItemsSelector] offline, skipping server item count check");
-                                return;
-                        }
-                        try {
-                                const localCount = await getStoredItemsCount();
-                                console.log("[ItemsSelector] verifying server item count", { localCount });
-                                const profileGroups = (this.pos_profile?.item_groups || []).map((g) => g.item_group);
-                                const res = await frappe.call({
-                                        method: "posawesome.posawesome.api.items.get_items_count",
-                                        args: {
-                                                pos_profile: JSON.stringify(this.pos_profile),
-                                                item_groups: profileGroups,
-                                        },
-                                });
-                                const serverCount = res.message || 0;
-                                console.log("[ItemsSelector] server item count result", { serverCount });
-                                if (typeof serverCount === "number") {
-                                        this.totalItemCount = serverCount;
-                                        if (serverCount <= localCount) {
-                                                this.loadProgress = serverCount
-                                                        ? Math.min(100, Math.round((localCount / serverCount) * 100))
-                                                        : 100;
-                                                this.eventBus.emit("data-load-progress", {
-                                                        name: "items",
-                                                        progress: this.loadProgress,
-                                                });
-                                                if (serverCount < localCount) {
-                                                        console.log(
-                                                                "[ItemsSelector] local cache has extra items, forcing reload"
-                                                        );
-                                                        await this.forceReloadItems();
-                                                }
-                                                return;
-                                        }
+		async verifyServerItemCount() {
+			if (this.usesLimitSearch) {
+				console.log("[ItemsSelector] limit search enabled, skipping background reconciliation");
+				return;
+			}
+			if (!this.pos_profile || !this.pos_profile.posa_local_storage || !this.storageAvailable) {
+				console.log("[ItemsSelector] local caching disabled, skipping background reconciliation");
+				return;
+			}
+			if (this.isBackgroundLoading) {
+				console.log("[ItemsSelector] background load already in progress, skipping reconciliation");
+				return;
+			}
+			if (isOffline()) {
+				console.log("[ItemsSelector] offline, skipping server item count check");
+				return;
+			}
+			try {
+				const localCount = await getStoredItemsCount();
+				console.log("[ItemsSelector] verifying server item count", { localCount });
+				const profileGroups = (this.pos_profile?.item_groups || []).map((g) => g.item_group);
+				const res = await frappe.call({
+					method: "posawesome.posawesome.api.items.get_items_count",
+					args: {
+						pos_profile: JSON.stringify(this.pos_profile),
+						item_groups: profileGroups,
+					},
+				});
+				const serverCount = res.message || 0;
+				console.log("[ItemsSelector] server item count result", { serverCount });
+				if (typeof serverCount === "number") {
+					this.totalItemCount = serverCount;
+					if (serverCount <= localCount) {
+						this.loadProgress = serverCount
+							? Math.min(100, Math.round((localCount / serverCount) * 100))
+							: 100;
+						this.eventBus.emit("data-load-progress", {
+							name: "items",
+							progress: this.loadProgress,
+						});
+						if (serverCount < localCount) {
+							console.log("[ItemsSelector] local cache has extra items, forcing reload");
+							await this.forceReloadItems();
+						}
+						return;
+					}
 
-                                        this.loadProgress = serverCount
-                                                ? Math.round((localCount / serverCount) * 100)
-                                                : 0;
-                                        this.eventBus.emit("data-load-progress", {
-                                                name: "items",
-                                                progress: this.loadProgress,
-                                        });
+					this.loadProgress = serverCount ? Math.round((localCount / serverCount) * 100) : 0;
+					this.eventBus.emit("data-load-progress", {
+						name: "items",
+						progress: this.loadProgress,
+					});
 
-                                        const lastSync = getItemsLastSync();
-                                        const requestToken = ++this.items_request_token;
-                                        await this.backgroundLoadItems();
-                                }
-                        } catch (err) {
-                                console.error("Error checking item count:", err);
-                        }
-                },
-                async get_items(force_server = false) {
-                        if (this.isBackgroundLoading) {
-                                if (this.pendingGetItems) {
-                                        this.pendingGetItems.force_server =
-                                                this.pendingGetItems.force_server || force_server;
-                                } else {
-                                        this.pendingGetItems = { force_server };
-                                }
-                                return;
-                        }
+					const lastSync = getItemsLastSync();
+					const requestToken = ++this.items_request_token;
+					await this.backgroundLoadItems();
+				}
+			} catch (err) {
+				console.error("Error checking item count:", err);
+			}
+		},
+		async get_items(force_server = false) {
+			if (this.isBackgroundLoading) {
+				if (this.pendingGetItems) {
+					this.pendingGetItems.force_server = this.pendingGetItems.force_server || force_server;
+				} else {
+					this.pendingGetItems = { force_server };
+				}
+				return;
+			}
 
-                        if (!this.pos_profile || !this.pos_profile.name) {
-                                console.warn("No POS Profile available, attempting to get it...");
-                                try {
-                                        if (frappe.boot && frappe.boot.pos_profile) {
-                                                this.pos_profile = frappe.boot.pos_profile;
-                                        } else {
-                                                frappe.msgprint(__("Please configure a POS Profile first"));
-                                                return;
-                                        }
-                                } catch (error) {
-                                        console.error("Failed to get POS Profile:", error);
-                                        return;
-                                }
-                        }
+			if (!this.pos_profile || !this.pos_profile.name) {
+				console.warn("No POS Profile available, attempting to get it...");
+				try {
+					if (frappe.boot && frappe.boot.pos_profile) {
+						this.pos_profile = frappe.boot.pos_profile;
+					} else {
+						frappe.msgprint(__("Please configure a POS Profile first"));
+						return;
+					}
+				} catch (error) {
+					console.error("Failed to get POS Profile:", error);
+					return;
+				}
+			}
 
-                        const searchValue = this.get_search(this.first_search);
-                        const normalizedGroup =
-                                typeof this.item_group === "string" && this.item_group.length > 0
-                                        ? this.item_group
-                                        : "ALL";
+			const searchValue = this.get_search(this.first_search);
+			const normalizedGroup =
+				typeof this.item_group === "string" && this.item_group.length > 0 ? this.item_group : "ALL";
 
-                        console.log("[ItemsSelector] get_items via store", {
-                                force_server,
-                                searchValue,
-                                normalizedGroup,
-                        });
+			console.log("[ItemsSelector] get_items via store", {
+				force_server,
+				searchValue,
+				normalizedGroup,
+			});
 
-                        this.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
-                        const requestToken = ++this.items_request_token;
+			this.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
+			const requestToken = ++this.items_request_token;
 
-                        try {
-                                const result = await this.loadItems({
-                                        forceServer: force_server,
-                                        searchValue,
-                                        groupFilter: normalizedGroup,
-                                        priceList: this.customer_price_list,
-                                        limit: this.usesLimitSearch ? this.limitSearchCap : undefined,
-                                });
+			try {
+				const result = await this.loadItems({
+					forceServer: force_server,
+					searchValue,
+					groupFilter: normalizedGroup,
+					priceList: this.customer_price_list,
+					limit: this.usesLimitSearch ? this.limitSearchCap : undefined,
+				});
 
-                                const resolvedItems = Array.isArray(result) && result.length ? result : this.items;
-                                this.replaceBarcodeIndex(resolvedItems);
-                                this.eventBus.emit("set_all_items", resolvedItems);
+				const resolvedItems = Array.isArray(result) && result.length ? result : this.items;
+				this.replaceBarcodeIndex(resolvedItems);
+				this.eventBus.emit("set_all_items", resolvedItems);
 
-                                const progress = this.loadProgress
-                                        ? this.loadProgress
-                                        : this.totalItemCount
-                                        ? Math.round((resolvedItems.length / this.totalItemCount) * 100)
-                                        : 100;
+				const progress = this.loadProgress
+					? this.loadProgress
+					: this.totalItemCount
+						? Math.round((resolvedItems.length / this.totalItemCount) * 100)
+						: 100;
 
-                                this.eventBus.emit("data-load-progress", {
-                                        name: "items",
-                                        progress,
-                                });
+				this.eventBus.emit("data-load-progress", {
+					name: "items",
+					progress,
+				});
 
-                                if (!this.usesLimitSearch && this.hasMoreCachedItems) {
-                                        await this.appendCachedItemsPage();
-                                }
+				if (!this.usesLimitSearch && this.hasMoreCachedItems) {
+					await this.appendCachedItemsPage();
+				}
 
-                                if (!this.usesLimitSearch && requestToken === this.items_request_token) {
-                                        this.kickoffBackgroundSync();
-                                }
-                        } catch (error) {
-                                console.error("Failed to load items via store:", error);
-                                frappe.msgprint(__("Failed to load items. Please try again."));
-                        }
-                },
-                kickoffBackgroundSync() {
-                        if (this.isBackgroundLoading || this.usesLimitSearch) {
-                                return Promise.resolve([]);
-                        }
+				if (!this.usesLimitSearch && requestToken === this.items_request_token) {
+					this.kickoffBackgroundSync();
+				}
+			} catch (error) {
+				console.error("Failed to load items via store:", error);
+				frappe.msgprint(__("Failed to load items. Please try again."));
+			}
+		},
+		kickoffBackgroundSync() {
+			if (this.isBackgroundLoading || this.usesLimitSearch) {
+				return Promise.resolve([]);
+			}
 
-                        const normalizedSearch = this.get_search(this.first_search || "").trim();
+			const normalizedSearch = this.get_search(this.first_search || "").trim();
 
-                        this.isBackgroundLoading = true;
+			this.isBackgroundLoading = true;
 
-                        return this.backgroundSyncItems({
-                                groupFilter: this.item_group,
-                                searchValue: normalizedSearch
-                        })
-                                .then((appended) => {
-                                        if (Array.isArray(appended) && appended.length) {
-                                                this.eventBus.emit("set_all_items", this.items);
-                                        }
-                                        return appended;
-                                })
-                                .finally(() => {
-                                        this.finishBackgroundLoad();
-                                });
-                },
-                finishBackgroundLoad() {
-                        this.isBackgroundLoading = false;
+			return this.backgroundSyncItems({
+				groupFilter: this.item_group,
+				searchValue: normalizedSearch,
+			})
+				.then((appended) => {
+					if (Array.isArray(appended) && appended.length) {
+						this.eventBus.emit("set_all_items", this.items);
+					}
+					return appended;
+				})
+				.finally(() => {
+					this.finishBackgroundLoad();
+				});
+		},
+		finishBackgroundLoad() {
+			this.isBackgroundLoading = false;
 
-                        const pendingSearch = this.pendingItemSearch;
-                        this.pendingItemSearch = null;
+			const pendingSearch = this.pendingItemSearch;
+			this.pendingItemSearch = null;
 			if (pendingSearch) {
 				this.search_onchange(pendingSearch);
 				if (this.search_onchange.flush) {
@@ -1650,11 +1628,11 @@ export default {
 				this.get_items(!!forceServer);
 			}
 		},
-                async backgroundLoadItems() {
-                        return this.kickoffBackgroundSync();
-                },
+		async backgroundLoadItems() {
+			return this.kickoffBackgroundSync();
+		},
 
-                get_items_groups() {
+		get_items_groups() {
 			if (!this.pos_profile) {
 				console.log("No POS Profile");
 				return;
@@ -1762,7 +1740,7 @@ export default {
 				this.stock_settings,
 				this.eventBus,
 				this.blockSaleBeyondAvailableQty,
-				!suppressNegativeWarning
+				!suppressNegativeWarning,
 			);
 
 			if (!isValid) {
@@ -1835,9 +1813,10 @@ export default {
 			if (this.pos_profile.posa_allow_multi_currency) {
 				this.applyCurrencyConversionToItem(item);
 
-				const base_rate = item.original_currency === this.pos_profile.currency
-					? item.original_rate
-					: item.original_rate * (item.plc_conversion_rate || this.exchange_rate);
+				const base_rate =
+					item.original_currency === this.pos_profile.currency
+						? item.original_rate
+						: item.original_rate * (item.plc_conversion_rate || this.exchange_rate);
 
 				item.base_rate = base_rate;
 				item.base_price_list_rate = base_rate;
@@ -1909,8 +1888,7 @@ export default {
 				if (availableQty !== null && availableQty < requestedQty) {
 					const negativeStockEnabled = this.isNegativeStockEnabled();
 					const shouldBlock =
-						!negativeStockEnabled &&
-						(this.blockSaleBeyondAvailableQty || availableQty <= 0);
+						!negativeStockEnabled && (this.blockSaleBeyondAvailableQty || availableQty <= 0);
 
 					if (shouldBlock || negativeStockEnabled) {
 						const formattedAvailable = this.format_number
@@ -1926,22 +1904,22 @@ export default {
 								)
 							: requestedQty;
 
-					if (shouldBlock) {
-						this.showScanError({
-							message: formatStockShortageError(
-								new_item.item_name || new_item.item_code || scannedCodeForDisplay,
-								availableQty,
-								requestedQty
-							),
-							code: scannedCodeForDisplay,
-							details: this.__("Adjust the quantity or enable negative stock to continue."),
-						});
-						return;
-					}
+						if (shouldBlock) {
+							this.showScanError({
+								message: formatStockShortageError(
+									new_item.item_name || new_item.item_code || scannedCodeForDisplay,
+									availableQty,
+									requestedQty,
+								),
+								code: scannedCodeForDisplay,
+								details: this.__("Adjust the quantity or enable negative stock to continue."),
+							});
+							return;
+						}
 
-                                        // Low stock warnings are suppressed to avoid distracting notifications
-                                        }
-                                }
+						// Low stock warnings are suppressed to avoid distracting notifications
+					}
+				}
 
 				if (fromScanner) {
 					this.awaitingScanResult = true;
@@ -1968,85 +1946,83 @@ export default {
 					this.search_from_scanner = false;
 				}
 
-                                if (!this.scanErrorDialog) {
-                                        // Clear search field after successfully adding an item
-                                        this.clearSearch();
-                                        this.focusItemSearch();
-                                }
+				if (!this.scanErrorDialog) {
+					// Clear search field after successfully adding an item
+					this.clearSearch();
+					this.focusItemSearch();
+				}
 			}
 		},
-                search_onchange: _.debounce(
-                        withPerf("pos:search-trigger", async function (newSearchTerm) {
-                                const vm = this;
+		search_onchange: _.debounce(
+			withPerf("pos:search-trigger", async function (newSearchTerm) {
+				const vm = this;
 
-                                vm.cancelItemDetailsRequest();
+				vm.cancelItemDetailsRequest();
 
-                        // Determine the actual query string and trim whitespace
-                        let query;
-                        if (typeof newSearchTerm === "string") {
-                                query = newSearchTerm;
-                        } else if (newSearchTerm && newSearchTerm.target) {
-                                query = newSearchTerm.target?.value ?? "";
-                        } else {
-                                query = vm.first_search;
-                        }
-                        const trimmedQuery = (query || "").trim();
-
-                        // Keep first_search in sync with the value we are about to search for
-                        vm.first_search = trimmedQuery;
-
-                        // Require a minimum of three characters before running a search
-                        if (!trimmedQuery || trimmedQuery.length < 3) {
-                                vm.search_from_scanner = false;
-                                return;
-			}
-
-			// If background loading is in progress, defer the search without changing the active query
-			if (vm.isBackgroundLoading) {
-				vm.pendingItemSearch = trimmedQuery;
-				return;
-			}
-
-			vm.search = trimmedQuery;
-
-			const fromScanner = vm.search_from_scanner;
-
-                        if (vm.usesLimitSearch) {
-                                const shouldForceServer =
-                                        !vm.pos_profile.posa_local_storage ||
-                                        !vm.storageAvailable ||
-                                        !isOffline();
-                                await vm.get_items(shouldForceServer);
-			} else if (vm.pos_profile && vm.pos_profile.posa_local_storage) {
-				if (vm.storageAvailable) {
-					await vm.loadVisibleItems(true);
-					vm.enter_event();
+				// Determine the actual query string and trim whitespace
+				let query;
+				if (typeof newSearchTerm === "string") {
+					query = newSearchTerm;
+				} else if (newSearchTerm && newSearchTerm.target) {
+					query = newSearchTerm.target?.value ?? "";
 				} else {
-					vm.get_items(true);
+					query = vm.first_search;
 				}
-			} else {
-				// When local storage is disabled, always fetch items
-				// from the server so searches aren't limited to the
-				// initially loaded set.
-				await vm.get_items(true);
-				vm.enter_event();
+				const trimmedQuery = (query || "").trim();
 
-				if (vm.displayedItems && vm.displayedItems.length > 0) {
-					setTimeout(() => {
-						vm.update_items_details(vm.displayedItems);
-					}, 300);
+				// Keep first_search in sync with the value we are about to search for
+				vm.first_search = trimmedQuery;
+
+				// Require a minimum of three characters before running a search
+				if (!trimmedQuery || trimmedQuery.length < 3) {
+					vm.search_from_scanner = false;
+					return;
 				}
-			}
 
-                        // Clear the input only when triggered via scanner
-                        if (fromScanner) {
-                                vm.clearSearch();
-                                vm.focusItemSearch();
-                                vm.search_from_scanner = false;
-                        }
-                        }),
-                        300,
-                ),
+				// If background loading is in progress, defer the search without changing the active query
+				if (vm.isBackgroundLoading) {
+					vm.pendingItemSearch = trimmedQuery;
+					return;
+				}
+
+				vm.search = trimmedQuery;
+
+				const fromScanner = vm.search_from_scanner;
+
+				if (vm.usesLimitSearch) {
+					const shouldForceServer =
+						!vm.pos_profile.posa_local_storage || !vm.storageAvailable || !isOffline();
+					await vm.get_items(shouldForceServer);
+				} else if (vm.pos_profile && vm.pos_profile.posa_local_storage) {
+					if (vm.storageAvailable) {
+						await vm.loadVisibleItems(true);
+						vm.enter_event();
+					} else {
+						vm.get_items(true);
+					}
+				} else {
+					// When local storage is disabled, always fetch items
+					// from the server so searches aren't limited to the
+					// initially loaded set.
+					await vm.get_items(true);
+					vm.enter_event();
+
+					if (vm.displayedItems && vm.displayedItems.length > 0) {
+						setTimeout(() => {
+							vm.update_items_details(vm.displayedItems);
+						}, 300);
+					}
+				}
+
+				// Clear the input only when triggered via scanner
+				if (fromScanner) {
+					vm.clearSearch();
+					vm.focusItemSearch();
+					vm.search_from_scanner = false;
+				}
+			}),
+			300,
+		),
 		get_item_qty(first_search) {
 			const qtyVal = this.qty != null ? this.qty : 1;
 			let scal_qty = Math.abs(qtyVal);
@@ -2086,13 +2062,13 @@ export default {
 			const item_code_len = first_search.length - prefix_len - 6;
 			return first_search.substr(0, prefix_len + item_code_len);
 		},
-                esc_event() {
-                        this.search = null;
-                        this.first_search = null;
-                        this.search_backup = null;
-                        this.qty = 1;
-                        this.focusItemSearch();
-                },
+		esc_event() {
+			this.search = null;
+			this.first_search = null;
+			this.search_backup = null;
+			this.qty = 1;
+			this.focusItemSearch();
+		},
 		async update_items_details(items) {
 			const vm = this;
 			if (!items || !items.length) return;
@@ -2133,15 +2109,15 @@ export default {
 						item.currency = det.currency;
 					}
 
-                                        if (!item.original_rate) {
-                                                item.original_rate = item.rate;
-                                                item.original_currency = item.currency || vm.pos_profile.currency;
-                                        }
+					if (!item.original_rate) {
+						item.original_rate = item.rate;
+						item.original_currency = item.currency || vm.pos_profile.currency;
+					}
 
-                                        vm.indexItem(item);
-                                        vm.applyCurrencyConversionToItem(item);
-                                }
-                        });
+					vm.indexItem(item);
+					vm.applyCurrencyConversionToItem(item);
+				}
+			});
 
 			let allCached = cacheResult.missing.length === 0;
 			items.forEach((item) => {
@@ -2228,21 +2204,21 @@ export default {
 						}
 					});
 
-                                        updatedItems.forEach(({ item, updates }) => {
-                                                Object.assign(item, updates);
-                                                vm.indexItem(item);
-                                                vm.applyCurrencyConversionToItem(item);
-                                        });
+					updatedItems.forEach(({ item, updates }) => {
+						Object.assign(item, updates);
+						vm.indexItem(item);
+						vm.applyCurrencyConversionToItem(item);
+					});
 
 					updateLocalStockCache(details);
 					saveItemDetailsCache(vm.pos_profile.name, vm.active_price_list, details);
 
-                                        if (
-                                                vm.pos_profile &&
-                                                vm.pos_profile.posa_local_storage &&
-                                                vm.storageAvailable &&
-                                                !vm.usesLimitSearch
-                                        ) {
+					if (
+						vm.pos_profile &&
+						vm.pos_profile.posa_local_storage &&
+						vm.storageAvailable &&
+						!vm.usesLimitSearch
+					) {
 						try {
 							await saveItemsBulk(details);
 						} catch (e) {
@@ -2415,13 +2391,13 @@ export default {
 					this.enter_event();
 				}
 
-                                // clear search field for next scan and refocus input
-                                if (!this.scanErrorDialog) {
-                                        this.clearSearch();
-                                        this.focusItemSearch();
-                                }
-                        });
-                },
+				// clear search field for next scan and refocus input
+				if (!this.scanErrorDialog) {
+					this.clearSearch();
+					this.focusItemSearch();
+				}
+			});
+		},
 		generateWordCombinations(inputString) {
 			const words = inputString.split(" ");
 			const wordCount = words.length;
@@ -2444,87 +2420,83 @@ export default {
 
 			return combinations;
 		},
-                clearSearch() {
-                        if (this.clearingSearch) {
-                                return;
-                        }
+		clearSearch() {
+			if (this.clearingSearch) {
+				return;
+			}
 
-                        const hadQuery = Boolean(
-                                (this.first_search && this.first_search.trim()) ||
-                                        (this.search && this.search.trim()),
-                        );
-                        const shouldReload =
-                                hadQuery || !this.itemsLoaded || !this.items.length;
+			const hadQuery = Boolean(
+				(this.first_search && this.first_search.trim()) || (this.search && this.search.trim()),
+			);
+			const shouldReload = hadQuery || !this.itemsLoaded || !this.items.length;
 
-                        this.search_backup = this.first_search;
-                        this.clearingSearch = true;
-                        this.first_search = "";
-                        this.search = "";
+			this.search_backup = this.first_search;
+			this.clearingSearch = true;
+			this.first_search = "";
+			this.search = "";
 
-                        const release = () => {
-                                this.$nextTick(() => {
-                                        this.clearingSearch = false;
-                                });
-                        };
+			const release = () => {
+				this.$nextTick(() => {
+					this.clearingSearch = false;
+				});
+			};
 
-                        if (this.usesLimitSearch) {
-                                const preservedItems =
-                                        this.clearLimitSearchResults({ preserveItems: true }) ||
-                                        this.items ||
-                                        [];
-                                this.resetBarcodeIndex();
+			if (this.usesLimitSearch) {
+				const preservedItems =
+					this.clearLimitSearchResults({ preserveItems: true }) || this.items || [];
+				this.resetBarcodeIndex();
 
-                                if (Array.isArray(preservedItems) && preservedItems.length) {
-                                        this.eventBus.emit("set_all_items", preservedItems);
-                                } else if (Array.isArray(this.items) && this.items.length) {
-                                        this.eventBus.emit("set_all_items", this.items);
-                                }
+				if (Array.isArray(preservedItems) && preservedItems.length) {
+					this.eventBus.emit("set_all_items", preservedItems);
+				} else if (Array.isArray(this.items) && this.items.length) {
+					this.eventBus.emit("set_all_items", this.items);
+				}
 
-                                if (shouldReload) {
-                                        this.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
-                                        const reloadPromise = this.get_items(true);
-                                        if (reloadPromise && typeof reloadPromise.finally === "function") {
-                                                reloadPromise.finally(release);
-                                                return reloadPromise;
-                                        }
-                                }
+				if (shouldReload) {
+					this.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
+					const reloadPromise = this.get_items(true);
+					if (reloadPromise && typeof reloadPromise.finally === "function") {
+						reloadPromise.finally(release);
+						return reloadPromise;
+					}
+				}
 
-                                release();
-                                return;
-                        }
+				release();
+				return;
+			}
 
-                        if (!shouldReload) {
-                                release();
-                                return;
-                        }
+			if (!shouldReload) {
+				release();
+				return;
+			}
 
-                        if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
-                                this.loadVisibleItems(true);
-                                if (!this.isBackgroundLoading) {
-                                        this.verifyServerItemCount();
-                                }
-                                release();
-                                return;
-                        }
+			if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
+				this.loadVisibleItems(true);
+				if (!this.isBackgroundLoading) {
+					this.verifyServerItemCount();
+				}
+				release();
+				return;
+			}
 
-                        if (this.isBackgroundLoading) {
-                                if (this.pendingGetItems) {
-                                        this.pendingGetItems.force_server = this.pendingGetItems.force_server || false;
-                                } else {
-                                        this.pendingGetItems = { force_server: false };
-                                }
-                                release();
-                                return;
-                        }
+			if (this.isBackgroundLoading) {
+				if (this.pendingGetItems) {
+					this.pendingGetItems.force_server = this.pendingGetItems.force_server || false;
+				} else {
+					this.pendingGetItems = { force_server: false };
+				}
+				release();
+				return;
+			}
 
-                        if (!this.itemsLoaded || !this.items.length) {
-                                this.get_items(true);
-                        } else {
-                                this.eventBus.emit("set_all_items", this.items);
-                        }
+			if (!this.itemsLoaded || !this.items.length) {
+				this.get_items(true);
+			} else {
+				this.eventBus.emit("set_all_items", this.items);
+			}
 
-                        release();
-                },
+			release();
+		},
 
 		restoreSearch() {
 			if (this.first_search === "") {
@@ -2540,31 +2512,31 @@ export default {
 			// this.search_backup = "";
 		},
 
-                focusItemSearch() {
-                        if (this.cameraScannerActive) {
-                                return;
-                        }
-                        this.$nextTick(() => {
-                                if (this.cameraScannerActive) {
-                                        return;
-                                }
-                                if (this.showManualScanInput) {
-                                        this.queueManualScanFocus();
-                                        return;
-                                }
-                                const input = this.$refs.debounce_search;
-                                if (input && typeof input.focus === "function") {
-                                        input.focus();
-                                }
-                        });
-                },
+		focusItemSearch() {
+			if (this.cameraScannerActive) {
+				return;
+			}
+			this.$nextTick(() => {
+				if (this.cameraScannerActive) {
+					return;
+				}
+				if (this.showManualScanInput) {
+					this.queueManualScanFocus();
+					return;
+				}
+				const input = this.$refs.debounce_search;
+				if (input && typeof input.focus === "function") {
+					input.focus();
+				}
+			});
+		},
 
-                blurItemSearch() {
-                        const input = this.$refs.debounce_search;
-                        if (input && typeof input.blur === "function") {
-                                input.blur();
-                        }
-                },
+		blurItemSearch() {
+			const input = this.$refs.debounce_search;
+			if (input && typeof input.blur === "function") {
+				input.blur();
+			}
+		},
 
 		clearQty() {
 			this.qty = null;
@@ -2617,204 +2589,204 @@ export default {
 				}
 			}
 		},
-                showScanError({ message, code = "", details = "" } = {}) {
-                        this.scanErrorMessage = message || this.__("Unable to add scanned item.");
-                        this.scanErrorCode = code;
-                        this.scanErrorDetails = details;
-                        if (code) {
-                                this.pendingScanCode = code;
-                        }
-                        this.awaitingScanResult = false;
-                        this.search_from_scanner = false;
-                        this.scanErrorDialog = true;
-                        this.scannerLocked = true;
-                        if (this.$refs.cameraScanner?.pauseForExternalLock) {
-                                this.$refs.cameraScanner.pauseForExternalLock();
-                        }
-                        this.playScanTone("error");
-                        if (frappe?.show_alert) {
-                                frappe.show_alert(
-                                        {
-                                                message: this.scanErrorMessage,
-                                                indicator: "red",
-                                        },
-                                        5,
-                                );
-                        }
-                },
-                handleScanPipelineError(error, code = "") {
-                        const normalizedCode = code || this.pendingScanCode || "";
-                        console.error("Unexpected barcode processing error:", error);
-                        const details =
-                                error && typeof error.message === "string" && error.message.trim()
-                                        ? error.message
-                                        : this.__("Please try again or enter the item manually.");
-                        this.showScanError({
-                                message: this.__("Unable to add scanned item."),
-                                code: normalizedCode,
-                                details,
-                        });
-                },
-                acknowledgeScanError() {
-                        this.scanErrorDialog = false;
-                        this.scannerLocked = false;
-                        this.scanErrorMessage = "";
-                        this.scanErrorCode = "";
-                        this.scanErrorDetails = "";
-                        this.pendingScanCode = "";
-                        this.awaitingScanResult = false;
-                        if (this.$refs.cameraScanner?.resumeFromExternalLock) {
-                                this.$refs.cameraScanner.resumeFromExternalLock();
-                        }
-                        this.focusItemSearch();
-                },
+		showScanError({ message, code = "", details = "" } = {}) {
+			this.scanErrorMessage = message || this.__("Unable to add scanned item.");
+			this.scanErrorCode = code;
+			this.scanErrorDetails = details;
+			if (code) {
+				this.pendingScanCode = code;
+			}
+			this.awaitingScanResult = false;
+			this.search_from_scanner = false;
+			this.scanErrorDialog = true;
+			this.scannerLocked = true;
+			if (this.$refs.cameraScanner?.pauseForExternalLock) {
+				this.$refs.cameraScanner.pauseForExternalLock();
+			}
+			this.playScanTone("error");
+			if (frappe?.show_alert) {
+				frappe.show_alert(
+					{
+						message: this.scanErrorMessage,
+						indicator: "red",
+					},
+					5,
+				);
+			}
+		},
+		handleScanPipelineError(error, code = "") {
+			const normalizedCode = code || this.pendingScanCode || "";
+			console.error("Unexpected barcode processing error:", error);
+			const details =
+				error && typeof error.message === "string" && error.message.trim()
+					? error.message
+					: this.__("Please try again or enter the item manually.");
+			this.showScanError({
+				message: this.__("Unable to add scanned item."),
+				code: normalizedCode,
+				details,
+			});
+		},
+		acknowledgeScanError() {
+			this.scanErrorDialog = false;
+			this.scannerLocked = false;
+			this.scanErrorMessage = "";
+			this.scanErrorCode = "";
+			this.scanErrorDetails = "";
+			this.pendingScanCode = "";
+			this.awaitingScanResult = false;
+			if (this.$refs.cameraScanner?.resumeFromExternalLock) {
+				this.$refs.cameraScanner.resumeFromExternalLock();
+			}
+			this.focusItemSearch();
+		},
 
-                toggleManualScanInput() {
-                        this.showManualScanInput = !this.showManualScanInput;
-                        if (this.showManualScanInput) {
-                                this.queueManualScanFocus();
-                        } else {
-                                this.focusItemSearch();
-                        }
-                },
+		toggleManualScanInput() {
+			this.showManualScanInput = !this.showManualScanInput;
+			if (this.showManualScanInput) {
+				this.queueManualScanFocus();
+			} else {
+				this.focusItemSearch();
+			}
+		},
 
-                submitManualScan() {
-                        const code = (this.manualScanValue ?? "").toString().trim();
-                        if (!code) {
-                                return;
-                        }
-                        if (this.scannerLocked) {
-                                this.onBarcodeScanned(code);
-                                this.queueManualScanFocus();
-                                return;
-                        }
-                        this.manualScanValue = "";
-                        this.onBarcodeScanned(code);
-                        this.queueManualScanFocus();
-                },
+		submitManualScan() {
+			const code = (this.manualScanValue ?? "").toString().trim();
+			if (!code) {
+				return;
+			}
+			if (this.scannerLocked) {
+				this.onBarcodeScanned(code);
+				this.queueManualScanFocus();
+				return;
+			}
+			this.manualScanValue = "";
+			this.onBarcodeScanned(code);
+			this.queueManualScanFocus();
+		},
 
-                focusManualScanInput() {
-                        const input = this.$refs.manualScanInput;
-                        if (input && typeof input.focus === "function") {
-                                input.focus();
-                        }
-                },
+		focusManualScanInput() {
+			const input = this.$refs.manualScanInput;
+			if (input && typeof input.focus === "function") {
+				input.focus();
+			}
+		},
 
-                queueManualScanFocus() {
-                        this.$nextTick(() => {
-                                const scheduler =
-                                        typeof requestAnimationFrame === "function"
-                                                ? requestAnimationFrame
-                                                : (cb) => setTimeout(cb, 16);
-                                scheduler(() => {
-                                        this.focusManualScanInput();
-                                });
-                        });
-                },
+		queueManualScanFocus() {
+			this.$nextTick(() => {
+				const scheduler =
+					typeof requestAnimationFrame === "function"
+						? requestAnimationFrame
+						: (cb) => setTimeout(cb, 16);
+				scheduler(() => {
+					this.focusManualScanInput();
+				});
+			});
+		},
 
-                onScannerOpened() {
-                        this.cameraScannerActive = true;
-                        this.showManualScanInput = false;
-                        this.manualScanValue = "";
-                        this.blurItemSearch();
-                },
+		onScannerOpened() {
+			this.cameraScannerActive = true;
+			this.showManualScanInput = false;
+			this.manualScanValue = "";
+			this.blurItemSearch();
+		},
 
-                onScannerClosed() {
-                        this.cameraScannerActive = false;
-                        this.focusItemSearch();
-                },
+		onScannerClosed() {
+			this.cameraScannerActive = false;
+			this.focusItemSearch();
+		},
 
-                startCameraScanning() {
-                        if (this.scannerLocked) {
-                                this.playScanTone("error");
-                                return;
-                        }
+		startCameraScanning() {
+			if (this.scannerLocked) {
+				this.playScanTone("error");
+				return;
+			}
 			if (this.$refs.cameraScanner) {
 				this.$refs.cameraScanner.startScanning();
 			}
-                },
-                onBarcodeScanned(scannedCode) {
-                        if (this.scannerLocked) {
-                                this.playScanTone("error");
-                                if (frappe?.show_alert) {
-                                        frappe.show_alert(
-                                                {
-                                                        message: this.__("Acknowledge the error to resume scanning."),
-                                                        indicator: "red",
-                                                },
-                                                3,
-                                        );
-                                }
-                                return;
-                        }
+		},
+		onBarcodeScanned(scannedCode) {
+			if (this.scannerLocked) {
+				this.playScanTone("error");
+				if (frappe?.show_alert) {
+					frappe.show_alert(
+						{
+							message: this.__("Acknowledge the error to resume scanning."),
+							indicator: "red",
+						},
+						3,
+					);
+				}
+				return;
+			}
 
-                        const runScanPipeline = async (code) => {
-                                const mark = perfMarkStart("pos:scan-handler");
-                                try {
-                                        console.log("Barcode scanned:", code);
-                                        this.pendingScanCode = code;
+			const runScanPipeline = async (code) => {
+				const mark = perfMarkStart("pos:scan-handler");
+				try {
+					console.log("Barcode scanned:", code);
+					this.pendingScanCode = code;
 
-                                        // mark this search as coming from a scanner
-                                        this.search_from_scanner = true;
+					// mark this search as coming from a scanner
+					this.search_from_scanner = true;
 
-                                        // Clear any previous search
-                                        this.search = "";
-                                        this.first_search = "";
+					// Clear any previous search
+					this.search = "";
+					this.first_search = "";
 
-                                        // Set the scanned code as search term
-                                        this.first_search = code;
-                                        this.search = code;
+					// Set the scanned code as search term
+					this.first_search = code;
+					this.search = code;
 
-                                        // Show scanning feedback
-                                        if (this.eventBus?.emit) {
-                                                this.eventBus.emit("show_message", {
-                                                        title: this.__("Scanning for: {0}", [code]),
-                                                        summary: this.__("Scanning items"),
-                                                        detail: code,
-                                                        color: "info",
-                                                        timeout: 2000,
-                                                        groupId: "scanner-progress",
-                                                });
-                                        } else if (frappe?.show_alert) {
-                                                frappe.show_alert(
-                                                        {
-                                                                message: `Scanning for: ${code}`,
-                                                                indicator: "blue",
-                                                        },
-                                                        2,
-                                                );
-                                        }
+					// Show scanning feedback
+					if (this.eventBus?.emit) {
+						this.eventBus.emit("show_message", {
+							title: this.__("Scanning for: {0}", [code]),
+							summary: this.__("Scanning items"),
+							detail: code,
+							color: "info",
+							timeout: 2000,
+							groupId: "scanner-progress",
+						});
+					} else if (frappe?.show_alert) {
+						frappe.show_alert(
+							{
+								message: `Scanning for: ${code}`,
+								indicator: "blue",
+							},
+							2,
+						);
+					}
 
-                                        // Enhanced item search and submission logic
-                                        await this.processScannedItem(code);
-                                } catch (error) {
-                                        this.handleScanPipelineError(error, code);
-                                } finally {
-                                        perfMarkEnd("pos:scan-handler", mark);
-                                }
-                        };
+					// Enhanced item search and submission logic
+					await this.processScannedItem(code);
+				} catch (error) {
+					this.handleScanPipelineError(error, code);
+				} finally {
+					perfMarkEnd("pos:scan-handler", mark);
+				}
+			};
 
-                        if (this.scanDebounceId) {
-                                clearTimeout(this.scanDebounceId);
-                        }
-                        this.scanQueuedCode = scannedCode;
-                        this.scanDebounceId = setTimeout(() => {
-                                this.scanDebounceId = null;
-                                const code = this.scanQueuedCode || scannedCode;
-                                this.scanQueuedCode = "";
-                                scheduleFrame(() => {
-                                        const maybePromise = runScanPipeline(code);
-                                        if (maybePromise && typeof maybePromise.catch === "function") {
-                                                maybePromise.catch((error) => {
-                                                        this.handleScanPipelineError(error, code);
-                                                });
-                                        }
-                                });
-                        }, 12);
-                },
-                async processScannedItem(scannedCode) {
-                        const mark = perfMarkStart("pos:scan-process");
-                        this.pendingScanCode = scannedCode;
+			if (this.scanDebounceId) {
+				clearTimeout(this.scanDebounceId);
+			}
+			this.scanQueuedCode = scannedCode;
+			this.scanDebounceId = setTimeout(() => {
+				this.scanDebounceId = null;
+				const code = this.scanQueuedCode || scannedCode;
+				this.scanQueuedCode = "";
+				scheduleFrame(() => {
+					const maybePromise = runScanPipeline(code);
+					if (maybePromise && typeof maybePromise.catch === "function") {
+						maybePromise.catch((error) => {
+							this.handleScanPipelineError(error, code);
+						});
+					}
+				});
+			}, 12);
+		},
+		async processScannedItem(scannedCode) {
+			const mark = perfMarkStart("pos:scan-process");
+			this.pendingScanCode = scannedCode;
 			// Handle scale barcodes by extracting the item code and quantity
 			let searchCode = scannedCode;
 			let qtyFromBarcode = null;
@@ -2826,23 +2798,23 @@ export default {
 				qtyFromBarcode = parseFloat(this.get_item_qty(scannedCode));
 			}
 
-                        // First try to find exact match by processed code using the pre-built index
-                        const barcodeIndex = this.ensureBarcodeIndex();
-                        let foundItem = this.lookupItemByBarcode(searchCode);
+			// First try to find exact match by processed code using the pre-built index
+			const barcodeIndex = this.ensureBarcodeIndex();
+			let foundItem = this.lookupItemByBarcode(searchCode);
 
-                        if (!foundItem && barcodeIndex.size === 0) {
-                                // Index not populated yet, build it and fall back to a direct scan once
-                                this.replaceBarcodeIndex(this.items);
-                                foundItem = this.items.find((item) => {
-                                        const barcodeMatch =
-                                                item.barcode === searchCode ||
-                                                (Array.isArray(item.item_barcode) &&
-                                                        item.item_barcode.some((b) => b.barcode === searchCode)) ||
-                                                (Array.isArray(item.barcodes) &&
-                                                        item.barcodes.some((bc) => String(bc) === searchCode));
-                                        return barcodeMatch || item.item_code === searchCode;
-                                });
-                        }
+			if (!foundItem && barcodeIndex.size === 0) {
+				// Index not populated yet, build it and fall back to a direct scan once
+				this.replaceBarcodeIndex(this.items);
+				foundItem = this.items.find((item) => {
+					const barcodeMatch =
+						item.barcode === searchCode ||
+						(Array.isArray(item.item_barcode) &&
+							item.item_barcode.some((b) => b.barcode === searchCode)) ||
+						(Array.isArray(item.barcodes) &&
+							item.barcodes.some((bc) => String(bc) === searchCode));
+					return barcodeMatch || item.item_code === searchCode;
+				});
+			}
 
 			if (foundItem) {
 				console.log("Found item by processed code:", foundItem);
@@ -2851,8 +2823,8 @@ export default {
 			}
 
 			// If not found locally, attempt to fetch from server using processed code
-                        try {
-                                const res = await frappe.call({
+			try {
+				const res = await frappe.call({
 					method: "posawesome.posawesome.api.items.get_items_from_barcode",
 					args: {
 						selling_price_list: this.active_price_list,
@@ -2861,14 +2833,14 @@ export default {
 					},
 				});
 
-                                if (res && res.message) {
-                                        const newItem = res.message;
-                                        this.items.push(newItem);
-                                        this.indexItem(newItem);
+				if (res && res.message) {
+					const newItem = res.message;
+					this.items.push(newItem);
+					this.indexItem(newItem);
 
-                                        if (this.searchCache) {
-                                                this.searchCache.clear();
-                                        }
+					if (this.searchCache) {
+						this.searchCache.clear();
+					}
 
 					await saveItems(this.items);
 					await savePriceListItems(this.customer_price_list, this.items);
@@ -2886,100 +2858,100 @@ export default {
 					details: this.__("Please verify the barcode or check the item's availability."),
 				});
 				return;
-                        } catch (e) {
-                                console.error("Error fetching item from barcode:", e);
-                                this.first_search = scannedCode;
-                                this.search = scannedCode;
-                                this.showScanError({
-                                        message: `${this.__("Item not found")}: ${scannedCode}`,
-                                        code: scannedCode,
-                                        details: this.__("The system could not retrieve the item details. Please try again."),
-                                });
-                                return;
-                        } finally {
-                                perfMarkEnd("pos:scan-process", mark);
-                        }
-                },
-                searchItemsByCode(code) {
-                        return this.items.filter((item) => {
-                                const searchTerm = code.toLowerCase();
-                                const barcodeMatch =
-                                        (item.barcode && item.barcode.toLowerCase().includes(searchTerm)) ||
+			} catch (e) {
+				console.error("Error fetching item from barcode:", e);
+				this.first_search = scannedCode;
+				this.search = scannedCode;
+				this.showScanError({
+					message: `${this.__("Item not found")}: ${scannedCode}`,
+					code: scannedCode,
+					details: this.__("The system could not retrieve the item details. Please try again."),
+				});
+				return;
+			} finally {
+				perfMarkEnd("pos:scan-process", mark);
+			}
+		},
+		searchItemsByCode(code) {
+			return this.items.filter((item) => {
+				const searchTerm = code.toLowerCase();
+				const barcodeMatch =
+					(item.barcode && item.barcode.toLowerCase().includes(searchTerm)) ||
 					(Array.isArray(item.barcodes) &&
 						item.barcodes.some((bc) => String(bc).toLowerCase().includes(searchTerm))) ||
 					(Array.isArray(item.item_barcode) &&
 						item.item_barcode.some(
 							(b) => b.barcode && b.barcode.toLowerCase().includes(searchTerm),
 						));
-                                return (
-                                        item.item_code.toLowerCase().includes(searchTerm) ||
-                                        item.item_name.toLowerCase().includes(searchTerm) ||
-                                        barcodeMatch
-                                );
-                        });
-                },
-                // PERF: maintain a barcode index so unfound scans do not walk the full list
-                ensureBarcodeIndex() {
-                        if (!this.barcodeIndex || typeof this.barcodeIndex.set !== "function") {
-                                this.barcodeIndex = new Map();
-                        }
-                        return this.barcodeIndex;
-                },
-                resetBarcodeIndex() {
-                        const index = this.ensureBarcodeIndex();
-                        index.clear();
-                },
-                indexItem(item) {
-                        if (!item) {
-                                return;
-                        }
-                        const index = this.ensureBarcodeIndex();
-                        const register = (code) => {
-                                if (code === undefined || code === null) {
-                                        return;
-                                }
-                                const normalized = String(code).trim();
-                                if (!normalized) {
-                                        return;
-                                }
-                                if (!index.has(normalized)) {
-                                        index.set(normalized, item);
-                                }
-                                const lower = normalized.toLowerCase();
-                                if (!index.has(lower)) {
-                                        index.set(lower, item);
-                                }
-                        };
-                        register(item.item_code);
-                        register(item.barcode);
-                        if (Array.isArray(item.item_barcode)) {
-                                item.item_barcode.forEach((barcode) => register(barcode?.barcode));
-                        }
-                        if (Array.isArray(item.barcodes)) {
-                                item.barcodes.forEach((barcode) => register(barcode));
-                        }
-                        if (Array.isArray(item.serial_no_data)) {
-                                item.serial_no_data.forEach((serial) => register(serial?.serial_no));
-                        }
-                        if (Array.isArray(item.batch_no_data)) {
-                                item.batch_no_data.forEach((batch) => register(batch?.batch_no));
-                        }
-                },
-                replaceBarcodeIndex(items = this.items) {
-                        this.resetBarcodeIndex();
-                        items.forEach((item) => this.indexItem(item));
-                },
-                lookupItemByBarcode(code) {
-                        if (code === undefined || code === null) {
-                                return null;
-                        }
-                        const index = this.ensureBarcodeIndex();
-                        const normalized = String(code).trim();
-                        if (!normalized) {
-                                return null;
-                        }
-                        return index.get(normalized) || index.get(normalized.toLowerCase()) || null;
-                },
+				return (
+					item.item_code.toLowerCase().includes(searchTerm) ||
+					item.item_name.toLowerCase().includes(searchTerm) ||
+					barcodeMatch
+				);
+			});
+		},
+		// PERF: maintain a barcode index so unfound scans do not walk the full list
+		ensureBarcodeIndex() {
+			if (!this.barcodeIndex || typeof this.barcodeIndex.set !== "function") {
+				this.barcodeIndex = new Map();
+			}
+			return this.barcodeIndex;
+		},
+		resetBarcodeIndex() {
+			const index = this.ensureBarcodeIndex();
+			index.clear();
+		},
+		indexItem(item) {
+			if (!item) {
+				return;
+			}
+			const index = this.ensureBarcodeIndex();
+			const register = (code) => {
+				if (code === undefined || code === null) {
+					return;
+				}
+				const normalized = String(code).trim();
+				if (!normalized) {
+					return;
+				}
+				if (!index.has(normalized)) {
+					index.set(normalized, item);
+				}
+				const lower = normalized.toLowerCase();
+				if (!index.has(lower)) {
+					index.set(lower, item);
+				}
+			};
+			register(item.item_code);
+			register(item.barcode);
+			if (Array.isArray(item.item_barcode)) {
+				item.item_barcode.forEach((barcode) => register(barcode?.barcode));
+			}
+			if (Array.isArray(item.barcodes)) {
+				item.barcodes.forEach((barcode) => register(barcode));
+			}
+			if (Array.isArray(item.serial_no_data)) {
+				item.serial_no_data.forEach((serial) => register(serial?.serial_no));
+			}
+			if (Array.isArray(item.batch_no_data)) {
+				item.batch_no_data.forEach((batch) => register(batch?.batch_no));
+			}
+		},
+		replaceBarcodeIndex(items = this.items) {
+			this.resetBarcodeIndex();
+			items.forEach((item) => this.indexItem(item));
+		},
+		lookupItemByBarcode(code) {
+			if (code === undefined || code === null) {
+				return null;
+			}
+			const index = this.ensureBarcodeIndex();
+			const normalized = String(code).trim();
+			if (!normalized) {
+				return null;
+			}
+			return index.get(normalized) || index.get(normalized.toLowerCase()) || null;
+		},
 		async addScannedItemToInvoice(item, scannedCode, qtyFromBarcode = null) {
 			console.log("Adding scanned item to invoice:", item, scannedCode);
 
@@ -3042,15 +3014,14 @@ export default {
 					: requestedQty;
 				const negativeStockEnabled = this.isNegativeStockEnabled();
 				const shouldBlock =
-					!negativeStockEnabled &&
-					(this.blockSaleBeyondAvailableQty || availableQty <= 0);
+					!negativeStockEnabled && (this.blockSaleBeyondAvailableQty || availableQty <= 0);
 
 				if (shouldBlock) {
 					this.showScanError({
 						message: formatStockShortageError(
 							newItem.item_name || newItem.item_code || scannedCode,
 							availableQty,
-							requestedQty
+							requestedQty,
 						),
 						code: scannedCode,
 						details: this.__("Adjust the quantity or enable negative stock to continue."),
@@ -3058,58 +3029,55 @@ export default {
 					return;
 				}
 
-                                // Suppress low stock notifications when negative stock is allowed
-                        }
+				// Suppress low stock notifications when negative stock is allowed
+			}
 
 			this.awaitingScanResult = true;
 
-                        try {
-                                // Use existing add_item method with enhanced feedback
-                                await this.add_item(newItem, {
-                                        suppressNegativeWarning: true,
-                                        skipNotification: true,
-                                });
-                                this.playScanTone("success");
-                                this.scannerLocked = false;
-                                this.search_from_scanner = false;
-                                this.pendingScanCode = "";
+			try {
+				// Use existing add_item method with enhanced feedback
+				await this.add_item(newItem, {
+					suppressNegativeWarning: true,
+					skipNotification: true,
+				});
+				this.playScanTone("success");
+				this.scannerLocked = false;
+				this.search_from_scanner = false;
+				this.pendingScanCode = "";
 
-                                // Show success message
-                                const itemName =
-                                        newItem.item_name || newItem.item_code || scannedCode || this.__("Item");
-                                const rawPrecision = Number(this.float_precision);
-                                const precision = Number.isInteger(rawPrecision)
-                                        ? Math.min(Math.max(rawPrecision, 0), 6)
-                                        : 2;
-                                const displayQty = Number.isInteger(requestedQty)
-                                        ? requestedQty
-                                        : Number(requestedQty.toFixed(precision));
+				// Show success message
+				const itemName = newItem.item_name || newItem.item_code || scannedCode || this.__("Item");
+				const rawPrecision = Number(this.float_precision);
+				const precision = Number.isInteger(rawPrecision) ? Math.min(Math.max(rawPrecision, 0), 6) : 2;
+				const displayQty = Number.isInteger(requestedQty)
+					? requestedQty
+					: Number(requestedQty.toFixed(precision));
 
-                                if (this.eventBus?.emit) {
-                                        this.eventBus.emit("show_message", {
-                                                title: this.__("Item {0} added to invoice", [itemName]),
-                                                summary: this.__("Items added to invoice"),
-                                                detail: this.__("{0} (Qty: {1})", [itemName, displayQty]),
-                                                color: "success",
-                                                groupId: "invoice-item-added",
-                                        });
-                                } else if (frappe?.show_alert) {
-                                        frappe.show_alert(
-                                                {
-                                                        message: `Added: ${itemName}`,
-                                                        indicator: "green",
-                                                },
-                                                3,
-                                        );
-                                }
+				if (this.eventBus?.emit) {
+					this.eventBus.emit("show_message", {
+						title: this.__("Item {0} added to invoice", [itemName]),
+						summary: this.__("Items added to invoice"),
+						detail: this.__("{0} (Qty: {1})", [itemName, displayQty]),
+						color: "success",
+						groupId: "invoice-item-added",
+					});
+				} else if (frappe?.show_alert) {
+					frappe.show_alert(
+						{
+							message: `Added: ${itemName}`,
+							indicator: "green",
+						},
+						3,
+					);
+				}
 
-                                // Clear search after successful addition and refocus input
-                                this.clearSearch();
-                                this.focusItemSearch();
-                        } finally {
-                                this.awaitingScanResult = false;
-                        }
-                },
+				// Clear search after successful addition and refocus input
+				this.clearSearch();
+				this.focusItemSearch();
+			} finally {
+				this.awaitingScanResult = false;
+			}
+		},
 		isNegativeStockEnabled() {
 			return parseBooleanSetting(this.stock_settings?.allow_negative_stock);
 		},
@@ -3330,119 +3298,114 @@ export default {
 		},
 	},
 
-        computed: {
-                usesLimitSearch() {
-                        const rawValue =
-                                this.pos_profile?.pose_use_limit_search ??
-                                this.pos_profile?.posa_use_limit_search;
+	computed: {
+		usesLimitSearch() {
+			const rawValue =
+				this.pos_profile?.pose_use_limit_search ?? this.pos_profile?.posa_use_limit_search;
 
-                        if (typeof rawValue === "string") {
-                                const normalized = rawValue.trim().toLowerCase();
-                                return normalized === "1" || normalized === "true" || normalized === "yes";
-                        }
+			if (typeof rawValue === "string") {
+				const normalized = rawValue.trim().toLowerCase();
+				return normalized === "1" || normalized === "true" || normalized === "yes";
+			}
 
-                        if (typeof rawValue === "number") {
-                                return rawValue === 1;
-                        }
+			if (typeof rawValue === "number") {
+				return rawValue === 1;
+			}
 
-                        return Boolean(rawValue);
-                },
-                limitSearchCap() {
-                        if (!this.usesLimitSearch) {
-                                return null;
-                        }
-
-                        const rawLimit = this.pos_profile?.posa_search_limit;
-                        const parsed = parseInt(rawLimit, 10);
-
-                        if (Number.isFinite(parsed) && parsed > 0) {
-                                return parsed;
-                        }
-
-                        return 500;
-                },
-                blockSaleBeyondAvailableQty() {
-                        return (
-                                Boolean(this.pos_profile?.posa_block_sale_beyond_available_qty) &&
-                                !this.isNegativeStockEnabled()
-                        );
+			return Boolean(rawValue);
 		},
-                headers() {
-                        return this.getItemsHeaders();
-                },
-                cardColumns() {
-                        if (this.windowWidth <= 768) {
-                                return 1;
-                        }
-                        if (this.windowWidth <= 1200) {
-                                return 2;
-                        }
-                        return 3;
-                },
-                cardGap() {
-                        if (this.windowWidth <= 768) {
-                                return 10;
-                        }
-                        if (this.windowWidth <= 1200) {
-                                return 12;
-                        }
-                        return 16;
-                },
-                cardPadding() {
-                        if (this.windowWidth <= 768) {
-                                return 10;
-                        }
-                        if (this.windowWidth <= 1200) {
-                                return 12;
-                        }
-                        return 16;
-                },
-                cardRowHeight() {
-                        if (this.windowWidth <= 768) {
-                                return 220;
-                        }
-                        if (this.windowWidth <= 1200) {
-                                return 240;
-                        }
-                        return 260;
-                },
-                cardColumnWidth() {
-                        const columns = Math.max(1, this.cardColumns);
-                        const containerWidth = this.cardContainerWidth || 0;
-                        if (!containerWidth) {
-                                return 240;
-                        }
+		limitSearchCap() {
+			if (!this.usesLimitSearch) {
+				return null;
+			}
 
-                        const gapTotal = this.cardGap * (columns - 1);
-                        const paddingTotal = this.cardPadding * 2;
-                        const available = Math.max(0, containerWidth - gapTotal - paddingTotal);
-                        const width = Math.floor(available / columns);
-                        return Math.max(180, width);
-                },
-                displayedItems() {
-                        const baseItems = Array.isArray(this.filteredItems)
-                                ? [...this.filteredItems]
-                                : [];
+			const rawLimit = this.pos_profile?.posa_search_limit;
+			const parsed = parseInt(rawLimit, 10);
 
-                        if (!baseItems.length) {
-                                return [];
-                        }
+			if (Number.isFinite(parsed) && parsed > 0) {
+				return parsed;
+			}
 
-                        const searchTerm = this.get_search(this.first_search).trim().toLowerCase();
-                        let filteredItems = baseItems;
+			return 500;
+		},
+		blockSaleBeyondAvailableQty() {
+			return (
+				Boolean(this.pos_profile?.posa_block_sale_beyond_available_qty) &&
+				!this.isNegativeStockEnabled()
+			);
+		},
+		headers() {
+			return this.getItemsHeaders();
+		},
+		cardColumns() {
+			if (this.windowWidth <= 768) {
+				return 1;
+			}
+			if (this.windowWidth <= 1200) {
+				return 2;
+			}
+			return 3;
+		},
+		cardGap() {
+			if (this.windowWidth <= 768) {
+				return 10;
+			}
+			if (this.windowWidth <= 1200) {
+				return 12;
+			}
+			return 16;
+		},
+		cardPadding() {
+			if (this.windowWidth <= 768) {
+				return 10;
+			}
+			if (this.windowWidth <= 1200) {
+				return 12;
+			}
+			return 16;
+		},
+		cardRowHeight() {
+			if (this.windowWidth <= 768) {
+				return 220;
+			}
+			if (this.windowWidth <= 1200) {
+				return 240;
+			}
+			return 260;
+		},
+		cardColumnWidth() {
+			const columns = Math.max(1, this.cardColumns);
+			const containerWidth = this.cardContainerWidth || 0;
+			if (!containerWidth) {
+				return 240;
+			}
 
-                        // Apply search filter only for queries with at least three characters
-                        if (searchTerm.length >= 3) {
-                                const searchTerms = Array.from(
-                                        new Set(searchTerm.split(/\s+/).filter(Boolean)),
-                                );
+			const gapTotal = this.cardGap * (columns - 1);
+			const paddingTotal = this.cardPadding * 2;
+			const available = Math.max(0, containerWidth - gapTotal - paddingTotal);
+			const width = Math.floor(available / columns);
+			return Math.max(180, width);
+		},
+		displayedItems() {
+			const baseItems = Array.isArray(this.filteredItems) ? [...this.filteredItems] : [];
 
-                                filteredItems = filteredItems.filter((item) => {
-                                        const barcodeList = [];
-                                        if (Array.isArray(item.item_barcode)) {
-                                                barcodeList.push(...item.item_barcode.map((b) => b.barcode).filter(Boolean));
-                                        } else if (item.item_barcode) {
-                                                barcodeList.push(String(item.item_barcode));
+			if (!baseItems.length) {
+				return [];
+			}
+
+			const searchTerm = this.get_search(this.first_search).trim().toLowerCase();
+			let filteredItems = baseItems;
+
+			// Apply search filter only for queries with at least three characters
+			if (searchTerm.length >= 3) {
+				const searchTerms = Array.from(new Set(searchTerm.split(/\s+/).filter(Boolean)));
+
+				filteredItems = filteredItems.filter((item) => {
+					const barcodeList = [];
+					if (Array.isArray(item.item_barcode)) {
+						barcodeList.push(...item.item_barcode.map((b) => b.barcode).filter(Boolean));
+					} else if (item.item_barcode) {
+						barcodeList.push(String(item.item_barcode));
 					}
 					if (Array.isArray(item.barcodes)) {
 						barcodeList.push(...item.barcodes.map((b) => String(b)).filter(Boolean));
@@ -3459,20 +3422,18 @@ export default {
 							: []),
 						...(this.pos_profile?.posa_search_batch_no && Array.isArray(item.batch_no_data)
 							? item.batch_no_data.map((b) => b.batch_no)
-                                                        : []),
-                                        ]
-                                                .filter(Boolean)
-                                                .map((field) => field.toLowerCase());
+							: []),
+					]
+						.filter(Boolean)
+						.map((field) => field.toLowerCase());
 
-                                        if (!searchTerms.length) {
-                                                return true;
-                                        }
+					if (!searchTerms.length) {
+						return true;
+					}
 
-                                        return searchTerms.every((term) =>
-                                                searchFields.some((field) => field.includes(term)),
-                                        );
-                                });
-                        }
+					return searchTerms.every((term) => searchFields.some((field) => field.includes(term)));
+				});
+			}
 
 			// Apply item group filter
 			if (this.item_group !== "ALL") {
@@ -3535,26 +3496,22 @@ export default {
 		},
 	},
 
-        async created() {
-                console.log("ItemsSelector created - starting initialization with Pinia store");
+	async created() {
+		console.log("ItemsSelector created - starting initialization with Pinia store");
 
-                // Initialize the Pinia store with existing POS profile data
-                if (this.pos_profile && this.pos_profile.name) {
-                    await this.initializeStore(
-                        this.pos_profile,
-                        this.customer,
-                        this.customer_price_list
-                    );
-                    console.log("Pinia store initialized successfully");
-                } else {
-                    console.warn("No POS Profile available for store initialization");
-                }
+		// Initialize the Pinia store with existing POS profile data
+		if (this.pos_profile && this.pos_profile.name) {
+			await this.initializeStore(this.pos_profile, this.customer, this.customer_price_list);
+			console.log("Pinia store initialized successfully");
+		} else {
+			console.warn("No POS Profile available for store initialization");
+		}
 
-                // Keep legacy initialization for backward compatibility
-                this.replaceBarcodeIndex(this.items || []);
+		// Keep legacy initialization for backward compatibility
+		this.replaceBarcodeIndex(this.items || []);
 
-                // Setup search debounce (now handled by store, but keeping for compatibility)
-                this.searchDebounce = _.debounce(() => {
+		// Setup search debounce (now handled by store, but keeping for compatibility)
+		this.searchDebounce = _.debounce(() => {
 			this.get_items();
 		}, 300);
 
@@ -3584,11 +3541,7 @@ export default {
 
 					// Initialize store with fallback profile
 					if (this.pos_profile && this.pos_profile.name) {
-						await this.initializeStore(
-							this.pos_profile,
-							this.customer,
-							this.customer_price_list
-						);
+						await this.initializeStore(this.pos_profile, this.customer, this.customer_price_list);
 					}
 				}
 
@@ -3628,14 +3581,14 @@ export default {
 		this.eventBus.on("update_customer_price_list", (data) => {
 			this.customer_price_list = data;
 		});
-                this.eventBus.on("focus_item_search", () => {
-                        this.focusItemSearch();
-                });
+		this.eventBus.on("focus_item_search", () => {
+			this.focusItemSearch();
+		});
 
 		// Manually trigger a full item reload when requested
 		this.eventBus.on("force_reload_items", async () => {
 			await this.ensureStorageHealth();
-						if (!isOffline()) {
+			if (!isOffline()) {
 				if (this.pos_profile && (!this.pos_profile.posa_local_storage || !this.storageAvailable)) {
 					await forceClearAllCache();
 				}
@@ -3719,22 +3672,22 @@ export default {
 		});
 	},
 
-        async mounted() {
-                this.$watch(
-                        () => this.selectedCustomer,
-                        (newCustomer) => {
-                                const normalized = newCustomer || "";
-                                if (this.customer !== normalized) {
-                                        this.customer = normalized;
-                                }
-                        },
-                        { immediate: true },
-                );
-                // Ensure POS profile is available
-                if (!this.pos_profile || !this.pos_profile.name) {
-                        try {
-                                // Try to get from global frappe context
-                                if (frappe.boot && frappe.boot.pos_profile) {
+	async mounted() {
+		this.$watch(
+			() => this.selectedCustomer,
+			(newCustomer) => {
+				const normalized = newCustomer || "";
+				if (this.customer !== normalized) {
+					this.customer = normalized;
+				}
+			},
+			{ immediate: true },
+		);
+		// Ensure POS profile is available
+		if (!this.pos_profile || !this.pos_profile.name) {
+			try {
+				// Try to get from global frappe context
+				if (frappe.boot && frappe.boot.pos_profile) {
 					this.pos_profile = frappe.boot.pos_profile;
 				} else if (window.cur_pos && window.cur_pos.pos_profile) {
 					this.pos_profile = window.cur_pos.pos_profile;
@@ -3751,22 +3704,22 @@ export default {
 		}
 
 		// Setup barcode scanner if enabled
-                if (this.pos_profile?.posa_enable_barcode_scanning) {
-                        this.scan_barcoud();
-                }
+		if (this.pos_profile?.posa_enable_barcode_scanning) {
+			this.scan_barcoud();
+		}
 
-                // Apply the configured items per page on mount
-                this.itemsPerPage = this.items_per_page;
-                window.addEventListener("resize", this.checkItemContainerOverflow);
-                this.$nextTick(() => {
-                        this.checkItemContainerOverflow();
-                        this.scheduleCardMetricsUpdate();
-                });
-        },
+		// Apply the configured items per page on mount
+		this.itemsPerPage = this.items_per_page;
+		window.addEventListener("resize", this.checkItemContainerOverflow);
+		this.$nextTick(() => {
+			this.checkItemContainerOverflow();
+			this.scheduleCardMetricsUpdate();
+		});
+	},
 
-        beforeUnmount() {
-                // Clear interval when component is destroyed
-                if (this.refresh_interval) {
+	beforeUnmount() {
+		// Clear interval when component is destroyed
+		if (this.refresh_interval) {
 			clearInterval(this.refresh_interval);
 		}
 
@@ -3809,50 +3762,52 @@ export default {
 		this.eventBus.off("update_cur_items_details");
 		this.eventBus.off("update_offers_counters");
 		this.eventBus.off("update_coupons_counters");
-                this.eventBus.off("update_customer_price_list");
-                this.eventBus.off("force_reload_items");
-                this.eventBus.off("focus_item_search");
-                window.removeEventListener("resize", this.checkItemContainerOverflow);
-                if (this.metricsRaf) {
-                        cancelAnimationFrame(this.metricsRaf);
-                        this.metricsRaf = null;
-                }
-        },
+		this.eventBus.off("update_customer_price_list");
+		this.eventBus.off("force_reload_items");
+		this.eventBus.off("focus_item_search");
+		window.removeEventListener("resize", this.checkItemContainerOverflow);
+		if (this.metricsRaf) {
+			cancelAnimationFrame(this.metricsRaf);
+			this.metricsRaf = null;
+		}
+	},
 };
 </script>
 
 <style scoped>
 /* "dynamic-card" no longer composes from pos-card; the pos-card class is added directly in the template */
 .dynamic-padding {
-        /* Equal spacing on all sides for consistent alignment */
-        padding: var(--dynamic-sm);
+	/* Equal spacing on all sides for consistent alignment */
+	padding: var(--dynamic-sm);
 }
 
 .manual-scan-container {
-        padding: 16px;
-        border-radius: 12px;
-        border: 1px solid var(--pos-border, rgba(0, 0, 0, 0.08));
-        background-color: var(--pos-card-bg, rgba(255, 255, 255, 0.96));
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
-        transition: background-color 0.2s ease, border-color 0.2s ease;
+	padding: 16px;
+	border-radius: 12px;
+	border: 1px solid var(--pos-border, rgba(0, 0, 0, 0.08));
+	background-color: var(--pos-card-bg, rgba(255, 255, 255, 0.96));
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+	transition:
+		background-color 0.2s ease,
+		border-color 0.2s ease;
 }
 
 .manual-scan-text .text-body-2 {
-        color: rgba(0, 0, 0, 0.6);
+	color: rgba(0, 0, 0, 0.6);
 }
 
 :deep(.v-theme--dark) .manual-scan-container {
-        background-color: rgba(30, 30, 30, 0.92);
-        border-color: rgba(255, 255, 255, 0.12);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+	background-color: rgba(30, 30, 30, 0.92);
+	border-color: rgba(255, 255, 255, 0.12);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 :deep(.v-theme--dark) .manual-scan-text .text-body-2 {
-        color: rgba(255, 255, 255, 0.7);
+	color: rgba(255, 255, 255, 0.7);
 }
 
 .scan-error-dialog {
-        border-radius: 16px;
+	border-radius: 16px;
 }
 
 .scan-error-dialog .scan-error-message {
@@ -4032,33 +3987,33 @@ export default {
 
 /* Enhanced Card View Grid Layout - 3 items per row */
 .items-card-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
-        padding: 16px;
-        height: calc(100% - 80px);
-        overflow-y: auto;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-        /* Performance optimizations */
-        contain: layout style;
-        will-change: scroll-position;
-        transform: translate3d(0, 0, 0);
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 16px;
+	padding: 16px;
+	height: calc(100% - 80px);
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+	/* Performance optimizations */
+	contain: layout style;
+	will-change: scroll-position;
+	transform: translate3d(0, 0, 0);
 }
 
 .virtual-scroller {
-        height: calc(100% - 80px);
-        overflow-y: auto;
-        position: relative;
+	height: calc(100% - 80px);
+	overflow-y: auto;
+	position: relative;
 }
 
 .virtual-scroller .items-card-grid {
-        height: auto;
-        overflow: visible;
+	height: auto;
+	overflow: visible;
 }
 
 .virtual-scroller .vue-recycle-scroller__item-wrapper {
-        display: contents;
+	display: contents;
 }
 
 .items-card-grid::-webkit-scrollbar {

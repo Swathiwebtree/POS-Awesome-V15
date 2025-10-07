@@ -20,20 +20,10 @@
 			</div>
 		</div>
 		<template #actions>
-			<v-btn
-				variant="text"
-				color="white"
-				class="mr-2"
-				@click="snooze"
-			>
+			<v-btn variant="text" color="white" class="mr-2" @click="snooze">
 				{{ __("Later") }}
 			</v-btn>
-			<v-btn
-				variant="elevated"
-				color="white"
-				class="text-primary"
-				@click="reload"
-			>
+			<v-btn variant="elevated" color="white" class="text-primary" @click="reload">
 				{{ updateStore.reloading ? __("Updating...") : __("Reload Now") }}
 			</v-btn>
 		</template>

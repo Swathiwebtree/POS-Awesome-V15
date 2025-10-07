@@ -45,13 +45,15 @@
 						size="x-small"
 						class="ml-1"
 						@click.stop="openNameDialog(item)"
-					>mdi-pencil</v-icon>
+						>mdi-pencil</v-icon
+					>
 					<v-icon
 						v-if="item.name_overridden"
 						size="x-small"
 						class="ml-1"
 						@click.stop="resetItemName(item)"
-					>mdi-undo</v-icon>
+						>mdi-undo</v-icon
+					>
 				</div>
 			</template>
 
@@ -112,7 +114,8 @@
 					<span
 						class="amount-value"
 						:class="{ 'negative-number': isNegative(item.qty * item.rate) }"
-					>{{ formatCurrency(item.qty * item.rate) }}</span>
+						>{{ formatCurrency(item.qty * item.rate) }}</span
+					>
 				</div>
 			</template>
 
@@ -139,7 +142,8 @@
 					<span
 						class="amount-value"
 						:class="{ 'negative-number': isNegative(item.discount_amount || 0) }"
-					>{{ formatCurrency(item.discount_amount || 0) }}</span>
+						>{{ formatCurrency(item.discount_amount || 0) }}</span
+					>
 				</div>
 			</template>
 
@@ -150,7 +154,8 @@
 					<span
 						class="amount-value"
 						:class="{ 'negative-number': isNegative(item.price_list_rate) }"
-					>{{ formatCurrency(item.price_list_rate) }}</span>
+						>{{ formatCurrency(item.price_list_rate) }}</span
+					>
 				</div>
 			</template>
 
@@ -639,7 +644,8 @@
 						v-if="editNameTarget && editNameTarget.name_overridden"
 						variant="text"
 						@click="resetItemName(editNameTarget)"
-					>{{ __("Reset") }}</v-btn>
+						>{{ __("Reset") }}</v-btn
+					>
 					<v-spacer></v-spacer>
 					<v-btn variant="text" @click="editNameDialog = false">{{ __("Cancel") }}</v-btn>
 					<v-btn color="primary" variant="text" @click="saveItemName">{{ __("Save") }}</v-btn>
@@ -656,19 +662,19 @@ import { logComponentRender } from "../../utils/perf.js";
 import { parseBooleanSetting } from "../../utils/stock.js";
 import { useInvoiceStore } from "../../stores/invoiceStore.js";
 export default {
-        name: "ItemsTable",
-        setup() {
-                const invoiceStore = useInvoiceStore();
-                return { invoiceStore };
-        },
-        props: {
-                headers: Array,
-                expanded: Array,
-                itemsPerPage: Number,
-                itemSearch: String,
-                pos_profile: Object,
-                invoiceType: String,
-                stock_settings: Object,
+	name: "ItemsTable",
+	setup() {
+		const invoiceStore = useInvoiceStore();
+		return { invoiceStore };
+	},
+	props: {
+		headers: Array,
+		expanded: Array,
+		itemsPerPage: Number,
+		itemSearch: String,
+		pos_profile: Object,
+		invoiceType: String,
+		stock_settings: Object,
 		displayCurrency: String,
 		formatFloat: Function,
 		formatCurrency: Function,
@@ -711,15 +717,15 @@ export default {
 			lastUpdateTime: 0,
 		};
 	},
-        computed: {
-                items() {
-                        return this.invoiceStore.items;
-                },
-                invoice_doc() {
-                        return this.invoiceStore.invoiceDoc || {};
-                },
-                // Dynamic container styles based on parent
-                containerStyles() {
+	computed: {
+		items() {
+			return this.invoiceStore.items;
+		},
+		invoice_doc() {
+			return this.invoiceStore.invoiceDoc || {};
+		},
+		// Dynamic container styles based on parent
+		containerStyles() {
 			return {
 				height: "calc(100% - 80px)",
 				maxHeight: "calc(100% - 80px)",
@@ -753,9 +759,9 @@ export default {
 		},
 
 		blockSaleBeyondAvailableQty() {
-		if (["Order", "Quotation"].includes(this.invoiceType)) return false;
-    const allowNegative = parseBooleanSetting(this.stock_settings?.allow_negative_stock);
-    return !allowNegative && !!this.pos_profile?.posa_block_sale_beyond_available_qty;
+			if (["Order", "Quotation"].includes(this.invoiceType)) return false;
+			const allowNegative = parseBooleanSetting(this.stock_settings?.allow_negative_stock);
+			return !allowNegative && !!this.pos_profile?.posa_block_sale_beyond_available_qty;
 		},
 
 		// Responsive headers based on container size
@@ -867,36 +873,36 @@ export default {
 				return isExpanded;
 			};
 		},
-                hide_qty_decimals() {
-                        try {
-                                const saved = localStorage.getItem("posawesome_item_selector_settings");
-                                if (saved) {
-                                        const opts = JSON.parse(saved);
-                                        return !!opts.hide_qty_decimals;
-                                }
-                        } catch (e) {
-                                console.error("Failed to load item selector settings:", e);
-                        }
-                        return false;
-                },
-                isRTL() {
-                        if (this._rtlComputed !== undefined) {
-                                return this._rtlComputed;
-                        }
+		hide_qty_decimals() {
+			try {
+				const saved = localStorage.getItem("posawesome_item_selector_settings");
+				if (saved) {
+					const opts = JSON.parse(saved);
+					return !!opts.hide_qty_decimals;
+				}
+			} catch (e) {
+				console.error("Failed to load item selector settings:", e);
+			}
+			return false;
+		},
+		isRTL() {
+			if (this._rtlComputed !== undefined) {
+				return this._rtlComputed;
+			}
 
-                        const htmlDir = document.documentElement.getAttribute("dir");
-                        const bodyDir = document.body.getAttribute("dir");
-                        const computedDir = window.getComputedStyle(document.documentElement).direction;
-                        const lang = document.documentElement.getAttribute("lang") || navigator.language;
-                        const rtlLanguages = ["ar", "he", "fa", "ur", "yi"];
-                        const isRTLLanguage = rtlLanguages.some((rtlLang) => lang.startsWith(rtlLang));
+			const htmlDir = document.documentElement.getAttribute("dir");
+			const bodyDir = document.body.getAttribute("dir");
+			const computedDir = window.getComputedStyle(document.documentElement).direction;
+			const lang = document.documentElement.getAttribute("lang") || navigator.language;
+			const rtlLanguages = ["ar", "he", "fa", "ur", "yi"];
+			const isRTLLanguage = rtlLanguages.some((rtlLang) => lang.startsWith(rtlLang));
 
-                        this._rtlComputed =
-                                htmlDir === "rtl" || bodyDir === "rtl" || computedDir === "rtl" || isRTLLanguage;
+			this._rtlComputed =
+				htmlDir === "rtl" || bodyDir === "rtl" || computedDir === "rtl" || isRTLLanguage;
 
-                        return this._rtlComputed;
-                },
-        },
+			return this._rtlComputed;
+		},
+	},
 	methods: {
 		customItemFilter(value, search, item) {
 			if (search == null) {
@@ -1178,15 +1184,15 @@ export default {
 		},
 	},
 
-        mounted() {
-                logComponentRender(this, "ItemsTable", "mounted", {
-                        rows: this.items?.length || 0,
-                });
-                this.setupResizeObserver();
+	mounted() {
+		logComponentRender(this, "ItemsTable", "mounted", {
+			rows: this.items?.length || 0,
+		});
+		this.setupResizeObserver();
 
-                // Performance optimization: defer non-critical initialization
-                this.$nextTick(() => {
-                        this.updateContainerDimensions();
+		// Performance optimization: defer non-critical initialization
+		this.$nextTick(() => {
+			this.updateContainerDimensions();
 
 			// Log performance metrics in development
 			if (process.env.NODE_ENV === "development") {
@@ -1203,14 +1209,14 @@ export default {
 					},
 				});
 			}
-                });
-        },
+		});
+	},
 
-        updated() {
-                logComponentRender(this, "ItemsTable", "updated", {
-                        rows: this.items?.length || 0,
-                });
-        },
+	updated() {
+		logComponentRender(this, "ItemsTable", "updated", {
+			rows: this.items?.length || 0,
+		});
+	},
 
 	beforeUnmount() {
 		this.cleanupResizeObserver();

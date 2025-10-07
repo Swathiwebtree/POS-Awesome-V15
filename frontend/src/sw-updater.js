@@ -105,7 +105,7 @@ if (typeof window !== "undefined" && "serviceWorker" in navigator) {
 			return pendingVersionRequest;
 		}
 		const now = Date.now();
-		if (!force && cachedVersionInfo && (now - cachedVersionTimestamp) < VERSION_CACHE_TTL) {
+		if (!force && cachedVersionInfo && now - cachedVersionTimestamp < VERSION_CACHE_TTL) {
 			return cachedVersionInfo;
 		}
 		pendingVersionRequest = (async () => {

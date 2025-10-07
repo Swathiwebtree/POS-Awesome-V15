@@ -73,7 +73,7 @@ workbox.routing.registerRoute(
 		cacheKeyWillBeUsed: async ({ request }) => {
 			// Include version parameter in cache key for proper invalidation
 			return request.url;
-		}
+		},
 	}),
 );
 

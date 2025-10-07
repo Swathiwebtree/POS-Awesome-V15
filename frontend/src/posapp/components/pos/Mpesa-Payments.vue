@@ -25,26 +25,27 @@
 							density="compact"
 							clearable
 						></v-text-field>
-                                                <v-btn
-                                                        variant="text"
-                                                        class="ml-2"
-                                                        color="primary"
-                                                        theme="dark"
-                                                        :loading="isLoading"
-                                                        :disabled="isLoading || isSubmitting"
-                                                        @click="search"
-                                                >{{ __("Search") }}</v-btn>
-                                        </v-row>
-                                        <v-row v-if="errorMessage">
-                                                <v-col cols="12" class="pt-0">
-                                                        <v-alert type="error" dense border="start" class="mx-4">
-                                                                {{ errorMessage }}
-                                                        </v-alert>
-                                                </v-col>
-                                        </v-row>
-                                        <v-row>
-                                                <v-col cols="12" class="pa-1" v-if="dialog_data">
-                                                        <v-data-table
+						<v-btn
+							variant="text"
+							class="ml-2"
+							color="primary"
+							theme="dark"
+							:loading="isLoading"
+							:disabled="isLoading || isSubmitting"
+							@click="search"
+							>{{ __("Search") }}</v-btn
+						>
+					</v-row>
+					<v-row v-if="errorMessage">
+						<v-col cols="12" class="pt-0">
+							<v-alert type="error" dense border="start" class="mx-4">
+								{{ errorMessage }}
+							</v-alert>
+						</v-col>
+					</v-row>
+					<v-row>
+						<v-col cols="12" class="pa-1" v-if="dialog_data">
+							<v-data-table
 								:headers="headers"
 								:items="dialog_data"
 								item-key="name"
@@ -66,18 +67,17 @@
 				</v-container>
 				<v-card-actions class="mt-4">
 					<v-spacer></v-spacer>
-                                        <v-btn color="error mx-2" theme="dark" @click="close_dialog">Close</v-btn>
-                                        <v-btn
-                                                v-if="selected.length"
-                                                color="success"
-                                                theme="dark"
-                                                :loading="isSubmitting"
-                                                :disabled="isSubmitting"
-                                                @click="submit_dialog"
-                                        >{{
-                                                __("Submit")
-                                        }}</v-btn>
-                                </v-card-actions>
+					<v-btn color="error mx-2" theme="dark" @click="close_dialog">Close</v-btn>
+					<v-btn
+						v-if="selected.length"
+						color="success"
+						theme="dark"
+						:loading="isSubmitting"
+						:disabled="isSubmitting"
+						@click="submit_dialog"
+						>{{ __("Submit") }}</v-btn
+					>
+				</v-card-actions>
 			</v-card>
 		</v-dialog>
 	</v-row>
@@ -90,16 +90,16 @@ export default {
 		dialog: false,
 		singleSelect: true,
 		selected: [],
-                dialog_data: "",
-                company: "",
-                customer: "",
-                mode_of_payment: "",
-                full_name: "",
-                mobile_no: "",
-                isLoading: false,
-                isSubmitting: false,
-                errorMessage: "",
-                headers: [
+		dialog_data: "",
+		company: "",
+		customer: "",
+		mode_of_payment: "",
+		full_name: "",
+		mobile_no: "",
+		isLoading: false,
+		isSubmitting: false,
+		errorMessage: "",
+		headers: [
 			{
 				title: __("Full Name"),
 				value: "full_name",
@@ -137,78 +137,78 @@ export default {
 				this.search();
 			}
 		},
-                async search() {
-                        if (this.isLoading || this.isSubmitting) {
-                                return;
-                        }
+		async search() {
+			if (this.isLoading || this.isSubmitting) {
+				return;
+			}
 
-                        this.errorMessage = "";
-                        this.isLoading = true;
+			this.errorMessage = "";
+			this.isLoading = true;
 
-                        try {
-                                const { message } = await frappe.call({
-                                        method: "posawesome.posawesome.api.m_pesa.get_mpesa_draft_payments",
-                                        args: {
-                                                company: this.company,
-                                                mode_of_payment: this.mode_of_payment,
-                                                mobile_no: this.mobile_no,
-                                                full_name: this.full_name,
-                                        },
-                                });
+			try {
+				const { message } = await frappe.call({
+					method: "posawesome.posawesome.api.m_pesa.get_mpesa_draft_payments",
+					args: {
+						company: this.company,
+						mode_of_payment: this.mode_of_payment,
+						mobile_no: this.mobile_no,
+						full_name: this.full_name,
+					},
+				});
 
-                                this.dialog_data = message;
-                        } catch (error) {
-                                console.error("Failed to search M-Pesa payments:", error);
-                                this.errorMessage = __("Unable to fetch M-Pesa payments");
-                        } finally {
-                                this.isLoading = false;
-                        }
-                },
-                async submit_dialog() {
-                        if (this.isSubmitting || this.selected.length === 0) {
-                                return;
-                        }
+				this.dialog_data = message;
+			} catch (error) {
+				console.error("Failed to search M-Pesa payments:", error);
+				this.errorMessage = __("Unable to fetch M-Pesa payments");
+			} finally {
+				this.isLoading = false;
+			}
+		},
+		async submit_dialog() {
+			if (this.isSubmitting || this.selected.length === 0) {
+				return;
+			}
 
-                        this.errorMessage = "";
-                        this.isSubmitting = true;
+			this.errorMessage = "";
+			this.isSubmitting = true;
 
-                        try {
-                                const selected_payment = this.selected[0].name;
-                                const { message } = await frappe.call({
-                                        method: "posawesome.posawesome.api.m_pesa.submit_mpesa_payment",
-                                        args: {
-                                                mpesa_payment: selected_payment,
-                                                customer: this.customer,
-                                        },
-                                });
+			try {
+				const selected_payment = this.selected[0].name;
+				const { message } = await frappe.call({
+					method: "posawesome.posawesome.api.m_pesa.submit_mpesa_payment",
+					args: {
+						mpesa_payment: selected_payment,
+						customer: this.customer,
+					},
+				});
 
-                                this.eventBus.emit("set_mpesa_payment", message);
-                                this.dialog = false;
-                        } catch (error) {
-                                console.error("Failed to submit M-Pesa payment:", error);
-                                this.errorMessage = __("Unable to submit the selected payment");
-                        } finally {
-                                this.isSubmitting = false;
-                        }
-                },
+				this.eventBus.emit("set_mpesa_payment", message);
+				this.dialog = false;
+			} catch (error) {
+				console.error("Failed to submit M-Pesa payment:", error);
+				this.errorMessage = __("Unable to submit the selected payment");
+			} finally {
+				this.isSubmitting = false;
+			}
+		},
 		formatCurrency(value) {
 			return this.$options.mixins[0].methods.formatCurrency.call(this, value, 2);
 		},
 	},
 	created: function () {
-                this.eventBus.on("open_mpesa_payments", (data) => {
-                        this.dialog = true;
-                        this.full_name = "";
-                        this.mobile_no = "";
-                        this.company = data.company;
-                        this.customer = data.customer;
-                        this.mode_of_payment = data.mode_of_payment;
-                        this.dialog_data = "";
-                        this.selected = [];
-                        this.errorMessage = "";
-                        this.isLoading = false;
-                        this.isSubmitting = false;
-                });
+		this.eventBus.on("open_mpesa_payments", (data) => {
+			this.dialog = true;
+			this.full_name = "";
+			this.mobile_no = "";
+			this.company = data.company;
+			this.customer = data.customer;
+			this.mode_of_payment = data.mode_of_payment;
+			this.dialog_data = "";
+			this.selected = [];
+			this.errorMessage = "";
+			this.isLoading = false;
+			this.isSubmitting = false;
+		});
 	},
 	beforeUnmount() {
 		this.eventBus.off("open_mpesa_payments");

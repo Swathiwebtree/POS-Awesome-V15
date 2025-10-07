@@ -149,245 +149,243 @@ import Skeleton from "../ui/Skeleton.vue";
 import { useCustomersStore } from "../../stores/customersStore.js";
 
 export default {
-        props: {
-                pos_profile: Object,
-        },
-        components: {
-                UpdateCustomer,
-                Skeleton,
-        },
-        setup(props) {
-                const { proxy } = getCurrentInstance();
-                const eventBus = proxy?.eventBus;
-                const customersStore = useCustomersStore();
-                const {
-                        customers,
-                        filteredCustomers,
-                        loadingCustomers,
-                        isCustomerBackgroundLoading,
-                        selectedCustomer,
-                        customerInfo,
-                } = storeToRefs(customersStore);
+	props: {
+		pos_profile: Object,
+	},
+	components: {
+		UpdateCustomer,
+		Skeleton,
+	},
+	setup(props) {
+		const { proxy } = getCurrentInstance();
+		const eventBus = proxy?.eventBus;
+		const customersStore = useCustomersStore();
+		const {
+			customers,
+			filteredCustomers,
+			loadingCustomers,
+			isCustomerBackgroundLoading,
+			selectedCustomer,
+			customerInfo,
+		} = storeToRefs(customersStore);
 
-                const internalCustomer = ref(null);
-                const tempSelectedCustomer = ref(null);
-                const isMenuOpen = ref(false);
-                const customerDropdown = ref(null);
-                const readonlyState = ref(false);
+		const internalCustomer = ref(null);
+		const tempSelectedCustomer = ref(null);
+		const isMenuOpen = ref(false);
+		const customerDropdown = ref(null);
+		const readonlyState = ref(false);
 
-                let scrollContainer = null;
+		let scrollContainer = null;
 
-                const effectiveReadonly = computed(() => readonlyState.value && navigator.onLine);
+		const effectiveReadonly = computed(() => readonlyState.value && navigator.onLine);
 
-                const searchDebounce = _.debounce((term) => {
-                        customersStore.queueSearch(term || "");
-                }, 300);
+		const searchDebounce = _.debounce((term) => {
+			customersStore.queueSearch(term || "");
+		}, 300);
 
-                watch(
-                        selectedCustomer,
-                        (value) => {
-                                if (!isMenuOpen.value) {
-                                        internalCustomer.value = value || null;
-                                }
-                        },
-                        { immediate: true },
-                );
+		watch(
+			selectedCustomer,
+			(value) => {
+				if (!isMenuOpen.value) {
+					internalCustomer.value = value || null;
+				}
+			},
+			{ immediate: true },
+		);
 
-                watch(
-                        () => props.pos_profile,
-                        (profile) => {
-                                if (profile) {
-                                        customersStore.setPosProfile(profile);
-                                }
-                        },
-                        { immediate: true },
-                );
+		watch(
+			() => props.pos_profile,
+			(profile) => {
+				if (profile) {
+					customersStore.setPosProfile(profile);
+				}
+			},
+			{ immediate: true },
+		);
 
-                const detachScrollListener = () => {
-                        if (scrollContainer) {
-                                scrollContainer.removeEventListener("scroll", onCustomerScroll);
-                                scrollContainer = null;
-                        }
-                };
+		const detachScrollListener = () => {
+			if (scrollContainer) {
+				scrollContainer.removeEventListener("scroll", onCustomerScroll);
+				scrollContainer = null;
+			}
+		};
 
-                const onCustomerScroll = (event) => {
-                        const el = event.target;
-                        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
-                                customersStore.loadMoreCustomers();
-                        }
-                };
+		const onCustomerScroll = (event) => {
+			const el = event.target;
+			if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
+				customersStore.loadMoreCustomers();
+			}
+		};
 
-                const attachScrollListener = () => {
-                        const dropdown =
-                                customerDropdown.value?.$el?.querySelector(".v-overlay__content .v-select-list");
-                        if (dropdown) {
-                                scrollContainer = dropdown;
-                                scrollContainer.scrollTop = 0;
-                                scrollContainer.addEventListener("scroll", onCustomerScroll);
-                        }
-                };
+		const attachScrollListener = () => {
+			const dropdown = customerDropdown.value?.$el?.querySelector(".v-overlay__content .v-select-list");
+			if (dropdown) {
+				scrollContainer = dropdown;
+				scrollContainer.scrollTop = 0;
+				scrollContainer.addEventListener("scroll", onCustomerScroll);
+			}
+		};
 
-                const onCustomerMenuToggle = (isOpen) => {
-                        isMenuOpen.value = isOpen;
-                        if (isOpen) {
-                                internalCustomer.value = null;
-                                nextTick(() => {
-                                        setTimeout(() => {
-                                                attachScrollListener();
-                                        }, 50);
-                                });
-                                return;
-                        }
+		const onCustomerMenuToggle = (isOpen) => {
+			isMenuOpen.value = isOpen;
+			if (isOpen) {
+				internalCustomer.value = null;
+				nextTick(() => {
+					setTimeout(() => {
+						attachScrollListener();
+					}, 50);
+				});
+				return;
+			}
 
-                        detachScrollListener();
-                        if (tempSelectedCustomer.value) {
-                                internalCustomer.value = tempSelectedCustomer.value;
-                                customersStore.setSelectedCustomer(tempSelectedCustomer.value);
-                        } else if (selectedCustomer.value) {
-                                internalCustomer.value = selectedCustomer.value;
-                        }
-                        tempSelectedCustomer.value = null;
-                };
+			detachScrollListener();
+			if (tempSelectedCustomer.value) {
+				internalCustomer.value = tempSelectedCustomer.value;
+				customersStore.setSelectedCustomer(tempSelectedCustomer.value);
+			} else if (selectedCustomer.value) {
+				internalCustomer.value = selectedCustomer.value;
+			}
+			tempSelectedCustomer.value = null;
+		};
 
-                const closeCustomerMenu = () => {
-                        const dropdown = customerDropdown.value;
-                        if (dropdown) {
-                                try {
-                                        dropdown.menu = false;
-                                } catch (err) {
-                                        dropdown.$emit?.("update:menu", false);
-                                }
-                                const inputEl = dropdown.$el?.querySelector("input");
-                                if (inputEl) {
-                                        inputEl.blur();
-                                }
-                        }
-                        isMenuOpen.value = false;
-                        detachScrollListener();
-                };
+		const closeCustomerMenu = () => {
+			const dropdown = customerDropdown.value;
+			if (dropdown) {
+				try {
+					dropdown.menu = false;
+				} catch (err) {
+					dropdown.$emit?.("update:menu", false);
+				}
+				const inputEl = dropdown.$el?.querySelector("input");
+				if (inputEl) {
+					inputEl.blur();
+				}
+			}
+			isMenuOpen.value = false;
+			detachScrollListener();
+		};
 
-                const onCustomerChange = (val) => {
-                        if (val && val === selectedCustomer.value) {
-                                internalCustomer.value = selectedCustomer.value;
-                                eventBus?.emit("show_message", {
-                                        title: __("Customer already selected"),
-                                        color: "error",
-                                });
-                                return;
-                        }
+		const onCustomerChange = (val) => {
+			if (val && val === selectedCustomer.value) {
+				internalCustomer.value = selectedCustomer.value;
+				eventBus?.emit("show_message", {
+					title: __("Customer already selected"),
+					color: "error",
+				});
+				return;
+			}
 
-                        tempSelectedCustomer.value = val;
+			tempSelectedCustomer.value = val;
 
-                        if (isMenuOpen.value && val) {
-                                closeCustomerMenu();
-                        } else if (!isMenuOpen.value && val) {
-                                customersStore.setSelectedCustomer(val);
-                        }
-                };
+			if (isMenuOpen.value && val) {
+				closeCustomerMenu();
+			} else if (!isMenuOpen.value && val) {
+				customersStore.setSelectedCustomer(val);
+			}
+		};
 
-                const onCustomerSearch = (value) => {
-                        const term = value || "";
-                        if (isCustomerBackgroundLoading.value) {
-                                customersStore.queueSearch(term);
-                                return;
-                        }
-                        searchDebounce(term);
-                };
+		const onCustomerSearch = (value) => {
+			const term = value || "";
+			if (isCustomerBackgroundLoading.value) {
+				customersStore.queueSearch(term);
+				return;
+			}
+			searchDebounce(term);
+		};
 
-                const handleEnter = (event) => {
-                        const inputText = event.target.value?.toLowerCase() || "";
-                        const matched = customers.value.find((cust) => {
-                                return (
-                                        cust.customer_name?.toLowerCase().includes(inputText) ||
-                                        cust.name?.toLowerCase().includes(inputText)
-                                );
-                        });
+		const handleEnter = (event) => {
+			const inputText = event.target.value?.toLowerCase() || "";
+			const matched = customers.value.find((cust) => {
+				return (
+					cust.customer_name?.toLowerCase().includes(inputText) ||
+					cust.name?.toLowerCase().includes(inputText)
+				);
+			});
 
-                        if (!matched) {
-                                return;
-                        }
+			if (!matched) {
+				return;
+			}
 
-                        tempSelectedCustomer.value = matched.name;
-                        internalCustomer.value = matched.name;
-                        customersStore.setSelectedCustomer(matched.name);
-                        closeCustomerMenu();
-                        if (event?.target?.blur) {
-                                event.target.blur();
-                        }
-                };
+			tempSelectedCustomer.value = matched.name;
+			internalCustomer.value = matched.name;
+			customersStore.setSelectedCustomer(matched.name);
+			closeCustomerMenu();
+			if (event?.target?.blur) {
+				event.target.blur();
+			}
+		};
 
-                const new_customer = () => {
-                        eventBus?.emit("open_update_customer", null);
-                };
+		const new_customer = () => {
+			eventBus?.emit("open_update_customer", null);
+		};
 
-                const edit_customer = () => {
-                        eventBus?.emit("open_update_customer", customerInfo.value || {});
-                };
+		const edit_customer = () => {
+			eventBus?.emit("open_update_customer", customerInfo.value || {});
+		};
 
-                const busHandlers = [];
+		const busHandlers = [];
 
-                const registerBus = (event, handler) => {
-                        if (eventBus && typeof eventBus.on === "function") {
-                                eventBus.on(event, handler);
-                                busHandlers.push({ event, handler });
-                        }
-                };
+		const registerBus = (event, handler) => {
+			if (eventBus && typeof eventBus.on === "function") {
+				eventBus.on(event, handler);
+				busHandlers.push({ event, handler });
+			}
+		};
 
-                onMounted(async () => {
-                        await customersStore.searchCustomers("");
+		onMounted(async () => {
+			await customersStore.searchCustomers("");
 
-                        registerBus("register_pos_profile", async (data) => {
-                                customersStore.setPosProfile(data);
-                                await customersStore.get_customer_names();
-                        });
+			registerBus("register_pos_profile", async (data) => {
+				customersStore.setPosProfile(data);
+				await customersStore.get_customer_names();
+			});
 
-                        registerBus("payments_register_pos_profile", async (data) => {
-                                customersStore.setPosProfile(data);
-                                await customersStore.get_customer_names();
-                        });
+			registerBus("payments_register_pos_profile", async (data) => {
+				customersStore.setPosProfile(data);
+				await customersStore.get_customer_names();
+			});
 
-                        registerBus("set_customer", (customer) => {
-                                customersStore.setSelectedCustomer(customer);
-                                internalCustomer.value = customer || null;
-                        });
+			registerBus("set_customer", (customer) => {
+				customersStore.setSelectedCustomer(customer);
+				internalCustomer.value = customer || null;
+			});
 
-                        registerBus("add_customer_to_list", async (customer) => {
-                                await customersStore.addOrUpdateCustomer(customer);
-                                internalCustomer.value = customer?.name || null;
-                        });
+			registerBus("add_customer_to_list", async (customer) => {
+				await customersStore.addOrUpdateCustomer(customer);
+				internalCustomer.value = customer?.name || null;
+			});
 
-                        registerBus("set_customer_readonly", (value) => {
-                                readonlyState.value = Boolean(value);
-                        });
+			registerBus("set_customer_readonly", (value) => {
+				readonlyState.value = Boolean(value);
+			});
 
-                        registerBus("set_customer_info_to_edit", (data) => {
-                                customersStore.setCustomerInfo(data || {});
-                        });
+			registerBus("set_customer_info_to_edit", (data) => {
+				customersStore.setCustomerInfo(data || {});
+			});
+		});
 
-                });
+		onBeforeUnmount(() => {
+			busHandlers.forEach(({ event, handler }) => {
+				eventBus?.off(event, handler);
+			});
+			searchDebounce.cancel();
+			detachScrollListener();
+		});
 
-                onBeforeUnmount(() => {
-                        busHandlers.forEach(({ event, handler }) => {
-                                eventBus?.off(event, handler);
-                        });
-                        searchDebounce.cancel();
-                        detachScrollListener();
-                });
-
-                return {
-                        customerDropdown,
-                        filteredCustomers,
-                        loadingCustomers,
-                        isCustomerBackgroundLoading,
-                        internalCustomer,
-                        effectiveReadonly,
-                        onCustomerMenuToggle,
-                        onCustomerChange,
-                        onCustomerSearch,
-                        handleEnter,
-                        new_customer,
-                        edit_customer,
-                };
-        },
+		return {
+			customerDropdown,
+			filteredCustomers,
+			loadingCustomers,
+			isCustomerBackgroundLoading,
+			internalCustomer,
+			effectiveReadonly,
+			onCustomerMenuToggle,
+			onCustomerChange,
+			onCustomerSearch,
+			handleEnter,
+			new_customer,
+			edit_customer,
+		};
+	},
 };
 </script>

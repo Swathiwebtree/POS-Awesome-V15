@@ -13,7 +13,7 @@
 				:icon="isMobile"
 				:class="[
 					'menu-btn-compact pos-themed-button',
-					isMobile ? 'mobile-menu-btn' : 'desktop-menu-btn'
+					isMobile ? 'mobile-menu-btn' : 'desktop-menu-btn',
 				]"
 			>
 				<template v-if="isMobile">
@@ -42,21 +42,32 @@
 							</div>
 						</template>
 						<div class="menu-content-compact">
-							<v-list-item-title class="menu-item-title-compact">{{ displayUserName }}</v-list-item-title>
-							<v-list-item-subtitle class="menu-item-subtitle-compact">{{ __("Current User") }}</v-list-item-subtitle>
+							<v-list-item-title class="menu-item-title-compact">{{
+								displayUserName
+							}}</v-list-item-title>
+							<v-list-item-subtitle class="menu-item-subtitle-compact">{{
+								__("Current User")
+							}}</v-list-item-subtitle>
 						</div>
 					</v-list-item>
 
 					<!-- Cache and System Status on mobile -->
-					<v-list-item class="menu-item-compact system-info-mobile" @click="$emit('refresh-cache-usage')">
+					<v-list-item
+						class="menu-item-compact system-info-mobile"
+						@click="$emit('refresh-cache-usage')"
+					>
 						<template v-slot:prepend>
 							<div class="menu-icon-wrapper-compact neutral-icon">
 								<v-icon color="white" size="16">mdi-database-clock</v-icon>
 							</div>
 						</template>
 						<div class="menu-content-compact">
-							<v-list-item-title class="menu-item-title-compact">{{ __("System Status") }}</v-list-item-title>
-							<v-list-item-subtitle class="menu-item-subtitle-compact">{{ __("Check cache and performance") }}</v-list-item-subtitle>
+							<v-list-item-title class="menu-item-title-compact">{{
+								__("System Status")
+							}}</v-list-item-title>
+							<v-list-item-subtitle class="menu-item-subtitle-compact">{{
+								__("Check cache and performance")
+							}}</v-list-item-subtitle>
 						</div>
 					</v-list-item>
 
@@ -413,7 +424,7 @@ export default {
 			}
 
 			// Fallback to Frappe user
-			if (typeof frappe !== 'undefined' && frappe.session) {
+			if (typeof frappe !== "undefined" && frappe.session) {
 				if (frappe.session.user_fullname) {
 					return frappe.session.user_fullname;
 				}

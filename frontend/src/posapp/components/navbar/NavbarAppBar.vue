@@ -110,7 +110,10 @@
 				<div :class="['profile-section', isRtl ? 'rtl-profile-section' : 'ltr-profile-section']">
 					<v-chip
 						variant="outlined"
-						:class="['profile-chip pos-themed-card', isRtl ? 'rtl-profile-chip' : 'ltr-profile-chip']"
+						:class="[
+							'profile-chip pos-themed-card',
+							isRtl ? 'rtl-profile-chip' : 'ltr-profile-chip',
+						]"
 					>
 						<v-icon
 							:start="!isRtl"
@@ -285,10 +288,10 @@ export default {
 
 		// Enhanced accessibility helper
 		handleKeyboardNavigation(event) {
-			if (event.key === 'Tab') {
+			if (event.key === "Tab") {
 				// Ensure proper tab order
 				const focusableElements = this.$el.querySelectorAll(
-					'button, [tabindex="0"], [role="button"]'
+					'button, [tabindex="0"], [role="button"]',
 				);
 				if (focusableElements.length > 0) {
 					// Tab navigation is handled by browser, just ensure visibility
@@ -296,8 +299,8 @@ export default {
 						const activeElement = document.activeElement;
 						if (activeElement && this.$el.contains(activeElement)) {
 							activeElement.scrollIntoView({
-								block: 'nearest',
-								inline: 'nearest'
+								block: "nearest",
+								inline: "nearest",
 							});
 						}
 					});

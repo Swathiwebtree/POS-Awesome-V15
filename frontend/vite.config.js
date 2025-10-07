@@ -49,7 +49,7 @@ export default defineConfig({
 					dest: "../www",
 					transform(contents) {
 						return contents.replace(/__BUILD_VERSION__/g, buildVersion);
-					}
+					},
 				},
 			],
 		}),

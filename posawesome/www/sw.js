@@ -119,11 +119,7 @@ self.addEventListener("activate", (event) => {
 		(async () => {
 			const activeCacheName = await getCacheName();
 			const keys = await caches.keys();
-			await Promise.all(
-				keys
-					.filter((key) => key !== activeCacheName)
-					.map((key) => caches.delete(key)),
-			);
+			await Promise.all(keys.filter((key) => key !== activeCacheName).map((key) => caches.delete(key)));
 			const cache = await caches.open(activeCacheName);
 			await enforceCacheLimit(cache);
 			await self.clients.claim();
@@ -184,7 +180,12 @@ self.addEventListener("fetch", (event) => {
 			try {
 				const response = await fetch(event.request);
 				const cacheableTypes = ["basic", "default", "cors"];
-				if (response && response.ok && response.status === 200 && cacheableTypes.includes(response.type)) {
+				if (
+					response &&
+					response.ok &&
+					response.status === 200 &&
+					cacheableTypes.includes(response.type)
+				) {
 					try {
 						const cache = await caches.open(cacheName);
 						await cache.put(event.request, response.clone());

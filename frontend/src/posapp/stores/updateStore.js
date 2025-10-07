@@ -102,8 +102,8 @@ export const useUpdateStore = defineStore("update", {
 		isUpdateReady(state) {
 			return Boolean(
 				state.availableVersion &&
-				state.currentVersion &&
-				state.availableVersion !== state.currentVersion,
+					state.currentVersion &&
+					state.availableVersion !== state.currentVersion,
 			);
 		},
 		shouldPrompt(state) {
