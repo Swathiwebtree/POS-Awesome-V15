@@ -171,19 +171,19 @@
 							{{ __("Print Draft") }}
 						</v-btn>
 					</v-col>
-			<v-col cols="6">
-				<v-btn
-					block
-					color="info"
-					theme="dark"
-					prepend-icon="mdi-tag"
-					@click="handleApplyOffers"
-					class="summary-btn"
-					:loading="applyOffersLoading"
-				>
-					{{ __("Apply Offers") }}
-				</v-btn>
-			</v-col>
+					<v-col cols="6">
+						<v-btn
+							block
+							color="info"
+							theme="dark"
+							prepend-icon="mdi-tag"
+							@click="handleApplyOffers"
+							class="summary-btn"
+							:loading="applyOffersLoading"
+						>
+							{{ __("Apply Offers") }}
+						</v-btn>
+					</v-col>
 					<v-col cols="12">
 						<v-btn
 							block

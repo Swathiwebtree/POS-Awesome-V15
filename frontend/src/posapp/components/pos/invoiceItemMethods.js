@@ -1186,7 +1186,9 @@ export default {
 			const name = current.name;
 			const doctype =
 				current.doctype ||
-				(this.pos_profile?.create_pos_invoice_instead_of_sales_invoice ? "POS Invoice" : "Sales Invoice");
+				(this.pos_profile?.create_pos_invoice_instead_of_sales_invoice
+					? "POS Invoice"
+					: "Sales Invoice");
 
 			if (!name || !doctype) {
 				return null;
