@@ -106,5 +106,5 @@ from .lazer_pos import (
     get_users,
     get_cash_counting,
     get_cashier_out,
-    get_daily_summary
+    get_daily_summary,
 )

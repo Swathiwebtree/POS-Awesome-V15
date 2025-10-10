@@ -157,12 +157,7 @@ doc_events = {
 # auto_cancel_exempted_doctypes = ["Auto Repeat"]
 
 fixtures = [
-    {
-        "doctype": "Workspace",
-        "filters": [
-            ["name", "in", ["lazer_pos"]]
-        ]
-    },
+    {"doctype": "Workspace", "filters": [["name", "in", ["lazer_pos"]]]},
     {
         "doctype": "Custom Field",
         "filters": [
