@@ -1,15 +1,27 @@
 <template>
-	<ModuleShell title="Cashier Out">
-		<div class="pa-4">
-			<h3>Cashier Out</h3>
-			<p>Process cashier out events and minor reconciliations.</p>
-		</div>
-	</ModuleShell>
+  <div>
+    <h2>Cashier Out</h2>
+    <button @click="cashierOut">Confirm Cashier Out</button>
+    <p v-if="status">{{ status }}</p>
+  </div>
 </template>
 
 <script>
-import ModuleShell from "./ModuleShell.vue";
-export default { name: "CashierOutModule", components: { ModuleShell } };
-</script>
+import axios from "axios";
 
-<style scoped></style>
+export default {
+  data() {
+    return { status: null };
+  },
+  methods: {
+    async cashierOut() {
+      try {
+        const res = await axios.post("/api/method/posawesome.posawesome.api.lazer_pos.cashier-out");
+        this.status = res.data.message;
+      } catch (err) {
+        console.error(err);
+      }
+    },
+  },
+};
+</script>

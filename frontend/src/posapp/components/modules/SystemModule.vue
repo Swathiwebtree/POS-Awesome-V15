@@ -1,17 +1,28 @@
 <template>
-	<ModuleShell title="System">
-		<div class="pa-4">
-			<h3>System Settings</h3>
-			<v-btn class="ma-2">POS Settings</v-btn>
-			<v-btn class="ma-2">Printer Setup</v-btn>
-			<v-btn class="ma-2">Shifts & Users</v-btn>
-		</div>
-	</ModuleShell>
+  <div>
+    <h2>System Module</h2>
+    <button @click="getSystemStatus">Check System Status</button>
+    <pre>{{ systemStatus }}</pre>
+  </div>
 </template>
 
 <script>
-import ModuleShell from "./ModuleShell.vue";
-export default { name: "SystemModule", components: { ModuleShell } };
-</script>
+import axios from "axios";
 
-<style scoped></style>
+export default {
+  name: "SystemModule",
+  data() {
+    return { systemStatus: null };
+  },
+  methods: {
+    async getSystemStatus() {
+      try {
+       const res = await axios.get("/api/method/posawesome.posawesome.api.lazer_pos.get_system_status");
+        this.systemStatus = res.data;
+      } catch (err) {
+        console.error(err);
+      }
+    },
+  },
+};
+</script>
