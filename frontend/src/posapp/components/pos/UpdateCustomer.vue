@@ -11,7 +11,7 @@
 						density="compact"
 						inset
 						hide-details
-						color="primary"
+						color="#4169E1"
 						:label="__('Hide Non Essential Fields')"
 					></v-switch>
 				</v-card-title>

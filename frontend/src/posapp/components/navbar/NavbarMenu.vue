@@ -1,10 +1,16 @@
 <template>
 	<v-menu :min-width="240" :close-on-content-click="true" location="bottom end" :offset="[0, 4]">
 		<template #activator="{ props }">
-			<v-btn v-bind="props" color="primary" variant="elevated" class="menu-btn-compact">
-				{{ __("Menu") }}
-				<v-icon end size="16" class="ml-1">mdi-menu-down</v-icon>
-			</v-btn>
+			 <v-btn
+        v-bind="props"
+        class="menu-btn-compact"
+        :class="isDark ? 'dark-mode' : 'light-mode'"
+        variant="elevated"
+      >
+        <v-icon left size="18">{{ mdiMenuIcon }}</v-icon>
+        <span class="menu-btn-text">Menu</span>
+        <v-icon end size="16" class="ml-1">mdi-menu-down</v-icon>
+      </v-btn>
 		</template>
 		<v-card class="menu-card-compact" elevation="12">
 			<div class="menu-header-compact">
@@ -310,6 +316,7 @@ export default {
 			changing: false,
 			useWesternNumerals: false,
 			originalWesternNumerals: false,
+			mdiMenuIcon: "mdi-menu",
 			notification: {
 				show: false,
 				message: "",
@@ -479,32 +486,109 @@ export default {
 </script>
 
 <style scoped>
+/* ======================== */
+/* MENU BUTTON STYLING       */
+/* ======================== */
+.menu-btn-compact {
+  margin-left: 8px;
+  margin-right: 4px;
+  padding: 6px 16px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: none;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  box-shadow: none;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 90px;
+  height: 36px;
+}
+
+/* Light Mode */
+.menu-btn-compact.light-mode {
+  background: #ffffff;
+  color: #000000;
+}
+
+.menu-btn-compact.light-mode .v-icon {
+  color: #000000;
+}
+
+/* Dark Mode */
+.menu-btn-compact.dark-mode {
+  background: #1e1e1e;
+  color: #ffffff;
+}
+
+.menu-btn-compact.dark-mode .v-icon {
+  color: #ffffff;
+}
+
+/* Hover Effects */
+.menu-btn-compact.light-mode:hover {
+  background: #f0f0f0;
+}
+
+.menu-btn-compact.dark-mode:hover {
+  background: #333333;
+}
+
+/* Menu Text Styling */
+.menu-btn-text {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* ======================== */
+/* MENU CARD STYLING         */
+/* ======================== */
+.menu-card-compact.light-mode-card {
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
+              0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.menu-card-compact.dark-mode-card {
+  background: #2c2c2c;
+  border: 1px solid #444;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24),
+              0 2px 6px rgba(0, 0, 0, 0.12);
+}
 /* Compact Menu Button - Better Navbar Integration */
 .menu-btn-compact {
 	margin-left: 8px;
 	margin-right: 4px;
 	padding: 6px 16px;
-	border-radius: 20px;
+	border-radius: 4px;
 	font-weight: 600;
 	text-transform: none;
 	font-size: 13px;
 	letter-spacing: 0.3px;
-	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.2);
-	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-	background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%);
+	box-shadow: none;
+	transition: all 0.3s ease;
+	background: #ffffff;
+        color:#000000 !important;
 	min-width: 90px;
 	height: 36px;
 }
 
 .menu-btn-compact:hover {
 	transform: translateY(-1px) scale(1.02);
-	box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
-	background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%);
+	background: #f0f0f0;
 }
+
+.menu-btn-compact .v-icon {
+    color: #000000 !important; /* ensures black icon */
+}
+
 
 /* Compact Menu Card - Smaller and Better Positioned */
 .menu-card-compact {
-	border-radius: 16px;
+	border-radius: 4px;
 	overflow: hidden;
 	background: #ffffff;
 	border: none;
@@ -779,8 +863,13 @@ export default {
 /* Dark Theme Adjustments */
 :deep([data-theme="dark"]) .menu-btn-compact,
 :deep(.v-theme--dark) .menu-btn-compact {
-	background: linear-gradient(135deg, #90caf9 0%, #42a5f5 100%);
-	color: #1e1e1e !important;
+	background: #1e1e1e !important;
+	color: #ffffff !important;
+}
+
+:deep([data-theme="dark"]) .menu-btn-compact .v-icon,
+:deep(.v-theme--dark) .menu-btn-compact .v-icon {
+    color: #ffffff !important; /* white icon */
 }
 
 :deep([data-theme="dark"]) .menu-btn-compact:hover,
@@ -791,11 +880,8 @@ export default {
 
 :deep([data-theme="dark"]) .menu-card-compact,
 :deep(.v-theme--dark) .menu-card-compact {
-	background: var(--surface-primary, #1e1e1e) !important;
-	border: 1px solid rgba(255, 255, 255, 0.12);
-	box-shadow:
-		0 8px 24px rgba(0, 0, 0, 0.4),
-		0 2px 6px rgba(0, 0, 0, 0.2);
+	background: #2c2c2c !important;
+	border: 1px solid #444;
 }
 
 :deep([data-theme="dark"]) .menu-header-compact,

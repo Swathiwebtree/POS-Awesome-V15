@@ -9,7 +9,7 @@
 			density="compact"
 			clearable
 			variant="solo"
-			color="primary"
+			color="#4169E1"
 			:label="frappe._('Customer')"
 			v-model="internalCustomer"
 			:items="filteredCustomers"

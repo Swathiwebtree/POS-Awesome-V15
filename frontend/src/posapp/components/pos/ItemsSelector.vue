@@ -33,7 +33,7 @@
 								clearable
 								autofocus
 								variant="solo"
-								color="primary"
+								color="#4169E1"
 								:label="frappe._('Search Items')"
 								hint="Search by item code, serial number, batch no or barcode"
 								hide-details
@@ -88,7 +88,7 @@
 								<v-btn
 									density="compact"
 									variant="text"
-									color="primary"
+									color="#4169E1"
 									prepend-icon="mdi-cog-outline"
 									@click="toggleItemSettings"
 									class="settings-btn"
@@ -99,7 +99,7 @@
 								<v-btn
 									density="compact"
 									variant="text"
-									color="primary"
+									color="#4169E1"
 									prepend-icon="mdi-refresh"
 									@click="forceReloadItems"
 									class="settings-btn"
@@ -313,7 +313,7 @@
 							>
 								<template v-slot:item.rate="{ item }">
 									<div>
-										<div class="text-primary">
+										<div class="#4169E1">
 											{{
 												currencySymbol(item.original_currency || pos_profile.currency)
 											}}
@@ -356,58 +356,82 @@
 				</v-row>
 			</div>
 		</v-card>
-		<v-card class="cards mb-0 mt-3 dynamic-padding resizable" style="resize: vertical; overflow: auto">
+		<!-- FILTER + ACTIONS -->
+		<v-card
+			class="cards mb-0 mt-3 dynamic-padding resizable"
+			:style="{
+				resize: 'vertical',
+				overflow: 'auto',
+				height: '204px',
+			}"
+		>
 			<v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
-				<v-col cols="12" class="mb-2">
-					<v-select
-						:items="items_group"
-						:label="frappe._('Items Group')"
-						density="compact"
-						variant="solo"
-						hide-details
-						v-model="item_group"
-					></v-select>
-				</v-col>
-				<v-col cols="12" class="mb-2" v-if="pos_profile.posa_enable_price_list_dropdown !== false">
-					<v-text-field
-						density="compact"
-						variant="solo"
-						color="primary"
-						:label="frappe._('Price List')"
-						hide-details
-						:model-value="active_price_list"
-						readonly
-					></v-text-field>
-				</v-col>
-				<v-col cols="3" class="dynamic-margin-xs">
-					<v-btn-toggle v-model="items_view" color="primary" group density="compact" rounded>
-						<v-btn size="small" value="list">{{ __("List") }}</v-btn>
-						<v-btn size="small" value="card">{{ __("Card") }}</v-btn>
-					</v-btn-toggle>
-				</v-col>
-				<v-col cols="5" class="dynamic-margin-xs">
-					<v-btn
-						size="small"
-						block
-						color="warning"
-						variant="text"
-						@click="show_offers"
-						class="action-btn-consistent"
+				<!-- ROW 1: Item Group and Price List (side-by-side on md+, stacked on xs) -->
+				<v-row no-gutters class="w-100 mb-2">
+					<v-col cols="12" md="6" class="pr-2">
+						<v-select
+							:items="items_group"
+							:label="frappe._('Items Group')"
+							density="compact"
+							variant="solo"
+							hide-details
+							v-model="item_group"
+						></v-select>
+					</v-col>
+
+					<v-col
+						cols="12"
+						md="6"
+						class="pl-2"
+						v-if="pos_profile.posa_enable_price_list_dropdown !== false"
 					>
-						{{ offersCount }} {{ __("Offers") }}
-					</v-btn>
-				</v-col>
-				<v-col cols="4" class="dynamic-margin-xs">
-					<v-btn
-						size="small"
-						block
-						color="primary"
-						variant="text"
-						@click="show_coupons"
-						class="action-btn-consistent"
-						>{{ couponsCount }} {{ __("Coupons") }}</v-btn
-					>
-				</v-col>
+						<v-text-field
+							density="compact"
+							variant="solo"
+							color="primary"
+							:label="frappe._('Price List')"
+							hide-details
+							:model-value="active_price_list"
+							readonly
+						></v-text-field>
+					</v-col>
+				</v-row>
+
+				<!-- ROW 2: actions (toggle / offers / coupons) -->
+				<v-row no-gutters class="w-100" style="margin-top: 80px">
+					<v-col cols="12" md="3" class="dynamic-margin-xs">
+						<v-btn-toggle v-model="items_view" color="#4169E1" group density="compact" rounded>
+							<v-btn size="small" value="list">{{ __("List") }}</v-btn>
+							<v-btn size="small" value="card">{{ __("Card") }}</v-btn>
+						</v-btn-toggle>
+					</v-col>
+
+					<v-col cols="12" md="5" class="dynamic-margin-xs">
+						<v-btn
+							size="small"
+							block
+							color="#E97451"
+							variant="text"
+							@click="show_offers"
+							class="action-btn-consistent"
+						>
+							{{ offersCount }} {{ __("Offers") }}
+						</v-btn>
+					</v-col>
+
+					<v-col cols="12" md="4" class="dynamic-margin-xs">
+						<v-btn
+							size="small"
+							block
+							color="#4169E1"
+							variant="text"
+							@click="show_coupons"
+							class="action-btn-consistent"
+						>
+							{{ couponsCount }} {{ __("Coupons") }}
+						</v-btn>
+					</v-col>
+				</v-row>
 			</v-row>
 		</v-card>
 
@@ -462,6 +486,7 @@ import { useRtl } from "../../composables/useRtl.js";
 import { useFlyAnimation } from "../../composables/useFlyAnimation.js";
 import placeholderImage from "./placeholder-image.png";
 import Skeleton from "../ui/Skeleton.vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 
 export default {
 	mixins: [format],
@@ -546,6 +571,7 @@ export default {
 		pendingItemSearch: null,
 		loadProgress: 0,
 		totalItemCount: 0,
+		posCart: [],
 	}),
 
 	watch: {
@@ -758,6 +784,31 @@ export default {
 
 			return result;
 		},
+
+        handleAddToPOS(event) {
+          const item = event.detail;
+          const existing = this.posCart.find(i => i.item_code === item.item_code);
+          if (existing) {
+          existing.qty += item.qty || 1;
+          existing.rate = item.rate || existing.rate;
+          } else {
+          this.posCart.push({
+            item_code: item.item_code,
+            item_name: item.item_name,
+            qty: item.qty || 1,
+            rate: item.rate || 0,
+           });
+         }
+       },
+
+       removeItem(item) {
+        const index = this.posCart.indexOf(item);
+        if (index > -1) this.posCart.splice(index, 1);
+       },
+
+       getTotalAmount() {
+         return this.posCart.reduce((sum, i) => sum + i.qty * i.rate, 0);
+      },
 
 		performSearch(searchTerm, itemGroup) {
 			if (!this.items || !this.items.length) {
@@ -2540,7 +2591,7 @@ export default {
 			<div>
 				<div class="font-weight-bold">${item.item_name}</div>
 				<div class="text-muted small">${item.item_code}</div>
-				<div class="text-primary">${this.format_currency(item.rate, this.pos_profile.currency, this.ratePrecision(item.rate))}</div>
+				<div class="#4169E1">${this.format_currency(item.rate, this.pos_profile.currency, this.ratePrecision(item.rate))}</div>
 			</div>
 			</div>
 		</div>
@@ -2718,6 +2769,34 @@ export default {
 				console.error("Failed to load item selector settings:", e);
 			}
 		},
+
+		 // Add item to POS cart
+        addToPOS(item) {
+         // Dispatch custom event to main POS component
+         const posItem = {
+            item_code: item.item_code,
+            item_name: item.item_name,
+            qty: this.qty || 1, 
+           rate: item.base_price_list_rate || item.rate || 0,
+         };
+         window.dispatchEvent(new CustomEvent('add-item-to-pos', { detail: posItem }));
+
+         // Optionally, maintain a local cart in this component
+         const existing = this.posCart.find(i => i.item_code === posItem.item_code);
+         if (existing) {
+             existing.qty += posItem.qty;
+            } else {
+            this.posCart.push(posItem);
+           }
+
+        // Reset qty input if needed
+        if (this.pos_profile.posa_input_qty) this.qty = 1;
+        },
+
+        // Call this from your existing select_item
+       select_item(event, item) {
+       this.addToPOS(item); // sends item to POS
+        },
 	},
 
 	computed: {
@@ -3018,6 +3097,9 @@ export default {
 		this.itemsPerPage = this.items_per_page;
 		window.addEventListener("resize", this.checkItemContainerOverflow);
 		this.$nextTick(this.checkItemContainerOverflow);
+
+
+		window.addEventListener("add-item-to-pos", this.handleAddToPOS);
 	},
 
 	beforeUnmount() {
@@ -3054,12 +3136,14 @@ export default {
 		this.eventBus.off("server-online");
 		this.eventBus.off("register_pos_profile");
 		this.eventBus.off("update_cur_items_details");
-		this.eventBus.off("update_offers_counters");
+		this.eventBus.off("update_offers_counters");a
 		this.eventBus.off("update_coupons_counters");
 		this.eventBus.off("update_customer_price_list");
 		this.eventBus.off("update_customer");
 		this.eventBus.off("force_reload_items");
 		window.removeEventListener("resize", this.checkItemContainerOverflow);
+
+		window.removeEventListener("add-item-to-pos", this.handleAddToPOS);
 	},
 };
 </script>

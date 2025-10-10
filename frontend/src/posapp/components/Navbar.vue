@@ -201,8 +201,9 @@ export default {
 			items: [
 				{ text: "POS", icon: "mdi-network-pos" },
 				{ text: "Payments", icon: "mdi-credit-card" },
+				{ text: "LazerPOS", icon: "mdi-cash-register"},
 			],
-			company: "POS Awesome",
+			company: "LazerPOS",
 			companyImg: posLogo,
 			showAboutDialog: false,
 			showOfflineInvoices: false,

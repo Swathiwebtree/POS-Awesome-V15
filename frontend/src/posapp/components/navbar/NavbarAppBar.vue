@@ -10,11 +10,9 @@
 	>
 		<!-- Brand Section (left in LTR, right in RTL) -->
 		<div :class="['navbar-brand-section', isRtl ? 'rtl-brand-section' : 'ltr-brand-section']">
-			<v-app-bar-nav-icon
-				ref="navIcon"
-				@click="$emit('nav-click')"
-				:class="['text-secondary nav-icon', isRtl ? 'rtl-nav-icon' : 'ltr-nav-icon']"
-			/>
+			<div class="logo-box flex items-center justify-center bg-blue-600 rounded-lg" style="width:32px; height:32px; cursor:pointer; " @click="$emit('nav-click')">
+                            <span class="text-white font-bold text-sm">L</span>
+                        </div>
 
 			<v-img
 				:src="posLogo"
@@ -31,8 +29,8 @@
 				]"
 				style="cursor: pointer; text-decoration: none"
 			>
-				<span class="font-weight-light navbar-title-light">{{ __("POS") }}</span
-				><span class="navbar-title-bold">{{ __("Awesome") }}</span>
+				<span class="font-weight-light navbar-title-light">{{ __("Lazer") }}</span
+				><span class="navbar-title-bold">{{ __("POS") }}</span>
 			</v-toolbar-title>
 		</div>
 
@@ -53,22 +51,11 @@
 			<slot name="cpu-gadget"></slot>
 
 			<div :class="['profile-section', isRtl ? 'rtl-profile-section' : 'ltr-profile-section']">
-				<v-chip
-					color="primary"
-					variant="outlined"
-					:class="['profile-chip', isRtl ? 'rtl-profile-chip' : 'ltr-profile-chip']"
-				>
-					<v-icon
-						:start="!isRtl"
-						:end="isRtl"
-						:class="isRtl ? 'rtl-profile-icon' : 'ltr-profile-icon'"
-					>
-						mdi-account-circle
-					</v-icon>
-					<span :class="isRtl ? 'rtl-profile-text' : 'ltr-profile-text'">
-						{{ displayName }}
-					</span>
-				</v-chip>
+                             <!-- Users -->
+                            <div class="flex items-center space-x-1 text-gray-600">
+                               <v-icon size="18">mdi-account-multiple-outline</v-icon>
+                              <span>{{ displayName }}</span>
+                            </div>
 			</div>
 
 			<v-btn
@@ -90,8 +77,9 @@
 				</v-tooltip>
 			</v-btn>
 
-			<!-- Menu component slot -->
-			<slot name="menu"></slot>
+			<!-- Menu Button Slot -->
+                        <slot name="menu"></slot>
+
 		</div>
 
 		<!-- Glass Morphism Loading Bar -->
@@ -333,6 +321,28 @@ export default {
 .navbar-logo:hover {
 	transform: scale(1.05);
 }
+.logo-box {
+    width: 32px;
+    height: 32px;
+    background-color: #1e40af;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.logo-box:hover {
+    transform: scale(1.05);
+}
+
+.logo-box span {
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 0.8rem;
+}
+
 
 /* Brand Title Styling */
 .navbar-title {
@@ -373,6 +383,7 @@ export default {
 	margin-right: 2px;
 	display: inline-block;
 	white-space: nowrap;
+        color:#000;
 }
 
 .navbar-title-bold {
@@ -380,6 +391,7 @@ export default {
 	letter-spacing: 0.25px;
 	display: inline-block;
 	white-space: nowrap;
+        color:#000
 }
 
 /* RTL Title Spacing */
@@ -422,7 +434,31 @@ export default {
 	margin: 0;
 	order: 2;
 	/* Second to last in actions section */
+        display:flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 8px;
+        border-radius: 20px;
+        background: #f5f5f5;
+        cursor: pointer;
+        transition: all 0.3s ease;
 }
+
+.profile-section:hover {
+       background: #e3f2fd;
+       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.profile-avatar{
+       border: 2px solid black;
+}
+
+.profile-name {
+       font-weight: 500;
+       font-size: 0.95rem;
+       color: black;
+       white-space: nowrap;
+}   
 
 .rtl-profile-section {
 	order: 2;

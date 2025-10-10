@@ -42,6 +42,7 @@
 /* global frappe, $ */
 import Navbar from "./components/Navbar.vue";
 import POS from "./components/pos/Pos.vue";
+import LazerPOS from "./components/LazerPOS.vue";
 import Payments from "./components/payments/Pay.vue";
 import AppLoadingOverlay from "./components/ui/LoadingOverlay.vue";
 import { useLoading } from "./composables/useLoading.js";
@@ -147,6 +148,7 @@ export default {
 		Navbar,
 		POS,
 		Payments,
+		LazerPOS, 
 		AppLoadingOverlay,
 	},
 	mounted() {

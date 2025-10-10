@@ -24,20 +24,44 @@
 
 		<v-divider />
 
-		<v-list density="compact" nav v-model:selected="activeItem" selected-class="active-item">
-			<v-list-item
-				v-for="(item, index) in items"
-				:key="item.text"
-				:value="index"
-				@click="changePage(item.text)"
-				class="drawer-item"
-			>
-				<template v-slot:prepend>
-					<v-icon class="drawer-icon">{{ item.icon }}</v-icon>
-				</template>
-				<v-list-item-title class="drawer-item-title">{{ item.text }}</v-list-item-title>
-			</v-list-item>
+		<v-list density="compact" nav>
+			<!-- Loop through modules -->
+			<template v-for="(module, mIndex) in items" :key="module.name || module.text">
+				<v-list-item
+					@click="selectModule(module)"
+					class="drawer-item"
+					:class="{ 'active-item': module.name === activeModule }"
+				>
+					<template v-slot:prepend>
+						<v-icon class="drawer-icon">{{ module.icon }}</v-icon>
+					</template>
+					<v-list-item-title class="drawer-item-title">
+						{{ module.name || module.text }}
+					</v-list-item-title>
+				</v-list-item>
+
+				<!-- Submodules -->
+				<v-list
+					v-if="module.submodules && module.name === activeModule"
+					dense
+					nav
+					class="submodule-list"
+				>
+					<v-list-item
+						v-for="sub in module.submodules"
+						:key="sub.name"
+						@click="selectSubmodule(sub.name)"
+						class="drawer-subitem"
+						:class="{ 'active-item': sub.name === activeSubmodule }"
+					>
+						<v-list-item-title class="drawer-subitem-title">
+							{{ sub.label }}
+						</v-list-item-title>
+					</v-list-item>
+				</v-list>
+			</template>
 		</v-list>
+
 		<!-- Sport section, hidden by default -->
 		<div v-if="showSport">
 			<!-- Sport content goes here -->
@@ -71,22 +95,20 @@ export default {
 			mini: false,
 			drawerOpen: this.drawer,
 			activeItem: this.item,
+			activeModule: null,
+			activeSubmodule: null,
 			showSport: true,
 		};
 	},
 	computed: {
 		scrimColor() {
-			// Use an opaque background in light mode so that
-			// underlying content doesn't show through the drawer
 			return this.isDark ? true : "rgba(255,255,255,1)";
 		},
 	},
 	watch: {
 		drawer(val) {
 			this.drawerOpen = val;
-			if (val) {
-				this.mini = false;
-			}
+			if (val) this.mini = false;
 		},
 		drawerOpen(val) {
 			document.body.style.overflow = val ? "hidden" : "";
@@ -98,8 +120,10 @@ export default {
 		activeItem(val) {
 			this.$emit("update:item", val);
 		},
+		activeSubmodule(val) {
+			this.$emit("select-submodule", val);
+		},
 	},
-	mounted() {},
 	methods: {
 		handleMouseLeave() {
 			if (!this.drawerOpen) return;
@@ -109,12 +133,21 @@ export default {
 				this.mini = true;
 			}, 250);
 		},
+		selectModule(module) {
+			this.activeModule = module.name || module.text;
+			// If module has no submodules, emit page change
+			if (!module.submodules || module.submodules.length === 0) {
+				this.selectSubmodule(module.name || module.text);
+			}
+		},
+		selectSubmodule(subName) {
+			this.activeSubmodule = subName;
+			this.$emit("change-page", subName);
+			if (window.innerWidth < 1024) this.closeDrawer();
+		},
 		changePage(key) {
 			this.$emit("change-page", key);
-			// Close drawer after selection
-			if (window.innerWidth < 1024) {
-				this.closeDrawer();
-			}
+			if (window.innerWidth < 1024) this.closeDrawer();
 		},
 		closeDrawer() {
 			this.drawerOpen = false;

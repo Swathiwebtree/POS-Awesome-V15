@@ -129,7 +129,7 @@
 						<v-btn
 							density="compact"
 							variant="text"
-							color="primary"
+							color="#4169E1"
 							prepend-icon="mdi-cog-outline"
 							@click="toggleColumnSelection"
 							class="column-selector-btn"
@@ -440,8 +440,9 @@ export default {
 				{ title: __("Price List Rate"), key: "price_list_rate", align: "start", required: false },
 				{ title: __("Discount %"), key: "discount_value", align: "start", required: false },
 				{ title: __("Discount Amount"), key: "discount_amount", align: "start", required: false },
-				{ title: __("Rate"), key: "rate", align: "start", required: true },
+				{ title: __("Rate"), key: "rate", align: "start", required: false },
 				{ title: __("Amount"), key: "amount", align: "start", required: true },
+				{ title: __("Actions"), key: "actions", align: "start", required: true},
 				{ title: __("Offer?"), key: "posa_is_offer", align: "center", required: false },
 			];
 
@@ -464,6 +465,62 @@ export default {
 			// Generate headers based on selected columns
 			this.updateHeadersFromSelection();
 		},
+
+		apply_additional_discount() {
+    const totalBeforeDiscount = this.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+
+    let discountAmount = 0;
+
+    if (this.additional_discount_percentage > 0) {
+        discountAmount = (totalBeforeDiscount * this.additional_discount_percentage) / 100;
+    } else if (this.additional_discount > 0) {
+        discountAmount = this.additional_discount;
+    }
+
+    this.discount_amount = discountAmount;
+    this.grand_total = this.roundAmount(totalBeforeDiscount - discountAmount);
+
+    if (this.invoice_doc) {
+        this.invoice_doc.discount_amount = this.discount_amount;
+        this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
+        this.invoice_doc.additional_discount = this.additional_discount;
+        this.invoice_doc.grand_total = this.grand_total;
+    }
+
+    this.$forceUpdate();
+},
+
+
+		// Handle item added from ItemSelector
+handleAddToPOS(event) {
+    const item = event.detail;
+    // Check if item already exists
+    const existing = this.items.find(i => i.item_code === item.item_code);
+
+    if (existing) {
+        // If exists, increase quantity
+        existing.qty += item.qty || 1;
+        existing.rate = item.rate || existing.rate;
+    } else {
+        // Add as new item
+        this.items.push({
+            item_code: item.item_code,
+            item_name: item.item_name,
+            qty: item.qty || 1,
+            rate: item.rate || 0,
+        });
+    }
+
+    // Recalculate totals
+    this.update_totals();
+},
+
+// Recalculate subtotal and total qty
+update_totals() {
+    this.subtotal = this.items.reduce((sum, i) => sum + (i.qty * i.rate), 0);
+    this.total_qty = this.items.reduce((sum, i) => sum + i.qty, 0);
+},
+
 		// Handle item dropped from ItemsSelector to ItemsTable
 		handleItemDrop(item) {
 			console.log("Item dropped:", item);
@@ -908,6 +965,8 @@ export default {
 
 			// Force UI update after all calculations
 			this.$forceUpdate();
+
+			this.apply_additional_discount();
 		},
 
 		formatCurrency(value, precision = null) {
@@ -1188,6 +1247,17 @@ export default {
 		this.loadColumnPreferences();
 		// Restore saved invoice height
 		this.loadInvoiceHeight();
+		// Listen for items added from ItemSelector.vue
+window.addEventListener("add-item-to-pos", this.handleAddToPOS);
+
+// Add default "Vehicle Service" item on POS load
+const defaultItem = {
+    item_code: "vehicle-service",
+    item_name: "Vehicle Service",
+    qty: 1,
+    rate: 0,
+};
+this.handleAddToPOS({ detail: defaultItem });
 		this.eventBus.on("item-drag-start", () => {
 			this.showDropFeedback(true);
 		});
@@ -1321,6 +1391,10 @@ export default {
 			this.showDropFeedback(false);
 		});
 	},
+	beforeDestroy() {
+    window.removeEventListener("add-item-to-pos", this.handleAddToPOS);
+   },
+
 	// Cleanup event listeners before component is destroyed
 	beforeUnmount() {
 		// Existing cleanup
