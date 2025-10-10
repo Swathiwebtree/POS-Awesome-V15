@@ -46,17 +46,17 @@
 						size="x-small"
 						class="ml-1"
 						@click.stop="openNameDialog(item)"
-						>
+					>
 						mdi-pencil
-						</v-icon>
+					</v-icon>
 					<v-icon
 						v-if="item.name_overridden"
 						size="x-small"
 						class="ml-1"
 						@click.stop="resetItemName(item)"
-						>
+					>
 						mdi-undo
-						</v-icon>
+					</v-icon>
 				</div>
 			</template>
 
@@ -85,53 +85,53 @@
 						class="amount-value"
 						:class="{ 'negative-number': isNegative(item.qty * item.rate) }"
 						>{{ formatCurrency(item.qty * item.rate) }}
-					 </span>
+					</span>
 				</div>
 			</template>
 
 			<!-- Actions column -->
-            <template v-slot:item.actions="{ item }">
-               <div class="action-buttons">
-                  <v-btn
-                      :disabled="!!item.posa_is_replace"
-                       size="small"
-                       color="error"
-                       variant="tonal"
-                       class="item-action-btn delete-btn"
-                       @click.stop="removeItem(item)"
-                     >
-                      <v-icon size="small">mdi-trash-can-outline</v-icon>
-                   </v-btn>
+			<template v-slot:item.actions="{ item }">
+				<div class="action-buttons">
+					<v-btn
+						:disabled="!!item.posa_is_replace"
+						size="small"
+						color="error"
+						variant="tonal"
+						class="item-action-btn delete-btn"
+						@click.stop="removeItem(item)"
+					>
+						<v-icon size="small">mdi-trash-can-outline</v-icon>
+					</v-btn>
 
-                    <v-btn
-                     :disabled="!!item.posa_is_replace"
-                     size="small"
-                     color="warning"
-                     variant="tonal"
-                     class="item-action-btn minus-btn"
-                     @click.stop="subtractOne(item)"
-                    >
-                      <v-icon size="small">mdi-minus-circle-outline</v-icon>
-                    </v-btn>
+					<v-btn
+						:disabled="!!item.posa_is_replace"
+						size="small"
+						color="warning"
+						variant="tonal"
+						class="item-action-btn minus-btn"
+						@click.stop="subtractOne(item)"
+					>
+						<v-icon size="small">mdi-minus-circle-outline</v-icon>
+					</v-btn>
 
-                     <v-btn
-                     :disabled="
-                     !!item.posa_is_replace ||
-                     ((!stock_settings.allow_negative_stock || pos_profile.posa_block_sale_beyond_available_qty) &&
-                     item.max_qty !== undefined &&
-                     item.qty >= item.max_qty)
-                      "
-                    size="small"
-                    color="success"
-                    variant="tonal"
-                    class="item-action-btn plus-btn"
-                    @click.stop="addOne(item)"
-                     >
-                     <v-icon size="small">mdi-plus-circle-outline</v-icon>
-                     </v-btn>
-                 </div>
-            </template>
-
+					<v-btn
+						:disabled="
+							!!item.posa_is_replace ||
+							((!stock_settings.allow_negative_stock ||
+								pos_profile.posa_block_sale_beyond_available_qty) &&
+								item.max_qty !== undefined &&
+								item.qty >= item.max_qty)
+						"
+						size="small"
+						color="success"
+						variant="tonal"
+						class="item-action-btn plus-btn"
+						@click.stop="addOne(item)"
+					>
+						<v-icon size="small">mdi-plus-circle-outline</v-icon>
+					</v-btn>
+				</div>
+			</template>
 
 			<!-- Discount amount column -->
 			<template v-slot:item.discount_amount="{ item }">
@@ -174,7 +174,6 @@
 			<template v-slot:expanded-row="{ item }">
 				<td :colspan="headers.length" class="ma-0 pa-0">
 					<div class="expanded-content">
-
 						<!-- Enhanced Item Details Form with better organization -->
 						<div class="item-details-form">
 							<!-- Basic Information Section -->
@@ -818,7 +817,6 @@ export default {
 	overflow-y: auto;
 }
 
-
 /* Table wrapper styling */
 .modern-items-table :deep(.v-data-table__wrapper),
 .modern-items-table :deep(.v-table__wrapper) {
@@ -953,23 +951,22 @@ export default {
 
 /* Item action buttons styling */
 .item-action-btn {
-  min-width: 32px !important;   /* smaller width */
-  height: 32px !important;      /* smaller height */
-  border-radius: 8px !important; /* slightly smaller curve */
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08) !important;
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  padding: 0 8px !important;     /* smaller padding */
-  font-size: 0.8rem !important;  /* smaller text */
-  font-weight: 500;
+	min-width: 32px !important; /* smaller width */
+	height: 32px !important; /* smaller height */
+	border-radius: 8px !important; /* slightly smaller curve */
+	transition: all 0.2s ease;
+	box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08) !important;
+	position: relative;
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+	padding: 0 8px !important; /* smaller padding */
+	font-size: 0.8rem !important; /* smaller text */
+	font-weight: 500;
 }
 
-
 .item-action-btn .action-label {
-	  display: none !important;
+	display: none !important;
 }
 
 @media (min-width: 600px) {
@@ -978,7 +975,7 @@ export default {
 	}
 
 	.item-action-btn {
-		min-width:px !important;
+		min-width: px !important;
 	}
 }
 
@@ -1202,15 +1199,14 @@ export default {
 .currency-display {
 	display: flex;
 	align-items: center;
-	justify-content:flex;
+	justify-content: flex;
 }
 .action-buttons {
-    display: flex;
+	display: flex;
 	align-items: center;
-	justify-content:flex-start;
+	justify-content: flex-start;
 	gap: 6px;
 }
-
 
 .currency-symbol {
 	opacity: 0.7;

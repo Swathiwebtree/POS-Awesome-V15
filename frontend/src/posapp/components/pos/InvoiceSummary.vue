@@ -486,14 +486,14 @@ export default {
 
 /* Loyalty Button Styling */
 .summary-btn[color="purple"] {
-  background: linear-gradient(135deg, #8e24aa, #6a1b9a) !important;
-  color: white !important;
-  font-weight: 600 !important;
+	background: linear-gradient(135deg, #8e24aa, #6a1b9a) !important;
+	color: white !important;
+	font-weight: 600 !important;
 }
 
 .summary-btn[color="purple"]:hover {
-  background: linear-gradient(135deg, #9c27b0, #7b1fa2) !important;
-  box-shadow: 0 4px 12px rgba(142, 36, 170, 0.3) !important;
+	background: linear-gradient(135deg, #9c27b0, #7b1fa2) !important;
+	box-shadow: 0 4px 12px rgba(142, 36, 170, 0.3) !important;
 }
 
 /* Special styling for the PAY button */

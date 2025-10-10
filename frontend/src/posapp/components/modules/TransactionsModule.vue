@@ -1,8 +1,8 @@
 <template>
-  <ModuleShell title="Transactions">
-    <component :is="activeComponent" v-if="activeComponent" />
-    <div v-else class="pa-4">Select a transaction submodule</div>
-  </ModuleShell>
+	<ModuleShell title="Transactions">
+		<component :is="activeComponent" v-if="activeComponent" />
+		<div v-else class="pa-4">Select a transaction submodule</div>
+	</ModuleShell>
 </template>
 
 <script>
@@ -22,36 +22,35 @@ const VehicleHistory = defineAsyncComponent(() => import("./transactions/Vehicle
 const RedeemedCouponPoints = defineAsyncComponent(() => import("./transactions/RedeemedCouponPoints.vue"));
 
 export default {
-  name: "TransactionsModule",
-  components: {
-    ModuleShell,
-  },
-  props: {
-    defaultSubmodule: {
-      type: String,
-      default: "VehicleService", // default after cashier login
-    },
-  },
-  setup(props) {
-    const componentMap = {
-      VehicleService,
-      VehiclesMaster,
-      ServiceIssueNote,
-      Quotation,
-      PettyCash,
-      ReceiptVoucher,
-      ItemInquiry,
-      SalesByPayment,
-      VehicleHistory,
-      RedeemedCouponPoints,
-    };
+	name: "TransactionsModule",
+	components: {
+		ModuleShell,
+	},
+	props: {
+		defaultSubmodule: {
+			type: String,
+			default: "VehicleService", // default after cashier login
+		},
+	},
+	setup(props) {
+		const componentMap = {
+			VehicleService,
+			VehiclesMaster,
+			ServiceIssueNote,
+			Quotation,
+			PettyCash,
+			ReceiptVoucher,
+			ItemInquiry,
+			SalesByPayment,
+			VehicleHistory,
+			RedeemedCouponPoints,
+		};
 
-    const activeComponent = computed(() => componentMap[props.defaultSubmodule] || null);
+		const activeComponent = computed(() => componentMap[props.defaultSubmodule] || null);
 
-    return { activeComponent };
-  },
+		return { activeComponent };
+	},
 };
 </script>
 
-<style scoped>
-</style>
+<style scoped></style>

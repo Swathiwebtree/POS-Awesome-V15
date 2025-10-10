@@ -785,30 +785,30 @@ export default {
 			return result;
 		},
 
-        handleAddToPOS(event) {
-          const item = event.detail;
-          const existing = this.posCart.find(i => i.item_code === item.item_code);
-          if (existing) {
-          existing.qty += item.qty || 1;
-          existing.rate = item.rate || existing.rate;
-          } else {
-          this.posCart.push({
-            item_code: item.item_code,
-            item_name: item.item_name,
-            qty: item.qty || 1,
-            rate: item.rate || 0,
-           });
-         }
-       },
+		handleAddToPOS(event) {
+			const item = event.detail;
+			const existing = this.posCart.find((i) => i.item_code === item.item_code);
+			if (existing) {
+				existing.qty += item.qty || 1;
+				existing.rate = item.rate || existing.rate;
+			} else {
+				this.posCart.push({
+					item_code: item.item_code,
+					item_name: item.item_name,
+					qty: item.qty || 1,
+					rate: item.rate || 0,
+				});
+			}
+		},
 
-       removeItem(item) {
-        const index = this.posCart.indexOf(item);
-        if (index > -1) this.posCart.splice(index, 1);
-       },
+		removeItem(item) {
+			const index = this.posCart.indexOf(item);
+			if (index > -1) this.posCart.splice(index, 1);
+		},
 
-       getTotalAmount() {
-         return this.posCart.reduce((sum, i) => sum + i.qty * i.rate, 0);
-      },
+		getTotalAmount() {
+			return this.posCart.reduce((sum, i) => sum + i.qty * i.rate, 0);
+		},
 
 		performSearch(searchTerm, itemGroup) {
 			if (!this.items || !this.items.length) {
@@ -2770,33 +2770,33 @@ export default {
 			}
 		},
 
-		 // Add item to POS cart
-        addToPOS(item) {
-         // Dispatch custom event to main POS component
-         const posItem = {
-            item_code: item.item_code,
-            item_name: item.item_name,
-            qty: this.qty || 1, 
-           rate: item.base_price_list_rate || item.rate || 0,
-         };
-         window.dispatchEvent(new CustomEvent('add-item-to-pos', { detail: posItem }));
+		// Add item to POS cart
+		addToPOS(item) {
+			// Dispatch custom event to main POS component
+			const posItem = {
+				item_code: item.item_code,
+				item_name: item.item_name,
+				qty: this.qty || 1,
+				rate: item.base_price_list_rate || item.rate || 0,
+			};
+			window.dispatchEvent(new CustomEvent("add-item-to-pos", { detail: posItem }));
 
-         // Optionally, maintain a local cart in this component
-         const existing = this.posCart.find(i => i.item_code === posItem.item_code);
-         if (existing) {
-             existing.qty += posItem.qty;
-            } else {
-            this.posCart.push(posItem);
-           }
+			// Optionally, maintain a local cart in this component
+			const existing = this.posCart.find((i) => i.item_code === posItem.item_code);
+			if (existing) {
+				existing.qty += posItem.qty;
+			} else {
+				this.posCart.push(posItem);
+			}
 
-        // Reset qty input if needed
-        if (this.pos_profile.posa_input_qty) this.qty = 1;
-        },
+			// Reset qty input if needed
+			if (this.pos_profile.posa_input_qty) this.qty = 1;
+		},
 
-        // Call this from your existing select_item
-       select_item(event, item) {
-       this.addToPOS(item); // sends item to POS
-        },
+		// Call this from your existing select_item
+		select_item(event, item) {
+			this.addToPOS(item); // sends item to POS
+		},
 	},
 
 	computed: {
@@ -3098,7 +3098,6 @@ export default {
 		window.addEventListener("resize", this.checkItemContainerOverflow);
 		this.$nextTick(this.checkItemContainerOverflow);
 
-
 		window.addEventListener("add-item-to-pos", this.handleAddToPOS);
 	},
 
@@ -3136,7 +3135,8 @@ export default {
 		this.eventBus.off("server-online");
 		this.eventBus.off("register_pos_profile");
 		this.eventBus.off("update_cur_items_details");
-		this.eventBus.off("update_offers_counters");a
+		this.eventBus.off("update_offers_counters");
+		a;
 		this.eventBus.off("update_coupons_counters");
 		this.eventBus.off("update_customer_price_list");
 		this.eventBus.off("update_customer");

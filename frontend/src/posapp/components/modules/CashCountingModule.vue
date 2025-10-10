@@ -1,10 +1,10 @@
 <template>
-  <ModuleShell title="Cash Counting">
-    <div class="pa-4">
-      <h3>Cash Counting</h3>
-      <p>Enter denominations and reconcile with POS totals.</p>
-    </div>
-  </ModuleShell>
+	<ModuleShell title="Cash Counting">
+		<div class="pa-4">
+			<h3>Cash Counting</h3>
+			<p>Enter denominations and reconcile with POS totals.</p>
+		</div>
+	</ModuleShell>
 </template>
 
 <script>

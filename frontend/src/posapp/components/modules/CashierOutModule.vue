@@ -1,10 +1,10 @@
 <template>
-  <ModuleShell title="Cashier Out">
-    <div class="pa-4">
-      <h3>Cashier Out</h3>
-      <p>Process cashier out events and minor reconciliations.</p>
-    </div>
-  </ModuleShell>
+	<ModuleShell title="Cashier Out">
+		<div class="pa-4">
+			<h3>Cashier Out</h3>
+			<p>Process cashier out events and minor reconciliations.</p>
+		</div>
+	</ModuleShell>
 </template>
 
 <script>

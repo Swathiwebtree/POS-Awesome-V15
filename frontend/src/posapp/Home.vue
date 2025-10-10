@@ -148,7 +148,7 @@ export default {
 		Navbar,
 		POS,
 		Payments,
-		LazerPOS, 
+		LazerPOS,
 		AppLoadingOverlay,
 	},
 	mounted() {
