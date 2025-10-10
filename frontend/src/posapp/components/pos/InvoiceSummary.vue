@@ -336,7 +336,7 @@ export default {
 			try {
 				const response = await frappe.call({
 					method: "posawesome.posawesome.api.lazer_pos.get_loyalty_points",
-					args: { customer: customerId }
+					args: { customer: customerId },
 				});
 
 				const points = response?.message?.points || 0;
