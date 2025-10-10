@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "cd frontend && yarn dev",
     "build": "cd frontend && yarn build",
+    "watch": "cd frontend && vite build --watch",
     "format": "prettier --write \"**/*.{js,vue,css,scss,html}\""
   },
   "dependencies": {

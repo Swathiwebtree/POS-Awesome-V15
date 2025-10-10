@@ -1,1 +1,4 @@
 POSAwesome
+Inventory
+Reports
+Transactions

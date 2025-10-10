@@ -158,6 +158,12 @@ doc_events = {
 
 fixtures = [
     {
+        "doctype": "Workspace",
+        "filters": [
+            ["name", "in", ["lazer_pos"]]
+        ]
+    },
+    {
         "doctype": "Custom Field",
         "filters": [
             [

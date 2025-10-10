@@ -1,0 +1,108 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-09-19 10:54:25.328694",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "issue_id",
+  "vehicle",
+  "customer",
+  "reported_by",
+  "issue_details",
+  "priority",
+  "status",
+  "resolution_notes",
+  "service_date"
+ ],
+ "fields": [
+  {
+   "fieldname": "issue_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Issue ID",
+   "reqd": 1
+  },
+  {
+   "fieldname": "vehicle",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Vehicle",
+   "options": "Vehicle",
+   "reqd": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reported_by",
+   "fieldtype": "Link",
+   "label": "Reported By",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "issue_details",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Issue Details",
+   "reqd": 1
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "label": "Priority",
+   "options": "Low\nMedium\nHigh",
+   "reqd": 1,
+   "sort_options": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nIn Progress\nResolved\nClosed",
+   "reqd": 1,
+   "sort_options": 1
+  },
+  {
+   "fieldname": "resolution_notes",
+   "fieldtype": "Small Text",
+   "label": "Resolution Notes"
+  },
+  {
+   "fieldname": "service_date",
+   "fieldtype": "Date",
+   "label": "Service Date"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-09-19 11:01:24.090961",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "Service Issue Note",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
