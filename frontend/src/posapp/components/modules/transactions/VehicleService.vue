@@ -3,7 +3,11 @@
 		<!-- Work Order & Vehicle Info -->
 		<v-row dense class="mb-3">
 			<v-col cols="12" md="3">
-				<v-text-field label="Work Order #" v-model="workOrder" />
+				<v-text-field
+					label="Work Order #"
+					v-model="workOrder"
+					@blur="fetchWorkOrderDetails"
+				/>
 				<v-text-field label="Vehicle #" v-model="vehicle" />
 				<v-text-field label="Customer" v-model="customer" />
 			</v-col>
@@ -47,7 +51,7 @@
 					<template #item.qty="{ item }">
 						<v-text-field v-model="item.qty" type="number" min="1" @change="updateQty(item)" />
 					</template>
-					<template #item.actions="{ item, index }">
+					<template #item.actions="{ index }">
 						<v-btn icon color="red" @click="voidLine(index)">
 							<v-icon>mdi-delete</v-icon>
 						</v-btn>
@@ -126,6 +130,7 @@ export default {
 			staffName: "",
 			points: 0,
 			orderItems: [],
+			workOrderDetails: null,
 			categories: ["Body Wash", "Engine Oil", "Extra Services"],
 			barcode: "",
 			workOrderDiscount: 0,
@@ -165,38 +170,59 @@ export default {
 		},
 	},
 	methods: {
+		// Fetch Work Order details
+		async fetchWorkOrderDetails() {
+			if (!this.workOrder) return;
+			try {
+				const res = await fetch(
+					`/api/method/erpnext.manufacturing.doctype.work_order.work_order.get_default_warehouse?work_order=${this.workOrder}`
+				);
+				const data = await res.json();
+				if (data.message) {
+					this.workOrderDetails = data.message;
+					this.vehicle = data.message.vehicle_no || "";
+					this.customer = data.message.customer || "";
+					this.orderItems = (data.message.items || []).map(i => ({ ...i, qty: i.qty || 1 }));
+				}
+			} catch (err) {
+				console.error("Error fetching work order:", err);
+				alert("Work Order not found!");
+			}
+		},
+
 		async browseItems() {
 			let allItems = [];
 			for (let cat of this.categories) {
 				const res = await fetch(
-					`/api/method/posawesome.posawesome.api.lazer_pos.browse_items?category=${encodeURIComponent(cat)}`,
+					`/api/method/posawesome.posawesome.api.items.get_items`
 				);
 				const data = await res.json();
 				if (data.message) allItems = allItems.concat(data.message);
 			}
 			this.orderItems = allItems;
 		},
+
 		browseCategory(category) {
-			// Filter items by category
-			this.orderItems = this.orderItems.filter((i) => i.category === category);
+			this.orderItems = this.orderItems.filter(i => i.category === category);
 		},
+
 		async onBarcodeScan(barcode) {
 			if (!barcode) return;
 			const res = await fetch(
-				`/api/method/posawesome.posawesome.api.lazer_pos.get_items_from_barcode?barcode=${barcode}`,
+				`/api/method/posawesome.posawesome.api.lazer_pos.get_items_from_barcode?barcode=${barcode}`
 			);
 			const data = await res.json();
 			if (data.message?.length > 0) {
 				const item = data.message[0];
-				const existing = this.orderItems.find((i) => i.item_code === item.item_code);
+				const existing = this.orderItems.find(i => i.item_code === item.item_code);
 				if (existing) existing.qty += 1;
 				else this.orderItems.push({ ...item, qty: 1 });
 			} else alert("Item not found for barcode: " + barcode);
 			this.barcode = "";
 		},
-		updateQty(item) {
-			if (item.qty <= 0) item.qty = 1;
-		},
+
+		updateQty(item) { if (item.qty <= 0) item.qty = 1; },
+
 		async saveWorkOrder() {
 			if (!this.workOrder || !this.vehicle || !this.customer)
 				return alert("Fill Work Order, Vehicle & Customer!");
@@ -210,8 +236,9 @@ export default {
 						customer: this.customer,
 						staff_code: this.staffCode,
 						staff_name: this.staffName,
-						items: this.orderItems,
+						items: this.orderItems.filter(i => i.qty > 0),
 						discount: this.workOrderDiscount,
+						default_warehouse: this.workOrderDetails?.default_warehouse,
 					}),
 				});
 				alert("Work Order saved successfully!");
@@ -220,6 +247,8 @@ export default {
 				alert("Error saving Work Order");
 			}
 		},
+
+		// Other methods remain the same...
 		async voidWorkOrder() {
 			if (!this.workOrder) return;
 			try {
@@ -230,10 +259,9 @@ export default {
 				});
 				this.resetOrder();
 				alert("Work Order voided!");
-			} catch (err) {
-				console.error(err);
-			}
+			} catch (err) { console.error(err); }
 		},
+
 		resetOrder() {
 			this.workOrder = "";
 			this.vehicle = "";
@@ -242,7 +270,9 @@ export default {
 			this.workOrderDiscount = 0;
 			this.paidAmount = 0;
 			this.isHold = false;
+			this.workOrderDetails = null;
 		},
+
 		toggleHold() {
 			this.isHold = !this.isHold;
 			fetch("/api/method/posawesome.posawesome.api.lazer_pos.hold_order", {
@@ -251,13 +281,14 @@ export default {
 				body: JSON.stringify({ order_no: this.workOrder }),
 			}).catch(console.error);
 		},
-		voidLine(index) {
-			this.orderItems.splice(index, 1);
-		},
+
+		voidLine(index) { this.orderItems.splice(index, 1); },
+
 		openPaymentModal() {
 			if (!this.orderItems.length) return alert("No items to settle!");
 			this.showPaymentModal = true;
 		},
+
 		applyPayment(method) {
 			if (method === "loyalty") {
 				this.showLoyaltyDialog = true;
@@ -267,29 +298,22 @@ export default {
 			fetch("/api/method/posawesome.posawesome.api.lazer_pos.settle_order", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					order_no: this.workOrder,
-					payment_info: [{ method, amount: this.paidAmount }],
-				}),
+				body: JSON.stringify({ order_no: this.workOrder, payment_info: [{ method, amount: this.paidAmount }] }),
 			})
 				.then(() => alert("Payment done"))
 				.catch(console.error);
 		},
-		resetPayment() {
-			this.paidAmount = 0;
-		},
-		resetAllPayments() {
-			this.resetOrder();
-			this.showPaymentModal = false;
-		},
+
+		resetPayment() { this.paidAmount = 0; },
+		resetAllPayments() { this.resetOrder(); this.showPaymentModal = false; },
 		completePayment() {
 			if (this.paidAmount < this.netTotal) return alert("Payment incomplete!");
 			this.showPaymentModal = false;
 			this.resetOrder();
 		},
-		openCouponDialog() {
-			this.showLoyaltyCoupon = true;
-		},
+
+		openCouponDialog() { this.showLoyaltyCoupon = true; },
+
 		async applyCouponCode(code) {
 			try {
 				await fetch("/api/method/posawesome.posawesome.api.lazer_pos.apply_coupon", {
@@ -299,20 +323,21 @@ export default {
 				});
 				alert("Coupon applied!");
 				this.showLoyaltyCoupon = false;
-			} catch (err) {
-				console.error(err);
-			}
+			} catch (err) { console.error(err); }
 		},
+
 		applyDiscount() {
 			const discount = prompt("Enter discount amount:");
 			if (discount) this.workOrderDiscount = parseFloat(discount);
 		},
+
 		reprintInvoice() {
 			fetch(`/api/method/posawesome.posawesome.api.lazer_pos.print_invoice?order_no=${this.workOrder}`)
-				.then((res) => res.json())
-				.then((data) => console.log("Invoice PDF:", data.message.pdf))
+				.then(res => res.json())
+				.then(data => console.log("Invoice PDF:", data.message.pdf))
 				.catch(console.error);
 		},
+
 		applyLoyaltyCustomer(customer) {
 			this.customer = customer.customer_name;
 			this.points = customer.points;
@@ -322,14 +347,6 @@ export default {
 </script>
 
 <style scoped>
-.vehicle-service-pos-container {
-	padding: 16px;
-	height: 100%;
-	overflow-y: auto;
-}
-.summary {
-	border: 1px solid #ccc;
-	border-radius: 6px;
-	padding: 16px;
-}
+.vehicle-service-pos-container { padding: 16px; height: 100%; overflow-y: auto; }
+.summary { border: 1px solid #ccc; border-radius: 6px; padding: 16px; }
 </style>
