@@ -871,11 +871,6 @@ def get_production_form_list(start_date=None, end_date=None, production_type=Non
     return result
 
 
-# File: posawesome/posawesome/api/lazer_pos.py
-import frappe
-from frappe import _
-
-
 @frappe.whitelist()
 def get_damage_memo_list(start_date=None, end_date=None, location=None, station_id=None):
     """
@@ -1298,8 +1293,6 @@ def get_loyalty_customer(filters=None):
     """
 
     return frappe.db.sql(sql_query, as_dict=True)
-
-import frappe
 
 @frappe.whitelist()
 def get_loyalty_points(customer):
