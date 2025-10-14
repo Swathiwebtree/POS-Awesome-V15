@@ -1294,21 +1294,18 @@ def get_loyalty_customer(filters=None):
 
     return frappe.db.sql(sql_query, as_dict=True)
 
+
 @frappe.whitelist()
 def get_loyalty_points(customer):
     if not customer:
         return {"points": 0}
 
     cards = frappe.get_all(
-        "Loyalty Card",
-        filters={"customer": customer, "status": "Active"},
-        fields=["points"]
+        "Loyalty Card", filters={"customer": customer, "status": "Active"}, fields=["points"]
     )
 
     total_points = sum(card.points for card in cards)
     return {"points": total_points}
-
-
 
 
 @frappe.whitelist()

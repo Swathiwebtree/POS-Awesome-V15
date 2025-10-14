@@ -248,7 +248,7 @@ export default {
 			printLoading: false,
 			paymentLoading: false,
 			loyaltyLoading: false,
-			selected_customer: null, 
+			selected_customer: null,
 		};
 	},
 	emits: [
@@ -281,10 +281,9 @@ export default {
 		},
 	},
 	methods: {
-
-	    onCustomerSelect(customer) {
-        this.selected_customer = customer; // store the selected customer
-        },
+		onCustomerSelect(customer) {
+			this.selected_customer = customer; // store the selected customer
+		},
 		// Debounced handlers for better performance
 		handleAdditionalDiscountUpdate(value) {
 			this.$emit("update:additional_discount", value);
@@ -337,35 +336,34 @@ export default {
 		},
 
 		async handleLoyaltyPoints(customerId) {
-    if (!customerId) {
-        frappe.show_alert({ message: "Please select a customer first", indicator: "red" });
-        return;
-    }
+			if (!customerId) {
+				frappe.show_alert({ message: "Please select a customer first", indicator: "red" });
+				return;
+			}
 
-    this.loyaltyLoading = true;
-    try {
-        const response = await frappe.call({
-            method: "posawesome.posawesome.api.lazer_pos.get_loyalty_points",
-            args: { customer: customerId },
-        });
+			this.loyaltyLoading = true;
+			try {
+				const response = await frappe.call({
+					method: "posawesome.posawesome.api.lazer_pos.get_loyalty_points",
+					args: { customer: customerId },
+				});
 
-        const points = response?.message?.points || 0;
+				const points = response?.message?.points || 0;
 
-        frappe.show_alert({
-            message: `Loyalty Points: ${points}`,
-            indicator: "green",
-        });
-
-    } catch (err) {
-        console.error("Failed to fetch loyalty points:", err);
-        frappe.show_alert({
-            message: "Error fetching loyalty points",
-            indicator: "red",
-        });
-    } finally {
-        this.loyaltyLoading = false;
-    }
-},
+				frappe.show_alert({
+					message: `Loyalty Points: ${points}`,
+					indicator: "green",
+				});
+			} catch (err) {
+				console.error("Failed to fetch loyalty points:", err);
+				frappe.show_alert({
+					message: "Error fetching loyalty points",
+					indicator: "red",
+				});
+			} finally {
+				this.loyaltyLoading = false;
+			}
+		},
 		async handleSelectOrder() {
 			this.selectOrderLoading = true;
 			try {

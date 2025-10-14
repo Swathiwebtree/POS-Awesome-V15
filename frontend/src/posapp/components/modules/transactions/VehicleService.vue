@@ -3,11 +3,7 @@
 		<!-- Work Order & Vehicle Info -->
 		<v-row dense class="mb-3">
 			<v-col cols="12" md="3">
-				<v-text-field
-					label="Work Order #"
-					v-model="workOrder"
-					@blur="fetchWorkOrderDetails"
-				/>
+				<v-text-field label="Work Order #" v-model="workOrder" @blur="fetchWorkOrderDetails" />
 				<v-text-field label="Vehicle #" v-model="vehicle" />
 				<v-text-field label="Customer" v-model="customer" />
 			</v-col>
@@ -175,14 +171,14 @@ export default {
 			if (!this.workOrder) return;
 			try {
 				const res = await fetch(
-					`/api/method/erpnext.manufacturing.doctype.work_order.work_order.get_default_warehouse?work_order=${this.workOrder}`
+					`/api/method/erpnext.manufacturing.doctype.work_order.work_order.get_default_warehouse?work_order=${this.workOrder}`,
 				);
 				const data = await res.json();
 				if (data.message) {
 					this.workOrderDetails = data.message;
 					this.vehicle = data.message.vehicle_no || "";
 					this.customer = data.message.customer || "";
-					this.orderItems = (data.message.items || []).map(i => ({ ...i, qty: i.qty || 1 }));
+					this.orderItems = (data.message.items || []).map((i) => ({ ...i, qty: i.qty || 1 }));
 				}
 			} catch (err) {
 				console.error("Error fetching work order:", err);
@@ -193,9 +189,7 @@ export default {
 		async browseItems() {
 			let allItems = [];
 			for (let cat of this.categories) {
-				const res = await fetch(
-					`/api/method/posawesome.posawesome.api.items.get_items`
-				);
+				const res = await fetch(`/api/method/posawesome.posawesome.api.items.get_items`);
 				const data = await res.json();
 				if (data.message) allItems = allItems.concat(data.message);
 			}
@@ -203,25 +197,27 @@ export default {
 		},
 
 		browseCategory(category) {
-			this.orderItems = this.orderItems.filter(i => i.category === category);
+			this.orderItems = this.orderItems.filter((i) => i.category === category);
 		},
 
 		async onBarcodeScan(barcode) {
 			if (!barcode) return;
 			const res = await fetch(
-				`/api/method/posawesome.posawesome.api.lazer_pos.get_items_from_barcode?barcode=${barcode}`
+				`/api/method/posawesome.posawesome.api.lazer_pos.get_items_from_barcode?barcode=${barcode}`,
 			);
 			const data = await res.json();
 			if (data.message?.length > 0) {
 				const item = data.message[0];
-				const existing = this.orderItems.find(i => i.item_code === item.item_code);
+				const existing = this.orderItems.find((i) => i.item_code === item.item_code);
 				if (existing) existing.qty += 1;
 				else this.orderItems.push({ ...item, qty: 1 });
 			} else alert("Item not found for barcode: " + barcode);
 			this.barcode = "";
 		},
 
-		updateQty(item) { if (item.qty <= 0) item.qty = 1; },
+		updateQty(item) {
+			if (item.qty <= 0) item.qty = 1;
+		},
 
 		async saveWorkOrder() {
 			if (!this.workOrder || !this.vehicle || !this.customer)
@@ -236,7 +232,7 @@ export default {
 						customer: this.customer,
 						staff_code: this.staffCode,
 						staff_name: this.staffName,
-						items: this.orderItems.filter(i => i.qty > 0),
+						items: this.orderItems.filter((i) => i.qty > 0),
 						discount: this.workOrderDiscount,
 						default_warehouse: this.workOrderDetails?.default_warehouse,
 					}),
@@ -259,7 +255,9 @@ export default {
 				});
 				this.resetOrder();
 				alert("Work Order voided!");
-			} catch (err) { console.error(err); }
+			} catch (err) {
+				console.error(err);
+			}
 		},
 
 		resetOrder() {
@@ -282,7 +280,9 @@ export default {
 			}).catch(console.error);
 		},
 
-		voidLine(index) { this.orderItems.splice(index, 1); },
+		voidLine(index) {
+			this.orderItems.splice(index, 1);
+		},
 
 		openPaymentModal() {
 			if (!this.orderItems.length) return alert("No items to settle!");
@@ -298,21 +298,31 @@ export default {
 			fetch("/api/method/posawesome.posawesome.api.lazer_pos.settle_order", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ order_no: this.workOrder, payment_info: [{ method, amount: this.paidAmount }] }),
+				body: JSON.stringify({
+					order_no: this.workOrder,
+					payment_info: [{ method, amount: this.paidAmount }],
+				}),
 			})
 				.then(() => alert("Payment done"))
 				.catch(console.error);
 		},
 
-		resetPayment() { this.paidAmount = 0; },
-		resetAllPayments() { this.resetOrder(); this.showPaymentModal = false; },
+		resetPayment() {
+			this.paidAmount = 0;
+		},
+		resetAllPayments() {
+			this.resetOrder();
+			this.showPaymentModal = false;
+		},
 		completePayment() {
 			if (this.paidAmount < this.netTotal) return alert("Payment incomplete!");
 			this.showPaymentModal = false;
 			this.resetOrder();
 		},
 
-		openCouponDialog() { this.showLoyaltyCoupon = true; },
+		openCouponDialog() {
+			this.showLoyaltyCoupon = true;
+		},
 
 		async applyCouponCode(code) {
 			try {
@@ -323,7 +333,9 @@ export default {
 				});
 				alert("Coupon applied!");
 				this.showLoyaltyCoupon = false;
-			} catch (err) { console.error(err); }
+			} catch (err) {
+				console.error(err);
+			}
 		},
 
 		applyDiscount() {
@@ -333,8 +345,8 @@ export default {
 
 		reprintInvoice() {
 			fetch(`/api/method/posawesome.posawesome.api.lazer_pos.print_invoice?order_no=${this.workOrder}`)
-				.then(res => res.json())
-				.then(data => console.log("Invoice PDF:", data.message.pdf))
+				.then((res) => res.json())
+				.then((data) => console.log("Invoice PDF:", data.message.pdf))
 				.catch(console.error);
 		},
 
@@ -347,6 +359,14 @@ export default {
 </script>
 
 <style scoped>
-.vehicle-service-pos-container { padding: 16px; height: 100%; overflow-y: auto; }
-.summary { border: 1px solid #ccc; border-radius: 6px; padding: 16px; }
+.vehicle-service-pos-container {
+	padding: 16px;
+	height: 100%;
+	overflow-y: auto;
+}
+.summary {
+	border: 1px solid #ccc;
+	border-radius: 6px;
+	padding: 16px;
+}
 </style>
