@@ -766,6 +766,7 @@ import { silentPrint, watchPrintWindow } from "../../plugins/print.js";
 import { useInvoiceStore } from "../../stores/invoiceStore.js";
 import { useCustomersStore } from "../../stores/customersStore.js";
 import { storeToRefs } from "pinia";
+import stockCoordinator from "../../utils/stockCoordinator.js";
 
 export default {
 	// Using format mixin for shared formatting methods
@@ -1518,24 +1519,38 @@ export default {
 					vm.is_credit_return = false;
 					vm.sales_person = "";
 					vm.eventBus.emit("set_last_invoice", vm.invoice_doc.name);
-					vm.eventBus.emit("show_message", {
-						title:
-							vm.invoiceType === "Order" && vm.pos_profile.posa_create_only_sales_order
-								? __("Sales Order {0} is Submitted", [r.message.name])
-								: vm.invoiceType === "Quotation"
-									? __("Quotation {0} is Submitted", [r.message.name])
-									: __("Invoice {0} is Submitted", [r.message.name]),
-						color: "success",
-					});
-					frappe.utils.play_sound("submit");
-					// Update local stock quantities immediately after successful
-					// invoice submission so item availability reflects changes
-					updateLocalStock(vm.invoice_doc.items || []);
-					vm.addresses = [];
-					vm.eventBus.emit("clear_invoice");
-					vm.eventBus.emit("focus_item_search");
-					vm.eventBus.emit("reset_posting_date");
-					vm.back_to_invoice();
+                                        vm.eventBus.emit("show_message", {
+                                                title:
+                                                        vm.invoiceType === "Order" && vm.pos_profile.posa_create_only_sales_order
+                                                                ? __("Sales Order {0} is Submitted", [r.message.name])
+                                                                : vm.invoiceType === "Quotation"
+                                                                        ? __("Quotation {0} is Submitted", [r.message.name])
+                                                                        : __("Invoice {0} is Submitted", [r.message.name]),
+                                                color: "success",
+                                        });
+                                        frappe.utils.play_sound("submit");
+                                        // Update local stock quantities immediately after successful
+                                        // invoice submission so item availability reflects changes
+                                        const submittedItems = Array.isArray(vm.invoice_doc.items)
+                                                ? vm.invoice_doc.items
+                                                : [];
+                                        updateLocalStock(submittedItems);
+                                        stockCoordinator.applyInvoiceConsumption(submittedItems, {
+                                                source: "invoice",
+                                        });
+                                        const submittedCodes = submittedItems
+                                                .map((item) => (item ? item.item_code : null))
+                                                .filter((code) => code !== undefined && code !== null);
+                                        vm.eventBus.emit("invoice_stock_adjusted", {
+                                                items: submittedItems,
+                                                item_codes: submittedCodes,
+                                                timestamp: Date.now(),
+                                        });
+                                        vm.addresses = [];
+                                        vm.eventBus.emit("clear_invoice");
+                                        vm.eventBus.emit("focus_item_search");
+                                        vm.eventBus.emit("reset_posting_date");
+                                        vm.back_to_invoice();
 					vm.loading = false;
 				},
 			});
