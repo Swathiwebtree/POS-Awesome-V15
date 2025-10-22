@@ -15,6 +15,7 @@ import { useBatchSerial } from "../../composables/useBatchSerial.js";
 import { useDiscounts } from "../../composables/useDiscounts.js";
 import { useItemAddition } from "../../composables/useItemAddition.js";
 import { useStockUtils } from "../../composables/useStockUtils.js";
+import stockCoordinator from "../../utils/stockCoordinator.js";
 
 const ITEM_DETAIL_CACHE_TTL = 5000;
 const STOCK_CACHE_TTL = 5000;
@@ -2104,15 +2105,35 @@ export default {
 		item.is_stock_item = data.is_stock_item;
 		item.is_fixed_asset = data.is_fixed_asset;
 		item.allow_alternative_item = data.allow_alternative_item;
-		item.is_stock_item = data.is_stock_item;
-		item.warehouse = data.warehouse || item.warehouse;
+                item.is_stock_item = data.is_stock_item;
+                item.warehouse = data.warehouse || item.warehouse;
 
-		item.actual_qty = data.actual_qty;
-		item.available_qty = data.actual_qty;
+                item.actual_qty = data.actual_qty;
+                item.available_qty = data.actual_qty;
 
-		if (this.update_qty_limits) {
-			this.update_qty_limits(item);
-		}
+                const hasCode = item && item.item_code !== undefined && item.item_code !== null;
+                const baseActualQty = Number(data.actual_qty);
+                if (hasCode && Number.isFinite(baseActualQty)) {
+                        item._base_actual_qty = baseActualQty;
+                        item._base_available_qty = baseActualQty;
+                        stockCoordinator.updateBaseQuantities(
+                                [
+                                        {
+                                                item_code: item.item_code,
+                                                actual_qty: baseActualQty,
+                                        },
+                                ],
+                                { source: "invoice" },
+                        );
+                }
+
+                if (hasCode) {
+                        stockCoordinator.applyAvailabilityToItem(item, { updateBaseAvailable: false });
+                }
+
+                if (this.update_qty_limits) {
+                        this.update_qty_limits(item);
+                }
 
 		if (data.barcode) {
 			item.barcode = data.barcode;
@@ -2228,15 +2249,14 @@ export default {
 			}
 		}
 
-		item.last_purchase_rate = data.last_purchase_rate;
-		item.projected_qty = data.projected_qty;
-		item.reserved_qty = data.reserved_qty;
-		item.conversion_factor = data.conversion_factor;
-		item.stock_qty = data.stock_qty;
-		item.actual_qty = data.actual_qty;
-		item.stock_uom = data.stock_uom;
-		item.has_serial_no = data.has_serial_no;
-		item.has_batch_no = data.has_batch_no;
+                item.last_purchase_rate = data.last_purchase_rate;
+                item.projected_qty = data.projected_qty;
+                item.reserved_qty = data.reserved_qty;
+                item.conversion_factor = data.conversion_factor;
+                item.stock_qty = data.stock_qty;
+                item.stock_uom = data.stock_uom;
+                item.has_serial_no = data.has_serial_no;
+                item.has_batch_no = data.has_batch_no;
 
 		item.amount = this.flt(item.qty * item.rate, this.currency_precision);
 		item.base_amount = this.flt(item.qty * item.base_rate, this.currency_precision);
@@ -2264,6 +2284,7 @@ export default {
                                 );
                                 if (cached) {
                                         vm.customer_info = { ...cached };
+                                        vm.sync_invoice_customer_details(vm.customer_info);
                                         if (vm.pos_profile.posa_force_price_from_customer_price_list !== false) {
                                                 const defaultPriceList = vm.pos_profile?.selling_price_list || null;
                                                 const resolvedPriceList = cached.customer_price_list || defaultPriceList;
@@ -2278,6 +2299,7 @@ export default {
                                         .find((c) => c.customer_name === vm.customer);
                                 if (queued) {
                                         vm.customer_info = { ...queued, name: queued.customer_name };
+                                        vm.sync_invoice_customer_details(vm.customer_info);
                                         if (vm.pos_profile.posa_force_price_from_customer_price_list !== false) {
                                                 const defaultPriceList = vm.pos_profile?.selling_price_list || null;
                                                 const resolvedPriceList = queued.customer_price_list || defaultPriceList;
@@ -2299,12 +2321,13 @@ export default {
 					customer: vm.customer,
 				},
 			});
-			const message = r.message;
-			if (!r.exc) {
-				vm.customer_info = {
-					...message,
-				};
-			}
+                        const message = r.message;
+                        if (!r.exc) {
+                                vm.customer_info = {
+                                        ...message,
+                                };
+                                vm.sync_invoice_customer_details(vm.customer_info);
+                        }
 			// When force reload is enabled, automatically switch to the
 			// customer's default price list so that item rates are fetched
 			// correctly from the server.
@@ -2337,6 +2360,106 @@ export default {
                         this.selected_price_list = price_list;
                 }
                 this.eventBus.emit("update_customer_price_list", price_list);
+        },
+
+        sync_invoice_customer_details(details = null) {
+                if (!this.invoice_doc || typeof this.invoice_doc !== "object") {
+                        return;
+                }
+
+                const existingDoc = this.invoice_doc || {};
+                const customerDetails = details || this.customer_info || {};
+                const resolvedCustomer = this.customer || customerDetails.customer || existingDoc.customer;
+                const hasCustomerChanged =
+                        existingDoc.customer && resolvedCustomer && existingDoc.customer !== resolvedCustomer;
+
+                const resolvedCustomerName =
+                        customerDetails.customer_name ??
+                        customerDetails.customer ??
+                        resolvedCustomer ??
+                        null;
+
+                const updatedDoc = {
+                        ...existingDoc,
+                        customer: resolvedCustomer,
+                };
+
+                const fieldsToSync = [
+                        "customer_name",
+                        "customer_group",
+                        "customer_price_list",
+                        "territory",
+                        "customer_type",
+                        "tax_id",
+                        "primary_address",
+                        "primary_address_name",
+                        "customer_primary_address",
+                        "shipping_address_name",
+                        "customer_primary_contact",
+                        "mobile_no",
+                        "phone",
+                        "email_id",
+                        "contact_person",
+                        "contact_display",
+                        "contact_email",
+                        "contact_mobile",
+                        "contact_phone",
+                ];
+
+                fieldsToSync.forEach((field) => {
+                        if (customerDetails[field] !== undefined && customerDetails[field] !== null) {
+                                updatedDoc[field] = customerDetails[field];
+                        }
+                });
+
+                const addressFields = {
+                        customer_address:
+                                customerDetails.customer_address ?? customerDetails.primary_address_name ?? null,
+                        customer_address_display:
+                                customerDetails.customer_address_display ?? customerDetails.primary_address ?? null,
+                        shipping_address: customerDetails.shipping_address ?? null,
+                        shipping_address_display:
+                                customerDetails.shipping_address_display ?? customerDetails.shipping_address ?? null,
+                };
+
+                Object.entries(addressFields).forEach(([field, value]) => {
+                        if (value !== undefined && value !== null) {
+                                updatedDoc[field] = value;
+                        } else if (hasCustomerChanged) {
+                                updatedDoc[field] = null;
+                        }
+                });
+
+                if (resolvedCustomerName) {
+                        const previousTitle = existingDoc.title ?? null;
+                        const titleMatchesPreviousCustomer =
+                                previousTitle &&
+                                (previousTitle === existingDoc.customer || previousTitle === existingDoc.customer_name);
+                        if (hasCustomerChanged || !previousTitle || titleMatchesPreviousCustomer) {
+                                updatedDoc.title = resolvedCustomerName;
+                        }
+                } else if (hasCustomerChanged) {
+                        updatedDoc.title = resolvedCustomer || "";
+                }
+
+                if (hasCustomerChanged) {
+                        const alwaysResetOnChange = [
+                                "shipping_address_name",
+                                "contact_person",
+                                "contact_display",
+                                "contact_email",
+                                "contact_mobile",
+                                "contact_phone",
+                        ];
+
+                        alwaysResetOnChange.forEach((field) => {
+                                if (customerDetails[field] === undefined) {
+                                        updatedDoc[field] = null;
+                                }
+                        });
+                }
+
+                this.invoice_doc = updatedDoc;
         },
 
 	_applyPriceListRate(item, newRate, priceCurrency) {

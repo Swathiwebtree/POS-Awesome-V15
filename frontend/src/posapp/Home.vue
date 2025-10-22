@@ -363,7 +363,7 @@ export default {
 				"&no_letterhead=" +
 				letter_head;
 
-                        const printOptions = {};
+                        const printOptions = { allowOfflineFallback: isOffline() };
                         if (this.posProfile.posa_silent_print) {
                                 silentPrint(url, printOptions);
                         } else {
@@ -419,11 +419,11 @@ export default {
 			this.$theme.toggle();
 		},
 
-		handleLogout() {
-			frappe.call("logout").finally(() => {
-				window.location.href = "/app";
-			});
-		},
+                handleLogout() {
+                        frappe.call("logout").finally(() => {
+                                window.location.href = "/app";
+                        });
+                },
 
 		handleRefreshCacheUsage() {
 			this.cacheUsageLoading = true;

@@ -82,19 +82,21 @@ const diffSnapshots = (previous, current) => {
 
 export default {
 	// Watch for customer change and update related data
-	customer() {
-		this.close_payments();
-		const customersStore = useCustomersStore();
-		customersStore.setSelectedCustomer(this.customer || null);
-		this.fetch_customer_details();
-		this.fetch_customer_balance();
-		this.set_delivery_charges();
-	},
-	// Watch for customer_info change and emit to edit form
-	customer_info() {
-		const customersStore = useCustomersStore();
-		customersStore.setCustomerInfo(this.customer_info || {});
-	},
+        customer() {
+                this.close_payments();
+                const customersStore = useCustomersStore();
+                customersStore.setSelectedCustomer(this.customer || null);
+                this.fetch_customer_details();
+                this.fetch_customer_balance();
+                this.set_delivery_charges();
+                this.sync_invoice_customer_details();
+        },
+        // Watch for customer_info change and emit to edit form
+        customer_info() {
+                const customersStore = useCustomersStore();
+                customersStore.setCustomerInfo(this.customer_info || {});
+                this.sync_invoice_customer_details(this.customer_info);
+        },
 	// Watch for expanded row change and update item detail
 	expanded(data_value) {
 		if (data_value.length > 0) {
@@ -118,58 +120,60 @@ export default {
 			const snapshot = buildSnapshot(newItems);
 			this._offerSnapshots = this._offerSnapshots || {};
 			const previous = this._offerSnapshots.items;
-			this._offerSnapshots.items = snapshot;
+                        this._offerSnapshots.items = snapshot;
 
-			const { changed, removedInfo } = diffSnapshots(previous, snapshot);
+                        const { changed, removedInfo } = diffSnapshots(previous, snapshot);
 
-			if (removedInfo && Object.keys(removedInfo).length) {
+                        if (removedInfo && Object.keys(removedInfo).length) {
 				this._pendingRemovedRowInfo = {
 					...(this._pendingRemovedRowInfo || {}),
 					...removedInfo,
-				};
-			}
+                                };
+                        }
 
-			if (!previous) {
-				if (snapshot.order.length) {
-					this.scheduleOfferRefresh([...new Set(snapshot.order)]);
-				}
-				return;
-			}
+                        if (!previous) {
+                                if (snapshot.order.length) {
+                                        this.scheduleOfferRefresh([...new Set(snapshot.order)]);
+                                }
+                        } else if (changed.size) {
+                                this.scheduleOfferRefresh(Array.from(changed));
+                        }
 
-			if (changed.size) {
-				this.scheduleOfferRefresh(Array.from(changed));
-			}
-		},
-	},
-	packed_items: {
-		deep: true,
-		handler(newItems) {
+                        if (typeof this.emitCartQuantities === "function") {
+                                this.emitCartQuantities();
+                        }
+                },
+        },
+        packed_items: {
+                deep: true,
+                handler(newItems) {
 			const snapshot = buildSnapshot(newItems);
 			this._offerSnapshots = this._offerSnapshots || {};
 			const previous = this._offerSnapshots.packed;
-			this._offerSnapshots.packed = snapshot;
+                        this._offerSnapshots.packed = snapshot;
 
-			const { changed, removedInfo } = diffSnapshots(previous, snapshot);
+                        const { changed, removedInfo } = diffSnapshots(previous, snapshot);
 
-			if (removedInfo && Object.keys(removedInfo).length) {
+                        if (removedInfo && Object.keys(removedInfo).length) {
 				this._pendingRemovedRowInfo = {
 					...(this._pendingRemovedRowInfo || {}),
 					...removedInfo,
-				};
-			}
+                                };
+                        }
 
-			if (!previous) {
-				if (snapshot.order.length) {
-					this.scheduleOfferRefresh([...new Set(snapshot.order)]);
-				}
-				return;
-			}
+                        if (!previous) {
+                                if (snapshot.order.length) {
+                                        this.scheduleOfferRefresh([...new Set(snapshot.order)]);
+                                }
+                        } else if (changed.size) {
+                                this.scheduleOfferRefresh(Array.from(changed));
+                        }
 
-			if (changed.size) {
-				this.scheduleOfferRefresh(Array.from(changed));
-			}
-		},
-	},
+                        if (typeof this.emitCartQuantities === "function") {
+                                this.emitCartQuantities();
+                        }
+                },
+        },
 	// Watch for invoice type change and emit
 	invoiceType() {
 		this.eventBus.emit("update_invoice_type", this.invoiceType);

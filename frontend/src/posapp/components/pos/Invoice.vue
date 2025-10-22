@@ -31,7 +31,7 @@
 				<v-row align="center" class="items px-3 py-2">
 					<v-col :cols="pos_profile.posa_allow_sales_order ? 9 : 12" class="pb-0 pr-0">
 						<!-- Customer selection component -->
-						<Customer />
+                                            <Customer ref="customerComponent" />
 					</v-col>
 					<!-- Invoice Type Selection (Only shown if sales orders are allowed) -->
 					<v-col v-if="pos_profile.posa_allow_sales_order" cols="3" class="pb-4">
@@ -120,9 +120,10 @@
 				<div class="items-table-wrapper">
 					<!-- Column selector button moved outside the table -->
 					<div class="column-selector-container">
-						<v-text-field
-							v-model="itemSearch"
-							density="compact"
+                                                <v-text-field
+                                                        ref="itemSearchField"
+                                                        v-model="itemSearch"
+                                                        density="compact"
 							variant="solo"
 							color="primary"
 							class="item-search-field pos-themed-input"
@@ -344,6 +345,7 @@ import shortcutMethods from "./invoiceShortcuts";
 import { useInvoiceStore } from "../../stores/invoiceStore.js";
 import { useCustomersStore } from "../../stores/customersStore.js";
 import { storeToRefs } from "pinia";
+import stockCoordinator from "../../utils/stockCoordinator.js";
 
 export default {
 	name: "POSInvoice",
@@ -386,10 +388,11 @@ export default {
 			float_precision: 6, // Float precision for calculations
 			currency_precision: 6, // Currency precision for display
 			new_line: false, // Add new line for item
-			available_stock_cache: {},
-			item_detail_cache: {},
-			item_stock_cache: {},
-			brand_cache: {},
+                        available_stock_cache: {},
+                        item_detail_cache: {},
+                        item_stock_cache: {},
+                        brand_cache: {},
+                        stockUnsubscribe: null,
 			delivery_charges: [], // List of delivery charges
 			base_delivery_charges_rate: 0, // Delivery charge in company currency
 			delivery_charges_rate: 0, // Selected delivery charge rate
@@ -463,17 +466,33 @@ export default {
 				this.invoiceStore.setPackedItems(value);
 			},
 		},
-		...invoiceComputed,
-	},
+                ...invoiceComputed,
+        },
 
-	methods: {
-		...shortcutMethods,
+        methods: {
+                ...shortcutMethods,
 		...offerMethods,
 		...invoiceItemMethods,
-		initializeItemsHeaders() {
-			// Define all available columns
-			this.available_columns = [
-				{ title: __("Name"), align: "start", sortable: true, key: "item_name", required: true },
+                focusCustomerSearchField() {
+                        const customerComponent = this.$refs.customerComponent;
+                        if (!customerComponent) {
+                                return;
+                        }
+
+                        const focusFn = customerComponent.focusCustomerSearch;
+                        if (typeof focusFn === "function") {
+                                focusFn();
+                        }
+                },
+
+                focusItemSearchField() {
+                        this.eventBus.emit("focus_item_search");
+                },
+
+                initializeItemsHeaders() {
+                        // Define all available columns
+                        this.available_columns = [
+                                { title: __("Name"), align: "start", sortable: true, key: "item_name", required: true },
 				{ title: __("QTY"), key: "qty", align: "center", required: true },
 				{ title: __("UOM"), key: "uom", align: "center", required: false },
 				{
@@ -507,21 +526,138 @@ export default {
 					.map((col) => col.key);
 			}
 
-			// Generate headers based on selected columns
-			this.updateHeadersFromSelection();
-		},
-		// Handle item dropped from ItemsSelector to ItemsTable
-		handleItemDrop(item) {
-			console.log("Item dropped:", item);
+                        // Generate headers based on selected columns
+                        this.updateHeadersFromSelection();
+                },
+                emitCartQuantities() {
+                        const totals = {};
+                        const normalizeNumber = (value) => {
+                                const num = Number(value);
+                                return Number.isFinite(num) ? num : null;
+                        };
+                        const accumulate = (line) => {
+                                if (!line || !line.item_code) {
+                                        return;
+                                }
 
-			// Use the existing add_item method to add the dropped item
-			this.add_item(item);
-		},
+                                const code = String(line.item_code).trim();
+                                if (!code) {
+                                        return;
+                                }
 
-		// Show visual feedback when item is being dragged over drop zone
-		showDropFeedback(isDragging) {
-			// Add visual feedback class to the items table
-			const itemsTable = this.$el.querySelector(".modern-items-table");
+                                let stockQty = normalizeNumber(line.stock_qty);
+                                if (stockQty === null) {
+                                        const qty = normalizeNumber(line.qty);
+                                        if (qty !== null) {
+                                                const conversion = normalizeNumber(line.conversion_factor);
+                                                const factor = conversion !== null && conversion !== 0 ? conversion : 1;
+                                                stockQty = qty * factor;
+                                        }
+                                }
+
+                                if (stockQty === null) {
+                                        return;
+                                }
+
+                                const positiveQty = Math.max(0, stockQty);
+                                if (!positiveQty) {
+                                        return;
+                                }
+
+                                totals[code] = (totals[code] || 0) + positiveQty;
+                        };
+
+                        (Array.isArray(this.items) ? this.items : []).forEach(accumulate);
+                        (Array.isArray(this.packed_items) ? this.packed_items : []).forEach(accumulate);
+
+                        const impacted = stockCoordinator.updateReservations(totals, {
+                                source: "invoice",
+                        });
+                        if (impacted.length) {
+                                this.applyStockStateToInvoiceItems(impacted);
+                        }
+
+                        this.eventBus.emit("cart_quantities_updated", totals);
+                },
+                // Handle item dropped from ItemsSelector to ItemsTable
+                handleItemDrop(item) {
+                        console.log("Item dropped:", item);
+
+                        // Use the existing add_item method to add the dropped item
+                        this.add_item(item);
+                },
+
+                applyStockStateToInvoiceItems(codes = null) {
+                        const collections = [];
+                        if (Array.isArray(this.items)) {
+                                collections.push(this.items);
+                        }
+                        if (Array.isArray(this.packed_items)) {
+                                collections.push(this.packed_items);
+                        }
+                        if (!collections.length) {
+                                return;
+                        }
+                        const codesSet = (() => {
+                                if (codes === null) {
+                                        return null;
+                                }
+                                const iterable = Array.isArray(codes)
+                                        ? codes
+                                        : codes instanceof Set || (codes && typeof codes[Symbol.iterator] === "function")
+                                        ? Array.from(codes)
+                                        : [codes];
+                                return new Set(
+                                        iterable
+                                                .map((code) =>
+                                                        code !== undefined && code !== null
+                                                                ? String(code).trim()
+                                                                : "",
+                                                )
+                                                .filter(Boolean),
+                                );
+                        })();
+
+                        collections.forEach((items) => {
+                                stockCoordinator.applyAvailabilityToCollection(items, codesSet, {
+                                        updateBaseAvailable: false,
+                                });
+                        });
+
+                        this.$forceUpdate();
+                },
+                primeInvoiceStockState(source = "invoice") {
+                        const baseItems = [];
+                        if (Array.isArray(this.items)) {
+                                baseItems.push(...this.items);
+                        }
+                        if (Array.isArray(this.packed_items)) {
+                                baseItems.push(...this.packed_items);
+                        }
+                        if (!baseItems.length) {
+                                return;
+                        }
+
+                        stockCoordinator.primeFromItems(baseItems, { silent: true, source });
+                        const codes = baseItems
+                                .map((item) =>
+                                        item && item.item_code !== undefined ? String(item.item_code).trim() : null,
+                                )
+                                .filter(Boolean);
+                        this.applyStockStateToInvoiceItems(codes);
+                },
+                handleStockCoordinatorUpdate(event = {}) {
+                        const codes = Array.isArray(event.codes) ? event.codes : [];
+                        if (!codes.length) {
+                                return;
+                        }
+                        this.applyStockStateToInvoiceItems(codes);
+                },
+
+                // Show visual feedback when item is being dragged over drop zone
+                showDropFeedback(isDragging) {
+                        // Add visual feedback class to the items table
+                        const itemsTable = this.$el.querySelector(".modern-items-table");
 			if (itemsTable) {
 				if (isDragging) {
 					itemsTable.classList.add("drag-over");
@@ -636,29 +772,35 @@ export default {
 			this.expanded = Array.isArray(ids) ? ids.slice(-1) : [];
 		},
 
-		async print_draft_invoice() {
-			if (!this.pos_profile.posa_allow_print_draft_invoices) {
-				this.eventBus.emit("show_message", {
-					title: __(`You are not allowed to print draft invoices`),
-					color: "error",
-				});
-				return;
-			}
-			let invoice_name = this.invoice_doc.name;
-			try {
-				const invoice_doc = await this.save_and_clear_invoice();
-				if (invoice_doc?.name) {
-					invoice_name = invoice_doc.name;
-				}
-				this.load_print_page(invoice_name);
-			} catch (error) {
-				console.error("Failed to print draft invoice:", error);
-				this.eventBus.emit("show_message", {
-					title: __("Unable to print draft invoice"),
-					color: "error",
-				});
-			}
-		},
+                async print_draft_invoice() {
+                        if (!this.pos_profile.posa_allow_print_draft_invoices) {
+                                this.eventBus.emit("show_message", {
+                                        title: __(`You are not allowed to print draft invoices`),
+                                        color: "error",
+                                });
+                                return;
+                        }
+
+                        let invoice_name = this.invoice_doc?.name || null;
+                        try {
+                                const invoice_doc = await this.save_and_clear_invoice();
+                                if (invoice_doc?.name) {
+                                        invoice_name = invoice_doc.name;
+                                }
+
+                                if (!invoice_name) {
+                                        throw new Error("Invoice could not be saved before printing");
+                                }
+
+                                this.load_print_page(invoice_name);
+                        } catch (error) {
+                                console.error("Failed to print draft invoice:", error);
+                                this.eventBus.emit("show_message", {
+                                        title: __("Unable to print draft invoice"),
+                                        color: "error",
+                                });
+                        }
+                },
 		async set_delivery_charges() {
 			var vm = this;
 			if (!this.pos_profile || !this.customer || !this.pos_profile.posa_use_delivery_charges) {
@@ -1327,6 +1469,7 @@ export default {
                                         this.update_item_detail(item);
                                 }
                         });
+                        this.primeInvoiceStockState();
                 },
                 handleLoadReturnInvoice(data) {
                         console.log("Invoice component received load_return_invoice event with data:", data);
@@ -1405,12 +1548,24 @@ export default {
                         this.eventBus.on(eventName, handler);
                 });
 
+                this.stockUnsubscribe = stockCoordinator.subscribe(this.handleStockCoordinatorUpdate);
+
                 if (this.pos_profile.posa_allow_multi_currency) {
                         this.fetch_available_currencies();
                 }
+
+                this.emitCartQuantities();
+                this.$nextTick(() => {
+                        this.primeInvoiceStockState();
+                });
         },
         // Cleanup event listeners before component is destroyed
         beforeUnmount() {
+                if (typeof this.stockUnsubscribe === "function") {
+                        this.stockUnsubscribe();
+                        this.stockUnsubscribe = null;
+                }
+
                 Object.entries(this._busHandlers || {}).forEach(([eventName, handler]) => {
                         this.eventBus.off(eventName, handler);
                 });
@@ -1447,31 +1602,37 @@ export default {
 				}
 			},
 		);
-		this._shortcutHandlers = this._shortcutHandlers || {};
+                this._shortcutHandlers = this._shortcutHandlers || {};
 
-		this._shortcutHandlers.shortOpenPayment = this.shortOpenPayment.bind(this);
-		this._shortcutHandlers.shortDeleteFirstItem = this.shortDeleteFirstItem.bind(this);
-		this._shortcutHandlers.shortOpenFirstItem = this.shortOpenFirstItem.bind(this);
-		this._shortcutHandlers.shortSelectDiscount = this.shortSelectDiscount.bind(this);
+                this._shortcutHandlers.shortOpenPayment = this.shortOpenPayment.bind(this);
+                this._shortcutHandlers.shortDeleteFirstItem = this.shortDeleteFirstItem.bind(this);
+                this._shortcutHandlers.shortOpenFirstItem = this.shortOpenFirstItem.bind(this);
+                this._shortcutHandlers.shortSelectDiscount = this.shortSelectDiscount.bind(this);
+                this._shortcutHandlers.shortFocusCustomer = this.shortFocusCustomer.bind(this);
+                this._shortcutHandlers.shortFocusItem = this.shortFocusItem.bind(this);
 
-		document.addEventListener("keydown", this._shortcutHandlers.shortOpenPayment);
-		document.addEventListener("keydown", this._shortcutHandlers.shortDeleteFirstItem);
-		document.addEventListener("keydown", this._shortcutHandlers.shortOpenFirstItem);
-		document.addEventListener("keydown", this._shortcutHandlers.shortSelectDiscount);
-	},
-	// Remove global keyboard shortcuts when component is unmounted
-	unmounted() {
-		if (!this._shortcutHandlers) {
-			return;
-		}
+                document.addEventListener("keydown", this._shortcutHandlers.shortOpenPayment);
+                document.addEventListener("keydown", this._shortcutHandlers.shortDeleteFirstItem);
+                document.addEventListener("keydown", this._shortcutHandlers.shortOpenFirstItem);
+                document.addEventListener("keydown", this._shortcutHandlers.shortSelectDiscount);
+                document.addEventListener("keydown", this._shortcutHandlers.shortFocusCustomer);
+                document.addEventListener("keydown", this._shortcutHandlers.shortFocusItem);
+        },
+        // Remove global keyboard shortcuts when component is unmounted
+        unmounted() {
+                if (!this._shortcutHandlers) {
+                        return;
+                }
 
-		document.removeEventListener("keydown", this._shortcutHandlers.shortOpenPayment);
-		document.removeEventListener("keydown", this._shortcutHandlers.shortDeleteFirstItem);
-		document.removeEventListener("keydown", this._shortcutHandlers.shortOpenFirstItem);
-		document.removeEventListener("keydown", this._shortcutHandlers.shortSelectDiscount);
+                document.removeEventListener("keydown", this._shortcutHandlers.shortOpenPayment);
+                document.removeEventListener("keydown", this._shortcutHandlers.shortDeleteFirstItem);
+                document.removeEventListener("keydown", this._shortcutHandlers.shortOpenFirstItem);
+                document.removeEventListener("keydown", this._shortcutHandlers.shortSelectDiscount);
+                document.removeEventListener("keydown", this._shortcutHandlers.shortFocusCustomer);
+                document.removeEventListener("keydown", this._shortcutHandlers.shortFocusItem);
 
-		this._shortcutHandlers = {};
-	},
+                this._shortcutHandlers = {};
+        },
 	watch: invoiceWatchers,
 };
 </script>
