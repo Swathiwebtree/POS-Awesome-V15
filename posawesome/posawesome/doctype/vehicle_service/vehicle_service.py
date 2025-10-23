@@ -5,5 +5,5 @@
 from frappe.model.document import Document
 
 
-class StockinHand(Document):
-    pass
+class VehicleService(Document):
+	pass

@@ -1,0 +1,217 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-10-20 11:00:38.140408",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "work_order",
+  "vehicle_number",
+  "items",
+  "payment_methods",
+  "service_and_product_categories",
+  "barcode",
+  "work_order_discount",
+  "quantity_and_description",
+  "staff_code_and_staff_name",
+  "customer",
+  "loyalty_points",
+  "invoice_no",
+  "invoice_date",
+  "station_no",
+  "cashier_name",
+  "column_break_uzip",
+  "customer_information",
+  "customer_id",
+  "name1",
+  "tin",
+  "contact_details",
+  "vehicle_information",
+  "make",
+  "model",
+  "mileage",
+  "next_service__date",
+  "sales_points"
+ ],
+ "fields": [
+  {
+   "fieldname": "work_order",
+   "fieldtype": "Data",
+   "label": "Work Order"
+  },
+  {
+   "fieldname": "vehicle_number",
+   "fieldtype": "Data",
+   "label": " Vehicle Number",
+   "options": "Vehicle Master"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Link",
+   "label": " Items",
+   "options": "Item"
+  },
+  {
+   "fieldname": "payment_methods",
+   "fieldtype": "Select",
+   "label": " Payment Methods",
+   "options": "Cash\nCredit Card\nSettle\nSell"
+  },
+  {
+   "fieldname": "service_and_product_categories",
+   "fieldtype": "Select",
+   "label": "Service And Product Categories",
+   "options": "Body Wash\nEngine Oil\nExtra Services"
+  },
+  {
+   "fieldname": "barcode",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Barcode",
+   "reqd": 1
+  },
+  {
+   "fieldname": "work_order_discount",
+   "fieldtype": "Data",
+   "label": " Work Order Discount"
+  },
+  {
+   "fetch_from": "items.item_name",
+   "fieldname": "quantity_and_description",
+   "fieldtype": "Small Text",
+   "label": "Quantity and Description"
+  },
+  {
+   "fieldname": "staff_code_and_staff_name",
+   "fieldtype": "Data",
+   "label": "Staff Code And Staff Name"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "loyalty_points",
+   "fieldtype": "Data",
+   "label": " Loyalty points ",
+   "options": "\n"
+  },
+  {
+   "fieldname": "invoice_no",
+   "fieldtype": "Link",
+   "label": " Invoice No",
+   "options": "Sales Invoice"
+  },
+  {
+   "fetch_from": "invoice_no.posting_date",
+   "fieldname": "invoice_date",
+   "fieldtype": "Date",
+   "label": "Invoice Date"
+  },
+  {
+   "fieldname": "station_no",
+   "fieldtype": "Link",
+   "label": "Station No",
+   "options": "POS Terminal"
+  },
+  {
+   "fieldname": "cashier_name",
+   "fieldtype": "Link",
+   "label": "Cashier Name",
+   "options": "User"
+  },
+  {
+   "fieldname": "column_break_uzip",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "customer_information",
+   "fieldtype": "Heading",
+   "label": " Customer Information"
+  },
+  {
+   "fetch_from": "customer.customer_pos_id",
+   "fieldname": "customer_id",
+   "fieldtype": "Data",
+   "label": "Customer ID"
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "name1",
+   "fieldtype": "Data",
+   "label": "Name"
+  },
+  {
+   "fetch_from": "customer.tax_id",
+   "fieldname": "tin",
+   "fieldtype": "Data",
+   "label": "TIN"
+  },
+  {
+   "fetch_from": "customer.customer_primary_contact",
+   "fieldname": "contact_details",
+   "fieldtype": "Data",
+   "label": "Contact Details"
+  },
+  {
+   "fieldname": "vehicle_information",
+   "fieldtype": "Heading",
+   "label": " Vehicle Information"
+  },
+  {
+   "fieldname": "make",
+   "fieldtype": "Link",
+   "label": " Make",
+   "options": "Vehicle Master"
+  },
+  {
+   "fetch_from": "make.model",
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "fieldname": "mileage",
+   "fieldtype": "Data",
+   "label": "Mileage"
+  },
+  {
+   "fieldname": "next_service__date",
+   "fieldtype": "Date",
+   "label": "Next Service  Date"
+  },
+  {
+   "fieldname": "sales_points",
+   "fieldtype": "Data",
+   "label": "Sales Points"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-10-20 11:00:38.140408",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "Vehicle Service",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

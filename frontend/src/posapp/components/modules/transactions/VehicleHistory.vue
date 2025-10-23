@@ -1,129 +1,131 @@
 <template>
-	<div class="vehicle-history">
-		<h4>Vehicle History</h4>
+  <div class="vehicle-history">
+    <h4>Vehicle History</h4>
 
-		<!-- Vehicle & Customer Info -->
-		<div class="info-row">
-			<label>Vehicle #:</label>
-			<input v-model="vehicleNo" placeholder="Enter vehicle number" />
-			<button @click="fetchVehicleDetails">Search</button>
-		</div>
+    <!-- Vehicle Search -->
+    <div class="info-row">
+      <label>Vehicle #:</label>
+      <input v-model="vehicleNo" placeholder="Enter vehicle number" />
+      <button @click="fetchVehicleHistory">Search</button>
+    </div>
 
-		<div v-if="vehicleData">
-			<div class="vehicle-info">
-				<p><strong>Tel (Mob):</strong> {{ customerData.mobile_no || "-" }}</p>
-				<p><strong>Make:</strong> {{ vehicleData.make || "-" }}</p>
-				<p><strong>Model #:</strong> {{ vehicleData.model || "-" }}</p>
-				<p><strong>Mileage Kms:</strong> {{ vehicleData.odometer || "-" }}</p>
-				<p><strong>Customer:</strong> {{ customerData.customer_name || "-" }}</p>
-				<p><strong>Cash Customer:</strong> {{ customerData.cash_customer ? "Yes" : "No" }}</p>
-				<p><strong>Name:</strong> {{ customerData.name || "-" }}</p>
-			</div>
+    <!-- Vehicle Info -->
+    <div v-if="vehicleHistory">
+      <div class="vehicle-info">
+        <p><strong>Vehicle #:</strong> {{ vehicleHistory.vehicle_no || "-" }}</p>
+        <p><strong>Make:</strong> {{ vehicleHistory.make || "-" }}</p>
+        <p><strong>Model #:</strong> {{ vehicleHistory.model_no || "-" }}</p>
+        <p><strong>Mileage Kms:</strong> {{ vehicleHistory.mileage_kms || "-" }}</p>
+        <p><strong>Customer Name:</strong> {{ vehicleHistory.customer_name || "-" }}</p>
+        <p><strong>Cash Customer:</strong> {{ vehicleHistory.cash_customer ? "Yes" : "No" }}</p>
+      </div>
 
-			<!-- Vehicle History Table -->
-			<h5>Transaction History</h5>
-			<table>
-				<thead>
-					<tr>
-						<th>Bill No</th>
-						<th>Date</th>
-						<th>Item Code</th>
-						<th>Item Name</th>
-						<th>Amount</th>
-						<th>Points</th>
-						<th>Lift Code</th>
-						<th>Staff Name</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="(entry, index) in history" :key="index">
-						<td>{{ entry.bill_no }}</td>
-						<td>{{ entry.date }}</td>
-						<td>{{ entry.item_code }}</td>
-						<td>{{ entry.item_name }}</td>
-						<td>{{ entry.amount }}</td>
-						<td>{{ entry.points }}</td>
-						<td>{{ entry.lift_code }}</td>
-						<td>{{ entry.staff_name }}</td>
-					</tr>
-					<tr v-if="history.length === 0">
-						<td colspan="8" class="no-data">No history found</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
+      <!-- Vehicle Transactions Table -->
+      <h5>Transactions</h5>
+      <table class="transactions-table">
+        <thead>
+          <tr>
+            <th>Bill No</th>
+            <th>Date</th>
+            <th>Item Code</th>
+            <th>Item Name</th>
+            <th>Amount</th>
+            <th>Points</th>
+            <th>Lift Code</th>
+            <th>Staff Name</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(tx, index) in vehicleHistory.vehicle_transactions" :key="index">
+            <td>{{ tx.bill_no }}</td>
+            <td>{{ tx.date }}</td>
+            <td>{{ tx.item_code }}</td>
+            <td>{{ tx.item_name }}</td>
+            <td>{{ tx.amount }}</td>
+            <td>{{ tx.points }}</td>
+            <td>{{ tx.lift_code }}</td>
+            <td>{{ tx.staff_name }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-		<div v-else>
-			<p>Please enter a vehicle number and click search.</p>
-		</div>
-	</div>
+    <div v-else-if="searched">No vehicle history found.</div>
+  </div>
 </template>
 
-<script setup>
-import { ref } from "vue";
+<script>
 import axios from "axios";
 
-const vehicleNo = ref("");
-const vehicleData = ref(null);
-const customerData = ref({});
-const history = ref([]);
+export default {
+  data() {
+    return {
+      vehicleNo: "",
+      vehicleHistory: null,
+      searched: false,
+    };
+  },
+  methods: {
+    async fetchVehicleHistory() {
+      if (!this.vehicleNo) return alert("Please enter a vehicle number");
 
-async function fetchVehicleDetails() {
-	if (!vehicleNo.value) return alert("Please enter vehicle number.");
+      try {
+        const response = await axios.get(
+          `/api/method/frappe.client.get_list`,
+          {
+            params: {
+              doctype: "Vehicle History",
+              filters: { vehicle_no: this.vehicleNo },
+              fields: [
+                "vehicle_no",
+                "make",
+                "model_no",
+                "mileage_kms",
+                "customer_name",
+                "cash_customer",
+                "vehicle_transactions"
+              ],
+              limit_page_length: 1,
+            },
+          }
+        );
 
-	try {
-		const res = await axios.get("/api/method/posawesome.posawesome.api.lazer_pos.get_vehicle_details", {
-			params: { vehicle_no: vehicleNo.value },
-		});
-
-		if (res.data.message) {
-			vehicleData.value = res.data.message.vehicle || null;
-			customerData.value = res.data.message.customer || {};
-			history.value = res.data.message.history || [];
-		} else {
-			vehicleData.value = null;
-			customerData.value = {};
-			history.value = [];
-			alert("Vehicle not found");
-		}
-	} catch (err) {
-		console.error(err);
-		alert("Error fetching vehicle details");
-	}
-}
+        if (response.data.message && response.data.message.length) {
+          this.vehicleHistory = response.data.message[0];
+        } else {
+          this.vehicleHistory = null;
+        }
+        this.searched = true;
+      } catch (error) {
+        console.error("Error fetching vehicle history:", error);
+      }
+    },
+  },
+};
 </script>
 
-<style scoped>
+<style>
 .vehicle-history {
-	padding: 10px;
+  padding: 1rem;
 }
 .info-row {
-	display: flex;
-	gap: 10px;
-	margin-bottom: 15px;
-	align-items: center;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 .vehicle-info p {
-	margin: 3px 0;
+  margin: 0.25rem 0;
 }
-table {
-	width: 100%;
-	border-collapse: collapse;
-	margin-top: 10px;
+.transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
 }
-th,
-td {
-	border: 1px solid #ccc;
-	padding: 5px;
-	text-align: left;
-}
-.no-data {
-	text-align: center;
-	font-style: italic;
-	color: #888;
-}
-button {
-	padding: 4px 8px;
-	cursor: pointer;
+.transactions-table th,
+.transactions-table td {
+  border: 1px solid #ccc;
+  padding: 0.5rem;
+  text-align: left;
 }
 </style>

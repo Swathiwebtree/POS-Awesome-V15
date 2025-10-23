@@ -5,6 +5,10 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "vehicle_master",
+  "model",
+  "employee",
+  "service_issue_item",
   "issue_id",
   "vehicle",
   "customer",
@@ -77,12 +81,36 @@
    "fieldname": "service_date",
    "fieldtype": "Date",
    "label": "Service Date"
+  },
+  {
+   "fieldname": "vehicle_master",
+   "fieldtype": "Link",
+   "label": "Vehicle Master",
+   "options": "Vehicle Master"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Model",
+   "options": "Vehicle Model"
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "label": "Employee",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "service_issue_item",
+   "fieldtype": "Table",
+   "label": "Service Issue Item",
+   "options": "Service Issue Item"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-19 11:01:24.090961",
+ "modified": "2025-10-22 20:27:40.805000",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Service Issue Note",

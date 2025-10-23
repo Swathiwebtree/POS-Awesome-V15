@@ -1,161 +1,204 @@
 <template>
-	<div class="grn-dashboard">
-		<h2>Goods Receipt Notes (GRN)</h2>
+  <div class="grn-dashboard">
+    <h2 class="title">Goods Receipt Notes (GRN)</h2>
 
-		<!-- Filters -->
-		<div class="filters mb-4">
-			<input type="date" v-model="startDate" placeholder="From Date" class="input" />
-			<input type="date" v-model="endDate" placeholder="To Date" class="input" />
-			<input v-model="supplier" placeholder="Supplier" class="input" />
-			<input v-model="itemCode" placeholder="Item Code" class="input" />
-			<button @click="fetchGRNs" class="btn">Search</button>
-		</div>
+    <!-- Filters -->
+    <div class="filters mb-4">
+      <input type="date" v-model="startDate" class="input" placeholder="From Date" />
+      <input type="date" v-model="endDate" class="input" placeholder="To Date" />
+      <input v-model="supplier" class="input" placeholder="Supplier" />
+      <input v-model="searchText" class="input" placeholder="Search GRN #" />
+      <button class="btn" @click="fetchGRNs">Search</button>
+    </div>
 
-		<!-- GRN List Table -->
-		<table>
-			<thead>
-				<tr>
-					<th>GRN #</th>
-					<th>Date</th>
-					<th>Supplier</th>
-					<th>Total Qty</th>
-					<th>Grand Total</th>
-					<th>Company</th>
-					<th>Status</th>
-				</tr>
-			</thead>
-			<tbody>
-				<tr v-for="grn in grnList" :key="grn.name" @click="selectGRN(grn)">
-					<td>{{ grn.name }}</td>
-					<td>{{ grn.posting_date }}</td>
-					<td>{{ grn.supplier_name }}</td>
-					<td>{{ grn.total_qty }}</td>
-					<td>{{ grn.grand_total }}</td>
-					<td>{{ grn.company }}</td>
-					<td>{{ grn.status }}</td>
-				</tr>
-			</tbody>
-		</table>
+    <!-- GRN Table -->
+    <table class="table">
+      <thead>
+        <tr>
+          <th>GRN #</th>
+          <th>Owner</th>
+          <th>Created On</th>
+          <th>Modified On</th>
+          <th>Modified By</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="(grn, index) in grnList"
+          :key="index"
+          @click="selectGRN(grn)"
+          class="row"
+        >
+          <td>{{ grn.name }}</td>
+          <td>{{ grn.owner }}</td>
+          <td>{{ formatDate(grn.creation) }}</td>
+          <td>{{ formatDate(grn.modified) }}</td>
+          <td>{{ grn.modified_by }}</td>
+          <td>{{ grn.docstatus === 0 ? 'Draft' : 'Submitted' }}</td>
+        </tr>
+        <tr v-if="!grnList.length">
+          <td colspan="6" class="text-center">No GRNs found.</td>
+        </tr>
+      </tbody>
+    </table>
 
-		<!-- Selected GRN Details -->
-		<div v-if="selectedGRN" class="grn-details mt-4">
-			<h3>GRN Details: {{ selectedGRN.name }}</h3>
-
-			<!-- Items Tab -->
-			<h4>Items</h4>
-			<table>
-				<thead>
-					<tr>
-						<th>Item Code</th>
-						<th>Item Name</th>
-						<th>Qty</th>
-						<th>Rate</th>
-						<th>Amount</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="(item, index) in selectedGRN.items" :key="index">
-						<td>{{ item.item_code }}</td>
-						<td>{{ item.item_name }}</td>
-						<td>{{ item.qty }}</td>
-						<td>{{ item.rate }}</td>
-						<td>{{ item.amount }}</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
-	</div>
+    <!-- Selected GRN Details -->
+    <div v-if="selectedGRN" class="grn-details">
+      <h3>GRN Details: {{ selectedGRN.name }}</h3>
+      <ul>
+        <li><strong>Owner:</strong> {{ selectedGRN.owner }}</li>
+        <li><strong>Created On:</strong> {{ formatDate(selectedGRN.creation) }}</li>
+        <li><strong>Modified By:</strong> {{ selectedGRN.modified_by }}</li>
+        <li><strong>Status:</strong> {{ selectedGRN.docstatus === 0 ? 'Draft' : 'Submitted' }}</li>
+        <li><strong>Supplier:</strong> {{ selectedGRN.supplier || '-' }}</li>
+        <li><strong>Location:</strong> {{ selectedGRN.location || '-' }}</li>
+        <li><strong>Date:</strong> {{ selectedGRN.date || '-' }}</li>
+        <li><strong>GRN #:</strong> {{ selectedGRN.grn_no || '-' }}</li>
+      </ul>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { ref } from "vue";
 import axios from "axios";
 
+// State variables
 const startDate = ref("");
 const endDate = ref("");
 const supplier = ref("");
-const itemCode = ref("");
-
+const searchText = ref("");
 const grnList = ref([]);
 const selectedGRN = ref(null);
 
+// Fetch GRNs from ERPNext
 const fetchGRNs = async () => {
-	try {
-		const res = await axios.get("/api/method/posawesome.posawesome.api.get_grn_list", {
-			params: {
-				start_date: startDate.value,
-				end_date: endDate.value,
-				supplier: supplier.value,
-				item_code: itemCode.value,
-			},
-		});
-		grnList.value = res.data.message || [];
-		selectedGRN.value = null;
-	} catch (err) {
-		console.error(err);
-	}
+  try {
+    // Build filters array
+    const filters = [];
+    if (startDate.value) filters.push(["creation", ">=", startDate.value]);
+    if (endDate.value) filters.push(["creation", "<=", endDate.value]);
+    if (supplier.value) filters.push(["supplier", "like", `%${supplier.value}%`]);
+    if (searchText.value) filters.push(["name", "like", `%${searchText.value}%`]);
+
+    const res = await axios.get("/api/method/frappe.desk.reportview.get", {
+      params: {
+        doctype: "Goods Receipt Note",
+        fields: JSON.stringify([
+          "name",
+          "owner",
+          "creation",
+          "modified",
+          "modified_by",
+          "docstatus",
+          "supplier",
+          "location",
+          "date",
+          "grn_no"
+        ]),
+        filters: JSON.stringify(filters),
+        order_by: "creation desc",
+        limit_start: 0,
+        limit_page_length: 50
+      }
+    });
+
+    const { keys, values } = res.data.message || { keys: [], values: [] };
+
+    grnList.value = values.map((row) => {
+      const obj = {};
+      keys.forEach((key, i) => (obj[key] = row[i]));
+      return obj;
+    });
+
+    selectedGRN.value = null;
+  } catch (err) {
+    console.error("Error fetching GRNs:", err);
+  }
 };
 
-const selectGRN = async (grn) => {
-	if (!grn.items) {
-		// Fetch items if not already loaded
-		try {
-			const res = await axios.get("/api/method/posawesome.posawesome.api.lazer_pos.get_grn_list", {
-				params: { item_code: "", start_date: "", end_date: "", supplier: "", grn_no: grn.name },
-			});
-			selectedGRN.value = res.data.message[0] || grn;
-		} catch (err) {
-			console.error(err);
-			selectedGRN.value = grn;
-		}
-	} else {
-		selectedGRN.value = grn;
-	}
+// Select GRN for details view
+const selectGRN = (grn) => {
+  selectedGRN.value = grn;
 };
+
+// Format date nicely
+const formatDate = (dateStr) => {
+  if (!dateStr) return "-";
+  return new Date(dateStr).toLocaleString();
+};
+
+// Fetch initial list on mount
+fetchGRNs();
 </script>
 
 <style scoped>
 .grn-dashboard {
-	padding: 10px;
+  padding: 20px;
+  font-family: Arial, sans-serif;
 }
+
+.title {
+  margin-bottom: 15px;
+}
+
 .filters {
-	display: flex;
-	gap: 10px;
-	flex-wrap: wrap;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
 }
+
 .input {
-	border: 1px solid #ccc;
-	padding: 4px;
-	width: 150px;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
 }
+
 .btn {
-	background: #007bff;
-	color: white;
-	padding: 6px 12px;
-	cursor: pointer;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
 }
+
 .btn:hover {
-	background: #0056b3;
+  background-color: #0056b3;
 }
-table {
-	width: 100%;
-	border-collapse: collapse;
-	margin-bottom: 20px;
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
 }
+
 th,
 td {
-	border: 1px solid #ccc;
-	padding: 5px;
-	text-align: left;
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
 }
-tr:hover {
-	background-color: #f5f5f5;
-	cursor: pointer;
+
+th {
+  background-color: #f2f2f2;
 }
+
+.row:hover {
+  background-color: #eef6ff;
+  cursor: pointer;
+}
+
 .grn-details {
-	margin-top: 20px;
-	padding: 10px;
-	border: 1px solid #ddd;
-	background: #fafafa;
+  margin-top: 20px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.text-center {
+  text-align: center;
 }
 </style>

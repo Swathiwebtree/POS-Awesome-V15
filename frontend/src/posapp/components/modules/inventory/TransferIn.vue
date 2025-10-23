@@ -1,156 +1,196 @@
 <template>
-	<div>
-		<h2 class="text-xl font-semibold mb-4">Transfer In</h2>
+  <div class="p-6">
+    <h2 class="text-2xl font-semibold mb-4 text-gray-800">Transfer In</h2>
 
-		<!-- Filter/Search Fields -->
-		<div class="grid grid-cols-4 gap-2 mb-4">
-			<input type="date" v-model="fromDate" placeholder="From Date" class="input" />
-			<input type="date" v-model="toDate" placeholder="To Date" class="input" />
-			<input v-model="transferFrom" placeholder="Transfer From" class="input" />
-			<input v-model="transferTo" placeholder="Transfer To" class="input" />
-			<input v-model="stationId" placeholder="Station ID" class="input" />
-			<button class="btn col-span-1" @click="fetchTransferInList">Search</button>
-		</div>
+    <!-- Filters -->
+    <div class="grid grid-cols-5 gap-3 mb-6">
+      <input v-model="filters.startDate" type="date" class="input" />
+      <input v-model="filters.endDate" type="date" class="input" />
+      <input v-model="filters.transferFrom" class="input" placeholder="Transfer From" />
+      <input v-model="filters.transferTo" class="input" placeholder="Transfer To" />
+      <button @click="fetchTransfers" class="btn">Fetch</button>
+    </div>
 
-		<!-- Main Fields -->
-		<div class="grid grid-cols-4 gap-2 mb-4">
-			<input v-model="transNumber" placeholder="Trans #" class="input" />
-			<input v-model="tOutNumber" placeholder="T. Out #" class="input" />
-			<input v-model="transferFromInput" placeholder="Transfer From" class="input" />
-			<input v-model="stationIdInput" placeholder="Station ID" class="input" />
-			<input type="date" v-model="date" class="input" />
-			<input v-model="division" placeholder="Div" class="input" />
-			<input v-model="transferToInput" placeholder="Transfer To" class="input" />
-			<input v-model="userId" placeholder="User ID" class="input" />
-		</div>
+    <!-- Transfer In Table -->
+    <div v-if="transfers.length" class="overflow-x-auto mb-8 border rounded-lg shadow-sm">
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-100">
+          <tr>
+            <th>Trans #</th>
+            <th>T. Out #</th>
+            <th>Transfer From</th>
+            <th>Station ID</th>
+            <th>Date</th>
+            <th>Div</th>
+            <th>Transfer To</th>
+            <th>User ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="transfer in transfers"
+            :key="transfer.name"
+            @click="selectTransfer(transfer)"
+            class="hover:bg-gray-50 cursor-pointer"
+          >
+            <td>{{ transfer.trans_no }}</td>
+            <td>{{ transfer.t_out_no }}</td>
+            <td>{{ transfer.transfer_from }}</td>
+            <td>{{ transfer.station_id }}</td>
+            <td>{{ formatDate(transfer.date) }}</td>
+            <td>{{ transfer.div }}</td>
+            <td>{{ transfer.transfer_to }}</td>
+            <td>{{ transfer.user_id }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-		<!-- Stock Items Table -->
-		<table class="table-auto border w-full mb-4">
-			<thead>
-				<tr>
-					<th>Barcode</th>
-					<th>Item Code</th>
-					<th>Item Name</th>
-					<th>Balance</th>
-					<th>Qty</th>
-					<th>Unit</th>
-					<th>Source #</th>
-				</tr>
-			</thead>
-			<tbody>
-				<tr v-for="(item, index) in items" :key="index">
-					<td><input v-model="item.barcode" class="input" /></td>
-					<td><input v-model="item.item_code" class="input" /></td>
-					<td><input v-model="item.item_name" class="input" /></td>
-					<td><input v-model.number="item.balance" class="input" /></td>
-					<td><input v-model.number="item.qty" class="input" /></td>
-					<td><input v-model="item.unit" class="input" /></td>
-					<td><input v-model="item.source_no" class="input" /></td>
-				</tr>
-			</tbody>
-		</table>
+    <p v-else class="text-gray-500 text-sm italic">No Transfer In records found.</p>
 
-		<button class="btn" @click="saveTransferIn">Save Transfer In</button>
-	</div>
+    <!-- Selected Transfer Details -->
+    <div v-if="selectedTransfer" class="mt-8">
+      <h3 class="text-lg font-semibold mb-3 text-gray-700">
+        Transfer Details — {{ selectedTransfer.trans_no }}
+      </h3>
+      <div class="grid grid-cols-3 gap-2 mb-4 text-sm text-gray-700">
+        <p><b>Transfer From:</b> {{ selectedTransfer.transfer_from }}</p>
+        <p><b>Transfer To:</b> {{ selectedTransfer.transfer_to }}</p>
+        <p><b>Date:</b> {{ formatDate(selectedTransfer.date) }}</p>
+        <p><b>Div:</b> {{ selectedTransfer.div }}</p>
+        <p><b>Station ID:</b> {{ selectedTransfer.station_id }}</p>
+        <p><b>User ID:</b> {{ selectedTransfer.user_id }}</p>
+        <p><b>T. Out #:</b> {{ selectedTransfer.t_out_no }}</p>
+      </div>
+
+      <h4 class="text-md font-semibold mb-2">Item Details</h4>
+      <div class="overflow-x-auto border rounded-lg">
+        <table class="min-w-full text-sm">
+          <thead class="bg-gray-100">
+            <tr>
+              <th>Barcode</th>
+              <th>Item Code</th>
+              <th>Item Name</th>
+              <th>Balance</th>
+              <th>Qty</th>
+              <th>Unit</th>
+              <th>Source #</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(item, idx) in selectedTransfer.items" :key="idx">
+              <td>{{ item.barcode }}</td>
+              <td>{{ item.item_code }}</td>
+              <td>{{ item.item_name }}</td>
+              <td>{{ item.balance }}</td>
+              <td>{{ item.qty }}</td>
+              <td>{{ item.unit }}</td>
+              <td>{{ item.source_no }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { ref } from "vue";
 import axios from "axios";
 
-const fromDate = ref("");
-const toDate = ref("");
-const transferFrom = ref("");
-const transferTo = ref("");
-const stationId = ref("");
+const filters = ref({
+  startDate: "",
+  endDate: "",
+  transferFrom: "",
+  transferTo: ""
+});
 
-const transNumber = ref("");
-const tOutNumber = ref("");
-const transferFromInput = ref("");
-const stationIdInput = ref("");
-const date = ref("");
-const division = ref("");
-const transferToInput = ref("");
-const userId = ref("");
+const transfers = ref([]);
+const selectedTransfer = ref(null);
 
-const items = ref([]);
+// Include cookies automatically
+axios.defaults.withCredentials = true;
 
-// Fetch Transfer In records from API
-const fetchTransferInList = async () => {
-	try {
-		const response = await axios.get(
-			"/api/method/posawesome.posawesome.api.lazer_pos.get_transfer_in_list",
-			{
-				params: {
-					from_date: fromDate.value,
-					to_date: toDate.value,
-					transfer_from: transferFrom.value,
-					transfer_to: transferTo.value,
-					station_id: stationId.value,
-				},
-			},
-		);
+// Add CSRF token if embedded in Frappe page
+axios.interceptors.request.use((config) => {
+  const csrfToken = frappe.csrf_token;
+  if (csrfToken) config.headers["X-Frappe-CSRF-Token"] = csrfToken;
+  return config;
+});
 
-		if (response.data.message) {
-			// If API returns list of transfer records
-			if (response.data.message.length > 0) {
-				const record = response.data.message[0];
-				transNumber.value = record.trans_no;
-				tOutNumber.value = record.t_out_no;
-				transferFromInput.value = record.transfer_from;
-				stationIdInput.value = record.station_id;
-				date.value = record.date;
-				division.value = record.div;
-				transferToInput.value = record.transfer_to;
-				userId.value = record.user_id;
-				items.value = record.items.map((i) => ({
-					barcode: i.barcode || "",
-					item_code: i.item_code || "",
-					item_name: i.item_name || "",
-					balance: i.balance || 0,
-					qty: i.qty || 0,
-					unit: i.unit || "",
-					source_no: i.source_no || "",
-				}));
-			}
-		}
-	} catch (error) {
-		console.error("Error fetching Transfer In list:", error);
-		alert("Failed to fetch Transfer In records.");
-	}
+// Fetch Transfer In records
+const fetchTransfers = async () => {
+  try {
+    const filtersObj = {};
+    if (filters.value.transferFrom) filtersObj.transfer_from = filters.value.transferFrom;
+    if (filters.value.transferTo) filtersObj.transfer_to = filters.value.transferTo;
+    if (filters.value.startDate && filters.value.endDate)
+      filtersObj.date = ["between", [filters.value.startDate, filters.value.endDate]];
+
+    const res = await axios.get("/api/resource/Transfer In", {
+      params: {
+        fields: JSON.stringify([
+          "name", "trans_no", "t_out_no", "transfer_from", "station_id",
+          "date", "div", "transfer_to", "user_id"
+        ]),
+        filters: JSON.stringify(filtersObj),
+        limit_page_length: 50,
+        order_by: "modified desc"
+      }
+    });
+
+    transfers.value = res.data.data || [];
+    selectedTransfer.value = null;
+  } catch (err) {
+    console.error("Error fetching Transfer In records:", err);
+  }
 };
 
-const saveTransferIn = () => {
-	alert("Transfer In Saved!");
+// Fetch single Transfer with child items
+const selectTransfer = async (transfer) => {
+  try {
+    const res = await axios.get(`/api/resource/Transfer In/${transfer.name}`);
+    selectedTransfer.value = res.data.data;
+  } catch (err) {
+    console.error("Error fetching Transfer In details:", err);
+  }
+};
+
+// Format date for display
+const formatDate = (date) => {
+  if (!date) return "";
+  return new Date(date).toLocaleDateString();
 };
 </script>
 
 <style scoped>
 .input {
-	border: 1px solid #ccc;
-	padding: 4px;
-	width: 100%;
-	margin-bottom: 4px;
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  width: 100%;
+  border-radius: 4px;
 }
 .btn {
-	background: #007bff;
-	color: white;
-	padding: 6px 12px;
-	cursor: pointer;
-	margin-top: 4px;
+  background-color: #007bff;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
 }
 .btn:hover {
-	background: #0056b3;
+  background-color: #0056b3;
 }
 table {
-	border-collapse: collapse;
-	width: 100%;
-	margin-bottom: 10px;
+  width: 100%;
+  border-collapse: collapse;
 }
-th,
-td {
-	border: 1px solid #ccc;
-	padding: 4px;
-	text-align: left;
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  text-align: left;
+}
+th {
+  font-weight: 600;
 }
 </style>

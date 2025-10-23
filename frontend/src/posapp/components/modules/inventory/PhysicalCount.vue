@@ -1,104 +1,132 @@
 <template>
-	<div>
-		<h2 class="text-xl font-semibold mb-4">Physical Count</h2>
+  <div class="physical-count-container p-4">
+    <h2 class="text-xl font-semibold mb-4">Physical Count</h2>
 
-		<!-- Main Fields -->
-		<div class="grid grid-cols-4 gap-2 mb-4">
-			<input v-model="phyNumber" placeholder="Phy #" class="input" />
-			<input type="date" v-model="date" class="input" />
-			<input v-model="shiftClosingId" placeholder="Shift Closing ID" class="input" />
-			<input v-model="stationId" placeholder="Station ID" class="input" />
-			<input v-model="location" placeholder="Location" class="input" />
-			<input v-model="reference" placeholder="Reference (Ref)" class="input" />
-			<input v-model="dayClosingId" placeholder="Day Closing ID" class="input" />
-			<input v-model="userId" placeholder="User ID" class="input" />
-		</div>
+    <!-- Header Fields -->
+    <div class="grid grid-cols-3 gap-4 mb-4">
+      <input v-model="physicalCount.phy_no" placeholder="Phy #" class="input" />
+      <input v-model="physicalCount.date" type="date" class="input" />
+      <input v-model="physicalCount.station_id" placeholder="Station ID" class="input" />
+      <input v-model="physicalCount.location" placeholder="Location" class="input" />
+      <input v-model="physicalCount.shift_closing_id" placeholder="Shift Closing ID" class="input" />
+      <input v-model="physicalCount.user_id" placeholder="User ID" class="input" />
+    </div>
 
-		<!-- Inventory Items Table -->
-		<table class="table-auto border w-full mb-4">
-			<thead>
-				<tr>
-					<th>Barcode</th>
-					<th>Item Code</th>
-					<th>Item Name</th>
-					<th>Unit</th>
-					<th>Factor</th>
-					<th>Qty</th>
-					<th>Net Qty</th>
-				</tr>
-			</thead>
-			<tbody>
-				<tr v-for="(item, index) in items" :key="index">
-					<td><input v-model="item.barcode" class="input" /></td>
-					<td><input v-model="item.code" class="input" /></td>
-					<td><input v-model="item.name" class="input" /></td>
-					<td><input v-model="item.unit" class="input" /></td>
-					<td><input v-model.number="item.factor" class="input" /></td>
-					<td><input v-model.number="item.qty" class="input" /></td>
-					<td>{{ (item.qty * item.factor).toFixed(2) }}</td>
-				</tr>
-			</tbody>
-		</table>
+    <!-- Items Table -->
+    <table class="w-full table-auto border">
+      <thead>
+        <tr class="bg-gray-200">
+          <th class="border px-2 py-1">Barcode</th>
+          <th class="border px-2 py-1">Item Code</th>
+          <th class="border px-2 py-1">Item Name</th>
+          <th class="border px-2 py-1">Unit</th>
+          <th class="border px-2 py-1">Factor</th>
+          <th class="border px-2 py-1">Quantity</th>
+          <th class="border px-2 py-1">Net Quantity</th>
+          <th class="border px-2 py-1">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(item, index) in physicalCount.items" :key="index">
+          <td class="border px-2 py-1"><input v-model="item.barcode" class="input"/></td>
+          <td class="border px-2 py-1"><input v-model="item.item_code" class="input"/></td>
+          <td class="border px-2 py-1"><input v-model="item.item_name" class="input"/></td>
+          <td class="border px-2 py-1"><input v-model="item.unit" class="input"/></td>
+          <td class="border px-2 py-1"><input v-model.number="item.factor" type="number" class="input"/></td>
+          <td class="border px-2 py-1"><input v-model.number="item.quantity" type="number" class="input"/></td>
+          <td class="border px-2 py-1"><input v-model.number="item.net_quantity" type="number" class="input"/></td>
+          <td class="border px-2 py-1">
+            <button @click="removeItem(index)" class="btn btn-red">Delete</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
 
-		<button class="btn" @click="savePhysicalCount">Save Physical Count</button>
-	</div>
+    <div class="mt-2">
+      <button @click="addItem" class="btn btn-blue mr-2">Add Item</button>
+      <button @click="savePhysicalCount" class="btn btn-green">Save Physical Count</button>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { ref } from "vue";
-import axios from "axios";
+import { ref } from 'vue'
 
-const phyNumber = ref("");
-const date = ref("");
-const shiftClosingId = ref("");
-const stationId = ref("");
-const location = ref("");
-const reference = ref("");
-const dayClosingId = ref("");
-const userId = ref("");
+// Reactive object for Physical Count
+const physicalCount = ref({
+  phy_no: '',
+  date: '',
+  station_id: '',
+  location: '',
+  shift_closing_id: '',
+  user_id: '',
+  items: []
+})
 
-const items = ref([{ barcode: "", code: "", name: "", unit: "", factor: 1, qty: 0 }]);
+// Add new empty row
+function addItem() {
+  physicalCount.value.items.push({
+    barcode: '',
+    item_code: '',
+    item_name: '',
+    unit: '',
+    factor: 1,
+    quantity: 0,
+    net_quantity: 0
+  })
+}
 
-// Save function to post the physical count
-const savePhysicalCount = async () => {
-	try {
-		const payload = {
-			phyNumber: phyNumber.value,
-			date: date.value,
-			shiftClosingId: shiftClosingId.value,
-			stationId: stationId.value,
-			location: location.value,
-			reference: reference.value,
-			dayClosingId: dayClosingId.value,
-			userId: userId.value,
-			items: items.value,
-		};
+// Remove row
+function removeItem(index) {
+  physicalCount.value.items.splice(index, 1)
+}
 
-		// Replace the URL with your actual Frappe endpoint
-		await axios.post("/api/method/posawesome.posawesome.api.lazer_pos.get_physical_count_list", payload);
-
-		alert("Physical Count saved successfully!");
-	} catch (error) {
-		console.error(error);
-		alert("Error saving Physical Count");
-	}
-};
+// Save to Frappe backend using frappe.call
+function savePhysicalCount() {
+  frappe.call({
+    method: 'frappe.client.insert',
+    args: {
+      doc: {
+        doctype: 'Physical Count',
+        ...physicalCount.value
+      }
+    },
+    callback: (r) => {
+      if (r.message) {
+        alert('Physical Count saved successfully!')
+        // Reset form
+        physicalCount.value = {
+          phy_no: '',
+          date: '',
+          station_id: '',
+          location: '',
+          shift_closing_id: '',
+          user_id: '',
+          items: []
+        }
+      }
+    },
+    error: (err) => {
+      console.error(err)
+      alert('Error saving Physical Count')
+    }
+  })
+}
 </script>
 
 <style scoped>
 .input {
-	border: 1px solid #ccc;
-	padding: 4px;
-	width: 100%;
-	margin-bottom: 4px;
+  border: 1px solid #ccc;
+  padding: 4px 6px;
+  width: 100%;
+  box-sizing: border-box;
 }
 .btn {
-	background: #007bff;
-	color: white;
-	padding: 6px 12px;
-	cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
 }
-.btn:hover {
-	background: #0056b3;
-}
+.btn-blue { background: #3b82f6; color: white; }
+.btn-green { background: #10b981; color: white; }
+.btn-red { background: #ef4444; color: white; }
 </style>

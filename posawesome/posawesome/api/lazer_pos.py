@@ -1,10 +1,25 @@
 import frappe
 from frappe.utils.data import nowdate
 from frappe import _
+from frappe.utils import getdate, flt
 
+from frappe.model.document import Document
+
+class VehicleMaster(Document):
+    def before_insert(self):
+        if not self.trans_no:
+            # auto generate if empty
+            self.trans_no = frappe.model.naming.make_autoname("TRANS-.#####")
 # ----------------------------
 # TRANSACTIONS MODULE
 # ----------------------------
+
+
+@frappe.whitelist()
+def get_items():
+    # Return simple items list for browse — adapt to your real item doctype
+    items = frappe.get_all("Item", filters={"disabled": 0}, fields=["item_code", "item_name", "standard_rate as price", "item_group as category"], limit_page_length=200)
+    return items
 
 
 @frappe.whitelist()
@@ -54,8 +69,25 @@ def get_vehicle_history(vehicle_no):
 
 @frappe.whitelist()
 def get_service_issue_list():
-    """Fetch service issues"""
-    return frappe.get_all("Service Issue", fields=["name", "issue_code", "description", "status"])
+    return frappe.get_all(
+        "Service Issue Note",
+        fields=["name", "issue_id", "vehicle", "customer", "status", "priority", "service_date"],
+        order_by="creation desc"
+    )
+
+@frappe.whitelist(allow_guest=True)
+def create_service_issue_note(data):
+    data = json.loads(data) if isinstance(data, str) else data
+    doc = frappe.new_doc("Service Issue Note")
+    doc.update(data)
+    doc.insert(ignore_permissions=True)
+    frappe.db.commit()
+    return "success"
+
+# @frappe.whitelist()
+# def get_service_issue_list():
+#     """Fetch service issues"""
+#     return frappe.get_all("Service Issue", fields=["name", "issue_code", "description", "status"])
 
 
 @frappe.whitelist()
@@ -136,34 +168,64 @@ def remove_item_from_order(order_no, item_code):
 
 
 @frappe.whitelist()
-def save_work_order(work_order, vehicle, customer, staff_code, staff_name, items, discount=0):
-    wo = frappe.get_doc({"doctype": "Work Order", "name": work_order})
-    wo.vehicle_no = vehicle
-    wo.customer = customer
-    wo.sales_person = staff_name
-    wo.discount = float(discount)
-    for i in items:
-        wo.append("items", i)
-    wo.insert(ignore_permissions=True)
+def save_work_order(work_order=None, vehicle=None, customer=None, staff_code=None, staff_name=None, items=None, discount=0):
+    """
+    Create or update a Vehicle Service Work Order (simple generic implementation).
+    items expected as list of dicts: [{ item_code, qty, price }]
+    """
+    if not work_order:
+        # generate a name if you want
+        work_order = make_autoname("WO-.####")
+
+    doc = None
+    if frappe.db.exists("Vehicle Service Work Order", work_order):
+        doc = frappe.get_doc("Vehicle Service Work Order", work_order)
+        # clear and update items
+        doc.items = []
+    else:
+        doc = frappe.get_doc({"doctype": "Vehicle Service Work Order", "name": work_order})
+
+    doc.vehicle = vehicle
+    doc.customer = customer
+    doc.staff_code = staff_code
+    doc.staff_name = staff_name
+    doc.discount = discount
+
+    # append items
+    if items:
+        # items may be JSON string if called from fetch; ensure list
+        if isinstance(items, str):
+            import json
+            items = json.loads(items)
+        for it in items:
+            qty = it.get("qty", 1)
+            price = it.get("price") or 0
+            doc.append("items", {
+                "item_code": it.get("item_code"),
+                "description": it.get("item_name") or it.get("description"),
+                "qty": qty,
+                "rate": price
+            })
+
+    doc.save(ignore_permissions=True)
     frappe.db.commit()
-    return get_work_order_details(work_order)
+    return {"status": "ok", "work_order": doc.name}
+
 
 
 @frappe.whitelist()
-def get_items_from_barcode(barcode):
-    return frappe.get_all(
-        "Item",
-        filters={"barcode": barcode},
-        fields=[
-            "item_code",
-            "item_name",
-            "description",
-            "standard_rate",
-            "vat_rate",
-            "barcode",
-            "unit_of_measure",
-        ],
-    )
+def get_items_from_barcode(barcode=None):
+    if not barcode:
+        return []
+    # simple lookup on Item Barcode doctype or Item's barcode field
+    ib = frappe.get_all("Item Barcode", filters={"barcode": barcode}, fields=["parent as item_code"], limit_page_length=1)
+    if ib:
+        item_code = ib[0].item_code
+        item = frappe.get_doc("Item", item_code)
+        return [{"item_code": item.name, "item_name": item.item_name, "price": item.standard_rate}]
+    # fallback: try item with barcode field
+    item = frappe.db.get_values("Item", {"barcode": barcode}, ["name", "item_name", "standard_rate"], as_dict=True) or []
+    return item
 
 
 @frappe.whitelist()
@@ -354,12 +416,17 @@ def hold_order(order_no):
 
 @frappe.whitelist()
 def void_order(order_no):
-    """Void work order"""
-    wo = frappe.get_doc("Work Order", order_no)
-    wo.status = "Voided"
-    wo.save(ignore_permissions=True)
+    if not order_no:
+        frappe.throw(_("Order number required"))
+    if not frappe.db.exists("Vehicle Service Work Order", order_no):
+        frappe.throw(_("Work order not found"))
+    doc = frappe.get_doc("Vehicle Service Work Order", order_no)
+    # business logic: set status or cancel
+    doc.flags.ignore_permissions = True
+    doc.db_set("status", "Cancelled")
     frappe.db.commit()
-    return get_work_order_details(order_no)
+    return {"status": "cancelled", "order": order_no}
+
 
 
 @frappe.whitelist()
@@ -919,337 +986,286 @@ def get_damage_memo_list(start_date=None, end_date=None, location=None, station_
 # ----------------------------
 
 
+# ==========================================================
+# 2.1 Bills Listing – Work Order
+# ==========================================================
 @frappe.whitelist()
-def get_bills_listing_work_order(date_from=None, date_to=None, work_order_no=None):
+def get_bills_listing_work_order(filters=None):
     """
-    Returns a list of bills filtered by work order and date range.
+    Filters:
+        from_date, to_date, work_order_no
     """
-    filters = {}
+    filters = frappe.parse_json(filters) if filters else {}
 
-    if date_from:
-        filters["posting_date"] = [">=", date_from]
-    if date_to:
-        filters["posting_date"] = ["<=", date_to]
-    if work_order_no:
-        filters["work_order_no"] = work_order_no
+    query = """
+        SELECT
+            work_order_no,
+            bill_no,
+            date,
+            payment_method,
+            vehicle_no,
+            total_amount,
+            discount_amount,
+            amount_after_discount,
+            vat_amount,
+            net_amount
+        FROM `tabBills Listing Work Order`
+        WHERE date BETWEEN %(from_date)s AND %(to_date)s
+    """
+    if filters.get("work_order_no"):
+        query += " AND work_order_no = %(work_order_no)s"
 
-    # Query the Sales Invoice or relevant DocType
-    bills = frappe.get_all(
-        "Sales Invoice",
-        filters=filters,
-        fields=[
-            "work_order_no",
-            "name as bill_no",
-            "posting_date as date",
-            "payment_method",
-            "vehicle_no",
-            "total_amount",
-            "discount_amount",
-            "amount_after_discount",
-            "tax_amount as vat_amount",
-            "grand_total as net_amount",
-        ],
-        order_by="posting_date desc",
-    )
-
-    # Calculate the grand total row
-    grand_total = {
-        "work_order_no": "Grand Total",
-        "bill_no": "",
-        "date": "",
-        "payment_method": "",
-        "vehicle_no": "",
-        "total_amount": sum(bill.total_amount for bill in bills),
-        "discount_amount": sum(bill.discount_amount for bill in bills),
-        "amount_after_discount": sum(bill.amount_after_discount for bill in bills),
-        "vat_amount": sum(bill.vat_amount for bill in bills),
-        "net_amount": sum(bill.net_amount for bill in bills),
-    }
-
-    bills.append(grand_total)
-    return bills
+    data = frappe.db.sql(query, filters, as_dict=True)
+    return _with_totals(data, ["total_amount", "discount_amount", "amount_after_discount", "vat_amount", "net_amount"])
 
 
+# ==========================================================
+# 2.2 Bills Listing – Vehicle
+# ==========================================================
 @frappe.whitelist()
-def get_bills_listing_vehicle(vehicle_no=None, from_date=None, to_date=None):
+def get_bills_listing_vehicle(filters=None):
     """
-    Returns bills listing filtered by Vehicle No and Date Range.
+    Filters:
+        from_date, to_date, vehicle_no
     """
+    filters = frappe.parse_json(filters) if filters else {}
 
-    if not vehicle_no:
-        frappe.throw(_("Vehicle No is required"))
+    query = """
+        SELECT
+            vehicle_no,
+            bill_no,
+            work_order_no,
+            date,
+            payment_method,
+            time_in,
+            time_out,
+            vehicle_count,
+            total_amount,
+            discount_amount,
+            amount_after_discount,
+            vat_amount,
+            net_amount
+        FROM `tabBills Listing Vehicle`
+        WHERE date BETWEEN %(from_date)s AND %(to_date)s
+    """
+    if filters.get("vehicle_no"):
+        query += " AND vehicle_no = %(vehicle_no)s"
 
-    filters = []
-    if from_date:
-        filters.append(["date", ">=", from_date])
-    if to_date:
-        filters.append(["date", "<=", to_date])
-    filters.append(["vehicle_no", "=", vehicle_no])
-
-    bills = frappe.get_all(
-        "Sales Invoice",  # Assuming Sales Invoice is the doctype storing POS bills
-        filters=filters,
-        fields=[
-            "name as bill_no",
-            "work_order_no",
-            "date",
-            "payment_method",
-            "time_in",
-            "time_out",
-            "vehicle_no",
-            "total_amount",
-            "discount_amount",
-            "amount_after_discount",
-            "vat_amount",
-            "net_amount",
-        ],
-        order_by="date desc",
-    )
-
-    grand_total = sum(bill.get("net_amount", 0) for bill in bills)
-
-    return {"bills": bills, "grand_total": grand_total}
+    data = frappe.db.sql(query, filters, as_dict=True)
+    return _with_totals(data, ["vehicle_count", "total_amount", "discount_amount", "amount_after_discount", "vat_amount", "net_amount"])
 
 
+# ==========================================================
+# 2.3 Payment Summary
+# ==========================================================
 @frappe.whitelist()
-def get_payment_summary_list(from_date=None, to_date=None, payment_type=None):
+def get_payment_summary(filters=None):
     """
-    Returns a summary of payments within the specified date range and optional payment type.
-
-    :param from_date: Filter payments from this date (YYYY-MM-DD)
-    :param to_date: Filter payments up to this date (YYYY-MM-DD)
-    :param payment_type: Optional filter for a specific payment type (Cash, Card, Coupon, etc.)
-    :return: List of dictionaries containing Date, Transaction Number, Payment Code, and Amount
+    Filters:
+        from_date, to_date, payment_type
     """
+    filters = frappe.parse_json(filters) if filters else {}
 
-    filters = {}
-    if from_date:
-        filters["posting_date"] = [">=", from_date]
-    if to_date:
-        filters["posting_date"] = ["<=", to_date]
-    if payment_type:
-        filters["payment_type"] = payment_type
+    query = """
+        SELECT
+            date,
+            transaction_no,
+            payment_code,
+            amount
+        FROM `tabPayment Summary`
+        WHERE date BETWEEN %(from_date)s AND %(to_date)s
+    """
+    if filters.get("payment_type"):
+        query += " AND payment_code = %(payment_type)s"
 
-    payment_summary = frappe.get_all(
-        "Payment Entry",  # Assuming Payment Entry doctype stores the payments
-        filters=filters,
-        fields=[
-            "posting_date as date",
-            "name as transaction_number",
-            "payment_type as payment_code",
-            "paid_amount as amount",
-        ],
-        order_by="posting_date asc",
-    )
-
-    # Optional: convert amounts to float for frontend usage
-    for entry in payment_summary:
-        entry["amount"] = flt(entry["amount"])
-
-    return payment_summary
+    data = frappe.db.sql(query, filters, as_dict=True)
+    return _with_totals(data, ["amount"])
 
 
+# ==========================================================
+# 2.4 Stock In Hand
+# ==========================================================
 @frappe.whitelist()
-def get_stock_in_hand_list(filters=None):
+def get_stock_in_hand(filters=None):
     """
-    API to fetch Stock in Hand report details
-    Filters (optional) can include:
-        - item_code
-        - location
-        - from_date
-        - to_date
+    Filters:
+        warehouse (optional)
     """
-    filters = filters or {}
-    conditions = []
+    filters = frappe.parse_json(filters) if filters else {}
 
-    if filters.get("item_code"):
-        conditions.append(f"item_code='{filters.get('item_code')}'")
-    if filters.get("location"):
-        conditions.append(f"location='{filters.get('location')}'")
-    if filters.get("from_date"):
-        conditions.append(f"posting_date>='{filters.get('from_date')}'")
-    if filters.get("to_date"):
-        conditions.append(f"posting_date<='{filters.get('to_date')}'")
-
-    condition_str = " AND ".join(conditions)
-    if condition_str:
-        condition_str = "WHERE " + condition_str
-
-    query = f"""
+    query = """
         SELECT
             item_code,
             item_name,
-            warehouse as location,
-            sum(actual_qty) as stock_in_hand,
-            stock_uom,
+            unit,
+            warehouse,
+            quantity,
             valuation_rate,
-            sum(actual_qty * valuation_rate) as total_value
-        FROM `tabBin`
-        {condition_str}
-        GROUP BY item_code, warehouse
-        ORDER BY item_code
+            amount
+        FROM `tabStock In Hand`
     """
+    if filters.get("warehouse"):
+        query += " WHERE warehouse = %(warehouse)s"
 
-    stock_list = frappe.db.sql(query, as_dict=True)
-
-    # Add formatted totals if needed
-    for row in stock_list:
-        row["stock_in_hand"] = flt(row.get("stock_in_hand", 0), 2)
-        row["total_value"] = flt(row.get("total_value", 0), 2)
-
-    return stock_list
+    data = frappe.db.sql(query, filters, as_dict=True)
+    return _with_totals(data, ["quantity", "amount"])
 
 
+# ==========================================================
+# 2.5 Stock Sales
+# ==========================================================
 @frappe.whitelist()
-def get_stock_sales_list(
-    start_date=None,
-    end_date=None,
-    department=None,
-    main_category=None,
-    sub_category=None,
-    stock_item_from=None,
-    stock_item_to=None,
-    group_by=None,
-):
+def get_stock_sales(filters=None):
     """
-    Returns stock sales report filtered by date, department, category, or stock item.
+    Filters:
+        from_date, to_date, department, main_category,
+        sub_category, stock_item_from, stock_item_to, stock_type, group_by
     """
-    filters = []
+    filters = frappe.parse_json(filters) if filters else {}
 
-    if start_date:
-        filters.append(["posting_date", ">=", start_date])
-    if end_date:
-        filters.append(["posting_date", "<=", end_date])
-    if department:
-        filters.append(["department", "=", department])
-    if main_category:
-        filters.append(["main_category", "=", main_category])
-    if sub_category:
-        filters.append(["sub_category", "=", sub_category])
-    if stock_item_from and stock_item_to:
-        filters.append(["item_code", ">=", stock_item_from])
-        filters.append(["item_code", "<=", stock_item_to])
+    query = """
+        SELECT
+            posting_date AS date,
+            sales_type,
+            department,
+            main_category,
+            sub_category,
+            stock_item,
+            quantity,
+            amount,
+            discount,
+            net_sales
+        FROM `tabStock Sales`
+        WHERE posting_date BETWEEN %(from_date)s AND %(to_date)s
+    """
 
-    sales_data = frappe.get_all(
-        "Sales Invoice Item",
-        filters=filters,
-        fields=[
-            "posting_date",
-            "item_code",
-            "item_name",
-            "quantity",
-            "amount",
-            "discount_amount",
-            "net_amount",
-        ],
-    )
+    # Optional filters
+    if filters.get("department"):
+        query += " AND department = %(department)s"
+    if filters.get("main_category"):
+        query += " AND main_category = %(main_category)s"
+    if filters.get("sub_category"):
+        query += " AND sub_category = %(sub_category)s"
+    if filters.get("stock_type"):
+        query += " AND stock_type = %(stock_type)s"
+    if filters.get("stock_item_from") and filters.get("stock_item_to"):
+        query += " AND stock_item BETWEEN %(stock_item_from)s AND %(stock_item_to)s"
 
-    # Grouping logic (optional)
-    if group_by == "Salesman":
-        grouped_data = {}
-        for row in sales_data:
-            key = frappe.get_value("Sales Invoice", row.get("parent"), "owner")
-            grouped_data.setdefault(key, []).append(row)
-        return grouped_data
+    # Optional grouping
+    if filters.get("group_by"):
+        query += f" ORDER BY {filters['group_by'].lower()}"
 
-    elif group_by == "Stock Item":
-        grouped_data = {}
-        for row in sales_data:
-            key = row["item_code"]
-            grouped_data.setdefault(key, []).append(row)
-        return grouped_data
-
-    # Default: return raw list
-    return sales_data
+    data = frappe.db.sql(query, filters, as_dict=True)
+    return _with_totals(data, ["quantity", "amount", "discount", "net_sales"])
 
 
+# ==========================================================
+# 2.6 Stock Points
+# ==========================================================
 @frappe.whitelist()
-def get_sales_points_list(start_date=None, end_date=None, staff=None, terminal=None, group_by=None):
+def get_stock_points(filters=None):
     """
-    Fetches Sales Points report.
-
-    Args:
-        start_date (str): Filter by start date (YYYY-MM-DD)
-        end_date (str): Filter by end date (YYYY-MM-DD)
-        staff (str): Staff code filter
-        terminal (str): Terminal filter
-        group_by (str): Option to group by Date, Staff, Terminal
-
-    Returns:
-        List of dictionaries containing sales points information
+    Filters:
+        from_date, to_date, from_staff, to_staff, from_terminal, to_terminal, report_group_by
     """
-    conditions = []
-    if start_date:
-        conditions.append(f"date >= '{start_date}'")
-    if end_date:
-        conditions.append(f"date <= '{end_date}'")
-    if staff:
-        conditions.append(f"staff_code = '{staff}'")
-    if terminal:
-        conditions.append(f"terminal = '{terminal}'")
+    filters = frappe.parse_json(filters) if filters else {}
 
-    where_clause = " AND ".join(conditions)
-    if where_clause:
-        where_clause = "WHERE " + where_clause
-
-    query = f"""
+    query = """
         SELECT
             date,
-            staff_code,
-            staff_name,
+            staff,
             terminal,
-            SUM(points) AS total_points,
-            COUNT(*) AS transactions_count
-        FROM `tabSales Points`
-        {where_clause}
+            item,
+            quantity,
+            amount,
+            discount,
+            net_sales
+        FROM `tabStock Points Item`
+        WHERE date BETWEEN %(from_date)s AND %(to_date)s
     """
 
-    if group_by:
-        query += f" GROUP BY {group_by}"
+    if filters.get("from_staff") and filters.get("to_staff"):
+        query += " AND staff BETWEEN %(from_staff)s AND %(to_staff)s"
+    if filters.get("from_terminal") and filters.get("to_terminal"):
+        query += " AND terminal BETWEEN %(from_terminal)s AND %(to_terminal)s"
 
-    query += " ORDER BY date ASC"
+    if filters.get("report_group_by"):
+        query += f" ORDER BY {filters['report_group_by'].lower()}"
 
-    sales_points = frappe.db.sql(query, as_dict=True)
-    return sales_points
+    data = frappe.db.sql(query, filters, as_dict=True)
+    return _with_totals(data, ["quantity", "amount", "discount", "net_sales"])
 
 
+# ==========================================================
+# 2.7 Sales Points
+# ==========================================================
 @frappe.whitelist()
-def get_sales_transaction_list(start_date=None, end_date=None, staff=None, terminal=None):
+def get_sales_points(filters=None):
     """
-    Fetch Sales Transactions within a given date range, optionally filtered by staff and terminal.
+    Filters:
+        from_date, to_date, staff, terminal
     """
-    filters = {}
+    filters = frappe.parse_json(filters) if filters else {}
 
-    if start_date:
-        filters["posting_date"] = [">=", start_date]
-    if end_date:
-        filters["posting_date"] = ["<=", end_date]
-    if staff:
-        filters["staff"] = staff
-    if terminal:
-        filters["terminal"] = terminal
+    query = """
+        SELECT
+            date,
+            staff,
+            terminal,
+            total_sales,
+            total_discount,
+            total_net_sales
+        FROM `tabSales Points`
+        WHERE date BETWEEN %(from_date)s AND %(to_date)s
+    """
+    if filters.get("staff"):
+        query += " AND staff = %(staff)s"
+    if filters.get("terminal"):
+        query += " AND terminal = %(terminal)s"
 
-    transactions = frappe.get_all(
-        "Sales Transaction",
-        filters=filters,
-        fields=[
-            "name",
-            "posting_date",
-            "transaction_number",
-            "bill_no",
-            "work_order_no",
-            "payment_method",
-            "customer",
-            "vehicle_no",
-            "total_amount",
-            "discount",
-            "net_amount",
-            "vat_amount",
-        ],
-        order_by="posting_date desc",
-    )
+    data = frappe.db.sql(query, filters, as_dict=True)
+    return _with_totals(data, ["total_sales", "total_discount", "total_net_sales"])
 
-    return transactions
+
+# ==========================================================
+# 2.8 Sales Transaction
+# ==========================================================
+@frappe.whitelist()
+def get_sales_transaction(filters=None):
+    """
+    Filters:
+        from_date, to_date, sales_type
+    """
+    filters = frappe.parse_json(filters) if filters else {}
+
+    query = """
+        SELECT
+            date,
+            transaction_no,
+            sales_type,
+            amount,
+            discount,
+            net_sales
+        FROM `tabSales Transaction`
+        WHERE date BETWEEN %(from_date)s AND %(to_date)s
+    """
+    if filters.get("sales_type"):
+        query += " AND sales_type = %(sales_type)s"
+
+    data = frappe.db.sql(query, filters, as_dict=True)
+    return _with_totals(data, ["amount", "discount", "net_sales"])
+
+
+# ==========================================================
+# Common Utility Function
+# ==========================================================
+def _with_totals(data, numeric_fields):
+    """Helper to include totals for numeric fields."""
+    totals = {}
+    for field in numeric_fields:
+        totals[field] = sum((d.get(field) or 0) for d in data)
+    return {"data": data, "totals": totals}
+
 
 
 @frappe.whitelist()
@@ -1700,68 +1716,63 @@ def get_daily_summary(start_date=None, end_date=None, station_id=None):
 # SYSTEM MODULE
 # ----------------------------
 
+@frappe.whitelist()
+def get_settings():
+    return frappe.get_all("System Settings_2", fields=["name", "parameter", "value"])
 
 @frappe.whitelist()
-def get_system_status():
-    """Fetch system status information"""
-    return {
-        "server_time": frappe.utils.data.now_datetime(),
-        "frappe_version": frappe.__version__,
-        "site_name": frappe.local.site,
-    }
+def create_setting(parameter, value):
+    doc = frappe.get_doc({
+        "doctype": "System Settings_2",
+        "parameter": parameter,
+        "value": value
+    })
+    doc.insert()
+    return doc
 
+@frappe.whitelist()
+def update_setting(name, value):
+    doc = frappe.get_doc("System Settings_2", name)
+    doc.value = value
+    doc.save()
+    return doc
+
+@frappe.whitelist()
+def delete_setting(name):
+    frappe.delete_doc("System Settings_2", name)
+    return {"status": "success"}
 
 # ----------------------------
 # CASH COUNTING MODULE API
 # ----------------------------
 
 
-@frappe.whitelist(allow_guest=False)
-def submit_cash_count(cashDenominations):
-    """
-    Save the cash count for the current cashier session.
-    cashDenominations: list of dicts [{denomination: 1, count: 5, total: 5}, ...]
-    """
-    import json
-
-    cash_data = json.loads(cashDenominations)
-
-    total_cash = sum([item["denomination"] * item["count"] for item in cash_data])
-
-    # Create a new Cash Counting record
-    doc = frappe.get_doc(
-        {
-            "doctype": "Cash Counting",
-            "counted_by": frappe.session.user,
-            "count_date": now_datetime(),
-            "cash_breakup": cash_data,
-            "total_cash": total_cash,
-        }
-    )
-    doc.insert(ignore_permissions=True)
-    frappe.db.commit()
-
-    return {
-        "message": "Cash count submitted successfully",
-        "total_cash": total_cash,
-        "cash_breakup": cash_data,
-    }
-
+@frappe.whitelist()
+def get_cash_counts():
+    return frappe.get_all("Cash Counting_2", fields=["name", "user", "amount", "date"])
 
 @frappe.whitelist()
-def get_cash_count(user=None):
-    """
-    Get the last cash count for a user or current session.
-    """
-    user = user or frappe.session.user
-    last_count = frappe.get_all(
-        "Cash Counting",
-        filters={"counted_by": user},
-        order_by="creation desc",
-        limit=1,
-        fields=["count_date", "cash_breakup", "total_cash"],
-    )
-    return last_count
+def create_cash_count(user, amount, date):
+    doc = frappe.get_doc({
+        "doctype": "Cash Counting_2",
+        "user": user,
+        "amount": amount,
+        "date": date
+    })
+    doc.insert()
+    return doc
+
+@frappe.whitelist()
+def update_cash_count(name, amount):
+    doc = frappe.get_doc("Cash Counting_2", name)
+    doc.amount = amount
+    doc.save()
+    return doc
+
+@frappe.whitelist()
+def delete_cash_count(name):
+    frappe.delete_doc("Cash Counting_2", name)
+    return {"status": "success"}
 
 
 # ----------------------------
@@ -1770,27 +1781,34 @@ def get_cash_count(user=None):
 
 
 @frappe.whitelist()
-def cashier_out():
-    """
-    API to perform Cashier Out.
-    Records the cashier out event for the current user/session.
-    """
-    user = frappe.session.user
+def get_shifts():
+    return frappe.get_all("Cashier Out", fields=["name", "user", "shift", "total_cash", "start_time", "end_time"])
 
-    # You can customize the logic, e.g., check open work orders or pending cash counts
-    # Here, we just log a cashier out entry
-    doc = frappe.get_doc(
-        {
-            "doctype": "Cashier Out Log",
-            "cashier": user,
-            "status": "Completed",
-            "out_time": frappe.utils.now_datetime(),
-        }
-    )
-    doc.insert(ignore_permissions=True)
-    frappe.db.commit()
+@frappe.whitelist()
+def create_shift(user, shift, total_cash, start_time, end_time):
+    doc = frappe.get_doc({
+        "doctype": "Cashier Out",
+        "user": user,
+        "shift": shift,
+        "total_cash": total_cash,
+        "start_time": start_time,
+        "end_time": end_time
+    })
+    doc.insert()
+    return doc
 
-    return {"message": _("Cashier out completed successfully.")}
+@frappe.whitelist()
+def update_shift(name, total_cash, end_time):
+    doc = frappe.get_doc("Cashier Out", name)
+    doc.total_cash = total_cash
+    doc.end_time = end_time
+    doc.save()
+    return doc
+
+@frappe.whitelist()
+def delete_shift(name):
+    frappe.delete_doc("Cashier Out", name)
+    return {"status": "success"}
 
 
 # ----------------------------
@@ -1799,50 +1817,75 @@ def cashier_out():
 
 
 @frappe.whitelist()
-def day_end_closing():
-    """
-    Perform day end closing: calculate total cash, transactions, and generate a report.
-    """
-    # Example: Fetch all transactions for today
-    today = nowdate()
-    transactions = frappe.get_all(
-        "Work Order",
-        filters={"work_order_date": today, "status": ["in", ["Open", "Closed"]]},
-        fields=["name", "vehicle_no", "net_total", "discount", "paid_amount"],
-    )
+def get_day_end():
+    return frappe.get_all("Day End Closing_2", fields=["name", "user", "total_cash", "open_work_orders", "closing_time"])
 
-    # Calculate totals
-    total_sales = sum([t["net_total"] for t in transactions])
-    total_discount = sum([t["discount"] for t in transactions])
-    total_paid = sum([t["paid_amount"] for t in transactions])
+@frappe.whitelist()
+def create_day_end(user, total_cash, open_work_orders, closing_time):
+    doc = frappe.get_doc({
+        "doctype": "Day End Closing_2",
+        "user": user,
+        "total_cash": total_cash,
+        "open_work_orders": open_work_orders,
+        "closing_time": closing_time
+    })
+    doc.insert()
+    return doc
 
-    # Example report structure
-    report = {
-        "date": today,
-        "total_sales": total_sales,
-        "total_discount": total_discount,
-        "total_paid": total_paid,
-        "transaction_count": len(transactions),
-        "transactions": transactions,
-    }
+@frappe.whitelist()
+def update_day_end(name, total_cash, open_work_orders, closing_time):
+    doc = frappe.get_doc("Day End Closing_2", name)
+    doc.total_cash = total_cash
+    doc.open_work_orders = open_work_orders
+    doc.closing_time = closing_time
+    doc.save()
+    return doc
 
-    # Optionally mark all transactions as "Closed" for the day
-    for t in transactions:
-        doc = frappe.get_doc("Work Order", t["name"])
-        doc.status = "Closed"
-        doc.save(ignore_permissions=True)
-
-    frappe.db.commit()
-    return report
-
+@frappe.whitelist()
+def delete_day_end(name):
+    frappe.delete_doc("Day End Closing_2", name)
+    return {"status": "success"}
 
 # ----------------------------
 # EXIT MODULE
 # ----------------------------
 
-
 @frappe.whitelist()
-def exit_pos(cashier, branch):
-    """Log exit action for a cashier"""
-    frappe.msgprint(_("Cashier {0} logged out from branch {1}").format(cashier, branch))
-    return {"status": "success", "cashier": cashier, "branch": branch}
+def exit_pos(user):
+    """
+    Simple API to log the user exit from POS.
+    Can also record shift summary closure if needed.
+    """
+    # Optional: Update Shift Summary for this user if open
+    shift = frappe.db.get_value("Day End Closing_2", {"user": user, "end_time": None})
+    if shift:
+        shift_doc = frappe.get_doc("Day End Closing_2", shift)
+        import datetime
+        shift_doc.end_time = datetime.datetime.now()
+        shift_doc.save()
+    
+    frappe.db.commit()
+    return {"message": _("POS exited successfully")}
+
+
+
+@frappe.whitelist(allow_guest=True)  
+def cashier_login(cashier_code):
+    """
+    API to verify cashier login code
+    """
+    user = frappe.get_all(
+        "User",
+        filters={"cashier_code": cashier_code, "enabled": 1},
+        fields=["name", "full_name"]
+    )
+
+    if user:
+        frappe.local.response.update({
+            "status": "success",
+            "message": f"Welcome {user[0].full_name}",
+            "user": user[0].name
+        })
+        return frappe.local.response
+    else:
+        frappe.throw(_("Invalid Cashier Code"))

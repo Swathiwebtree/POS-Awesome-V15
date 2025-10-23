@@ -1,133 +1,151 @@
 <template>
-	<div>
-		<h2 class="text-xl font-semibold mb-4">Sales Points</h2>
+  <div class="stock-points-dashboard p-4">
+    <h2 class="mb-4">Stock Points Report</h2>
 
-		<!-- Filters -->
-		<div class="grid grid-cols-4 gap-2 mb-4">
-			<input type="date" v-model="dateFrom" class="input" placeholder="From Date" />
-			<input type="date" v-model="dateTo" class="input" placeholder="To Date" />
-			<input v-model="staffFrom" placeholder="Staff From" class="input" />
-			<input v-model="staffTo" placeholder="Staff To" class="input" />
-			<input v-model="terminalFrom" placeholder="Terminal From" class="input" />
-			<input v-model="terminalTo" placeholder="Terminal To" class="input" />
-			<button class="btn col-span-4" @click="generateReport">Generate Report</button>
-		</div>
+    <!-- Filters -->
+    <div class="filters grid grid-cols-3 gap-4 mb-4">
+      <div>
+        <label>From Date</label>
+        <input type="date" v-model="filters.from_date" class="input" />
+      </div>
+      <div>
+        <label>To Date</label>
+        <input type="date" v-model="filters.to_date" class="input" />
+      </div>
+      <div>
+        <label>Report Group By</label>
+        <select v-model="filters.report_group_by" class="input">
+          <option value="Date">Date</option>
+          <option value="Staff">Staff</option>
+          <option value="Terminal">Terminal</option>
+        </select>
+      </div>
+      <div>
+        <label>From Staff</label>
+        <input type="text" v-model="filters.from_staff" placeholder="Staff Name" class="input" />
+      </div>
+      <div>
+        <label>To Staff</label>
+        <input type="text" v-model="filters.to_staff" placeholder="Staff Name" class="input" />
+      </div>
+      <div>
+        <label>From Terminal</label>
+        <input type="text" v-model="filters.from_terminal" placeholder="Terminal" class="input" />
+      </div>
+      <div>
+        <label>To Terminal</label>
+        <input type="text" v-model="filters.to_terminal" placeholder="Terminal" class="input" />
+      </div>
+    </div>
 
-		<!-- Grouping Options -->
-		<div class="mb-4">
-			<label class="mr-2">Group By:</label>
-			<select v-model="groupBy" class="input w-1/4">
-				<option value="">None</option>
-				<option value="date">Date</option>
-				<option value="staff">Staff</option>
-				<option value="terminal">Terminal</option>
-			</select>
-		</div>
+    <button class="btn btn-primary mb-4" @click="fetchReport">Generate Report</button>
 
-		<!-- Report Table -->
-		<table class="table-auto border w-full">
-			<thead>
-				<tr>
-					<th>Date</th>
-					<th>Staff</th>
-					<th>Terminal</th>
-					<th>Sales Amount</th>
-					<th>Discount</th>
-					<th>Net Sales</th>
-				</tr>
-			</thead>
-			<tbody>
-				<tr v-for="(row, index) in reportData" :key="index">
-					<td>{{ row.date }}</td>
-					<td>{{ row.staff }}</td>
-					<td>{{ row.terminal }}</td>
-					<td>{{ row.amount }}</td>
-					<td>{{ row.discount }}</td>
-					<td>{{ row.netSales }}</td>
-				</tr>
-			</tbody>
-			<tfoot>
-				<tr>
-					<td colspan="5" class="text-right font-semibold">Grand Total</td>
-					<td>{{ grandTotal }}</td>
-				</tr>
-			</tfoot>
-		</table>
-	</div>
+    <!-- Report Table -->
+    <div v-if="items.length" class="overflow-x-auto">
+      <table class="table-auto w-full border border-gray-300">
+        <thead>
+          <tr class="bg-gray-200">
+            <th class="px-2 py-1 border">Date</th>
+            <th class="px-2 py-1 border">Staff</th>
+            <th class="px-2 py-1 border">Terminal</th>
+            <th class="px-2 py-1 border">Item</th>
+            <th class="px-2 py-1 border">Quantity</th>
+            <th class="px-2 py-1 border">Amount</th>
+            <th class="px-2 py-1 border">Discount</th>
+            <th class="px-2 py-1 border">Net Sales</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(item, index) in items" :key="index">
+            <td class="px-2 py-1 border">{{ item.date }}</td>
+            <td class="px-2 py-1 border">{{ item.staff }}</td>
+            <td class="px-2 py-1 border">{{ item.terminal }}</td>
+            <td class="px-2 py-1 border">{{ item.item }}</td>
+            <td class="px-2 py-1 border text-right">{{ item.quantity }}</td>
+            <td class="px-2 py-1 border text-right">{{ item.amount.toFixed(2) }}</td>
+            <td class="px-2 py-1 border text-right">{{ item.discount.toFixed(2) }}</td>
+            <td class="px-2 py-1 border text-right">{{ item.net_sales.toFixed(2) }}</td>
+          </tr>
+          <!-- Grand Total -->
+          <tr class="font-bold bg-gray-100">
+            <td class="px-2 py-1 border" colspan="4">Grand Total</td>
+            <td class="px-2 py-1 border text-right">{{ totalQuantity }}</td>
+            <td class="px-2 py-1 border text-right">{{ totalAmount.toFixed(2) }}</td>
+            <td class="px-2 py-1 border text-right">{{ totalDiscount.toFixed(2) }}</td>
+            <td class="px-2 py-1 border text-right">{{ totalNetSales.toFixed(2) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div v-else class="text-gray-500 mt-4">No data found.</div>
+  </div>
 </template>
 
-<script setup>
-import { ref, computed } from "vue";
+<script>
 import axios from "axios";
 
-const dateFrom = ref("");
-const dateTo = ref("");
-const staffFrom = ref("");
-const staffTo = ref("");
-const terminalFrom = ref("");
-const terminalTo = ref("");
-const groupBy = ref("");
+export default {
+  name: "StockPointsReport",
+  data() {
+    return {
+      filters: {
+        from_date: "",
+        to_date: "",
+        from_staff: "",
+        to_staff: "",
+        from_terminal: "",
+        to_terminal: "",
+        report_group_by: "Date",
+      },
+      items: [],
+    };
+  },
+  computed: {
+    totalQuantity() {
+      return this.items.reduce((sum, i) => sum + i.quantity, 0);
+    },
+    totalAmount() {
+      return this.items.reduce((sum, i) => sum + i.amount, 0);
+    },
+    totalDiscount() {
+      return this.items.reduce((sum, i) => sum + i.discount, 0);
+    },
+    totalNetSales() {
+      return this.items.reduce((sum, i) => sum + i.net_sales, 0);
+    },
+  },
+  methods: {
+    async fetchReport() {
+      try {
+        const query = {
+          filters: {
+            posting_date: ["between", [this.filters.from_date, this.filters.to_date]],
+            staff: ["between", [this.filters.from_staff, this.filters.to_staff]],
+            terminal: ["between", [this.filters.from_terminal, this.filters.to_terminal]],
+          },
+        };
 
-const reportData = ref([]);
-
-// Calculate grand total of Net Sales
-const grandTotal = computed(() => reportData.value.reduce((sum, row) => sum + (row.netSales || 0), 0));
-
-// Fetch report data from API
-const generateReport = async () => {
-	try {
-		const params = {
-			start_date: dateFrom.value,
-			end_date: dateTo.value,
-			staff: staffFrom.value || undefined, // pass only if value exists
-			terminal: terminalFrom.value || undefined,
-			group_by: groupBy.value || undefined,
-		};
-
-		const response = await axios.get(
-			"/api/method/posawesome.posawesome.api.lazer_pos.get_sales_points_list",
-			{ params },
-		);
-
-		// Assuming API returns an array of rows
-		reportData.value = response.data.message.map((row) => ({
-			date: row.date,
-			staff: row.staff_name || row.staff_code,
-			terminal: row.terminal,
-			amount: row.total_points || 0,
-			discount: row.discount || 0, // replace with actual field if exists
-			netSales: row.total_points || 0, // replace with actual net field if exists
-		}));
-	} catch (error) {
-		console.error("Failed to fetch Sales Points report:", error);
-		alert("Error fetching report. Check console for details.");
-	}
+        const response = await axios.get("/api/resource/Stock Points Item", { params: query });
+        this.items = response.data.data;
+      } catch (err) {
+        console.error(err);
+        this.items = [];
+      }
+    },
+  },
 };
 </script>
 
 <style scoped>
 .input {
-	border: 1px solid #ccc;
-	padding: 4px;
-	width: 100%;
-	margin-bottom: 4px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
 }
 .btn {
-	background: #007bff;
-	color: white;
-	padding: 6px 12px;
-	cursor: pointer;
-	margin-top: 4px;
-}
-.btn:hover {
-	background: #0056b3;
-}
-.table-auto {
-	border-collapse: collapse;
-}
-.table-auto th,
-.table-auto td {
-	border: 1px solid #ccc;
-	padding: 6px;
+  padding: 6px 12px;
+  border-radius: 4px;
 }
 </style>

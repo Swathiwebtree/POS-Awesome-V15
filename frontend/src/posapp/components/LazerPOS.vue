@@ -1,4 +1,8 @@
 <template>
+
+ <!-- Cashier Login Modal -->
+  <CashierLogin v-if="showLogin" @loginSuccess="handleLoginSuccess" />
+
 	<div class="LazerPOS flex">
 		<!-- Sidebar -->
 		<aside class="w-64 bg-gray-100 p-4 min-h-screen">
@@ -38,7 +42,16 @@
 </template>
 
 <script setup>
+import CashierLogin from "./CashierLogin.vue";
 import { ref, computed, defineAsyncComponent } from "vue";
+
+const showLogin = ref(true); 
+const loggedInCashier = ref(null);
+
+function formatModuleKey(name) {
+  // Remove spaces and append 'Module'
+  return name.replace(/\s+/g, "") + "Module";
+}
 
 /* ===========================
    Import Main Modules
@@ -147,17 +160,25 @@ const currentModuleComponent = ref("TransactionsModule");
 =========================== */
 function toggleModule(moduleName) {
 	currentModule.value = moduleName;
-	currentModuleComponent.value = moduleName + "Module";
+	currentModuleComponent.value = formatModuleKey(moduleName); 
 
 	const mod = sidebarModules.find((m) => m.name === moduleName);
 	currentSubmodule.value = mod?.submodules?.[0] || "";
 }
 
+
+
 function selectSubmodule(mainModule, submoduleLabel) {
 	currentModule.value = mainModule;
 	currentSubmodule.value = submoduleLabel;
-	currentModuleComponent.value = mainModule + "Module";
+	currentModuleComponent.value = formatModuleKey(mainModule); //
 }
+
+function handleLoginSuccess(username) {
+  loggedInCashier.value = username; // store the cashier username
+  showLogin.value = false;          // hide the login modal
+}
+
 
 /* ===========================
    Computed Properties
