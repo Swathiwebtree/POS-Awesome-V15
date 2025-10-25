@@ -490,29 +490,29 @@ export default {
 			this.$forceUpdate();
 		},
 
-		// Handle item added from ItemSelector
-		handleAddToPOS(event) {
-			const item = event.detail;
-			// Check if item already exists
-			const existing = this.items.find((i) => i.item_code === item.item_code);
+		// // Handle item added from ItemSelector
+		// handleAddToPOS(event) {
+		// 	const item = event.detail;
+		// 	// Check if item already exists
+		// 	const existing = this.items.find((i) => i.item_code === item.item_code);
 
-			if (existing) {
-				// If exists, increase quantity
-				existing.qty += item.qty || 1;
-				existing.rate = item.rate || existing.rate;
-			} else {
-				// Add as new item
-				this.items.push({
-					item_code: item.item_code,
-					item_name: item.item_name,
-					qty: item.qty || 1,
-					rate: item.rate || 0,
-				});
-			}
+		// 	if (existing) {
+		// 		// If exists, increase quantity
+		// 		existing.qty += item.qty || 1;
+		// 		existing.rate = item.rate || existing.rate;
+		// 	} else {
+		// 		// Add as new item
+		// 		this.items.push({
+		// 			item_code: item.item_code,
+		// 			item_name: item.item_name,
+		// 			qty: item.qty || 1,
+		// 			rate: item.rate || 0,
+		// 		});
+		// 	}
 
-			// Recalculate totals
-			this.update_totals();
-		},
+		// 	// Recalculate totals
+		// 	this.update_totals();
+		// },
 
 		// Recalculate subtotal and total qty
 		update_totals() {
@@ -1246,23 +1246,8 @@ export default {
 		this.loadColumnPreferences();
 		// Restore saved invoice height
 		this.loadInvoiceHeight();
-		// Listen for items added from ItemSelector.vue
-		window.addEventListener("add-item-to-pos", this.handleAddToPOS);
-
-		// Add default "Vehicle Service" item on POS load
-		const defaultItem = {
-			item_code: "vehicle-service",
-			item_name: "Vehicle Service",
-			qty: 1,
-			rate: 0,
-		};
-		this.handleAddToPOS({ detail: defaultItem });
-		this.eventBus.on("item-drag-start", () => {
-			this.showDropFeedback(true);
-		});
-		this.eventBus.on("item-drag-end", () => {
-			this.showDropFeedback(false);
-		});
+		// // Listen for items added from ItemSelector.vue
+		// window.addEventListener("add-item-to-pos", this.handleAddToPOS);
 
 		// Register event listeners for POS profile, items, customer, offers, etc.
 		this.eventBus.on("register_pos_profile", (data) => {
@@ -1391,7 +1376,7 @@ export default {
 		});
 	},
 	beforeDestroy() {
-		window.removeEventListener("add-item-to-pos", this.handleAddToPOS);
+		// window.removeEventListener("add-item-to-pos", this.handleAddToPOS);
 	},
 
 	// Cleanup event listeners before component is destroyed

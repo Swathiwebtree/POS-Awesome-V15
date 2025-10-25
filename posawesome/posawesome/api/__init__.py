@@ -10,7 +10,16 @@ from .customers import (
     get_sales_person_names,
     make_address,
     set_customer_info,
+    get_customer_groups,
+    get_child_nodes,
+    get_customer_group_condition,
+    get_customer_by_vehicle,
+
 )
+from .vehicles import (
+    get_vehicles_by_customer,
+)
+
 from .invoices import (
     delete_invoice,
     get_draft_invoices,
@@ -79,9 +88,11 @@ from .lazer_pos import (
     get_quotation_list,
     get_loyalty_points,
     get_petty_cash_transactions,
+    add_petty_cash,
     get_sales_by_payment_list,
     get_vehicle_history,
     get_redeemed_coupon_points_list,
+    get_list,
     get_coupon_sales_point_list,
     get_vehicle_details,
     get_material_request_list,
@@ -98,7 +109,6 @@ from .lazer_pos import (
     get_stock_in_hand,
     get_stock_sales,
     get_stock_points,
-    get_stock_sales_list,
     get_sales_points,
     get_sales_transaction,
     _with_totals,

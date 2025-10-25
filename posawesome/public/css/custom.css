@@ -1,0 +1,104 @@
+/* === FIXED BORDER, NO SHADOWS, NO FOCUS JUMP === */
+
+/* 1) Remove all box-shadows/elevation globally */
+.v-input,
+.v-text-field,
+.v-card,
+.v-btn,
+.v-sheet,
+.v-toolbar {
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  --v-shadow: none !important;
+  background-clip: padding-box !important;
+}
+
+/* 2) Persistent border for text fields */
+.v-input .v-field,
+.v-text-field .v-field,
+.v-field {
+  border: 1px solid rgba(0, 0, 0, 0.25) !important;
+  border-radius: 6px !important;
+  background-color: rgb(var(--v-theme-surface)) !important;
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+/* 3) Remove Vuetify's built-in overlay shadows */
+.v-field__overlay,
+.v-field__outline {
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+/* 4) Keep same border on hover/focus (no color change) */
+.v-input .v-field:hover,
+.v-input .v-field:focus-within,
+.v-field.v-field--focused {
+  border-color: rgba(0, 0, 0, 0.25) !important;
+  box-shadow: none !important;
+}
+
+/* 5) Remove native input focus outline */
+.v-input input:focus,
+.v-input textarea:focus,
+.v-text-field input:focus,
+.v-textarea textarea:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* 6) Prevent layout jumps from field details */
+.v-input__details {
+  min-height: 0 !important;
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* 7) Ensure prefix/suffix icons don't break border */
+.v-input__prepend-inner,
+.v-input__append-inner,
+.v-field__affix {
+  z-index: 1;
+}
+
+/* 8) Remove default shadows from cards/buttons/sheets/toolbars */
+.v-card,
+.v-btn,
+.v-sheet,
+.v-toolbar {
+  box-shadow: none !important;
+}
+
+/* 9) Add borders to ALL v-cards in POS (aggressive targeting) */
+.v-card {
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 8px !important;
+}
+
+/* 10) Restore scroll for scrollable cards */
+.v-card.pos-card.dynamic-card,
+.v-card.selection {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scrollbar-gutter: stable;
+}
+
+/* 11) Visible scrollbar styling */
+.v-card::-webkit-scrollbar {
+  width: 8px;
+}
+
+.v-card::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.v-card::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.v-card::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}

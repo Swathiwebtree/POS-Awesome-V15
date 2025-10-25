@@ -78,12 +78,12 @@
         <p><b>Address:</b> {{ selectedVehicle.address }}</p>
         <p><b>City:</b> {{ selectedVehicle.city }}</p>
         <p><b>TIN:</b> {{ selectedVehicle.tin }}</p>
-        <p><b>Tel (Mob):</b> {{ selectedVehicle.tel_mob }}</p>
-        <p><b>Office:</b> {{ selectedVehicle.office }}</p>
-        <p><b>Home:</b> {{ selectedVehicle.home }}</p>
+        <p><b>Tel (Mob):</b> {{ selectedVehicle.tel_mobile }}</p>
+        <p><b>Office:</b> {{ selectedVehicle.office_tel }}</p>
+        <p><b>Home:</b> {{ selectedVehicle.home_tel }}</p>
         <p><b>Bill To:</b> {{ selectedVehicle.bill_to }}</p>
         <p><b>Stationed:</b> {{ selectedVehicle.stationed }}</p>
-        <p><b>Location:</b> {{ selectedVehicle.loc }}</p>
+        <p><b>Location:</b> {{ selectedVehicle.location }}</p>
         <p><b>Sales Rep:</b> {{ selectedVehicle.sales_rep }}</p>
         <p><b>Comments:</b> {{ selectedVehicle.comments }}</p>
       </div>
@@ -112,12 +112,12 @@
           <input v-model="newVehicle.address" class="input" placeholder="Address" />
           <input v-model="newVehicle.city" class="input" placeholder="City" />
           <input v-model="newVehicle.tin" class="input" placeholder="TIN" />
-          <input v-model="newVehicle.tel_mob" class="input" placeholder="Tel (Mob)" />
-          <input v-model="newVehicle.office" class="input" placeholder="Office" />
-          <input v-model="newVehicle.home" class="input" placeholder="Home" />
+          <input v-model="newVehicle.tel_mobile" class="input" placeholder="Tel (Mob)" />
+          <input v-model="newVehicle.office_tel" class="input" placeholder="Office" />
+          <input v-model="newVehicle.home_tel" class="input" placeholder="Home" />
           <input v-model="newVehicle.bill_to" class="input" placeholder="Bill To" />
           <input v-model="newVehicle.stationed" class="input" placeholder="Stationed" />
-          <input v-model="newVehicle.loc" class="input" placeholder="Location" />
+          <input v-model="newVehicle.location" class="input" placeholder="Location" />
           <input v-model="newVehicle.sales_rep" class="input" placeholder="Sales Rep" />
           <input v-model="newVehicle.comments" class="input" placeholder="Comments" />
         </div>
@@ -162,12 +162,12 @@ const newVehicle = ref({
   address: "",
   city: "",
   tin: "",
-  tel_mob: "",
-  office: "",
-  home: "",
+  tel_mobile: "",
+  office_tel: "",
+  home_tel: "",
   bill_to: "",
   stationed: "",
-  loc: "",
+  location: "",
   sales_rep: "",
   comments: "",
 });
@@ -195,7 +195,7 @@ const fetchVehicles = async () => {
         fields: JSON.stringify([
           "name","trans_number","vehicle_no","customer","model","chasis_no","color",
           "reg_no","warranty","odometer","engine","body","year","division","address",
-          "city","tin","tel_mob","office","home","bill_to","stationed","loc","sales_rep","comments","date"
+          "city","tin","tel_mobile","office_tel","home_tel","bill_to","stationed","location","sales_rep","comments","date"
         ]),
         filters: JSON.stringify(filtersObj),
         limit_page_length: 50,

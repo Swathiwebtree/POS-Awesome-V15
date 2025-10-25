@@ -23,6 +23,7 @@ app_include_js = [
 
 app_include_css = [
     "/assets/posawesome/dist/js/posawesome.css",
+    "/assets/posawesome/css/custom.css",  
 ]
 
 # include js, css files in header of web template

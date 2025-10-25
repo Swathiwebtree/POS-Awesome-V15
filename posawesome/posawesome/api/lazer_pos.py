@@ -245,51 +245,51 @@ def get_quotation_list(customer=None, status=None):
     )
 
 
-@frappe.whitelist()
-def get_petty_cash_transactions():
-    """
-    Fetch petty cash transactions with item details
-    """
-    transactions = frappe.get_all(
-        "Petty Cash",
-        fields=[
-            "name as pc_no",
-            "ref",
-            "station_id",
-            "posting_date as date",
-            "description",
-            "user_id",
-            "remarks",
-            "shift_closing_id",
-            "count_closing_id",
-            "day_closing_id",
-            "total",
-        ],
-        order_by="posting_date desc",
-    )
+# @frappe.whitelist()
+# def get_petty_cash_transactions():
+#     """
+#     Fetch petty cash transactions with item details
+#     """
+#     transactions = frappe.get_all(
+#         "Petty Cash",
+#         fields=[
+#             "name as pc_no",
+#             "ref",
+#             "station_id",
+#             "posting_date as date",
+#             "description",
+#             "user_id",
+#             "remarks",
+#             "shift_closing_id",
+#             "count_closing_id",
+#             "day_closing_id",
+#             "total",
+#         ],
+#         order_by="posting_date desc",
+#     )
 
-    for txn in transactions:
-        # Fetch item details
-        txn["items"] = frappe.get_all(
-            "Petty Cash Item",
-            filters={"parent": txn.pc_no},
-            fields=[
-                "account as ac_code",
-                "account_name",
-                "description",
-                "amount",
-                "division as div",
-                "account_id",
-                "date",
-                "typ",
-                "trans_no",
-                "ref_no",
-                "currency as cur",
-                "paid_foreign",
-                "paid_local",
-            ],
-        )
-    return transactions
+#     for txn in transactions:
+#         # Fetch item details
+#         txn["items"] = frappe.get_all(
+#             "Petty Cash Item",
+#             filters={"parent": txn.pc_no},
+#             fields=[
+#                 "account as ac_code",
+#                 "account_name",
+#                 "description",
+#                 "amount",
+#                 "division as div",
+#                 "account_id",
+#                 "date",
+#                 "typ",
+#                 "trans_no",
+#                 "ref_no",
+#                 "currency as cur",
+#                 "paid_foreign",
+#                 "paid_local",
+#             ],
+#         )
+#     return transactions
 
 
 @frappe.whitelist()
@@ -543,9 +543,71 @@ def browse_items(category=None):
 
 
 @frappe.whitelist()
-def get_petty_cash():
-    """List petty cash entries"""
-    return frappe.get_all("Petty Cash", fields=["name", "date", "amount", "paid_by", "division", "status"])
+def get_petty_cash_transactions():
+    """Fetch all Petty Cash entries with items"""
+    petty_cash_entries = frappe.get_all(
+        "Petty Cash",
+        fields=[
+            "name as pc_no",
+            "ref",
+            "station_id",
+            "date",
+            "description",
+            "user_id",
+            "remarks",
+            "shift_closing_id",
+            "count_closing_id",
+            "day_closing_id",
+            "total"
+        ],
+        order_by="date desc",
+        limit_page_length=200
+    )
+
+    for entry in petty_cash_entries:
+        items = frappe.get_all(
+            "Petty Cash Item",
+            filters={"parent": entry.pc_no},
+            fields=[
+                "ac_code",
+                "account_name",
+                "description",
+                "amount",
+                "division",
+                "account_id",
+                "date",
+                "typ",
+                "trans_no",
+                "ref_no",
+                "currency",
+                "paid_foreign",
+                "paid_local",
+            ],
+            order_by="idx"
+        )
+        entry["items"] = items
+
+    return petty_cash_entries
+
+@frappe.whitelist()
+def add_petty_cash(pc_data, items_data):
+    """
+    Add new Petty Cash entry with items
+    pc_data: dict with main fields
+    items_data: list of dicts for child table
+    """
+    import json
+    pc_data = json.loads(pc_data)
+    items_data = json.loads(items_data)
+
+    doc = frappe.get_doc({
+        "doctype": "Petty Cash",
+        **pc_data,
+        "items": items_data
+    })
+    doc.insert()
+    frappe.db.commit()
+    return {"message": "Petty Cash added successfully", "pc_no": doc.name}
 
 
 @frappe.whitelist()
@@ -555,6 +617,31 @@ def get_receipt_voucher():
         "Receipt Voucher", fields=["name", "customer", "date", "amount", "status", "division"]
     )
 
+@frappe.whitelist(allow_guest=True)
+def get_list():
+    # Fetch all items
+    items = frappe.get_all(
+        "Item",
+        fields=["name as item_code", "item_name", "barcode", "supplier", "stock_uom as unit", "default_warehouse as location", "selling_price", "vat_rate as vat_price", "scale", "stock_balance"]
+    )
+
+    # Fetch price levels
+    price_levels = frappe.get_all(
+        "Item Price",
+        fields=["name as price_id", "price_list as price_level", "item_code as barcode", "price_list_rate as price", "price_list_rate_with_tax as price_vat"]
+    )
+
+    # Fetch stock in hand
+    stock_in_hand = frappe.get_all(
+        "Bin",
+        fields=["warehouse as location_name", "actual_qty as balance", "shelf_no"]
+    )
+
+    return {
+        "items": items,
+        "price_levels": price_levels,
+        "stock_in_hand": stock_in_hand
+    }
 
 # ----------------------------
 # INVENTORY MODULE
@@ -1312,17 +1399,44 @@ def get_loyalty_customer(filters=None):
 
 @frappe.whitelist()
 def get_loyalty_points(customer):
-    if not customer:
-        return {"points": 0}
+    """
+    Calculates the current available loyalty points for a given customer.
 
-    cards = frappe.get_all(
-        "Loyalty Card",
-        filters={"customer": customer, "status": "Active"},
-        fields=["points"]
+    :param customer: The Customer ID (string).
+    :returns: A dictionary containing the total available points.
+    """
+    if not customer:
+        frappe.throw("Customer ID is required.")
+
+    # Get the Loyalty Program linked to the customer
+    # This assumes a standard ERPNext setup where a Customer can be linked to a Loyalty Program
+    loyalty_program = frappe.db.get_value(
+        "Customer", customer, "loyalty_program"
     )
 
-    total_points = sum(card.points for card in cards)
-    return {"points": total_points}
+    if not loyalty_program:
+        # Check if any Loyalty Program is set as default/global
+        loyalty_program = frappe.db.get_value(
+            "Loyalty Program",
+            {"is_active": 1, "is_default": 1},
+            "name"
+        )
+
+    if not loyalty_program:
+        # If no program is found, return 0 points
+        return {"points": 0}
+
+    # Calculate the total points balance
+    # Total points earned minus total points redeemed for the given customer and program
+    total_points = frappe.db.get_value(
+        "Loyalty Point Entry",
+        {"customer": customer, "loyalty_program": loyalty_program},
+        "SUM(loyalty_points)"
+    ) or 0
+
+    return {
+        "points": total_points
+    }
 
 
 

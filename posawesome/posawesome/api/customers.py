@@ -13,11 +13,26 @@ from erpnext.accounts.doctype.loyalty_program.loyalty_program import (
 from frappe.utils.caching import redis_cache
 from .utils import get_active_pos_profile
 
+# Define the DocType here too for the get_customer_info function
+VEHICLE_DOCTYPE = "Vehicle Master"
 
+
+# ---------------- POS Customer Utilities ----------------
+
+# (get_customer_groups, get_child_nodes, get_customer_group_condition remain the same)
 def get_customer_groups(pos_profile):
+    """Return list of all child customer groups for a POS profile"""
+    if isinstance(pos_profile, str):
+        try:
+            if not pos_profile.strip() or pos_profile.strip() in ['""', "''"]:
+                pos_profile = {}
+            else:
+                pos_profile = json.loads(pos_profile)
+        except json.JSONDecodeError:
+            frappe.throw(_("Invalid POS Profile data passed to get_customer_groups"))
+
     customer_groups = []
     if pos_profile.get("customer_groups"):
-        # Get items based on the item groups defined in the POS profile
         for data in pos_profile.get("customer_groups"):
             customer_groups.extend(
                 [
@@ -25,7 +40,6 @@ def get_customer_groups(pos_profile):
                     for d in get_child_nodes("Customer Group", data.get("customer_group"))
                 ]
             )
-
     return list(set(customer_groups))
 
 
@@ -40,29 +54,41 @@ def get_child_nodes(group_type, root):
 
 
 def get_customer_group_condition(pos_profile):
+    """Return SQL condition for customer groups based on POS profile."""
     cond = "disabled = 0"
     customer_groups = get_customer_groups(pos_profile)
     if customer_groups:
-        cond = " customer_group in (%s)" % (", ".join(["%s"] * len(customer_groups)))
+        escaped_groups = [frappe.db.escape_value(group) for group in customer_groups]
+        cond = f" customer_group in ({', '.join(escaped_groups)})"
+    return cond
 
-    return cond % tuple(customer_groups)
-
+# ---------------- POS Customer APIs ----------------
 
 @frappe.whitelist()
-def get_customer_names(pos_profile, limit=None, offset=None, start_after=None, modified_after=None):
+def get_customer_names(pos_profile=None, limit=200, start_after=None, modified_after=None):
+    """Fetch customers filtered by POS profile with pagination and optional caching"""
+    
+    # --- Fix for optional pos_profile and None handling ---
+    if not pos_profile:
+        active_profile_doc = get_active_pos_profile()
+        # FIX: Check for None explicitly before calling .as_json()
+        pos_profile = active_profile_doc.as_json() if active_profile_doc else "{}"
+    # ------------------------------------------------------
+
     _pos_profile = json.loads(pos_profile)
     ttl = _pos_profile.get("posa_server_cache_duration")
     if ttl:
         ttl = int(ttl) * 60
 
     @redis_cache(ttl=ttl or 1800)
-    def __get_customer_names(pos_profile, limit=None, offset=None, start_after=None, modified_after=None):
-        return _get_customer_names(pos_profile, limit, offset, start_after, modified_after)
+    def __get_customer_names(pos_profile, limit, start_after, modified_after):
+        return _get_customer_names(pos_profile, limit, start_after, modified_after)
 
-    def _get_customer_names(pos_profile, limit=None, offset=None, start_after=None, modified_after=None):
-        pos_profile = json.loads(pos_profile)
+    def _get_customer_names(pos_profile, limit, start_after, modified_after):
+        if isinstance(pos_profile, str):
+            pos_profile = json.loads(pos_profile)
+            
         filters = {"disabled": 0}
-
         customer_groups = get_customer_groups(pos_profile)
         if customer_groups:
             filters["customer_group"] = ["in", customer_groups]
@@ -89,24 +115,43 @@ def get_customer_names(pos_profile, limit=None, offset=None, start_after=None, m
                 "primary_address",
             ],
             order_by="name",
-            limit_start=None if start_after else offset,
             limit_page_length=limit,
         )
         return customers
 
-    if _pos_profile.get("posa_use_server_cache") and not (limit or offset or start_after or modified_after):
-        return __get_customer_names(pos_profile, limit, offset, start_after, modified_after)
+    if _pos_profile.get("posa_use_server_cache") and not (start_after or modified_after):
+        return __get_customer_names(pos_profile, limit, start_after, modified_after)
     else:
-        return _get_customer_names(pos_profile, limit, offset, start_after, modified_after)
+        return _get_customer_names(pos_profile, limit, start_after, modified_after)
 
 
 @frappe.whitelist()
-def get_customers_count(pos_profile):
-    pos_profile = json.loads(pos_profile)
+def get_customers_count(pos_profile=None, modified_after=None):
+    """Return customer count for POS profile, optionally after a date"""
+    
+    # --- FIX for TypeError: 'NoneType' object is not callable ---
+    if not pos_profile:
+        active_profile_doc = get_active_pos_profile()
+        # APPLY THE NONE CHECK HERE
+        if active_profile_doc:
+            pos_profile = active_profile_doc.as_json()
+        else:
+            # If no active profile, treat pos_profile as an empty object
+            pos_profile = "{}"
+    # ---------------------------------------------------------------------
+
     filters = {"disabled": 0}
     customer_groups = get_customer_groups(pos_profile)
     if customer_groups:
         filters["customer_group"] = ["in", customer_groups]
+
+    if modified_after:
+        try:
+            parsed_modified_after = get_datetime(modified_after)
+        except Exception:
+            frappe.throw(_("modified_after must be a valid ISO datetime"))
+        filters["modified"] = [">", parsed_modified_after.isoformat()]
+
     return frappe.db.count("Customer", filters)
 
 
@@ -116,6 +161,7 @@ def get_customer_info(customer):
 
     res = {"loyalty_points": None, "conversion_factor": None}
 
+    # --- Standard fields ---
     res["email_id"] = customer.email_id
     res["mobile_no"] = customer.mobile_no
     res["image"] = customer.image
@@ -135,36 +181,42 @@ def get_customer_info(customer):
     )
 
     if customer.loyalty_program:
-        lp_details = get_loyalty_program_details_with_points(
-            customer.name,
-            customer.loyalty_program,
-            silent=True,
-            include_expired_entry=False,
-        )
-        res["loyalty_points"] = lp_details.get("loyalty_points")
-        res["conversion_factor"] = lp_details.get("conversion_factor")
+        # Assuming get_loyalty_program_details_with_points is available
+        try:
+            lp_details = get_loyalty_program_details_with_points(
+                customer.name,
+                customer.loyalty_program,
+                silent=True,
+                include_expired_entry=False,
+            )
+            res["loyalty_points"] = lp_details.get("loyalty_points")
+            res["conversion_factor"] = lp_details.get("conversion_factor")
+        except NameError:
+             frappe.log_error("Loyalty program utility not found.", "POS Customer Info")
 
+
+    # --- Address Query ---
     addresses = frappe.db.sql(
         """
-	SELECT
-	    address.name as address_name,
-	    address.address_line1,
-	    address.address_line2,
-	    address.city,
-	    address.state,
-	    address.country,
-	    address.address_type
-	FROM `tabAddress` address
-	INNER JOIN `tabDynamic Link` link
-	    ON (address.name = link.parent)
-	WHERE
-	    link.link_doctype = 'Customer'
-	    AND link.link_name = %s
-	    AND address.disabled = 0
-	    AND address.address_type = 'Shipping'
-	ORDER BY address.creation DESC
-	LIMIT 1
-	""",
+        SELECT
+            address.name as address_name,
+            address.address_line1,
+            address.address_line2,
+            address.city,
+            address.state,
+            address.country,
+            address.address_type
+        FROM `tabAddress` address
+        INNER JOIN `tabDynamic Link` link
+            ON (address.name = link.parent)
+        WHERE
+            link.link_doctype = 'Customer'
+            AND link.link_name = %s
+            AND address.disabled = 0
+            AND address.address_type = 'Shipping'
+        ORDER BY address.creation DESC
+        LIMIT 1
+        """,
         (customer.name,),
         as_dict=True,
     )
@@ -176,9 +228,75 @@ def get_customer_info(customer):
         res["city"] = addr.city or ""
         res["state"] = addr.state or ""
         res["country"] = addr.country or ""
-
+        
+    # --- VEHICLE QUERY (FIXED: Using Vehicle Master and vehicle_no) ---
+    vehicles = frappe.get_all(
+        VEHICLE_DOCTYPE, # Correct DocType: "Vehicle Master"
+        filters={"customer": customer.name}, # Correct link field
+        fields=["name", "vehicle_no"], # Correct plate field: "vehicle_no"
+        limit_page_length=10
+        # REMOVED: as_dict=True to prevent TypeError on newer Frappe versions
+    )
+    
+    # Map the result structure
+    res["vehicles"] = [{"name": v.name, "vehicle_no": v.vehicle_no} for v in vehicles if v.get("vehicle_no")]
+    
+    if res["vehicles"]:
+        res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
+        
     return res
 
+@frappe.whitelist()
+def get_customer_by_vehicle(vehicle_no):
+    """Return customer details for a vehicle number (exact match)."""
+    
+    vehicle_data = frappe.get_all(
+        VEHICLE_DOCTYPE, # Correct DocType: "Vehicle Master"
+        filters={"vehicle_no": vehicle_no}, # Correct plate field: "vehicle_no"
+        # Adjusted fields to match your DocType: customer, model, chasis_no, mobile
+        fields=["name", "customer", "model", "chasis_no", "tel_mobile", "vehicle_no"],
+        limit_page_length=1,
+        # REMOVED: as_dict=True to prevent TypeError on newer Frappe versions
+    )
+    
+    # frappe.get_all returns a list of objects/tuples depending on as_dict/Frappe version, 
+    # but the subsequent code expects dictionary access, so we will use an explicit list check
+    if not vehicle_data or not vehicle_data[0]:
+        return {}
+        
+    vehicle = vehicle_data[0]
+    
+    # Ensure vehicle_no is present in the final output structure
+    if "vehicle_no" not in vehicle and vehicle.get("vehicle_no_field_name"): # Example of safety net
+        vehicle["vehicle_no"] = vehicle.get("vehicle_no_field_name")
+        
+    cust_name = vehicle.get("customer")
+    if not cust_name:
+        # Return vehicle data even if no customer is linked
+        return {"vehicle": vehicle, "customer": {}}
+    
+    # Retrieve customer details
+    try:
+        cust_doc = frappe.get_doc("Customer", cust_name)
+        return {
+            "vehicle": vehicle,
+            "customer": {
+                "name": cust_doc.name,
+                "customer_name": cust_doc.customer_name,
+                "email_id": getattr(cust_doc, "email_id", ""),
+                "tel_mobile": getattr(cust_doc, "tel_mobile", ""),
+                "tax_id": getattr(cust_doc, "tax_id", ""),
+                "customer_group": cust_doc.customer_group,
+                "territory": cust_doc.territory,
+                "posa_discount": cust_doc.posa_discount,
+            },
+        }
+    except frappe.DoesNotExistError:
+        # Handle case where customer link is broken
+        return {"vehicle": vehicle, "customer": {}}
+
+
+# ---------------- Customer CRUD & Utilities ----------------
 
 @frappe.whitelist()
 def create_customer(
@@ -202,17 +320,12 @@ def create_customer(
 ):
     pos_profile = json.loads(pos_profile_doc)
 
-    # Format birthday to MySQL compatible format (YYYY-MM-DD) if provided
     formatted_birthday = None
     if birthday:
         try:
-            # Try to parse date in DD-MM-YYYY format
             if "-" in birthday:
-                date_parts = birthday.split("-")
-                if len(date_parts) == 3:
-                    day, month, year = date_parts
-                    formatted_birthday = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-            # If format is already YYYY-MM-DD, use as is
+                day, month, year = birthday.split("-")
+                formatted_birthday = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
             elif len(birthday) == 10 and birthday[4] == "-" and birthday[7] == "-":
                 formatted_birthday = birthday
         except Exception:
@@ -276,7 +389,6 @@ def create_customer(
         customer_doc.gender = gender
         customer_doc.save()
 
-        # ensure contact details are synced correctly
         if mobile_no:
             set_customer_info(customer_doc.name, "mobile_no", mobile_no)
         if email_id:
@@ -332,7 +444,6 @@ def set_customer_info(customer, fieldname, value=""):
             contact_doc.set("phone_nos", [{"phone": value, "is_primary_mobile_no": 1}])
             frappe.db.set_value("Customer", customer, "mobile_no", value)
         contact_doc.save()
-
     else:
         contact_doc = frappe.new_doc("Contact")
         contact_doc.first_name = customer
@@ -340,12 +451,9 @@ def set_customer_info(customer, fieldname, value=""):
         contact_doc.is_billing_contact = 1
         if fieldname == "mobile_no":
             contact_doc.add_phone(value, is_primary_mobile_no=1, is_primary_phone=1)
-
         if fieldname == "email_id":
             contact_doc.add_email(value, is_primary=1)
-
         contact_doc.append("links", {"link_doctype": "Customer", "link_name": customer})
-
         contact_doc.flags.ignore_mandatory = True
         contact_doc.save()
         frappe.set_value("Customer", customer, "customer_primary_contact", contact_doc.name)
@@ -355,25 +463,23 @@ def set_customer_info(customer, fieldname, value=""):
 def get_customer_addresses(customer):
     return frappe.db.sql(
         """
-	SELECT
-	    address.name,
-	    address.address_line1,
-	    address.address_line2,
-	    address.address_title,
-	    address.city,
-	    address.state,
-	    address.country,
-	    address.address_type
-	FROM `tabAddress` as address
-	INNER JOIN `tabDynamic Link` AS link
-				ON address.name = link.parent
-	WHERE link.link_doctype = 'Customer'
-	    AND link.link_name = '{0}'
-	    AND address.disabled = 0
-	ORDER BY address.name
-	""".format(
-            customer
-        ),
+        SELECT
+            address.name,
+            address.address_line1,
+            address.address_line2,
+            address.address_title,
+            address.city,
+            address.state,
+            address.country,
+            address.address_type
+        FROM `tabAddress` as address
+        INNER JOIN `tabDynamic Link` AS link
+            ON address.name = link.parent
+        WHERE link.link_doctype = 'Customer'
+            AND link.link_name = '{0}'
+            AND address.disabled = 0
+        ORDER BY address.name
+        """.format(customer),
         as_dict=1,
     )
 
@@ -395,15 +501,11 @@ def make_address(args):
             "links": [{"link_doctype": args.get("doctype"), "link_name": args.get("customer")}],
         }
     ).insert()
-
     return address
 
 
 @frappe.whitelist()
 def get_sales_person_names():
-    import json
-
-    print("Fetching sales persons...")
     try:
         profile = get_active_pos_profile()
         allowed = []
@@ -420,9 +522,7 @@ def get_sales_person_names():
             fields=["name", "sales_person_name"],
             limit_page_length=100000,
         )
-        print(f"Found {len(sales_persons)} sales persons: {json.dumps(sales_persons)}")
         return sales_persons
     except Exception as e:
-        print(f"Error fetching sales persons: {str(e)}")
         frappe.log_error(f"Error fetching sales persons: {str(e)}", "POS Sales Person Error")
         return []
