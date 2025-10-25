@@ -86,9 +86,7 @@
 		</div>
 
 		<!-- No Data -->
-		<div v-else class="no-data">
-			No quotation data found. Please search using a valid Quotation #.
-		</div>
+		<div v-else class="no-data">No quotation data found. Please search using a valid Quotation #.</div>
 	</div>
 </template>
 
@@ -106,15 +104,12 @@ async function fetchQuotation() {
 		return;
 	}
 	try {
-		const res = await axios.get(
-			"/api/method/frappe.desk.form.load.getdoc",
-			{
-				params: {
-					doctype: "Quotation",
-					name: filters.value.name,
-				},
+		const res = await axios.get("/api/method/frappe.desk.form.load.getdoc", {
+			params: {
+				doctype: "Quotation",
+				name: filters.value.name,
 			},
-		);
+		});
 		quotation.value = res.data.docs?.[0] || null;
 	} catch (err) {
 		console.error("Error fetching quotation:", err);

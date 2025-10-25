@@ -19,6 +19,7 @@ VEHICLE_DOCTYPE = "Vehicle Master"
 
 # ---------------- POS Customer Utilities ----------------
 
+
 # (get_customer_groups, get_child_nodes, get_customer_group_condition remain the same)
 def get_customer_groups(pos_profile):
     """Return list of all child customer groups for a POS profile"""
@@ -62,12 +63,14 @@ def get_customer_group_condition(pos_profile):
         cond = f" customer_group in ({', '.join(escaped_groups)})"
     return cond
 
+
 # ---------------- POS Customer APIs ----------------
+
 
 @frappe.whitelist()
 def get_customer_names(pos_profile=None, limit=200, start_after=None, modified_after=None):
     """Fetch customers filtered by POS profile with pagination and optional caching"""
-    
+
     # --- Fix for optional pos_profile and None handling ---
     if not pos_profile:
         active_profile_doc = get_active_pos_profile()
@@ -87,7 +90,7 @@ def get_customer_names(pos_profile=None, limit=200, start_after=None, modified_a
     def _get_customer_names(pos_profile, limit, start_after, modified_after):
         if isinstance(pos_profile, str):
             pos_profile = json.loads(pos_profile)
-            
+
         filters = {"disabled": 0}
         customer_groups = get_customer_groups(pos_profile)
         if customer_groups:
@@ -128,7 +131,7 @@ def get_customer_names(pos_profile=None, limit=200, start_after=None, modified_a
 @frappe.whitelist()
 def get_customers_count(pos_profile=None, modified_after=None):
     """Return customer count for POS profile, optionally after a date"""
-    
+
     # --- FIX for TypeError: 'NoneType' object is not callable ---
     if not pos_profile:
         active_profile_doc = get_active_pos_profile()
@@ -192,8 +195,7 @@ def get_customer_info(customer):
             res["loyalty_points"] = lp_details.get("loyalty_points")
             res["conversion_factor"] = lp_details.get("conversion_factor")
         except NameError:
-             frappe.log_error("Loyalty program utility not found.", "POS Customer Info")
-
+            frappe.log_error("Loyalty program utility not found.", "POS Customer Info")
 
     # --- Address Query ---
     addresses = frappe.db.sql(
@@ -228,53 +230,54 @@ def get_customer_info(customer):
         res["city"] = addr.city or ""
         res["state"] = addr.state or ""
         res["country"] = addr.country or ""
-        
+
     # --- VEHICLE QUERY (FIXED: Using Vehicle Master and vehicle_no) ---
     vehicles = frappe.get_all(
-        VEHICLE_DOCTYPE, # Correct DocType: "Vehicle Master"
-        filters={"customer": customer.name}, # Correct link field
-        fields=["name", "vehicle_no"], # Correct plate field: "vehicle_no"
-        limit_page_length=10
+        VEHICLE_DOCTYPE,  # Correct DocType: "Vehicle Master"
+        filters={"customer": customer.name},  # Correct link field
+        fields=["name", "vehicle_no"],  # Correct plate field: "vehicle_no"
+        limit_page_length=10,
         # REMOVED: as_dict=True to prevent TypeError on newer Frappe versions
     )
-    
+
     # Map the result structure
     res["vehicles"] = [{"name": v.name, "vehicle_no": v.vehicle_no} for v in vehicles if v.get("vehicle_no")]
-    
+
     if res["vehicles"]:
         res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
-        
+
     return res
+
 
 @frappe.whitelist()
 def get_customer_by_vehicle(vehicle_no):
     """Return customer details for a vehicle number (exact match)."""
-    
+
     vehicle_data = frappe.get_all(
-        VEHICLE_DOCTYPE, # Correct DocType: "Vehicle Master"
-        filters={"vehicle_no": vehicle_no}, # Correct plate field: "vehicle_no"
+        VEHICLE_DOCTYPE,  # Correct DocType: "Vehicle Master"
+        filters={"vehicle_no": vehicle_no},  # Correct plate field: "vehicle_no"
         # Adjusted fields to match your DocType: customer, model, chasis_no, mobile
         fields=["name", "customer", "model", "chasis_no", "tel_mobile", "vehicle_no"],
         limit_page_length=1,
         # REMOVED: as_dict=True to prevent TypeError on newer Frappe versions
     )
-    
-    # frappe.get_all returns a list of objects/tuples depending on as_dict/Frappe version, 
+
+    # frappe.get_all returns a list of objects/tuples depending on as_dict/Frappe version,
     # but the subsequent code expects dictionary access, so we will use an explicit list check
     if not vehicle_data or not vehicle_data[0]:
         return {}
-        
+
     vehicle = vehicle_data[0]
-    
+
     # Ensure vehicle_no is present in the final output structure
-    if "vehicle_no" not in vehicle and vehicle.get("vehicle_no_field_name"): # Example of safety net
+    if "vehicle_no" not in vehicle and vehicle.get("vehicle_no_field_name"):  # Example of safety net
         vehicle["vehicle_no"] = vehicle.get("vehicle_no_field_name")
-        
+
     cust_name = vehicle.get("customer")
     if not cust_name:
         # Return vehicle data even if no customer is linked
         return {"vehicle": vehicle, "customer": {}}
-    
+
     # Retrieve customer details
     try:
         cust_doc = frappe.get_doc("Customer", cust_name)
@@ -297,6 +300,7 @@ def get_customer_by_vehicle(vehicle_no):
 
 
 # ---------------- Customer CRUD & Utilities ----------------
+
 
 @frappe.whitelist()
 def create_customer(
@@ -479,7 +483,9 @@ def get_customer_addresses(customer):
             AND link.link_name = '{0}'
             AND address.disabled = 0
         ORDER BY address.name
-        """.format(customer),
+        """.format(
+            customer
+        ),
         as_dict=1,
     )
 

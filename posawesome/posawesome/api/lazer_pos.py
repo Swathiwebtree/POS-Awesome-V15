@@ -5,11 +5,14 @@ from frappe.utils import getdate, flt
 
 from frappe.model.document import Document
 
+
 class VehicleMaster(Document):
     def before_insert(self):
         if not self.trans_no:
             # auto generate if empty
             self.trans_no = frappe.model.naming.make_autoname("TRANS-.#####")
+
+
 # ----------------------------
 # TRANSACTIONS MODULE
 # ----------------------------
@@ -18,7 +21,12 @@ class VehicleMaster(Document):
 @frappe.whitelist()
 def get_items():
     # Return simple items list for browse — adapt to your real item doctype
-    items = frappe.get_all("Item", filters={"disabled": 0}, fields=["item_code", "item_name", "standard_rate as price", "item_group as category"], limit_page_length=200)
+    items = frappe.get_all(
+        "Item",
+        filters={"disabled": 0},
+        fields=["item_code", "item_name", "standard_rate as price", "item_group as category"],
+        limit_page_length=200,
+    )
     return items
 
 
@@ -72,8 +80,9 @@ def get_service_issue_list():
     return frappe.get_all(
         "Service Issue Note",
         fields=["name", "issue_id", "vehicle", "customer", "status", "priority", "service_date"],
-        order_by="creation desc"
+        order_by="creation desc",
     )
+
 
 @frappe.whitelist(allow_guest=True)
 def create_service_issue_note(data):
@@ -83,6 +92,7 @@ def create_service_issue_note(data):
     doc.insert(ignore_permissions=True)
     frappe.db.commit()
     return "success"
+
 
 # @frappe.whitelist()
 # def get_service_issue_list():
@@ -168,7 +178,9 @@ def remove_item_from_order(order_no, item_code):
 
 
 @frappe.whitelist()
-def save_work_order(work_order=None, vehicle=None, customer=None, staff_code=None, staff_name=None, items=None, discount=0):
+def save_work_order(
+    work_order=None, vehicle=None, customer=None, staff_code=None, staff_name=None, items=None, discount=0
+):
     """
     Create or update a Vehicle Service Work Order (simple generic implementation).
     items expected as list of dicts: [{ item_code, qty, price }]
@@ -196,21 +208,24 @@ def save_work_order(work_order=None, vehicle=None, customer=None, staff_code=Non
         # items may be JSON string if called from fetch; ensure list
         if isinstance(items, str):
             import json
+
             items = json.loads(items)
         for it in items:
             qty = it.get("qty", 1)
             price = it.get("price") or 0
-            doc.append("items", {
-                "item_code": it.get("item_code"),
-                "description": it.get("item_name") or it.get("description"),
-                "qty": qty,
-                "rate": price
-            })
+            doc.append(
+                "items",
+                {
+                    "item_code": it.get("item_code"),
+                    "description": it.get("item_name") or it.get("description"),
+                    "qty": qty,
+                    "rate": price,
+                },
+            )
 
     doc.save(ignore_permissions=True)
     frappe.db.commit()
     return {"status": "ok", "work_order": doc.name}
-
 
 
 @frappe.whitelist()
@@ -218,13 +233,20 @@ def get_items_from_barcode(barcode=None):
     if not barcode:
         return []
     # simple lookup on Item Barcode doctype or Item's barcode field
-    ib = frappe.get_all("Item Barcode", filters={"barcode": barcode}, fields=["parent as item_code"], limit_page_length=1)
+    ib = frappe.get_all(
+        "Item Barcode", filters={"barcode": barcode}, fields=["parent as item_code"], limit_page_length=1
+    )
     if ib:
         item_code = ib[0].item_code
         item = frappe.get_doc("Item", item_code)
         return [{"item_code": item.name, "item_name": item.item_name, "price": item.standard_rate}]
     # fallback: try item with barcode field
-    item = frappe.db.get_values("Item", {"barcode": barcode}, ["name", "item_name", "standard_rate"], as_dict=True) or []
+    item = (
+        frappe.db.get_values(
+            "Item", {"barcode": barcode}, ["name", "item_name", "standard_rate"], as_dict=True
+        )
+        or []
+    )
     return item
 
 
@@ -428,7 +450,6 @@ def void_order(order_no):
     return {"status": "cancelled", "order": order_no}
 
 
-
 @frappe.whitelist()
 def print_invoice(order_no):
     """Print invoice PDF"""
@@ -558,10 +579,10 @@ def get_petty_cash_transactions():
             "shift_closing_id",
             "count_closing_id",
             "day_closing_id",
-            "total"
+            "total",
         ],
         order_by="date desc",
-        limit_page_length=200
+        limit_page_length=200,
     )
 
     for entry in petty_cash_entries:
@@ -583,11 +604,12 @@ def get_petty_cash_transactions():
                 "paid_foreign",
                 "paid_local",
             ],
-            order_by="idx"
+            order_by="idx",
         )
         entry["items"] = items
 
     return petty_cash_entries
+
 
 @frappe.whitelist()
 def add_petty_cash(pc_data, items_data):
@@ -597,14 +619,11 @@ def add_petty_cash(pc_data, items_data):
     items_data: list of dicts for child table
     """
     import json
+
     pc_data = json.loads(pc_data)
     items_data = json.loads(items_data)
 
-    doc = frappe.get_doc({
-        "doctype": "Petty Cash",
-        **pc_data,
-        "items": items_data
-    })
+    doc = frappe.get_doc({"doctype": "Petty Cash", **pc_data, "items": items_data})
     doc.insert()
     frappe.db.commit()
     return {"message": "Petty Cash added successfully", "pc_no": doc.name}
@@ -617,31 +636,45 @@ def get_receipt_voucher():
         "Receipt Voucher", fields=["name", "customer", "date", "amount", "status", "division"]
     )
 
+
 @frappe.whitelist(allow_guest=True)
 def get_list():
     # Fetch all items
     items = frappe.get_all(
         "Item",
-        fields=["name as item_code", "item_name", "barcode", "supplier", "stock_uom as unit", "default_warehouse as location", "selling_price", "vat_rate as vat_price", "scale", "stock_balance"]
+        fields=[
+            "name as item_code",
+            "item_name",
+            "barcode",
+            "supplier",
+            "stock_uom as unit",
+            "default_warehouse as location",
+            "selling_price",
+            "vat_rate as vat_price",
+            "scale",
+            "stock_balance",
+        ],
     )
 
     # Fetch price levels
     price_levels = frappe.get_all(
         "Item Price",
-        fields=["name as price_id", "price_list as price_level", "item_code as barcode", "price_list_rate as price", "price_list_rate_with_tax as price_vat"]
+        fields=[
+            "name as price_id",
+            "price_list as price_level",
+            "item_code as barcode",
+            "price_list_rate as price",
+            "price_list_rate_with_tax as price_vat",
+        ],
     )
 
     # Fetch stock in hand
     stock_in_hand = frappe.get_all(
-        "Bin",
-        fields=["warehouse as location_name", "actual_qty as balance", "shelf_no"]
+        "Bin", fields=["warehouse as location_name", "actual_qty as balance", "shelf_no"]
     )
 
-    return {
-        "items": items,
-        "price_levels": price_levels,
-        "stock_in_hand": stock_in_hand
-    }
+    return {"items": items, "price_levels": price_levels, "stock_in_hand": stock_in_hand}
+
 
 # ----------------------------
 # INVENTORY MODULE
@@ -1103,7 +1136,9 @@ def get_bills_listing_work_order(filters=None):
         query += " AND work_order_no = %(work_order_no)s"
 
     data = frappe.db.sql(query, filters, as_dict=True)
-    return _with_totals(data, ["total_amount", "discount_amount", "amount_after_discount", "vat_amount", "net_amount"])
+    return _with_totals(
+        data, ["total_amount", "discount_amount", "amount_after_discount", "vat_amount", "net_amount"]
+    )
 
 
 # ==========================================================
@@ -1139,7 +1174,17 @@ def get_bills_listing_vehicle(filters=None):
         query += " AND vehicle_no = %(vehicle_no)s"
 
     data = frappe.db.sql(query, filters, as_dict=True)
-    return _with_totals(data, ["vehicle_count", "total_amount", "discount_amount", "amount_after_discount", "vat_amount", "net_amount"])
+    return _with_totals(
+        data,
+        [
+            "vehicle_count",
+            "total_amount",
+            "discount_amount",
+            "amount_after_discount",
+            "vat_amount",
+            "net_amount",
+        ],
+    )
 
 
 # ==========================================================
@@ -1354,7 +1399,6 @@ def _with_totals(data, numeric_fields):
     return {"data": data, "totals": totals}
 
 
-
 @frappe.whitelist()
 def get_loyalty_customer(filters=None):
     """
@@ -1397,6 +1441,7 @@ def get_loyalty_customer(filters=None):
 
     return frappe.db.sql(sql_query, as_dict=True)
 
+
 @frappe.whitelist()
 def get_loyalty_points(customer):
     """
@@ -1410,17 +1455,11 @@ def get_loyalty_points(customer):
 
     # Get the Loyalty Program linked to the customer
     # This assumes a standard ERPNext setup where a Customer can be linked to a Loyalty Program
-    loyalty_program = frappe.db.get_value(
-        "Customer", customer, "loyalty_program"
-    )
+    loyalty_program = frappe.db.get_value("Customer", customer, "loyalty_program")
 
     if not loyalty_program:
         # Check if any Loyalty Program is set as default/global
-        loyalty_program = frappe.db.get_value(
-            "Loyalty Program",
-            {"is_active": 1, "is_default": 1},
-            "name"
-        )
+        loyalty_program = frappe.db.get_value("Loyalty Program", {"is_active": 1, "is_default": 1}, "name")
 
     if not loyalty_program:
         # If no program is found, return 0 points
@@ -1428,17 +1467,16 @@ def get_loyalty_points(customer):
 
     # Calculate the total points balance
     # Total points earned minus total points redeemed for the given customer and program
-    total_points = frappe.db.get_value(
-        "Loyalty Point Entry",
-        {"customer": customer, "loyalty_program": loyalty_program},
-        "SUM(loyalty_points)"
-    ) or 0
+    total_points = (
+        frappe.db.get_value(
+            "Loyalty Point Entry",
+            {"customer": customer, "loyalty_program": loyalty_program},
+            "SUM(loyalty_points)",
+        )
+        or 0
+    )
 
-    return {
-        "points": total_points
-    }
-
-
+    return {"points": total_points}
 
 
 @frappe.whitelist()
@@ -1830,19 +1868,18 @@ def get_daily_summary(start_date=None, end_date=None, station_id=None):
 # SYSTEM MODULE
 # ----------------------------
 
+
 @frappe.whitelist()
 def get_settings():
     return frappe.get_all("System Settings_2", fields=["name", "parameter", "value"])
 
+
 @frappe.whitelist()
 def create_setting(parameter, value):
-    doc = frappe.get_doc({
-        "doctype": "System Settings_2",
-        "parameter": parameter,
-        "value": value
-    })
+    doc = frappe.get_doc({"doctype": "System Settings_2", "parameter": parameter, "value": value})
     doc.insert()
     return doc
+
 
 @frappe.whitelist()
 def update_setting(name, value):
@@ -1851,10 +1888,12 @@ def update_setting(name, value):
     doc.save()
     return doc
 
+
 @frappe.whitelist()
 def delete_setting(name):
     frappe.delete_doc("System Settings_2", name)
     return {"status": "success"}
+
 
 # ----------------------------
 # CASH COUNTING MODULE API
@@ -1865,16 +1904,13 @@ def delete_setting(name):
 def get_cash_counts():
     return frappe.get_all("Cash Counting_2", fields=["name", "user", "amount", "date"])
 
+
 @frappe.whitelist()
 def create_cash_count(user, amount, date):
-    doc = frappe.get_doc({
-        "doctype": "Cash Counting_2",
-        "user": user,
-        "amount": amount,
-        "date": date
-    })
+    doc = frappe.get_doc({"doctype": "Cash Counting_2", "user": user, "amount": amount, "date": date})
     doc.insert()
     return doc
+
 
 @frappe.whitelist()
 def update_cash_count(name, amount):
@@ -1882,6 +1918,7 @@ def update_cash_count(name, amount):
     doc.amount = amount
     doc.save()
     return doc
+
 
 @frappe.whitelist()
 def delete_cash_count(name):
@@ -1896,20 +1933,26 @@ def delete_cash_count(name):
 
 @frappe.whitelist()
 def get_shifts():
-    return frappe.get_all("Cashier Out", fields=["name", "user", "shift", "total_cash", "start_time", "end_time"])
+    return frappe.get_all(
+        "Cashier Out", fields=["name", "user", "shift", "total_cash", "start_time", "end_time"]
+    )
+
 
 @frappe.whitelist()
 def create_shift(user, shift, total_cash, start_time, end_time):
-    doc = frappe.get_doc({
-        "doctype": "Cashier Out",
-        "user": user,
-        "shift": shift,
-        "total_cash": total_cash,
-        "start_time": start_time,
-        "end_time": end_time
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "Cashier Out",
+            "user": user,
+            "shift": shift,
+            "total_cash": total_cash,
+            "start_time": start_time,
+            "end_time": end_time,
+        }
+    )
     doc.insert()
     return doc
+
 
 @frappe.whitelist()
 def update_shift(name, total_cash, end_time):
@@ -1918,6 +1961,7 @@ def update_shift(name, total_cash, end_time):
     doc.end_time = end_time
     doc.save()
     return doc
+
 
 @frappe.whitelist()
 def delete_shift(name):
@@ -1932,19 +1976,25 @@ def delete_shift(name):
 
 @frappe.whitelist()
 def get_day_end():
-    return frappe.get_all("Day End Closing_2", fields=["name", "user", "total_cash", "open_work_orders", "closing_time"])
+    return frappe.get_all(
+        "Day End Closing_2", fields=["name", "user", "total_cash", "open_work_orders", "closing_time"]
+    )
+
 
 @frappe.whitelist()
 def create_day_end(user, total_cash, open_work_orders, closing_time):
-    doc = frappe.get_doc({
-        "doctype": "Day End Closing_2",
-        "user": user,
-        "total_cash": total_cash,
-        "open_work_orders": open_work_orders,
-        "closing_time": closing_time
-    })
+    doc = frappe.get_doc(
+        {
+            "doctype": "Day End Closing_2",
+            "user": user,
+            "total_cash": total_cash,
+            "open_work_orders": open_work_orders,
+            "closing_time": closing_time,
+        }
+    )
     doc.insert()
     return doc
+
 
 @frappe.whitelist()
 def update_day_end(name, total_cash, open_work_orders, closing_time):
@@ -1955,14 +2005,17 @@ def update_day_end(name, total_cash, open_work_orders, closing_time):
     doc.save()
     return doc
 
+
 @frappe.whitelist()
 def delete_day_end(name):
     frappe.delete_doc("Day End Closing_2", name)
     return {"status": "success"}
 
+
 # ----------------------------
 # EXIT MODULE
 # ----------------------------
+
 
 @frappe.whitelist()
 def exit_pos(user):
@@ -1975,31 +2028,27 @@ def exit_pos(user):
     if shift:
         shift_doc = frappe.get_doc("Day End Closing_2", shift)
         import datetime
+
         shift_doc.end_time = datetime.datetime.now()
         shift_doc.save()
-    
+
     frappe.db.commit()
     return {"message": _("POS exited successfully")}
 
 
-
-@frappe.whitelist(allow_guest=True)  
+@frappe.whitelist(allow_guest=True)
 def cashier_login(cashier_code):
     """
     API to verify cashier login code
     """
     user = frappe.get_all(
-        "User",
-        filters={"cashier_code": cashier_code, "enabled": 1},
-        fields=["name", "full_name"]
+        "User", filters={"cashier_code": cashier_code, "enabled": 1}, fields=["name", "full_name"]
     )
 
     if user:
-        frappe.local.response.update({
-            "status": "success",
-            "message": f"Welcome {user[0].full_name}",
-            "user": user[0].name
-        })
+        frappe.local.response.update(
+            {"status": "success", "message": f"Welcome {user[0].full_name}", "user": user[0].name}
+        )
         return frappe.local.response
     else:
         frappe.throw(_("Invalid Cashier Code"))

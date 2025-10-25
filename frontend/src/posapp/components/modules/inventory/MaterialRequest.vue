@@ -4,11 +4,7 @@
 
 		<!-- Filters -->
 		<div class="filters">
-			<input
-				type="text"
-				v-model="filters.keyword"
-				placeholder="Search by MR # or Title"
-			/>
+			<input type="text" v-model="filters.keyword" placeholder="Search by MR # or Title" />
 			<button @click="fetchMaterialRequests">Search</button>
 			<button class="btn-new" @click="createMaterialRequest">+ New</button>
 		</div>
@@ -27,11 +23,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				<tr
-					v-for="(mr, index) in materialRequests"
-					:key="index"
-					@click="fetchMRDetails(mr[0])"
-				>
+				<tr v-for="(mr, index) in materialRequests" :key="index" @click="fetchMRDetails(mr[0])">
 					<td>{{ mr[0] }}</td>
 					<td>{{ mr[11] }}</td>
 					<td>{{ mr[12] }}</td>

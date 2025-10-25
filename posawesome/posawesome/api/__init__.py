@@ -14,7 +14,6 @@ from .customers import (
     get_child_nodes,
     get_customer_group_condition,
     get_customer_by_vehicle,
-
 )
 from .vehicles import (
     get_vehicles_by_customer,
@@ -138,5 +137,4 @@ from .lazer_pos import (
     update_day_end,
     delete_day_end,
     cashier_login,
-
 )
