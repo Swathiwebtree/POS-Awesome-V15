@@ -317,16 +317,30 @@ export default {
 	},
 
 	// Load an invoice (or return invoice) from data, set all fields accordingly
-	async load_invoice(data = {}) {
-		console.log("load_invoice called with data:", {
-			is_return: data.is_return,
-			return_against: data.return_against,
-			customer: data.customer,
-			items_count: data.items ? data.items.length : 0,
+        async load_invoice(data = {}, options = {}) {
+                const { preserveAdditionalDiscountPercentage = false } = options || {};
+                const usePercentageDiscount = Boolean(this.pos_profile?.posa_use_percentage_discount);
+                const previousDiscountPercentage = usePercentageDiscount
+                        ? flt(this.additional_discount_percentage)
+                        : null;
+                const shouldPreserveDiscountPercentage =
+                        usePercentageDiscount &&
+                        preserveAdditionalDiscountPercentage &&
+                        Number.isFinite(previousDiscountPercentage);
+
+                console.log("load_invoice called with data:", {
+                        is_return: data.is_return,
+                        return_against: data.return_against,
+                        customer: data.customer,
+                        items_count: data.items ? data.items.length : 0,
 		});
 
-		this.clear_invoice();
-		if (data.is_return) {
+                this.clear_invoice();
+                if (data?.is_return) {
+                        this._normalizeReturnDocTotals(data);
+                }
+
+                if (data.is_return) {
 			console.log("Processing return invoice");
 			// For return without invoice case, check if there's a return_against
 			// Only set customer readonly if this is a return with reference to an invoice
@@ -342,8 +356,8 @@ export default {
 			this.invoiceTypes = ["Return"];
 		}
 
-		this.invoice_doc = data;
-		this.items = data.items || [];
+                this.invoice_doc = data;
+                this.items = data.items || [];
 		this.packed_items = data.packed_items || [];
 		console.log("Items set:", this.items.length, "items");
 
@@ -393,14 +407,103 @@ export default {
 
 		this.customer = data.customer;
 		this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
-		this.discount_amount = data.discount_amount;
-		this.additional_discount_percentage = data.additional_discount_percentage;
-		this.additional_discount = data.discount_amount;
+                const docDiscountAmount = flt(data.discount_amount);
+                const docDiscountPercentage =
+                        data.additional_discount_percentage !== undefined &&
+                        data.additional_discount_percentage !== null
+                                ? flt(data.additional_discount_percentage)
+                                : 0;
+                const docIsReturn = Boolean(data.is_return);
 
-		if (this.items.length > 0) {
-			this.items.forEach((item) => {
-				if (item.serial_no) {
-					item.serial_no_selected = [];
+                if (usePercentageDiscount) {
+                        let resolvedPercentage = 0;
+
+                        if (shouldPreserveDiscountPercentage) {
+                                resolvedPercentage = previousDiscountPercentage;
+                        } else if (
+                                data.additional_discount_percentage !== undefined &&
+                                data.additional_discount_percentage !== null &&
+                                Number.isFinite(docDiscountPercentage)
+                        ) {
+                                resolvedPercentage = docDiscountPercentage;
+                        } else {
+                                const totalsForPercentage = [];
+
+                                if (this.Total) {
+                                        const signedTotal = docIsReturn
+                                                ? -Math.abs(this.Total)
+                                                : this.Total;
+                                        if (signedTotal) {
+                                                totalsForPercentage.push(signedTotal);
+                                        }
+                                }
+
+                                if (data.total !== undefined && data.total !== null) {
+                                        const docTotal = flt(data.total);
+                                        const signedDocTotal = docIsReturn
+                                                ? -Math.abs(docTotal)
+                                                : docTotal;
+                                        if (signedDocTotal) {
+                                                totalsForPercentage.push(signedDocTotal);
+                                        }
+                                }
+
+                                if (data.net_total !== undefined && data.net_total !== null) {
+                                        const docNetTotal = flt(data.net_total);
+                                        const signedNetTotal = docIsReturn
+                                                ? -Math.abs(docNetTotal)
+                                                : docNetTotal;
+                                        if (signedNetTotal) {
+                                                totalsForPercentage.push(signedNetTotal);
+                                        }
+                                }
+
+                                const percentageBase = totalsForPercentage.find((value) => value);
+
+                                if (percentageBase) {
+                                        resolvedPercentage = this.flt(
+                                                (docDiscountAmount / percentageBase) * 100,
+                                                this.float_precision,
+                                        );
+                                } else {
+                                        resolvedPercentage = docDiscountPercentage;
+                                }
+                        }
+
+                        if (!Number.isFinite(resolvedPercentage)) {
+                                resolvedPercentage = 0;
+                        }
+
+                        if (docIsReturn) {
+                                resolvedPercentage = -Math.abs(resolvedPercentage);
+                        } else {
+                                resolvedPercentage = Math.abs(resolvedPercentage);
+                        }
+
+                        this.additional_discount_percentage = resolvedPercentage;
+                        updateDiscountAmount(this);
+
+                        // Ensure watchers or rounding adjustments don't overwrite the intended value
+                        if (typeof this.$nextTick === "function") {
+                                this.$nextTick(() => {
+                                        if (this.pos_profile?.posa_use_percentage_discount) {
+                                                this.additional_discount_percentage = resolvedPercentage;
+                                        }
+                                });
+                        }
+
+                        this.additional_discount = this.flt(this.additional_discount, this.currency_precision);
+                        this.discount_amount = this.additional_discount;
+                } else {
+                        this.discount_amount = docDiscountAmount;
+                        this.additional_discount_percentage = docDiscountPercentage;
+                        this.additional_discount = docDiscountAmount;
+                }
+
+                if (this.items.length > 0) {
+                        this.items.forEach((item) => {
+                                if (item.serial_no) {
+                                        item.serial_no_selected = [];
 					const serial_list = item.serial_no.split("\n");
 					serial_list.forEach((element) => {
 						if (element.length) {
@@ -475,13 +578,14 @@ export default {
 			this.additional_discount_percentage = 0;
 			this.invoiceType = "Invoice";
 			this.invoiceTypes = ["Invoice", "Order", "Quotation"];
-		} else {
-			if (data.is_return) {
-				// For return without invoice case, check if there's a return_against
-				// Only set customer readonly if this is a return with reference to an invoice
-				if (data.return_against) {
-					this.eventBus.emit("set_customer_readonly", true);
-				} else {
+                } else {
+                        if (data.is_return) {
+                                this._normalizeReturnDocTotals(data);
+                                // For return without invoice case, check if there's a return_against
+                                // Only set customer readonly if this is a return with reference to an invoice
+                                if (data.return_against) {
+                                        this.eventBus.emit("set_customer_readonly", true);
+                                } else {
 					// Allow customer selection for returns without invoice
 					this.eventBus.emit("set_customer_readonly", false);
 				}
@@ -502,8 +606,14 @@ export default {
 			});
 			this.customer = data.customer;
 			this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
-			this.discount_amount = data.discount_amount;
-			this.additional_discount_percentage = data.additional_discount_percentage;
+                        this.discount_amount = data.discount_amount;
+                        if (data.is_return && this.pos_profile?.posa_use_percentage_discount) {
+                                this.additional_discount_percentage = -Math.abs(
+                                        flt(data.additional_discount_percentage),
+                                );
+                        } else {
+                                this.additional_discount_percentage = data.additional_discount_percentage;
+                        }
 			this.items.forEach((item) => {
 				if (item.serial_no) {
 					item.serial_no_selected = [];
@@ -597,10 +707,14 @@ export default {
 		doc.discount_amount = discountAmount;
 		doc.base_discount_amount = discountAmount * (this.exchange_rate || 1);
 
-		let discountPercentage = flt(this.additional_discount_percentage);
-		if (isReturn && discountPercentage > 0) discountPercentage = -Math.abs(discountPercentage);
+                let discountPercentage = flt(this.additional_discount_percentage);
+                if (this.pos_profile?.posa_use_percentage_discount) {
+                        discountPercentage = Math.abs(discountPercentage);
+                } else if (isReturn && discountPercentage > 0) {
+                        discountPercentage = -Math.abs(discountPercentage);
+                }
 
-		doc.additional_discount_percentage = discountPercentage;
+                doc.additional_discount_percentage = discountPercentage;
 
 		// Calculate grand total with correct sign for returns
 		let grandTotal = this.subtotal;
@@ -1042,19 +1156,22 @@ export default {
 					: "posawesome.posawesome.api.invoices.update_invoice";
 
 		try {
-			const response = await frappe.call({
-				method,
-				args: {
-					data: doc,
-				},
+                        const response = await frappe.call({
+                                method,
+                                args: {
+                                        data: doc,
+                                },
 			});
 
 			const message = response?.message;
-			if (message) {
-				this.invoice_doc = message;
-				if (message.exchange_rate_date) {
-					this.exchange_rate_date = message.exchange_rate_date;
-					const posting_backend = this.formatDateForBackend(this.posting_date_display);
+                        if (message) {
+                                if (message.is_return) {
+                                        this._normalizeReturnDocTotals(message);
+                                }
+                                this.invoice_doc = message;
+                                if (message.exchange_rate_date) {
+                                        this.exchange_rate_date = message.exchange_rate_date;
+                                        const posting_backend = this.formatDateForBackend(this.posting_date_display);
 					if (posting_backend !== this.exchange_rate_date) {
 						this.eventBus.emit("show_message", {
 							title: __(
@@ -1093,8 +1210,11 @@ export default {
 			});
 
 			const message = response?.message;
-			if (message) {
-				this.invoice_doc = message;
+                        if (message) {
+                                if (message.is_return) {
+                                        this._normalizeReturnDocTotals(message);
+                                }
+                                this.invoice_doc = message;
 				if (message.exchange_rate_date) {
 					this.exchange_rate_date = message.exchange_rate_date;
 					const posting_backend = this.formatDateForBackend(this.posting_date_display);
@@ -1185,11 +1305,11 @@ export default {
 	},
 
 	// Reload the currently open invoice from the backend and load it into the UI
-	async reload_current_invoice_from_backend() {
-		try {
-			if (isOffline()) {
-				return null;
-			}
+        async reload_current_invoice_from_backend() {
+                try {
+                        if (isOffline()) {
+                                return null;
+                        }
 
 			const current = this.invoice_doc || {};
 			const name = current.name;
@@ -1215,7 +1335,9 @@ export default {
 				if (manualOverrides.length) {
 					this._applyManualRateOverridesToDoc(doc, manualOverrides);
 				}
-				await this.load_invoice(doc);
+                                await this.load_invoice(doc, {
+                                        preserveAdditionalDiscountPercentage: true,
+                                });
 				return doc;
 			}
 			return null;
@@ -1225,14 +1347,105 @@ export default {
 				title: __("Failed to reload invoice from server"),
 				color: "warning",
 			});
-			return null;
-		}
-	},
+                        return null;
+                }
+        },
 
-	_collectManualRateOverrides(items) {
-		if (!Array.isArray(items) || !items.length) {
-			return [];
-		}
+        _normalizeReturnDocTotals(doc) {
+                if (!doc || !doc.is_return) {
+                        return doc;
+                }
+
+                const toNumber = (value) => {
+                        if (value === undefined || value === null || value === "") {
+                                return null;
+                        }
+
+                        const number = flt(value, this.currency_precision);
+                        return Number.isFinite(number) ? number : null;
+                };
+
+                const ensureNegative = (value) => {
+                        if (value === null) {
+                                return value;
+                        }
+                        return value > 0 ? -Math.abs(value) : value;
+                };
+
+                const adjustFieldByDelta = (field, delta) => {
+                        if (!delta || !Number.isFinite(delta)) {
+                                return;
+                        }
+
+                        if (doc[field] === undefined || doc[field] === null || doc[field] === "") {
+                                return;
+                        }
+
+                        const currentValue = toNumber(doc[field]);
+                        if (currentValue === null) {
+                                return;
+                        }
+
+                        doc[field] = flt(currentValue - delta, this.currency_precision);
+                };
+
+                const originalDiscount = toNumber(doc.discount_amount);
+                let discountDelta = 0;
+                if (originalDiscount !== null) {
+                        const normalizedDiscount = ensureNegative(originalDiscount);
+                        discountDelta = normalizedDiscount - originalDiscount;
+                        doc.discount_amount = normalizedDiscount;
+                }
+
+                const originalBaseDiscount = toNumber(doc.base_discount_amount);
+                let baseDiscountDelta = 0;
+                if (originalBaseDiscount !== null) {
+                        const normalizedBaseDiscount = ensureNegative(originalBaseDiscount);
+                        baseDiscountDelta = normalizedBaseDiscount - originalBaseDiscount;
+                        doc.base_discount_amount = normalizedBaseDiscount;
+                }
+
+                if (discountDelta) {
+                        ["net_total", "grand_total", "rounded_total"].forEach((field) =>
+                                adjustFieldByDelta(field, discountDelta),
+                        );
+                }
+
+                if (baseDiscountDelta) {
+                        ["base_net_total", "base_grand_total", "base_rounded_total"].forEach((field) =>
+                                adjustFieldByDelta(field, baseDiscountDelta),
+                        );
+                }
+
+                [
+                        "total",
+                        "net_total",
+                        "grand_total",
+                        "rounded_total",
+                        "base_total",
+                        "base_net_total",
+                        "base_grand_total",
+                        "base_rounded_total",
+                ].forEach((field) => {
+                        if (doc[field] === undefined || doc[field] === null || doc[field] === "") {
+                                return;
+                        }
+
+                        const value = toNumber(doc[field]);
+                        if (value === null) {
+                                return;
+                        }
+
+                        doc[field] = ensureNegative(value);
+                });
+
+                return doc;
+        },
+
+        _collectManualRateOverrides(items) {
+                if (!Array.isArray(items) || !items.length) {
+                        return [];
+                }
 
 		return items
 			.filter((item) => item && item._manual_rate_set)
