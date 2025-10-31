@@ -64,10 +64,39 @@
 									>{{ __("Clear") }}</v-btn
 								>
 							</v-col>
-						</v-row>
-						<v-data-table
-							:headers="invoices_headers"
-							:items="outstanding_invoices"
+                                                </v-row>
+                                                <v-row
+                                                        v-if="
+                                                                pos_profile.posa_allow_reconcile_payments &&
+                                                                outstanding_invoices.length &&
+                                                                customer_name
+                                                        "
+                                                        class="mb-2"
+                                                >
+                                                        <v-col md="4" cols="12" class="pb-1">
+                                                                <v-btn
+                                                                        block
+                                                                        color="primary"
+                                                                        theme="dark"
+                                                                        :loading="auto_reconcile_loading"
+                                                                        :disabled="
+                                                                                auto_reconcile_loading ||
+                                                                                !unallocated_payments.length
+                                                                        "
+                                                                        @click="autoReconcile"
+                                                                >
+                                                                        {{ __("Auto Reconcile") }}
+                                                                </v-btn>
+                                                        </v-col>
+                                                        <v-col md="8" cols="12" v-if="auto_reconcile_summary">
+                                                                <div class="text-caption text-medium-emphasis">
+                                                                        {{ auto_reconcile_summary }}
+                                                                </div>
+                                                        </v-col>
+                                                </v-row>
+                                                <v-data-table
+                                                        :headers="invoices_headers"
+                                                        :items="outstanding_invoices"
 							item-key="voucher_no"
 							class="elevation-1 mt-0"
 							:loading="invoices_loading"
@@ -117,26 +146,41 @@
 								</p>
 							</v-col>
 						</v-row>
-						<v-data-table
-							:headers="unallocated_payments_headers"
-							:items="unallocated_payments"
-							item-key="name"
-							class="elevation-1 mt-0"
-							:loading="unallocated_payments_loading"
-						>
-							<template v-slot:item.select="{ item }">
-								<v-checkbox
-									v-model="selected_payments"
-									:value="item"
+                                                <v-data-table
+                                                        :headers="unallocated_payments_headers"
+                                                        :items="unallocated_payments"
+                                                        item-key="name"
+                                                        class="elevation-1 mt-0"
+                                                        :loading="unallocated_payments_loading"
+                                                        :item-class="paymentRowClass"
+                                                >
+                                                        <template v-slot:item.select="{ item }">
+                                                                <v-checkbox
+                                                                        v-model="selected_payments"
+                                                                        :value="item"
 									color="primary"
 									hide-details
 									@click.stop
-								></v-checkbox>
-							</template>
-							<template v-slot:item.paid_amount="{ item }">
-								{{ currencySymbol(item.currency) }}
-								{{ formatCurrency(item.paid_amount) }}
-							</template>
+                                                                ></v-checkbox>
+                                                        </template>
+                                                        <template v-slot:item.mode_of_payment="{ item }">
+                                                                <span>
+                                                                        {{
+                                                                                item?.is_credit_note
+                                                                                        ? __("Credit Note")
+                                                                                        : item?.mode_of_payment
+                                                                        }}
+                                                                </span>
+                                                        </template>
+                                                        <template v-slot:item.reference_invoice="{ item }">
+                                                                <span v-if="item?.is_credit_note && item?.reference_invoice">
+                                                                        {{ item.reference_invoice }}
+                                                                </span>
+                                                        </template>
+                                                        <template v-slot:item.paid_amount="{ item }">
+                                                                {{ currencySymbol(item.currency) }}
+                                                                {{ formatCurrency(item.paid_amount) }}
+                                                        </template>
 							<template v-slot:item.unallocated_amount="{ item }">
 								<span class="text-primary"
 									>{{ currencySymbol(item.currency) }}
@@ -424,9 +468,11 @@ export default {
 			unallocated_payments: [],
 			mpesa_payments: [],
 			selected_invoices: [],
-			selected_payments: [],
-			selected_mpesa_payments: [],
-			pos_profiles_list: [],
+                        selected_payments: [],
+                        selected_mpesa_payments: [],
+                        auto_reconcile_loading: false,
+                        auto_reconcile_summary: "",
+                        pos_profiles_list: [],
 			pos_profile_search: "",
 			payment_methods_list: [],
 			mpesa_search_name: "",
@@ -476,43 +522,49 @@ export default {
 					key: "outstanding_amount",
 				},
 			],
-			unallocated_payments_headers: [
-				{
-					title: "",
-					align: "center",
-					sortable: false,
-					key: "select",
-					width: "50px",
-				},
-				{
-					title: __("Payment ID"),
-					align: "start",
-					sortable: true,
-					key: "name",
-				},
-				{
-					title: __("Customer"),
-					align: "start",
-					sortable: true,
-					key: "customer_name",
-				},
-				{
-					title: __("Date"),
-					align: "start",
-					sortable: true,
-					key: "posting_date",
-				},
-				{
-					title: __("Mode"),
-					align: "start",
-					sortable: true,
-					key: "mode_of_payment",
-				},
-				{
-					title: __("Paid"),
-					align: "end",
-					sortable: true,
-					key: "paid_amount",
+                        unallocated_payments_headers: [
+                                {
+                                        title: "",
+                                        align: "center",
+                                        sortable: false,
+                                        key: "select",
+                                        width: "50px",
+                                },
+                                {
+                                        title: __("Payment ID"),
+                                        align: "start",
+                                        sortable: true,
+                                        key: "name",
+                                },
+                                {
+                                        title: __("Customer"),
+                                        align: "start",
+                                        sortable: true,
+                                        key: "customer_name",
+                                },
+                                {
+                                        title: __("Date"),
+                                        align: "start",
+                                        sortable: true,
+                                        key: "posting_date",
+                                },
+                                {
+                                        title: __("Mode"),
+                                        align: "start",
+                                        sortable: true,
+                                        key: "mode_of_payment",
+                                },
+                                {
+                                        title: __("Reference"),
+                                        align: "start",
+                                        sortable: false,
+                                        key: "reference_invoice",
+                                },
+                                {
+                                        title: __("Paid"),
+                                        align: "end",
+                                        sortable: true,
+                                        key: "paid_amount",
 				},
 				{
 					title: __("Unallocated"),
@@ -562,8 +614,8 @@ export default {
 		UpdateCustomer,
 	},
 
-	methods: {
-		async check_opening_entry() {
+        methods: {
+                async check_opening_entry() {
 			var vm = this;
 			await initPromise;
 			await checkDbHealth();
@@ -656,12 +708,18 @@ export default {
 						this.pos_profiles_list = r.message;
 					}
 				});
-		},
-		create_opening_voucher() {
-			this.dialog = true;
-		},
-		async fetch_customer_details() {
-			var vm = this;
+                },
+                create_opening_voucher() {
+                        this.dialog = true;
+                },
+                paymentRowClass(item) {
+                        if (!item || typeof item !== "object") {
+                                return "";
+                        }
+                        return item.is_credit_note ? "credit-note-row" : "";
+                },
+                async fetch_customer_details() {
+                        var vm = this;
 			if (!this.customer_name) return;
 
 			// When offline, attempt to load details from cached customers
@@ -748,38 +806,133 @@ export default {
 					}
 				});
 		},
-		get_unallocated_payments() {
-			if (!this.pos_profile.posa_allow_reconcile_payments) return;
-			this.unallocated_payments_loading = true;
-			if (!this.customer_name) {
-				this.unallocated_payments = [];
-				this.unallocated_payments_loading = false;
-				return;
-			}
+                get_unallocated_payments() {
+                        if (!this.pos_profile.posa_allow_reconcile_payments) return;
+                        this.unallocated_payments_loading = true;
+                        if (!this.customer_name) {
+                                this.unallocated_payments = [];
+                                this.unallocated_payments_loading = false;
+                                return;
+                        }
 
-			if (isOffline()) {
-				this.unallocated_payments = [];
-				this.unallocated_payments_loading = false;
-				return;
-			}
-			return frappe
-				.call("posawesome.posawesome.api.payment_entry.get_unallocated_payments", {
-					customer: this.customer_name,
-					company: this.company,
-					currency: this.pos_profile.currency,
-				})
-				.then((r) => {
-					if (r.message) {
-						this.unallocated_payments = r.message;
-						this.unallocated_payments_loading = false;
-					}
-				});
-		},
-		set_mpesa_search_params() {
-			if (!this.pos_profile.posa_allow_mpesa_reconcile_payments) return;
-			if (!this.customer_name) return;
-			this.mpesa_search_name = this.customer_info.customer_name.split(" ")[0];
-			if (this.customer_info.mobile_no) {
+                        if (isOffline()) {
+                                this.unallocated_payments = [];
+                                this.unallocated_payments_loading = false;
+                                return;
+                        }
+                        return frappe
+                                .call("posawesome.posawesome.api.payment_entry.get_unallocated_payments", {
+                                        customer: this.customer_name,
+                                        company: this.company,
+                                        currency: this.pos_profile.currency,
+                                })
+                                .then((r) => {
+                                        const payments = Array.isArray(r.message) ? r.message : [];
+                                        this.unallocated_payments = payments.map((payment) => ({
+                                                ...payment,
+                                                is_credit_note: Boolean(payment?.is_credit_note),
+                                                mode_of_payment: payment?.is_credit_note
+                                                        ? __("Credit Note")
+                                                        : payment?.mode_of_payment,
+                                        }));
+                                        this.unallocated_payments_loading = false;
+                                });
+                },
+                async autoReconcile() {
+                        if (!this.pos_profile.posa_allow_reconcile_payments) {
+                                return;
+                        }
+                        if (!this.customer_name) {
+                                frappe.msgprint(__("Please select a customer before reconciling."));
+                                return;
+                        }
+                        if (!this.outstanding_invoices.length) {
+                                frappe.msgprint(__("There are no outstanding invoices to reconcile."));
+                                return;
+                        }
+                        if (!this.unallocated_payments.length) {
+                                frappe.msgprint(__("No unallocated payments are available for reconciliation."));
+                                return;
+                        }
+                        if (isOffline()) {
+                                frappe.msgprint(__("Auto reconciliation is unavailable while offline."));
+                                return;
+                        }
+
+                        this.auto_reconcile_loading = true;
+                        this.auto_reconcile_summary = "";
+
+                        try {
+                                const response = await frappe.call({
+                                        method: "posawesome.posawesome.api.payment_entry.auto_reconcile_customer_invoices",
+                                        args: {
+                                                customer: this.customer_name,
+                                                company: this.company,
+                                                currency: this.pos_profile.currency,
+                                                pos_profile: this.pos_profile_search || null,
+                                        },
+                                        freeze: true,
+                                        freeze_message: __("Reconciling Payments"),
+                                });
+
+                                const result = response?.message || {};
+                                const { summary, total_allocated, skipped_payments } = result;
+
+                                this.auto_reconcile_summary = summary || "";
+                                if (!this.auto_reconcile_summary) {
+                                        const allocatedText = this.formatCurrency(result.total_allocated || 0);
+                                        const outstandingText = this.formatCurrency(result.remaining_outstanding || 0);
+                                        this.auto_reconcile_summary = __(
+                                                "Auto reconciliation completed. Allocated: {0}{1}. Remaining outstanding: {0}{2}.",
+                                                [
+                                                        this.currencySymbol(this.pos_profile.currency),
+                                                        allocatedText,
+                                                        outstandingText,
+                                                ],
+                                        );
+                                }
+
+                                this.selected_invoices = [];
+                                this.selected_payments = [];
+
+                                await this.get_outstanding_invoices();
+                                await this.get_unallocated_payments();
+
+                                this.$nextTick(() => {
+                                        this.$forceUpdate();
+                                });
+
+                                if (this.auto_reconcile_summary) {
+                                        this.eventBus.emit("show_message", {
+                                                title: this.auto_reconcile_summary,
+                                                color: total_allocated ? "success" : "info",
+                                        });
+                                }
+
+                                if (Array.isArray(skipped_payments) && skipped_payments.length) {
+                                        const escapeHtml = frappe.utils?.escape_html || ((value) => value);
+                                        const skippedMessage = skipped_payments
+                                                .map((row) => `<div>${escapeHtml(row)}</div>`)
+                                                .join("");
+                                        frappe.msgprint({
+                                                title: __("Skipped Payments"),
+                                                message: skippedMessage,
+                                                indicator: "orange",
+                                        });
+                                }
+                        } catch (error) {
+                                console.error("Auto reconciliation failed", error);
+                                this.auto_reconcile_summary = "";
+                                frappe.msgprint(error?.message || __("Failed to auto reconcile payments."));
+                        } finally {
+                                this.auto_reconcile_loading = false;
+                        }
+                },
+                set_mpesa_search_params() {
+                        if (!this.pos_profile.posa_allow_mpesa_reconcile_payments) return;
+                        if (!this.customer_name) return;
+                        this.mpesa_search_name = this.customer_info.customer_name.split(" ")[0];
+                        if (this.customer_info.mobile_no) {
 				this.mpesa_search_mobile =
 					this.customer_info.mobile_no.substring(0, 4) +
 					" ***** " +
@@ -837,10 +990,12 @@ export default {
 			this.outstanding_invoices = [];
 			this.unallocated_payments = [];
 			this.selected_invoices = [];
-			this.selected_payments = [];
-			this.selected_mpesa_payments = [];
-			this.set_payment_methods();
-		},
+                        this.selected_payments = [];
+                        this.selected_mpesa_payments = [];
+                        this.auto_reconcile_summary = "";
+                        this.auto_reconcile_loading = false;
+                        this.set_payment_methods();
+                },
 
 		submit() {
 			return this.processPayment({ printAfter: false });
@@ -1177,6 +1332,10 @@ input[total_selected_mpesa_payments] {
 }
 
 .selected-row {
-	background-color: #e3f2fd !important;
+        background-color: #e3f2fd !important;
+}
+
+.credit-note-row {
+        background-color: rgba(76, 175, 80, 0.08) !important;
 }
 </style>
