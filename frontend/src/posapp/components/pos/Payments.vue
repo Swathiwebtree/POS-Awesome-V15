@@ -85,16 +85,16 @@
 				<!-- Payment Inputs (All Payment Methods) -->
 				<div v-if="is_cashback && invoice_doc && Array.isArray(invoice_doc.payments)">
 					<v-row class="payments pa-1" v-for="payment in invoice_doc.payments" :key="payment.name">
-						<v-col cols="6" v-if="!is_mpesa_c2b_payment(payment)">
-							<v-text-field
+                                        <v-col cols="6" v-if="!is_mpesa_c2b_payment(payment)">
+                                                <v-text-field
 								density="compact"
 								variant="solo"
 								color="primary"
 								:label="frappe._(payment.mode_of_payment)"
 								class="sleek-field pos-themed-input"
 								hide-details
-								:model-value="formatCurrency(payment.amount)"
-								@change="setFormatedCurrency(payment, 'amount', null, false, $event)"
+                                                                :model-value="formatCurrency(payment.amount)"
+                                                                @change="handlePaymentAmountChange(payment, $event)"
 								:rules="[
 									isNumber,
 									(v) =>
@@ -810,9 +810,10 @@ export default {
 			sales_person: "", // Selected sales person
 			addresses: [], // List of customer addresses
 			is_user_editing_paid_change: false, // User interaction flag
-			highlightSubmit: false, // Highlight state for submit button
-		};
-	},
+                        highlightSubmit: false, // Highlight state for submit button
+                        last_payment_change_was_cash: null, // Track last edited payment type
+                };
+        },
 	computed: {
 		invoice_doc: {
 			get() {
@@ -916,9 +917,9 @@ export default {
 
                 // Calculate change to be given back to customer
                 change_due() {
-			if (!this.invoice_doc) {
-				return 0;
-			}
+                        if (!this.invoice_doc) {
+                                return 0;
+                        }
 
 			// For multi-currency, use grand_total instead of rounded_total
 			let invoice_total;
@@ -939,6 +940,41 @@ export default {
 
                         // Ensure change is not negative
                         return change > 0 ? change : 0;
+                },
+
+                shouldAutoApplyCreditChange() {
+                        if (!this.invoice_doc || this.invoice_doc.is_return) {
+                                return false;
+                        }
+
+                        if (this.change_due <= 0) {
+                                return false;
+                        }
+
+                        const payments = Array.isArray(this.invoice_doc.payments)
+                                ? this.invoice_doc.payments
+                                : [];
+
+                        const totals = payments.reduce(
+                                (accumulator, payment) => {
+                                        if (!payment) {
+                                                return accumulator;
+                                        }
+
+                                        const amount = this.flt(payment.amount || 0, this.currency_precision);
+
+                                        if (this.isCashLikePayment(payment)) {
+                                                accumulator.cash += amount;
+                                        } else {
+                                                accumulator.nonCash += amount;
+                                        }
+
+                                        return accumulator;
+                                },
+                                { cash: 0, nonCash: 0 },
+                        );
+
+                        return totals.nonCash > 0 && totals.cash === 0;
                 },
 
 		// Label for the difference field (To Be Paid/Change)
@@ -1002,9 +1038,25 @@ export default {
 	watch: {
 		// Watch diff_payment to update paid_change
                 diff_payment(newVal) {
-                        if (!this.is_user_editing_paid_change) {
-                                this.paid_change = newVal < 0 ? -newVal : 0;
+                        if (this.is_user_editing_paid_change) {
+                                return;
                         }
+
+                        const lastEditWasCash = this.last_payment_change_was_cash;
+
+                        if (newVal < 0) {
+                                const changeDue = -newVal;
+
+                                if (this.shouldAutoApplyCreditChange || lastEditWasCash === false) {
+                                        this.updateCreditChange(changeDue);
+                                } else {
+                                        this.paid_change = changeDue;
+                                }
+                        } else {
+                                this.updateCreditChange(0);
+                        }
+
+                        this.last_payment_change_was_cash = null;
                 },
                 // Watch paid_change to validate and update credit_change
                 paid_change(newVal) {
@@ -1619,11 +1671,19 @@ export default {
 		},
 		// Open print page for invoice
 		load_print_page() {
-			const print_format = this.pos_profile.print_format_for_online || this.pos_profile.print_format;
-			const letter_head = this.pos_profile.letter_head || 0;
-			const doctype = this.pos_profile.create_pos_invoice_instead_of_sales_invoice
-				? "POS Invoice"
-				: "Sales Invoice";
+                        const print_format = this.pos_profile.print_format_for_online || this.pos_profile.print_format;
+                        const letter_head = this.pos_profile.letter_head || 0;
+                        let doctype;
+
+                        if (this.invoiceType === "Quotation") {
+                                doctype = "Quotation";
+                        } else if (this.invoiceType === "Order" && this.pos_profile.posa_create_only_sales_order) {
+                                doctype = "Sales Order";
+                        } else if (this.pos_profile.create_pos_invoice_instead_of_sales_invoice) {
+                                doctype = "POS Invoice";
+                        } else {
+                                doctype = "Sales Invoice";
+                        }
 			const url =
 				frappe.urllib.get_base_url() +
 				"/printview?doctype=" +
@@ -2104,6 +2164,23 @@ export default {
                         } else {
                                 this.updateCreditChange(0);
                         }
+                },
+                handlePaymentAmountChange(payment, event) {
+                        this.last_payment_change_was_cash = this.isCashLikePayment(payment);
+                        format.methods.setFormatedCurrency.call(this, payment, "amount", null, false, event);
+                },
+                isCashLikePayment(payment) {
+                        if (!payment) {
+                                return false;
+                        }
+
+                        const type = String(payment.type || "").toLowerCase();
+                        if (type === "cash") {
+                                return true;
+                        }
+
+                        const mode = String(payment.mode_of_payment || "").toLowerCase();
+                        return mode.includes("cash");
                 },
                 updateCreditChange(rawValue) {
                         const changeLimit = Math.max(-this.diff_payment, 0);

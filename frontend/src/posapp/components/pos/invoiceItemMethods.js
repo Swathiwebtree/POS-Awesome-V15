@@ -317,19 +317,33 @@ export default {
 	},
 
 	// Load an invoice (or return invoice) from data, set all fields accordingly
-	async load_invoice(data = {}) {
-		console.log("load_invoice called with data:", {
-			is_return: data.is_return,
-			return_against: data.return_against,
-			customer: data.customer,
-			items_count: data.items ? data.items.length : 0,
+        async load_invoice(data = {}, options = {}) {
+                const { preserveAdditionalDiscountPercentage = false } = options || {};
+                const usePercentageDiscount = Boolean(this.pos_profile?.posa_use_percentage_discount);
+                const previousDiscountPercentage = usePercentageDiscount
+                        ? flt(this.additional_discount_percentage)
+                        : null;
+                const shouldPreserveDiscountPercentage =
+                        usePercentageDiscount &&
+                        preserveAdditionalDiscountPercentage &&
+                        Number.isFinite(previousDiscountPercentage);
+
+                console.log("load_invoice called with data:", {
+                        is_return: data.is_return,
+                        return_against: data.return_against,
+                        customer: data.customer,
+                        items_count: data.items ? data.items.length : 0,
 		});
 
-		this.clear_invoice();
-		if (data.is_return) {
-			console.log("Processing return invoice");
-			// For return without invoice case, check if there's a return_against
-			// Only set customer readonly if this is a return with reference to an invoice
+                this.clear_invoice();
+                if (data?.is_return) {
+                        this._normalizeReturnDocTotals(data);
+                }
+
+                if (data.is_return) {
+                        console.log("Processing return invoice");
+                        // For return without invoice case, check if there's a return_against
+                        // Only set customer readonly if this is a return with reference to an invoice
 			if (data.return_against) {
 				console.log("Return has reference to invoice:", data.return_against);
 				this.eventBus.emit("set_customer_readonly", true);
@@ -338,12 +352,25 @@ export default {
 				// Allow customer selection for returns without invoice
 				this.eventBus.emit("set_customer_readonly", false);
 			}
-			this.invoiceType = "Return";
-			this.invoiceTypes = ["Return"];
-		}
+                        this.invoiceType = "Return";
+                        this.invoiceTypes = ["Return"];
+                } else if (data.doctype === "Quotation") {
+                        this.invoiceType = "Quotation";
+                        if (!this.invoiceTypes.includes("Quotation")) {
+                                this.invoiceTypes = ["Invoice", "Order", "Quotation"];
+                        }
+                } else if (
+                        data.doctype === "Sales Order" &&
+                        this.pos_profile?.posa_create_only_sales_order
+                ) {
+                        this.invoiceType = "Order";
+                        if (!this.invoiceTypes.includes("Order")) {
+                                this.invoiceTypes = ["Invoice", "Order", "Quotation"];
+                        }
+                }
 
-		this.invoice_doc = data;
-		this.items = data.items || [];
+                this.invoice_doc = data;
+                this.items = data.items || [];
 		this.packed_items = data.packed_items || [];
 		console.log("Items set:", this.items.length, "items");
 
@@ -393,14 +420,103 @@ export default {
 
 		this.customer = data.customer;
 		this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
-		this.discount_amount = data.discount_amount;
-		this.additional_discount_percentage = data.additional_discount_percentage;
-		this.additional_discount = data.discount_amount;
+                const docDiscountAmount = flt(data.discount_amount);
+                const docDiscountPercentage =
+                        data.additional_discount_percentage !== undefined &&
+                        data.additional_discount_percentage !== null
+                                ? flt(data.additional_discount_percentage)
+                                : 0;
+                const docIsReturn = Boolean(data.is_return);
 
-		if (this.items.length > 0) {
-			this.items.forEach((item) => {
-				if (item.serial_no) {
-					item.serial_no_selected = [];
+                if (usePercentageDiscount) {
+                        let resolvedPercentage = 0;
+
+                        if (shouldPreserveDiscountPercentage) {
+                                resolvedPercentage = previousDiscountPercentage;
+                        } else if (
+                                data.additional_discount_percentage !== undefined &&
+                                data.additional_discount_percentage !== null &&
+                                Number.isFinite(docDiscountPercentage)
+                        ) {
+                                resolvedPercentage = docDiscountPercentage;
+                        } else {
+                                const totalsForPercentage = [];
+
+                                if (this.Total) {
+                                        const signedTotal = docIsReturn
+                                                ? -Math.abs(this.Total)
+                                                : this.Total;
+                                        if (signedTotal) {
+                                                totalsForPercentage.push(signedTotal);
+                                        }
+                                }
+
+                                if (data.total !== undefined && data.total !== null) {
+                                        const docTotal = flt(data.total);
+                                        const signedDocTotal = docIsReturn
+                                                ? -Math.abs(docTotal)
+                                                : docTotal;
+                                        if (signedDocTotal) {
+                                                totalsForPercentage.push(signedDocTotal);
+                                        }
+                                }
+
+                                if (data.net_total !== undefined && data.net_total !== null) {
+                                        const docNetTotal = flt(data.net_total);
+                                        const signedNetTotal = docIsReturn
+                                                ? -Math.abs(docNetTotal)
+                                                : docNetTotal;
+                                        if (signedNetTotal) {
+                                                totalsForPercentage.push(signedNetTotal);
+                                        }
+                                }
+
+                                const percentageBase = totalsForPercentage.find((value) => value);
+
+                                if (percentageBase) {
+                                        resolvedPercentage = this.flt(
+                                                (docDiscountAmount / percentageBase) * 100,
+                                                this.float_precision,
+                                        );
+                                } else {
+                                        resolvedPercentage = docDiscountPercentage;
+                                }
+                        }
+
+                        if (!Number.isFinite(resolvedPercentage)) {
+                                resolvedPercentage = 0;
+                        }
+
+                        if (docIsReturn) {
+                                resolvedPercentage = -Math.abs(resolvedPercentage);
+                        } else {
+                                resolvedPercentage = Math.abs(resolvedPercentage);
+                        }
+
+                        this.additional_discount_percentage = resolvedPercentage;
+                        updateDiscountAmount(this);
+
+                        // Ensure watchers or rounding adjustments don't overwrite the intended value
+                        if (typeof this.$nextTick === "function") {
+                                this.$nextTick(() => {
+                                        if (this.pos_profile?.posa_use_percentage_discount) {
+                                                this.additional_discount_percentage = resolvedPercentage;
+                                        }
+                                });
+                        }
+
+                        this.additional_discount = this.flt(this.additional_discount, this.currency_precision);
+                        this.discount_amount = this.additional_discount;
+                } else {
+                        this.discount_amount = docDiscountAmount;
+                        this.additional_discount_percentage = docDiscountPercentage;
+                        this.additional_discount = docDiscountAmount;
+                }
+
+                if (this.items.length > 0) {
+                        this.items.forEach((item) => {
+                                if (item.serial_no) {
+                                        item.serial_no_selected = [];
 					const serial_list = item.serial_no.split("\n");
 					serial_list.forEach((element) => {
 						if (element.length) {
@@ -475,13 +591,14 @@ export default {
 			this.additional_discount_percentage = 0;
 			this.invoiceType = "Invoice";
 			this.invoiceTypes = ["Invoice", "Order", "Quotation"];
-		} else {
-			if (data.is_return) {
-				// For return without invoice case, check if there's a return_against
-				// Only set customer readonly if this is a return with reference to an invoice
-				if (data.return_against) {
-					this.eventBus.emit("set_customer_readonly", true);
-				} else {
+                } else {
+                        if (data.is_return) {
+                                this._normalizeReturnDocTotals(data);
+                                // For return without invoice case, check if there's a return_against
+                                // Only set customer readonly if this is a return with reference to an invoice
+                                if (data.return_against) {
+                                        this.eventBus.emit("set_customer_readonly", true);
+                                } else {
 					// Allow customer selection for returns without invoice
 					this.eventBus.emit("set_customer_readonly", false);
 				}
@@ -502,8 +619,14 @@ export default {
 			});
 			this.customer = data.customer;
 			this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
-			this.discount_amount = data.discount_amount;
-			this.additional_discount_percentage = data.additional_discount_percentage;
+                        this.discount_amount = data.discount_amount;
+                        if (data.is_return && this.pos_profile?.posa_use_percentage_discount) {
+                                this.additional_discount_percentage = -Math.abs(
+                                        flt(data.additional_discount_percentage),
+                                );
+                        } else {
+                                this.additional_discount_percentage = data.additional_discount_percentage;
+                        }
 			this.items.forEach((item) => {
 				if (item.serial_no) {
 					item.serial_no_selected = [];
@@ -530,37 +653,55 @@ export default {
 		}
 
 		// Always set these fields first
-		if (this.invoiceType === "Quotation") {
-			doc.doctype = "Quotation";
-		} else if (this.invoiceType === "Order" && this.pos_profile.posa_create_only_sales_order) {
-			doc.doctype = "Sales Order";
-		} else if (this.pos_profile.create_pos_invoice_instead_of_sales_invoice) {
-			doc.doctype = "POS Invoice";
-		} else {
-			doc.doctype = "Sales Invoice";
-		}
-		doc.is_pos = 1;
-		doc.ignore_pricing_rule = 1;
-		doc.company = doc.company || this.pos_profile.company;
-		doc.pos_profile = doc.pos_profile || this.pos_profile.name;
-		doc.posa_show_custom_name_marker_on_print = this.pos_profile.posa_show_custom_name_marker_on_print;
+                if (this.invoiceType === "Quotation") {
+                        doc.doctype = "Quotation";
+                } else if (this.invoiceType === "Order" && this.pos_profile.posa_create_only_sales_order) {
+                        doc.doctype = "Sales Order";
+                } else if (this.pos_profile.create_pos_invoice_instead_of_sales_invoice) {
+                        doc.doctype = "POS Invoice";
+                } else {
+                        doc.doctype = "Sales Invoice";
+                }
+                doc.is_pos = 1;
+                doc.ignore_pricing_rule = 1;
+                doc.company = doc.company || this.pos_profile.company;
+                doc.pos_profile = doc.pos_profile || this.pos_profile.name;
+                doc.posa_show_custom_name_marker_on_print = this.pos_profile.posa_show_custom_name_marker_on_print;
 
-		// Currency related fields
-		doc.currency = this.selected_currency || this.pos_profile.currency;
-		doc.conversion_rate = (sourceDoc && sourceDoc.conversion_rate) || this.conversion_rate || 1;
+                // Currency related fields
+                doc.currency = this.selected_currency || this.pos_profile.currency;
+                doc.conversion_rate = (sourceDoc && sourceDoc.conversion_rate) || this.conversion_rate || 1;
 
-		// Use actual price list currency if available
-		doc.price_list_currency = this.price_list_currency || doc.currency;
+                // Use actual price list currency if available
+                doc.price_list_currency = this.price_list_currency || doc.currency;
 
-		doc.plc_conversion_rate =
-			(sourceDoc && sourceDoc.plc_conversion_rate) ||
-			(doc.price_list_currency === doc.currency ? 1 : this.exchange_rate);
+                doc.plc_conversion_rate =
+                        (sourceDoc && sourceDoc.plc_conversion_rate) ||
+                        (doc.price_list_currency === doc.currency ? 1 : this.exchange_rate);
 
-		// Other fields
-		doc.campaign = doc.campaign || this.pos_profile.campaign;
-		doc.selling_price_list = this.pos_profile.selling_price_list;
-		doc.naming_series = doc.naming_series || this.pos_profile.naming_series;
-		doc.customer = this.customer;
+                // Other fields
+                doc.campaign = doc.campaign || this.pos_profile.campaign;
+                doc.selling_price_list = this.pos_profile.selling_price_list;
+                doc.naming_series = doc.naming_series || this.pos_profile.naming_series;
+                const customerDetails =
+                        this.customer_info && typeof this.customer_info === "object"
+                                ? this.customer_info
+                                : {};
+                const resolvedCustomer =
+                        this.customer ||
+                        customerDetails.customer ||
+                        doc.customer ||
+                        null;
+                doc.customer = resolvedCustomer;
+                if (!doc.customer_name && customerDetails.customer_name) {
+                        doc.customer_name = customerDetails.customer_name;
+                }
+                if (doc.doctype === "Quotation") {
+                        doc.quotation_to = doc.quotation_to || "Customer";
+                        if (resolvedCustomer) {
+                                doc.party_name = resolvedCustomer;
+                        }
+                }
 
 		// Determine if this is a return invoice
 		const isReturn = this.isReturnInvoice;
@@ -597,10 +738,14 @@ export default {
 		doc.discount_amount = discountAmount;
 		doc.base_discount_amount = discountAmount * (this.exchange_rate || 1);
 
-		let discountPercentage = flt(this.additional_discount_percentage);
-		if (isReturn && discountPercentage > 0) discountPercentage = -Math.abs(discountPercentage);
+                let discountPercentage = flt(this.additional_discount_percentage);
+                if (this.pos_profile?.posa_use_percentage_discount) {
+                        discountPercentage = Math.abs(discountPercentage);
+                } else if (isReturn && discountPercentage > 0) {
+                        discountPercentage = -Math.abs(discountPercentage);
+                }
 
-		doc.additional_discount_percentage = discountPercentage;
+                doc.additional_discount_percentage = discountPercentage;
 
 		// Calculate grand total with correct sign for returns
 		let grandTotal = this.subtotal;
@@ -1042,19 +1187,22 @@ export default {
 					: "posawesome.posawesome.api.invoices.update_invoice";
 
 		try {
-			const response = await frappe.call({
-				method,
-				args: {
-					data: doc,
-				},
+                        const response = await frappe.call({
+                                method,
+                                args: {
+                                        data: doc,
+                                },
 			});
 
 			const message = response?.message;
-			if (message) {
-				this.invoice_doc = message;
-				if (message.exchange_rate_date) {
-					this.exchange_rate_date = message.exchange_rate_date;
-					const posting_backend = this.formatDateForBackend(this.posting_date_display);
+                        if (message) {
+                                if (message.is_return) {
+                                        this._normalizeReturnDocTotals(message);
+                                }
+                                this.invoice_doc = message;
+                                if (message.exchange_rate_date) {
+                                        this.exchange_rate_date = message.exchange_rate_date;
+                                        const posting_backend = this.formatDateForBackend(this.posting_date_display);
 					if (posting_backend !== this.exchange_rate_date) {
 						this.eventBus.emit("show_message", {
 							title: __(
@@ -1093,8 +1241,11 @@ export default {
 			});
 
 			const message = response?.message;
-			if (message) {
-				this.invoice_doc = message;
+                        if (message) {
+                                if (message.is_return) {
+                                        this._normalizeReturnDocTotals(message);
+                                }
+                                this.invoice_doc = message;
 				if (message.exchange_rate_date) {
 					this.exchange_rate_date = message.exchange_rate_date;
 					const posting_backend = this.formatDateForBackend(this.posting_date_display);
@@ -1185,23 +1336,34 @@ export default {
 	},
 
 	// Reload the currently open invoice from the backend and load it into the UI
-	async reload_current_invoice_from_backend() {
-		try {
-			if (isOffline()) {
-				return null;
-			}
+        async reload_current_invoice_from_backend() {
+                try {
+                        if (isOffline()) {
+                                return null;
+                        }
 
-			const current = this.invoice_doc || {};
-			const name = current.name;
-			const doctype =
-				current.doctype ||
-				(this.pos_profile?.create_pos_invoice_instead_of_sales_invoice
-					? "POS Invoice"
-					: "Sales Invoice");
+                        const current = this.invoice_doc || {};
+                        const name = current.name;
+                        let doctype = current.doctype;
 
-			if (!name || !doctype) {
-				return null;
-			}
+                        if (!doctype) {
+                                if (this.invoiceType === "Quotation") {
+                                        doctype = "Quotation";
+                                } else if (
+                                        this.invoiceType === "Order" &&
+                                        this.pos_profile?.posa_create_only_sales_order
+                                ) {
+                                        doctype = "Sales Order";
+                                } else if (this.pos_profile?.create_pos_invoice_instead_of_sales_invoice) {
+                                        doctype = "POS Invoice";
+                                } else {
+                                        doctype = "Sales Invoice";
+                                }
+                        }
+
+                        if (!name || !doctype) {
+                                return null;
+                        }
 
 			const manualOverrides = this._collectManualRateOverrides(this.items);
 
@@ -1215,7 +1377,9 @@ export default {
 				if (manualOverrides.length) {
 					this._applyManualRateOverridesToDoc(doc, manualOverrides);
 				}
-				await this.load_invoice(doc);
+                                await this.load_invoice(doc, {
+                                        preserveAdditionalDiscountPercentage: true,
+                                });
 				return doc;
 			}
 			return null;
@@ -1225,14 +1389,105 @@ export default {
 				title: __("Failed to reload invoice from server"),
 				color: "warning",
 			});
-			return null;
-		}
-	},
+                        return null;
+                }
+        },
 
-	_collectManualRateOverrides(items) {
-		if (!Array.isArray(items) || !items.length) {
-			return [];
-		}
+        _normalizeReturnDocTotals(doc) {
+                if (!doc || !doc.is_return) {
+                        return doc;
+                }
+
+                const toNumber = (value) => {
+                        if (value === undefined || value === null || value === "") {
+                                return null;
+                        }
+
+                        const number = flt(value, this.currency_precision);
+                        return Number.isFinite(number) ? number : null;
+                };
+
+                const ensureNegative = (value) => {
+                        if (value === null) {
+                                return value;
+                        }
+                        return value > 0 ? -Math.abs(value) : value;
+                };
+
+                const adjustFieldByDelta = (field, delta) => {
+                        if (!delta || !Number.isFinite(delta)) {
+                                return;
+                        }
+
+                        if (doc[field] === undefined || doc[field] === null || doc[field] === "") {
+                                return;
+                        }
+
+                        const currentValue = toNumber(doc[field]);
+                        if (currentValue === null) {
+                                return;
+                        }
+
+                        doc[field] = flt(currentValue - delta, this.currency_precision);
+                };
+
+                const originalDiscount = toNumber(doc.discount_amount);
+                let discountDelta = 0;
+                if (originalDiscount !== null) {
+                        const normalizedDiscount = ensureNegative(originalDiscount);
+                        discountDelta = normalizedDiscount - originalDiscount;
+                        doc.discount_amount = normalizedDiscount;
+                }
+
+                const originalBaseDiscount = toNumber(doc.base_discount_amount);
+                let baseDiscountDelta = 0;
+                if (originalBaseDiscount !== null) {
+                        const normalizedBaseDiscount = ensureNegative(originalBaseDiscount);
+                        baseDiscountDelta = normalizedBaseDiscount - originalBaseDiscount;
+                        doc.base_discount_amount = normalizedBaseDiscount;
+                }
+
+                if (discountDelta) {
+                        ["net_total", "grand_total", "rounded_total"].forEach((field) =>
+                                adjustFieldByDelta(field, discountDelta),
+                        );
+                }
+
+                if (baseDiscountDelta) {
+                        ["base_net_total", "base_grand_total", "base_rounded_total"].forEach((field) =>
+                                adjustFieldByDelta(field, baseDiscountDelta),
+                        );
+                }
+
+                [
+                        "total",
+                        "net_total",
+                        "grand_total",
+                        "rounded_total",
+                        "base_total",
+                        "base_net_total",
+                        "base_grand_total",
+                        "base_rounded_total",
+                ].forEach((field) => {
+                        if (doc[field] === undefined || doc[field] === null || doc[field] === "") {
+                                return;
+                        }
+
+                        const value = toNumber(doc[field]);
+                        if (value === null) {
+                                return;
+                        }
+
+                        doc[field] = ensureNegative(value);
+                });
+
+                return doc;
+        },
+
+        _collectManualRateOverrides(items) {
+                if (!Array.isArray(items) || !items.length) {
+                        return [];
+                }
 
 		return items
 			.filter((item) => item && item._manual_rate_set)
@@ -1907,42 +2162,73 @@ export default {
 				},
 			});
 
-			if (response?.message) {
-				items.forEach((item) => {
-					const updated_item = response.message.find(
-						(element) => element.posa_row_id == item.posa_row_id,
-					);
-					if (updated_item) {
-						item.actual_qty = updated_item.actual_qty;
-						item.item_uoms = updated_item.item_uoms;
-						item.has_batch_no = updated_item.has_batch_no;
-						item.has_serial_no = updated_item.has_serial_no;
-						item.batch_no_data = updated_item.batch_no_data;
-						item.serial_no_data = updated_item.serial_no_data;
-						if (updated_item.rate !== undefined) {
-							const force =
-								this.pos_profile?.posa_force_price_from_customer_price_list !== false;
-							const price = updated_item.price_list_rate ?? updated_item.rate ?? 0;
-							const manualLocked = item._manual_rate_set === true;
-							const shouldOverrideRate =
-								!item.locked_price && !item.posa_offer_applied && !manualLocked;
+                        if (response?.message) {
+                                const detailMap = new Map();
+                                response.message.forEach((detail) => {
+                                        if (!detail) {
+                                                return;
+                                        }
+                                        const key = detail.posa_row_id || detail.item_code;
+                                        if (key) {
+                                                detailMap.set(key, detail);
+                                        }
+                                });
 
-							if (shouldOverrideRate) {
-								if (force || price) {
-									item.rate = price;
-									item.price_list_rate = price;
-								}
-							} else if (!item.price_list_rate && (force || price)) {
-								item.price_list_rate = price;
-							}
-						}
-						if (updated_item.currency) {
-							item.currency = updated_item.currency;
-						}
-					}
-				});
-			}
-		} catch (error) {
+                                items.forEach((item) => {
+                                        if (!item) {
+                                                return;
+                                        }
+
+                                        const key = item.posa_row_id || item.item_code;
+                                        const updated_item = key ? detailMap.get(key) : null;
+                                        if (!updated_item) {
+                                                return;
+                                        }
+
+                                        item.actual_qty = updated_item.actual_qty;
+                                        item.item_uoms = updated_item.item_uoms;
+                                        item.has_batch_no = updated_item.has_batch_no;
+                                        item.has_serial_no = updated_item.has_serial_no;
+                                        item.batch_no_data = updated_item.batch_no_data;
+                                        item.serial_no_data = updated_item.serial_no_data;
+
+                                        if (updated_item.price_list_currency) {
+                                                item.price_list_currency = updated_item.price_list_currency;
+                                        }
+
+                                        if (updated_item.rate !== undefined || updated_item.price_list_rate !== undefined) {
+                                                const force =
+                                                        this.pos_profile?.posa_force_price_from_customer_price_list !== false;
+                                                const price = updated_item.price_list_rate ?? updated_item.rate ?? 0;
+                                                const priceCurrency =
+                                                        updated_item.currency ||
+                                                        updated_item.price_list_currency ||
+                                                        item.price_list_currency ||
+                                                        this.selected_currency;
+                                                const manualLocked = item._manual_rate_set === true;
+                                                const shouldOverrideRate =
+                                                        !item.locked_price && !item.posa_offer_applied && !manualLocked;
+
+                                                if (shouldOverrideRate) {
+                                                        if (force || price) {
+                                                                this._applyPriceListRate(item, price, priceCurrency);
+                                                        }
+                                                } else if (!item.price_list_rate && (force || price)) {
+                                                        const converted = this._computePriceConversion(price, priceCurrency);
+                                                        if (converted.base_price_list_rate !== undefined) {
+                                                                item.base_price_list_rate = converted.base_price_list_rate;
+                                                        }
+                                                        item.price_list_rate = converted.price_list_rate;
+                                                }
+                                        }
+
+                                        const resolvedCurrency = this.selected_currency || updated_item.currency;
+                                        if (resolvedCurrency) {
+                                                item.currency = resolvedCurrency;
+                                        }
+                                });
+                        }
+                } catch (error) {
 			console.error("Error updating items:", error);
 			this.eventBus.emit("show_message", {
 				title: __("Error updating item details"),
@@ -2412,6 +2698,20 @@ export default {
                         }
                 });
 
+                if (!updatedDoc.customer_name && resolvedCustomerName) {
+                        updatedDoc.customer_name = resolvedCustomerName;
+                }
+
+                const currentDoctype = updatedDoc.doctype || existingDoc.doctype || null;
+                if (currentDoctype === "Quotation") {
+                        updatedDoc.quotation_to = updatedDoc.quotation_to || "Customer";
+                        if (resolvedCustomer) {
+                                updatedDoc.party_name = resolvedCustomer;
+                        } else if (hasCustomerChanged) {
+                                updatedDoc.party_name = null;
+                        }
+                }
+
                 const addressFields = {
                         customer_address:
                                 customerDetails.customer_address ?? customerDetails.primary_address_name ?? null,
@@ -2529,9 +2829,44 @@ export default {
 		if (typeof item.qty === "number" && typeof item.base_rate === "number") {
 			item.base_amount = this.flt(item.qty * item.base_rate, this.currency_precision);
 		}
-	},
+        },
 
-	// Apply cached price list rates to existing invoice items
+        _computePriceConversion(rate, priceCurrency) {
+                const numericRate = Number.isFinite(Number(rate)) ? Number(rate) : 0;
+                const resolvedCurrency = priceCurrency || this.selected_currency;
+                const companyCurrency = this.pos_profile?.currency;
+                const selectedCurrency = this.selected_currency || companyCurrency;
+
+                const result = {
+                        base_price_list_rate: this.flt(numericRate, this.currency_precision),
+                        price_list_rate: this.flt(numericRate, this.currency_precision),
+                };
+
+                if (!resolvedCurrency || resolvedCurrency === selectedCurrency) {
+                        if (resolvedCurrency && companyCurrency && resolvedCurrency !== companyCurrency) {
+                                const conv = this.conversion_rate || 1;
+                                result.base_price_list_rate = this.flt(
+                                        numericRate * conv,
+                                        this.currency_precision,
+                                );
+                        }
+                        return result;
+                }
+
+                result.base_price_list_rate = this.flt(numericRate, this.currency_precision);
+
+                if (selectedCurrency && companyCurrency && selectedCurrency !== companyCurrency) {
+                        const exchange = this.exchange_rate || 1;
+                        result.price_list_rate = this.flt(
+                                numericRate * exchange,
+                                this.currency_precision,
+                        );
+                }
+
+                return result;
+        },
+
+        // Apply cached price list rates to existing invoice items
 	async apply_cached_price_list(price_list) {
 		const targetPriceList = price_list || this.pos_profile?.selling_price_list;
 		const cached = targetPriceList ? await getCachedPriceListItems(targetPriceList) : null;
