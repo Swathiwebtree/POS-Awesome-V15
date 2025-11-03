@@ -2033,34 +2033,52 @@ export default {
                         if (!barcode) {
                                 return null;
                         }
+
                         const scalePrefix = this.pos_profile?.posa_scale_barcode_start || "";
                         if (!scalePrefix || !barcode.startsWith(scalePrefix)) {
                                 return null;
                         }
 
                         const sanitized = String(barcode).trim();
+                        if (!/^\d+$/.test(sanitized)) {
+                                return null;
+                        }
                         const prefixLen = scalePrefix.length;
-                        const trailingDigits = 6; // 5 for qty, 1 for check digit
 
-                        if (sanitized.length <= prefixLen + trailingDigits) {
+                        // POS Awesome scale barcodes always reserve five digits for the
+                        // quantity section. The remaining digits (before the quantity) map
+                        // to the operator + item code that is stored in the item master.
+                        const expectedItemWithPrefixLen = 7;
+                        const productDigits = expectedItemWithPrefixLen - prefixLen;
+
+                        if (productDigits <= 0) {
                                 return null;
                         }
 
-                        const itemCodeLen = sanitized.length - prefixLen - trailingDigits;
-                        if (itemCodeLen <= 0) {
+                        const minLength = expectedItemWithPrefixLen + 5; // 12 digits total
+                        const maxLength = minLength + 1; // Allow optional trailing check digit
+
+                        if (sanitized.length < minLength || sanitized.length > maxLength) {
                                 return null;
                         }
 
-                        const itemCodeWithPrefix = sanitized.substr(0, prefixLen + itemCodeLen);
-                        const itemCode = sanitized.substr(prefixLen, itemCodeLen);
-                        const weightDigits = sanitized.substr(prefixLen + itemCodeLen, 5);
+                        const hasCheckDigit = sanitized.length === maxLength;
+                        const itemCodeWithPrefix = sanitized.substr(0, expectedItemWithPrefixLen);
+                        const itemCode = sanitized.substr(prefixLen, productDigits);
+                        const weightDigits = sanitized.substr(expectedItemWithPrefixLen, 5);
                         const quantity = this.parseScaleBarcodeWeight(weightDigits);
+                        const fullWithoutCheck = hasCheckDigit
+                                ? sanitized.slice(0, sanitized.length - 1)
+                                : sanitized;
 
                         const lookupCodes = Array.from(
                                 new Set(
-                                        [itemCodeWithPrefix, itemCode, sanitized].filter(
-                                                (code) => typeof code === "string" && code.trim().length,
-                                        ),
+                                        [
+                                                itemCodeWithPrefix,
+                                                itemCode,
+                                                sanitized,
+                                                fullWithoutCheck,
+                                        ].filter((code) => typeof code === "string" && code.trim().length),
                                 ),
                         );
 
@@ -2077,7 +2095,7 @@ export default {
                         }
 
                         const digitsOnly = String(weightDigits).replace(/\D/g, "");
-                        if (!digitsOnly) {
+                        if (!digitsOnly || digitsOnly.length !== 5) {
                                 return null;
                         }
 
