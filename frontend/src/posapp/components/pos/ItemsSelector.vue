@@ -3054,27 +3054,17 @@ export default {
                                 return null;
                         }
 
-                        const prefixLength = prefix.length;
-                        const expectedItemCodeLength = prefixLength + 5;
-                        const expectedBaseLength = expectedItemCodeLength + 5;
-
-                        if (
-                                normalizedRaw.length !== expectedBaseLength &&
-                                normalizedRaw.length !== expectedBaseLength + 1
-                        ) {
+                        if (normalizedRaw.length < 12 || normalizedRaw.length > 13) {
                                 return null;
                         }
 
-                        const baseCode =
-                                normalizedRaw.length === expectedBaseLength + 1
-                                        ? normalizedRaw.slice(0, -1)
-                                        : normalizedRaw;
-                        if (baseCode.length !== expectedBaseLength) {
+                        const baseCode = normalizedRaw.length === 13 ? normalizedRaw.slice(0, -1) : normalizedRaw;
+                        if (baseCode.length !== 12) {
                                 return null;
                         }
 
-                        const itemCode = baseCode.slice(0, expectedItemCodeLength);
-                        const quantityDigits = baseCode.slice(expectedItemCodeLength);
+                        const itemCode = baseCode.slice(0, 7);
+                        const quantityDigits = baseCode.slice(7);
 
                         if (quantityDigits.length !== 5) {
                                 return null;
