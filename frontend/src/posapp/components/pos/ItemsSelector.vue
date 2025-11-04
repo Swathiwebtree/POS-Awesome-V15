@@ -1771,19 +1771,20 @@ export default {
 				item.qty = qtyVal;
 			}
 		},
-		async enter_event() {
-			if (!this.displayedItems.length || !this.first_search) {
+		async enter_event(scannedCode) {
+			const searchTerm = scannedCode || this.first_search;
+			if (!this.displayedItems.length || !searchTerm) {
 				return;
 			}
 
 			// Derive the searchable code and detect scale barcode
-			const search = this.get_search(this.first_search);
+			const search = this.get_search(searchTerm);
 			const isScaleBarcode =
 				this.pos_profile?.posa_scale_barcode_start &&
-				this.first_search.startsWith(this.pos_profile.posa_scale_barcode_start);
+				searchTerm.startsWith(this.pos_profile.posa_scale_barcode_start);
 			this.search = search;
 
-			const qty = parseFloat(this.get_item_qty(this.first_search));
+			const qty = parseFloat(this.get_item_qty(searchTerm));
 			const new_item = { ...this.displayedItems[0] };
 			new_item.qty = flt(qty);
 			if (isScaleBarcode) {
@@ -2637,7 +2638,7 @@ export default {
 						details: this.__("Please verify the barcode or search manually."),
 					});
 				} else {
-					this.enter_event();
+					this.enter_event(sCode);
 				}
 
 				// clear search field for next scan and refocus input
@@ -2924,6 +2925,9 @@ export default {
 				return;
 			}
 
+			// Clear the search field immediately to allow for rapid scanning
+			this.clearSearch();
+
 			const runScanPipeline = async (code) => {
 				const mark = perfMarkStart("pos:scan-handler");
 				try {
@@ -2932,14 +2936,6 @@ export default {
 
 					// mark this search as coming from a scanner
 					this.search_from_scanner = true;
-
-					// Clear any previous search
-					this.search = "";
-					this.first_search = "";
-
-					// Set the scanned code as search term
-					this.first_search = code;
-					this.search = code;
 
 					// Show scanning feedback
 					if (this.eventBus?.emit) {
