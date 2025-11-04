@@ -2034,7 +2034,10 @@ export default {
 			let scal_qty = Math.abs(qtyVal);
 			const prefix_len = this.pos_profile.posa_scale_barcode_start?.length || 0;
 
-			if (first_search.startsWith(this.pos_profile.posa_scale_barcode_start)) {
+			if (
+				this.pos_profile.posa_scale_barcode_start &&
+				first_search.startsWith(this.pos_profile.posa_scale_barcode_start)
+			) {
 				// Determine item code length dynamically based on EAN-13 structure:
 				// prefix + item_code + 5 qty digits + 1 check digit
 				const item_code_len = first_search.length - prefix_len - 6;
@@ -2061,7 +2064,10 @@ export default {
 		get_search(first_search) {
 			if (!first_search) return "";
 			const prefix_len = this.pos_profile.posa_scale_barcode_start?.length || 0;
-			if (!first_search.startsWith(this.pos_profile.posa_scale_barcode_start)) {
+			if (
+				!this.pos_profile.posa_scale_barcode_start ||
+				!first_search.startsWith(this.pos_profile.posa_scale_barcode_start)
+			) {
 				return first_search;
 			}
 			// Calculate item code length from total barcode length
@@ -3259,16 +3265,16 @@ export default {
 			// If not found locally, attempt to fetch from server using processed code
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_items_from_barcode",
+					method: "posawesome.posawesome.api.items.get_items",
 					args: {
-						selling_price_list: this.active_price_list,
-						currency: this.pos_profile.currency,
-						barcode: searchCode,
+						pos_profile: this.pos_profile,
+						price_list: this.active_price_list,
+						search_value: searchCode,
 					},
 				});
 
-				if (res && res.message) {
-					const newItem = res.message;
+				if (res && res.message && res.message.length > 0) {
+					const newItem = res.message[0];
 					this.items.push(newItem);
 					this.indexItem(newItem);
 
