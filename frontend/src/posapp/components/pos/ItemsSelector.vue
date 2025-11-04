@@ -59,9 +59,9 @@
 								:label="frappe._('Search Items')"
 								hint="Search by item code, serial number, batch no or barcode"
 								hide-details
-								v-model="debounce_search"
+								v-model="search_input"
 								@keydown.esc="esc_event"
-								@keydown.enter="search_onchange"
+								@keydown.enter="onEnter"
 								@click:clear="clearSearch"
 								prepend-inner-icon="mdi-magnify"
 								@focus="handleItemSearchFocus"
@@ -552,6 +552,7 @@ export default {
 		customer: "",
 		items_view: "list",
 		first_search: "",
+		search_input: "",
 		search_backup: "",
 		// Limit the displayed items to avoid overly large lists
 		itemsPerPage: 50,
@@ -632,6 +633,10 @@ export default {
 	}),
 
 	watch: {
+		search_input(newValue) {
+			this.first_search = newValue;
+			this.search_onchange();
+		},
 		customer: _.debounce(function () {
 			if (this.pos_profile.posa_force_reload_items) {
 				if (this.pos_profile.posa_smart_reload_mode) {
@@ -1893,6 +1898,19 @@ export default {
 				}
 			}
 		},
+		onEnter() {
+			const trimmedQuery = (this.search_input || "").trim();
+
+			// If the input is a numeric string longer than 6 characters, treat it as a barcode
+			if (/^\d{7,}$/.test(trimmedQuery)) {
+				this.onBarcodeScanned(trimmedQuery);
+				// Immediately clear the search field
+				this.search_input = "";
+				return;
+			}
+			// Otherwise, trigger the standard search
+			this.search_onchange();
+		},
 		search_onchange: _.debounce(
 			withPerf("pos:search-trigger", async function (newSearchTerm) {
 				const vm = this;
@@ -2926,7 +2944,7 @@ export default {
 			}
 
 			// Clear the search field immediately to allow for rapid scanning
-			this.clearSearch();
+			this.search_input = "";
 
 			const runScanPipeline = async (code) => {
 				const mark = perfMarkStart("pos:scan-handler");
