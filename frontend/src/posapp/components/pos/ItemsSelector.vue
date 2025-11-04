@@ -69,20 +69,6 @@
 							>
 								<template v-slot:append-inner>
 									<v-btn
-										:icon="showManualScanInput ? 'mdi-barcode-off' : 'mdi-barcode-scan'"
-										size="small"
-										color="primary"
-										:variant="showManualScanInput ? 'tonal' : 'text'"
-										class="mr-1"
-										@click.stop="toggleManualScanInput"
-										:title="
-											showManualScanInput
-												? __('Hide Manual Entry')
-												: __('Show Manual Entry')
-										"
-									>
-									</v-btn>
-									<v-btn
 										v-if="pos_profile.posa_enable_camera_scanning"
 										icon="mdi-camera"
 										size="small"
@@ -99,47 +85,6 @@
 									</v-btn>
 								</template>
 							</v-text-field>
-							<v-expand-transition>
-								<div v-if="showManualScanInput" class="manual-scan-container mt-2">
-									<div class="manual-scan-text mb-3">
-										<div class="text-subtitle-2 font-weight-medium">
-											{{ __("Manual or Hardware Scanner Input") }}
-										</div>
-										<div class="text-body-2 text-medium-emphasis">
-											{{
-												__(
-													"Scan with a hardware scanner or type the code, then press Enter.",
-												)
-											}}
-										</div>
-									</div>
-									<v-text-field
-										density="comfortable"
-										variant="outlined"
-										color="primary"
-										clearable
-										hide-details
-										:label="__('Enter Code Manually')"
-										v-model="manualScanValue"
-										@keydown.enter.prevent="submitManualScan"
-										@click:clear="manualScanValue = ''"
-										autocomplete="off"
-										ref="manualScanInput"
-										prepend-inner-icon="mdi-barcode-scan"
-									>
-										<template #append-inner>
-											<v-btn
-												icon="mdi-check"
-												variant="tonal"
-												color="primary"
-												size="small"
-												@click="submitManualScan"
-												:title="__('Submit Code')"
-											></v-btn>
-										</template>
-									</v-text-field>
-								</div>
-							</v-expand-transition>
 						</v-col>
 						<v-col cols="3" class="pb-0" v-if="pos_profile.posa_input_qty">
 							<v-text-field
@@ -677,8 +622,6 @@ export default {
 		scanErrorCode: "",
 		scannerLocked: false,
 		cameraScannerActive: false,
-		showManualScanInput: false,
-		manualScanValue: "",
 		scanAudioContext: null,
 		pendingScanCode: "",
 		awaitingScanResult: false,
@@ -689,16 +632,6 @@ export default {
 	}),
 
 	watch: {
-		showManualScanInput(newVal) {
-			if (newVal) {
-				this.queueManualScanFocus();
-			} else {
-				this.manualScanValue = "";
-				if (!this.cameraScannerActive) {
-					this.$nextTick(() => this.focusItemSearch());
-				}
-			}
-		},
 		customer: _.debounce(function () {
 			if (this.pos_profile.posa_force_reload_items) {
 				if (this.pos_profile.posa_smart_reload_mode) {
@@ -1979,6 +1912,12 @@ export default {
 				// Keep first_search in sync with the value we are about to search for
 				vm.first_search = trimmedQuery;
 
+				// If the input is a numeric string longer than 6 characters, treat it as a barcode
+				if (/^\d{7,}$/.test(trimmedQuery)) {
+					vm.onBarcodeScanned(trimmedQuery);
+					return;
+				}
+
 				// Require a minimum of three characters before running a search
 				if (!trimmedQuery || trimmedQuery.length < 3) {
 					vm.search_from_scanner = false;
@@ -2951,183 +2890,8 @@ export default {
 			this.focusItemSearch();
 		},
 
-		toggleManualScanInput() {
-			this.showManualScanInput = !this.showManualScanInput;
-			if (this.showManualScanInput) {
-				this.queueManualScanFocus();
-			} else {
-				this.focusItemSearch();
-			}
-		},
-
-                async submitManualScan() {
-                        const code = (this.manualScanValue ?? "").toString().trim();
-                        if (!code) {
-                                return;
-                        }
-                        if (this.scannerLocked) {
-                                this.onBarcodeScanned(code);
-                                this.queueManualScanFocus();
-                                return;
-                        }
-
-                        const decodedScale = this.decodeManualScaleBarcode(code);
-                        this.manualScanValue = "";
-
-                        if (!decodedScale) {
-                                this.onBarcodeScanned(code);
-                                this.queueManualScanFocus();
-                                return;
-                        }
-
-                        const { itemCode, quantity, originalCode } = decodedScale;
-                        if (!itemCode || quantity === null || Number.isNaN(quantity)) {
-                                this.onBarcodeScanned(code);
-                                this.queueManualScanFocus();
-                                return;
-                        }
-
-                        this.pendingScanCode = originalCode;
-                        this.search_from_scanner = true;
-
-                        try {
-                                const localItem = this.lookupItemByBarcode(itemCode);
-                                if (localItem) {
-                                        await this.addScannedItemToInvoice(localItem, itemCode, quantity);
-                                        return;
-                                }
-
-                                const res = await frappe.call({
-                                        method: "posawesome.posawesome.api.items.get_items_from_barcode",
-                                        args: {
-                                                selling_price_list: this.active_price_list,
-                                                currency: this.pos_profile.currency,
-                                                barcode: itemCode,
-                                        },
-                                });
-
-                                if (res && res.message) {
-                                        const newItem = res.message;
-                                        this.items.push(newItem);
-                                        this.indexItem(newItem);
-
-                                        if (this.searchCache) {
-                                                this.searchCache.clear();
-                                        }
-
-                                        await saveItems(this.items);
-                                        await savePriceListItems(this.customer_price_list, this.items);
-                                        this.eventBus.emit("set_all_items", this.items);
-                                        await this.update_items_details([newItem]);
-                                        await this.addScannedItemToInvoice(newItem, itemCode, quantity);
-                                        return;
-                                }
-
-                                this.showScanError({
-                                        message: `${this.__("Item not found")}: ${itemCode}`,
-                                        code: originalCode,
-                                        details: this.__("Please verify the barcode or search manually."),
-                                });
-                        } catch (error) {
-                                console.error("Error processing manual scale barcode:", error);
-                                this.showScanError({
-                                        message: this.__("Unable to add scanned item."),
-                                        code: originalCode,
-                                        details: this.__("Please try again or enter the item manually."),
-                                });
-                        } finally {
-                                this.queueManualScanFocus();
-                        }
-                },
-
-                decodeManualScaleBarcode(rawCode) {
-                        const prefix = this.pos_profile?.posa_scale_barcode_start || "";
-                        if (!prefix) {
-                                return null;
-                        }
-
-                        const normalizedRaw = typeof rawCode === "string" ? rawCode.trim() : String(rawCode || "");
-                        if (!normalizedRaw) {
-                                return null;
-                        }
-
-                        const numericRegex = /^[0-9]+$/;
-                        if (!numericRegex.test(normalizedRaw)) {
-                                return null;
-                        }
-
-                        if (!normalizedRaw.startsWith(prefix)) {
-                                return null;
-                        }
-
-                        if (normalizedRaw.length < 12 || normalizedRaw.length > 13) {
-                                return null;
-                        }
-
-                        const baseCode = normalizedRaw.length === 13 ? normalizedRaw.slice(0, -1) : normalizedRaw;
-                        if (baseCode.length !== 12) {
-                                return null;
-                        }
-
-                        const itemCode = baseCode.slice(0, 7);
-                        const quantityDigits = baseCode.slice(7);
-
-                        if (quantityDigits.length !== 5) {
-                                return null;
-                        }
-
-                        let quantityString = "";
-                        if (quantityDigits.startsWith("0000")) {
-                                quantityString = `0.00${quantityDigits.slice(4)}`;
-                        } else if (quantityDigits.startsWith("000")) {
-                                quantityString = `0.0${quantityDigits.slice(3)}`;
-                        } else if (quantityDigits.startsWith("00")) {
-                                quantityString = `0.${quantityDigits.slice(2)}`;
-                        } else if (quantityDigits.startsWith("0")) {
-                                quantityString = `${quantityDigits.slice(1, 2)}.${quantityDigits.slice(2)}`;
-                        } else {
-                                quantityString = `${quantityDigits.slice(0, 2)}.${quantityDigits.slice(2)}`;
-                        }
-
-                        let quantity = parseFloat(quantityString);
-                        if (!Number.isFinite(quantity)) {
-                                return null;
-                        }
-
-                        if (this.hide_qty_decimals) {
-                                quantity = Math.trunc(quantity);
-                        }
-
-                        return {
-                                itemCode,
-                                quantity,
-                                originalCode: normalizedRaw,
-                        };
-                },
-
-		focusManualScanInput() {
-			const input = this.$refs.manualScanInput;
-			if (input && typeof input.focus === "function") {
-				input.focus();
-			}
-		},
-
-		queueManualScanFocus() {
-			this.$nextTick(() => {
-				const scheduler =
-					typeof requestAnimationFrame === "function"
-						? requestAnimationFrame
-						: (cb) => setTimeout(cb, 16);
-				scheduler(() => {
-					this.focusManualScanInput();
-				});
-			});
-		},
-
 		onScannerOpened() {
 			this.cameraScannerActive = true;
-			this.showManualScanInput = false;
-			this.manualScanValue = "";
 			this.blurItemSearch();
 		},
 
