@@ -3042,17 +3042,38 @@ export default {
 
 			// If not found locally, attempt to fetch from server using processed code
 			try {
-				const res = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_items",
-					args: {
-						pos_profile: this.pos_profile,
-						price_list: this.active_price_list,
-						search_value: searchCode,
-					},
-				});
+				let newItem = null;
+				if (qtyFromBarcode !== null) {
+					// Scale barcodes use a direct, faster lookup
+					const res = await frappe.call({
+						method: "posawesome.posawesome.api.items.get_item_detail",
+						args: {
+							item: JSON.stringify({ item_code: searchCode }),
+							warehouse: this.pos_profile.warehouse,
+							price_list: this.active_price_list,
+							company: this.pos_profile.company,
+						},
+					});
+					if (res && res.message) {
+						newItem = res.message;
+					}
+				} else {
+					// Regular barcodes and searches use the generic search
+					const res = await frappe.call({
+						method: "posawesome.posawesome.api.items.get_items",
+						args: {
+							pos_profile: this.pos_profile,
+							price_list: this.active_price_list,
+							search_value: searchCode,
+						},
+					});
 
-				if (res && res.message && res.message.length > 0) {
-					const newItem = res.message[0];
+					if (res && res.message && res.message.length > 0) {
+						newItem = res.message[0];
+					}
+				}
+
+				if (newItem) {
 					this.items.push(newItem);
 					this.indexItem(newItem);
 
