@@ -540,7 +540,7 @@ def submit_invoice(invoice, data):
             frappe.throw(_("Unable to determine customer receivable account for change payment entry."))
 
         advance_payment_entry = frappe.new_doc("Payment Entry")
-        advance_payment_entry.payment_type = "Pay"
+        advance_payment_entry.payment_type = "Receive"
         advance_payment_entry.mode_of_payment = cash_mode_of_payment or "Cash"
         advance_payment_entry.party_type = "Customer"
         advance_payment_entry.party = invoice_doc.get("customer")
