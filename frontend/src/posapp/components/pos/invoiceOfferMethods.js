@@ -1041,8 +1041,18 @@ export default {
 			return null;
 		}
 		const new_item = { ...item };
-		new_item.qty = offer.given_qty;
-		new_item.stock_qty = offer.given_qty;
+		if (offer.round_free_qty) {
+			const total_qty = this.items.reduce((acc, item) => {
+				if (item.item_code === offer.item) {
+					return acc + item.qty;
+				}
+				return acc;
+			}, 0);
+			new_item.qty = Math.floor(total_qty / offer.min_qty) * offer.given_qty;
+		} else {
+			new_item.qty = offer.given_qty;
+		}
+		new_item.stock_qty = new_item.qty;
 
 		// Handle rate based on currency
 		if (offer.discount_type === "Rate") {
