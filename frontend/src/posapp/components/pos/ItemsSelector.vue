@@ -1675,6 +1675,9 @@ export default {
 				return;
 			}
 
+			// Ensure details are initialized before validation
+			await this.update_items_details([item]);
+
 			// Validate item before adding to cart
 			const requestedQty = this.qty != null ? Math.abs(this.qty) : 1;
 			const isValid = await this.cartValidation.validateCartItem(
@@ -1821,51 +1824,6 @@ export default {
 
 			if (match) {
 				const fromScanner = this.search_from_scanner;
-				const scannedCodeForDisplay = this.pendingScanCode || this.first_search || search;
-				const availableQty =
-					typeof new_item.available_qty === "number"
-						? new_item.available_qty
-						: typeof new_item.actual_qty === "number"
-							? new_item.actual_qty
-							: null;
-				const requestedQty = Math.abs(new_item.qty || 1);
-
-				if (availableQty !== null && availableQty < requestedQty) {
-					const negativeStockEnabled = this.isNegativeStockEnabled();
-					const shouldBlock =
-						!negativeStockEnabled && (this.blockSaleBeyondAvailableQty || availableQty <= 0);
-
-					if (shouldBlock || negativeStockEnabled) {
-						const formattedAvailable = this.format_number
-							? this.format_number(
-									availableQty,
-									this.hide_qty_decimals ? 0 : this.float_precision,
-								)
-							: availableQty;
-						const formattedRequested = this.format_number
-							? this.format_number(
-									requestedQty,
-									this.hide_qty_decimals ? 0 : this.float_precision,
-								)
-							: requestedQty;
-
-						if (shouldBlock) {
-							this.showScanError({
-								message: formatStockShortageError(
-									new_item.item_name || new_item.item_code || scannedCodeForDisplay,
-									availableQty,
-									requestedQty,
-								),
-								code: scannedCodeForDisplay,
-								details: this.__("Adjust the quantity or enable negative stock to continue."),
-							});
-							return;
-						}
-
-						// Low stock warnings are suppressed to avoid distracting notifications
-					}
-				}
-
 				if (fromScanner) {
 					this.awaitingScanResult = true;
 				}
