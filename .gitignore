@@ -10,3 +10,4 @@ posawesome/public/dist
 **/*.vue.css
 /dist
 package-lock.json
+frappe-bench/

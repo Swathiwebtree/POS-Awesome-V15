@@ -369,7 +369,7 @@ def _build_search_plan(
 
     if search_value:
         raw_search_value = cstr(search_value).strip()
-        data = search_serial_or_batch_or_barcode_number(search_value, search_serial_no, search_batch_no)
+        data = search_serial_or_batch_or_barcode_number(raw_search_value, search_serial_no, search_batch_no)
 
         tokens = re.split(r"\s+", raw_search_value)
         seen: List[str] = []
