@@ -635,7 +635,6 @@ export default {
 	watch: {
 		search_input(newValue) {
 			this.first_search = newValue;
-			this.search_onchange();
 		},
 		customer: _.debounce(function () {
 			if (this.pos_profile.posa_force_reload_items) {
