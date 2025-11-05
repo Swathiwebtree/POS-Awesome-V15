@@ -1909,7 +1909,11 @@ export default {
 				return;
 			}
 			// Otherwise, trigger the standard search
-			this.search_onchange();
+			if (this.search_onchange.flush) {
+				this.search_onchange.flush();
+			} else {
+				this.search_onchange();
+			}
 		},
 		search_onchange: _.debounce(
 			withPerf("pos:search-trigger", async function (newSearchTerm) {
