@@ -398,11 +398,7 @@ def _build_search_plan(
                 ]
                 item_code_for_search = base_search_term
 
-            if resolved_item_code:
-                filters["item_code"] = resolved_item_code
-                or_filters = []
-                item_code_for_search = None
-            elif len(raw_search_value) < min_search_len:
+            if len(raw_search_value) < min_search_len:
                 filters["item_code"] = base_search_term
         elif resolved_item_code:
             filters["item_code"] = resolved_item_code
