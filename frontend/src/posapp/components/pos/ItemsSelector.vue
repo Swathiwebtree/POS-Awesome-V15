@@ -1897,97 +1897,85 @@ export default {
 				}
 			}
 		},
-		onEnter() {
-			const trimmedQuery = (this.search_input || "").trim();
+		async _performSearch(searchTerm) {
+			const vm = this;
 
-			// If the input is a numeric string longer than 6 characters, treat it as a barcode
+			vm.cancelItemDetailsRequest();
+
+			const trimmedQuery = (searchTerm || "").trim();
+
+			vm.first_search = trimmedQuery;
+
 			if (/^\d{7,}$/.test(trimmedQuery)) {
-				this.onBarcodeScanned(trimmedQuery);
-				// Immediately clear the search field
-				this.search_input = "";
+				vm.onBarcodeScanned(trimmedQuery);
 				return;
 			}
-			// Otherwise, trigger the standard search
-			this.search_onchange();
-			if (this.search_onchange.flush) {
-				this.search_onchange.flush();
+
+			if (!trimmedQuery || trimmedQuery.length < 3) {
+				vm.search_from_scanner = false;
+				return;
+			}
+
+			if (vm.isBackgroundLoading) {
+				vm.pendingItemSearch = trimmedQuery;
+				return;
+			}
+
+			vm.search = trimmedQuery;
+
+			const fromScanner = vm.search_from_scanner;
+
+			if (vm.usesLimitSearch) {
+				const shouldForceServer =
+					!vm.pos_profile.posa_local_storage || !vm.storageAvailable || !isOffline();
+				await vm.get_items(shouldForceServer);
+			} else if (vm.pos_profile && vm.pos_profile.posa_local_storage) {
+				if (vm.storageAvailable) {
+					await vm.loadVisibleItems(true);
+					vm.enter_event();
+				} else {
+					await vm.get_items(true);
+				}
+			} else {
+				await vm.get_items(true);
+				vm.enter_event();
+
+				if (vm.displayedItems && vm.displayedItems.length > 0) {
+					setTimeout(() => {
+						vm.update_items_details(vm.displayedItems);
+					}, 300);
+				}
+			}
+
+			if (fromScanner) {
+				vm.clearSearch();
+				vm.focusItemSearch();
+				vm.search_from_scanner = false;
+			}
+		},
+		onEnter() {
+			const trimmedQuery = (this.search_input || "").trim();
+			if (this.usesLimitSearch) {
+				this._performSearch(trimmedQuery);
+			} else {
+				this.search_onchange(trimmedQuery);
+				if (this.search_onchange.flush) {
+					this.search_onchange.flush();
+				}
 			}
 		},
 		search_onchange: _.debounce(
 			withPerf("pos:search-trigger", async function (newSearchTerm) {
 				const vm = this;
-
-				vm.cancelItemDetailsRequest();
-
-				// Determine the actual query string and trim whitespace
 				let query;
 				if (typeof newSearchTerm === "string") {
 					query = newSearchTerm;
-				} else if (newSearchTerm && newSearchTerm.target) {
-					query = newSearchTerm.target?.value ?? "";
 				} else {
 					query = vm.first_search;
 				}
-				const trimmedQuery = (query || "").trim();
-
-				// Keep first_search in sync with the value we are about to search for
-				vm.first_search = trimmedQuery;
-
-				// If the input is a numeric string longer than 6 characters, treat it as a barcode
-				if (/^\d{7,}$/.test(trimmedQuery)) {
-					vm.onBarcodeScanned(trimmedQuery);
-					return;
-				}
-
-				// Require a minimum of three characters before running a search
-				if (!trimmedQuery || trimmedQuery.length < 3) {
-					vm.search_from_scanner = false;
-					return;
-				}
-
-				// If background loading is in progress, defer the search without changing the active query
-				if (vm.isBackgroundLoading) {
-					vm.pendingItemSearch = trimmedQuery;
-					return;
-				}
-
-				vm.search = trimmedQuery;
-
-				const fromScanner = vm.search_from_scanner;
-
-				if (vm.usesLimitSearch) {
-					const shouldForceServer =
-						!vm.pos_profile.posa_local_storage || !vm.storageAvailable || !isOffline();
-					await vm.get_items(shouldForceServer);
-				} else if (vm.pos_profile && vm.pos_profile.posa_local_storage) {
-					if (vm.storageAvailable) {
-						await vm.loadVisibleItems(true);
-						vm.enter_event();
-					} else {
-						vm.get_items(true);
-					}
-				} else {
-					// When local storage is disabled, always fetch items
-					// from the server so searches aren't limited to the
-					// initially loaded set.
-					await vm.get_items(true);
-					vm.enter_event();
-
-					if (vm.displayedItems && vm.displayedItems.length > 0) {
-						setTimeout(() => {
-							vm.update_items_details(vm.displayedItems);
-						}, 300);
-					}
-				}
-
-				// Clear the input only when triggered via scanner
-				if (fromScanner) {
-					vm.clearSearch();
-					vm.focusItemSearch();
-					vm.search_from_scanner = false;
-				}
+				await vm._performSearch(query);
 			}),
-			300,
+			300
 		),
 		get_item_qty(first_search) {
 			const qtyVal = this.qty != null ? this.qty : 1;
