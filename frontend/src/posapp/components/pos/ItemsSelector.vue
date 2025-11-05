@@ -1909,6 +1909,9 @@ export default {
 			}
 			// Otherwise, trigger the standard search
 			this.search_onchange();
+			if (this.search_onchange.flush) {
+				this.search_onchange.flush();
+			}
 		},
 		search_onchange: _.debounce(
 			withPerf("pos:search-trigger", async function (newSearchTerm) {
