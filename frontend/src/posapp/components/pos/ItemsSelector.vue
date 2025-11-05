@@ -2774,10 +2774,7 @@ export default {
 			}
 		},
 		handleItemSearchFocus() {
-			this.first_search = "";
-			this.search = "";
-			// Optionally, you might want to also clear search_backup if the behaviour should be a full reset on focus
-			// this.search_backup = "";
+			this.search_input = "";
 		},
 
 		focusItemSearch() {
