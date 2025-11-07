@@ -91,6 +91,7 @@
 						class="pos-table__qty-input"
 						@blur="toggleQtyEdit(item)"
 						@keydown.enter.prevent="toggleQtyEdit(item, true)"
+						@click.stop
 						ref="qtyInput"
 						:autofocus="true"
 						type="number"
@@ -1201,6 +1202,9 @@ export default {
 
 		toggleQtyEdit(item, forceClose = false) {
 			if (this.editing_qty_row_id === item.posa_row_id || forceClose) {
+				if (!item.qty || item.qty <= 0) {
+					this.setFormatedQty(item, "qty", null, false, 1);
+				}
 				this.editing_qty_row_id = null;
 			} else {
 				this.editing_qty_row_id = item.posa_row_id;
