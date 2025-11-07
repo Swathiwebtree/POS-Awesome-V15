@@ -78,7 +78,7 @@
 						}"
 						:data-length="memoizedQtyLength(item.qty)"
 						:title="formatFloat(item.qty, hide_qty_decimals ? 0 : undefined)"
-						@click.stop="toggleQtyEdit(item)"
+						@click.stop="openQtyEdit(item)"
 					>
 						{{ formatFloat(item.qty, hide_qty_decimals ? 0 : undefined) }}
 					</div>
@@ -89,8 +89,8 @@
 						density="compact"
 						variant="outlined"
 						class="pos-table__qty-input"
-						@blur="toggleQtyEdit(item)"
-						@keydown.enter.prevent="toggleQtyEdit(item, true)"
+						@blur="closeQtyEdit(item)"
+						@keydown.enter.prevent="closeQtyEdit(item)"
 						@click.stop
 						ref="qtyInput"
 						:autofocus="true"
@@ -1201,8 +1201,18 @@ export default {
 			this.$emit("update:expanded", mappedValues);
 		},
 
-		toggleQtyEdit(item, forceClose = false) {
-			if (this.editing_qty_row_id === item.posa_row_id || forceClose) {
+		openQtyEdit(item) {
+			if (this.editing_qty_row_id !== item.posa_row_id) {
+				this.editing_qty_row_id = item.posa_row_id;
+				this.editing_qty_value = item.qty;
+				this.$nextTick(() => {
+					this.$refs.qtyInput?.focus();
+				});
+			}
+		},
+
+		closeQtyEdit(item) {
+			if (this.editing_qty_row_id === item.posa_row_id) {
 				const newQty = parseFloat(this.editing_qty_value);
 				if (!newQty || newQty <= 0) {
 					this.setFormatedQty(item, "qty", null, false, 1);
@@ -1211,12 +1221,6 @@ export default {
 				}
 				this.editing_qty_row_id = null;
 				this.editing_qty_value = null;
-			} else {
-				this.editing_qty_row_id = item.posa_row_id;
-				this.editing_qty_value = item.qty;
-				this.$nextTick(() => {
-					this.$refs.qtyInput?.focus();
-				});
 			}
 		},
 	},
