@@ -863,6 +863,8 @@ export default {
 		doc.posa_coupons = this.posa_coupons;
 		doc.posa_delivery_charges = this.selected_delivery_charge?.name || null;
 		doc.posa_delivery_charges_rate = this.delivery_charges_rate || 0;
+		doc.posa_notes = sourceDoc.posa_notes ?? null;
+		doc.posa_authorization_code = sourceDoc.posa_authorization_code ?? null;
 		doc.posting_date = this.formatDateForBackend(this.posting_date_display);
 
 		// Add flags to ensure proper rate handling

@@ -428,6 +428,24 @@
 							v-model="invoice_doc.posa_notes"
 						></v-textarea>
 					</v-col>
+					<v-col
+						cols="12"
+						md="6"
+						v-if="pos_profile.posa_display_authorization_code"
+					>
+						<v-text-field
+							class="sleek-field pos-themed-input"
+							variant="solo"
+							density="compact"
+							clearable
+							color="primary"
+							:label="frappe._('Authorization Code')"
+							v-model="invoice_doc.posa_authorization_code"
+							hide-details
+							autocomplete="off"
+							maxlength="32"
+						></v-text-field>
+					</v-col>
 				</v-row>
 
 				<!-- Customer Purchase Order (if enabled in POS profile) -->
@@ -2310,6 +2328,7 @@ export default {
 				if (this.invoice_doc && data !== "Order") {
 					this.invoice_doc.posa_delivery_date = null;
 					this.invoice_doc.posa_notes = null;
+					this.invoice_doc.posa_authorization_code = null;
 					this.invoice_doc.shipping_address_name = null;
 				} else if (this.invoice_doc && data === "Order") {
 					// Initialize delivery date to today when switching to Order type
