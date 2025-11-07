@@ -84,8 +84,8 @@
 					</div>
 					<v-text-field
 						v-else
-						:model-value="item.qty"
-						@update:model-value="setFormatedQty(item, 'qty', null, false, $event)"
+						:model-value="editing_qty_value"
+						@update:model-value="editing_qty_value = $event"
 						density="compact"
 						variant="outlined"
 						class="pos-table__qty-input"
@@ -732,6 +732,7 @@ export default {
 			expandedCache: new Map(),
 			lastUpdateTime: 0,
 			editing_qty_row_id: null,
+			editing_qty_value: null,
 		};
 	},
 	computed: {
@@ -1202,12 +1203,17 @@ export default {
 
 		toggleQtyEdit(item, forceClose = false) {
 			if (this.editing_qty_row_id === item.posa_row_id || forceClose) {
-				if (!item.qty || item.qty <= 0) {
+				const newQty = parseFloat(this.editing_qty_value);
+				if (!newQty || newQty <= 0) {
 					this.setFormatedQty(item, "qty", null, false, 1);
+				} else {
+					this.setFormatedQty(item, "qty", null, false, newQty);
 				}
 				this.editing_qty_row_id = null;
+				this.editing_qty_value = null;
 			} else {
 				this.editing_qty_row_id = item.posa_row_id;
+				this.editing_qty_value = item.qty;
 				this.$nextTick(() => {
 					this.$refs.qtyInput?.focus();
 				});
