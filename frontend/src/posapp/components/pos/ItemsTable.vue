@@ -70,6 +70,7 @@
 						<v-icon size="small">mdi-minus</v-icon>
 					</v-btn>
 					<div
+						v-if="editing_qty_row_id !== item.posa_row_id"
 						class="pos-table__qty-display amount-value number-field-rtl"
 						:class="{
 							'negative-number': isNegative(item.qty),
@@ -77,9 +78,24 @@
 						}"
 						:data-length="memoizedQtyLength(item.qty)"
 						:title="formatFloat(item.qty, hide_qty_decimals ? 0 : undefined)"
+						@click.stop="openQtyEdit(item)"
 					>
 						{{ formatFloat(item.qty, hide_qty_decimals ? 0 : undefined) }}
 					</div>
+					<v-text-field
+						v-else
+						:model-value="editing_qty_value"
+						@update:model-value="editing_qty_value = $event"
+						density="compact"
+						variant="outlined"
+						class="pos-table__qty-input"
+						@blur="closeQtyEdit(item)"
+						@keydown.enter.prevent="closeQtyEdit(item)"
+						@click.stop
+						ref="qtyInput"
+						:autofocus="true"
+						type="number"
+					></v-text-field>
 					<v-btn
 						:disabled="
 							!!item.posa_is_replace ||
@@ -715,6 +731,8 @@ export default {
 			qtyLengthCache: new Map(),
 			expandedCache: new Map(),
 			lastUpdateTime: 0,
+			editing_qty_row_id: null,
+			editing_qty_value: null,
 		};
 	},
 	computed: {
@@ -1181,6 +1199,29 @@ export default {
 		handleExpandedUpdate(val) {
 			const mappedValues = val.map((v) => (typeof v === "object" ? v.posa_row_id : v));
 			this.$emit("update:expanded", mappedValues);
+		},
+
+		openQtyEdit(item) {
+			if (this.editing_qty_row_id !== item.posa_row_id) {
+				this.editing_qty_row_id = item.posa_row_id;
+				this.editing_qty_value = item.qty;
+				this.$nextTick(() => {
+					this.$refs.qtyInput?.focus();
+				});
+			}
+		},
+
+		closeQtyEdit(item) {
+			if (this.editing_qty_row_id === item.posa_row_id) {
+				const newQty = parseFloat(this.editing_qty_value);
+				if (!newQty || newQty <= 0) {
+					this.setFormatedQty(item, "qty", null, false, 1);
+				} else {
+					this.setFormatedQty(item, "qty", null, false, newQty);
+				}
+				this.editing_qty_row_id = null;
+				this.editing_qty_value = null;
+			}
 		},
 	},
 
@@ -3242,5 +3283,31 @@ body[dir="rtl"] .number-field-rtl {
 
 .delete-action-btn:hover .v-icon {
 	animation: pulse 0.6s ease-in-out;
+}
+
+.pos-table__qty-input {
+	max-width: 80px;
+	margin: 0 auto;
+}
+.pos-table__qty-input :deep(input) {
+	text-align: center;
+	font-weight: 600;
+	-moz-appearance: textfield;
+}
+.pos-table__qty-input :deep(input::-webkit-outer-spin-button),
+.pos-table__qty-input :deep(input::-webkit-inner-spin-button) {
+	-webkit-appearance: none;
+	margin: 0;
+}
+.pos-table__qty-input :deep(.v-input__control) {
+	height: 32px;
+}
+.pos-table__qty-input :deep(.v-field__field) {
+	height: 32px;
+	padding: 0 8px;
+}
+.pos-table__qty-input :deep(.v-field__input) {
+	padding: 0;
+	min-height: 32px;
 }
 </style>
