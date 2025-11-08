@@ -2717,7 +2717,7 @@ export default {
 			}
 		},
 		handleItemSearchFocus() {
-			// Deliberately left blank
+			this.search_input = "";
 		},
 
 		focusItemSearch() {
