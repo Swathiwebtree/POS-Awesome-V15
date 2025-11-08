@@ -1977,9 +1977,7 @@ export default {
 			return first_search.substr(0, prefix_len + item_code_len);
 		},
                 esc_event() {
-                        this.search = null;
-                        this.first_search = null;
-                        this.search_backup = null;
+                        this.clearSearch();
                         this.qty = 1;
                         this.focusItemSearch();
                 },
