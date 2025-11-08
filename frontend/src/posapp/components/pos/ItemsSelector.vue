@@ -1857,6 +1857,9 @@ export default {
 			}
 		},
 		onEnter() {
+			if (this.search_onchange.cancel) {
+				this.search_onchange.cancel();
+			}
 			this._performSearch();
 		},
 		search_onchange: _.debounce(function () {
@@ -2641,6 +2644,7 @@ export default {
 
 			this.search_backup = this.first_search;
 			this.clearingSearch = true;
+			this.search_input = "";
 			this.first_search = "";
 			this.search = "";
 
@@ -2715,7 +2719,7 @@ export default {
 			}
 		},
 		handleItemSearchFocus() {
-			this.search_input = "";
+			// Deliberately left blank
 		},
 
 		focusItemSearch() {
@@ -2844,6 +2848,7 @@ export default {
 			if (this.$refs.cameraScanner?.resumeFromExternalLock) {
 				this.$refs.cameraScanner.resumeFromExternalLock();
 			}
+			this.clearSearch();
 			this.focusItemSearch();
 		},
 
@@ -2879,6 +2884,10 @@ export default {
 					);
 				}
 				return;
+			}
+
+			if (this.search_onchange.cancel) {
+				this.search_onchange.cancel();
 			}
 
 			// Clear the search field immediately to allow for rapid scanning
@@ -3648,7 +3657,7 @@ export default {
 				return this.first_search;
 			},
 			set: _.debounce(function (newValue) {
-				this.first_search = (newValue || "").trim();
+				this.first_search = newValue || "";
 			}, 200),
 		},
 		debounce_qty: {
