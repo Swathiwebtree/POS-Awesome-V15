@@ -2771,12 +2771,12 @@ export default {
 			this.set_batch_qty(item, null, false);
 		}
 
-		if (!item.locked_price) {
-			if (forceUpdate || !item.base_rate) {
-				if (data.price_list_rate !== 0 || !item.base_price_list_rate) {
-					item.base_price_list_rate = data.price_list_rate;
-					if (!item.posa_offer_applied) {
-						item.base_rate = data.price_list_rate;
+                if (!item.locked_price) {
+                        if (forceUpdate || !item.base_rate) {
+                                if (data.price_list_rate !== 0 || !item.base_price_list_rate) {
+                                        item.base_price_list_rate = data.price_list_rate;
+                                        if (!item.posa_offer_applied) {
+                                                item.base_rate = data.price_list_rate;
 					}
 				}
 			}
@@ -2821,15 +2821,61 @@ export default {
 						this.currency_precision,
 					);
 				} else {
-					item.price_list_rate = item.base_rate;
-				}
-			}
+                                        item.price_list_rate = item.base_rate;
+                                }
+                        }
 
-			if (
-				!item.posa_offer_applied &&
-				this.pos_profile.posa_apply_customer_discount &&
-				this.customer_info.posa_discount > 0 &&
-				this.customer_info.posa_discount <= 100 &&
+                        const serverDiscountPercentage = Number.parseFloat(data.discount_percentage);
+                        const hasServerPercentage =
+                                Number.isFinite(serverDiscountPercentage) && serverDiscountPercentage !== 0;
+                        if (hasServerPercentage && !item.posa_offer_applied && !item._manual_rate_set) {
+                                const existingDiscount = Number(item.discount_amount) || 0;
+                                const EPSILON = 0.000001;
+                                if (Math.abs(existingDiscount) < EPSILON) {
+                                        const resolvedPercentage = this.flt(
+                                                serverDiscountPercentage,
+                                                this.float_precision,
+                                        );
+
+                                        const priceListRateCandidate =
+                                                item.price_list_rate ?? data.price_list_rate ?? item.rate ?? 0;
+                                        const priceListRate = Number(priceListRateCandidate) || 0;
+
+                                        const basePriceListRateCandidate =
+                                                item.base_price_list_rate ?? data.price_list_rate ?? priceListRate;
+                                        const basePriceListRate = Number(basePriceListRateCandidate) || 0;
+
+                                        const hasRate =
+                                                Math.abs(priceListRate) > EPSILON ||
+                                                Math.abs(basePriceListRate) > EPSILON;
+
+                                        if (hasRate) {
+                                                const discountAmount = this.flt(
+                                                        (priceListRate * resolvedPercentage) / 100,
+                                                        this.currency_precision,
+                                                );
+                                                const baseDiscountAmount = this.flt(
+                                                        (basePriceListRate * resolvedPercentage) / 100,
+                                                        this.currency_precision,
+                                                );
+
+                                                const newRate = Math.max(priceListRate - discountAmount, 0);
+                                                const newBaseRate = Math.max(basePriceListRate - baseDiscountAmount, 0);
+
+                                                item.discount_percentage = resolvedPercentage;
+                                                item.discount_amount = discountAmount;
+                                                item.base_discount_amount = baseDiscountAmount;
+                                                item.rate = this.flt(newRate, this.currency_precision);
+                                                item.base_rate = this.flt(newBaseRate, this.currency_precision);
+                                        }
+                                }
+                        }
+
+                        if (
+                                !item.posa_offer_applied &&
+                                this.pos_profile.posa_apply_customer_discount &&
+                                this.customer_info.posa_discount > 0 &&
+                                this.customer_info.posa_discount <= 100 &&
 				item.posa_is_offer == 0 &&
 				!item.posa_is_replace
 			) {
