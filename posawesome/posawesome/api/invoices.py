@@ -128,6 +128,39 @@ def _merge_duplicate_taxes(invoice_doc):
         invoice_doc.calculate_taxes_and_totals()
 
 
+def _deduplicate_free_items(invoice_doc):
+    """Drop duplicate free lines created by local + server pricing rules."""
+
+    items = invoice_doc.get("items", [])
+    if not items:
+        return
+
+    unique = []
+    seen = set()
+
+    for item in items:
+        if cint(item.get("is_free_item")):
+            key = (
+                cstr(
+                    item.get("source_rule")
+                    or item.get("pricing_rule")
+                    or item.get("pricing_rules")
+                    or ""
+                ),
+                cstr(item.get("item_code") or ""),
+                cstr(item.get("warehouse") or ""),
+                cstr(item.get("uom") or ""),
+                flt(item.get("qty")),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+        unique.append(item)
+
+    if len(unique) != len(items):
+        invoice_doc.set("items", unique)
+
+
 def _should_block(pos_profile):
     allow_negative = cint(frappe.db.get_single_value("Stock Settings", "allow_negative_stock") or 0)
     if allow_negative:
@@ -343,6 +376,8 @@ def update_invoice(data):
     invoice_doc.ignore_pricing_rule = 1
     invoice_doc.flags.ignore_pricing_rule = True
 
+    _deduplicate_free_items(invoice_doc)
+
     # Set missing values first
     invoice_doc.set_missing_values()
 
@@ -482,6 +517,8 @@ def submit_invoice(invoice, data):
     else:
         invoice_doc = frappe.get_doc(doctype, invoice_name)
         invoice_doc.update(invoice)
+
+    _deduplicate_free_items(invoice_doc)
 
     # Ensure item name overrides are respected on submit
     _apply_item_name_overrides(invoice_doc)
@@ -939,6 +976,7 @@ def update_invoice_from_order(data):
     data = json.loads(data)
     invoice_doc = frappe.get_doc("Sales Invoice", data.get("name"))
     invoice_doc.update(data)
+    _deduplicate_free_items(invoice_doc)
     invoice_doc.save()
     return invoice_doc
 
