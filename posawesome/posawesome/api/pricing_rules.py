@@ -197,30 +197,31 @@ def get_active_pricing_rules(params: dict | None = None, **kwargs):
         PricingRule.customer,
         PricingRule.customer_group,
         PricingRule.territory,
-        PricingRule.margin_type,
-        PricingRule.margin_rate_or_amount,
-        PricingRule.apply_discount_on_rate,
-        PricingRule.same_item,
-        PricingRule.free_item,
-        PricingRule.free_qty,
-        PricingRule.free_qty_per_unit,
-        PricingRule.apply_per_threshold,
-        PricingRule.max_free_qty,
-        PricingRule.is_recursive,
-        PricingRule.recurse_for,
-        PricingRule.apply_recursion_over,
-        PricingRule.round_free_qty,
-        PricingRule.dont_enforce_free_item_qty,
     ]
 
-    if meta.has_field("stop_further_rules"):
-        select_columns.append(PricingRule.stop_further_rules)
+    optional_fields = [
+        "margin_type",
+        "margin_rate_or_amount",
+        "apply_discount_on_rate",
+        "same_item",
+        "free_item",
+        "free_qty",
+        "free_qty_per_unit",
+        "apply_per_threshold",
+        "max_free_qty",
+        "is_recursive",
+        "recurse_for",
+        "apply_recursion_over",
+        "round_free_qty",
+        "dont_enforce_free_item_qty",
+        "stop_further_rules",
+        "for_price_list_rate",
+        "uom",
+    ]
 
-    if meta.has_field("for_price_list_rate"):
-        select_columns.append(PricingRule.for_price_list_rate)
-
-    if meta.has_field("uom"):
-        select_columns.append(PricingRule.uom)
+    for fieldname in optional_fields:
+        if meta.has_field(fieldname):
+            select_columns.append(getattr(PricingRule, fieldname))
 
     query = (
         frappe.qb.from_(PricingRule)
