@@ -382,7 +382,7 @@ def reconcile_line_prices(cart_payload: dict | str | None = None):
 
         _collect_freebies(freebies, details.get("free_item_data"))
 
-        doc.items.append(
+        doc.setdefault("items", []).append(
             frappe._dict(
                 {
                     "item_code": args.item_code,
