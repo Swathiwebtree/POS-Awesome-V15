@@ -197,7 +197,6 @@ def get_active_pricing_rules(params: dict | None = None, **kwargs):
         PricingRule.customer,
         PricingRule.customer_group,
         PricingRule.territory,
-        PricingRule.uom,
         PricingRule.margin_type,
         PricingRule.margin_rate_or_amount,
         PricingRule.apply_discount_on_rate,
@@ -219,6 +218,9 @@ def get_active_pricing_rules(params: dict | None = None, **kwargs):
 
     if meta.has_field("for_price_list_rate"):
         select_columns.append(PricingRule.for_price_list_rate)
+
+    if meta.has_field("uom"):
+        select_columns.append(PricingRule.uom)
 
     query = (
         frappe.qb.from_(PricingRule)
