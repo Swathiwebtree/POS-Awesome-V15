@@ -132,8 +132,20 @@ export function reduceCacheUsage() {
         persist("item_groups_cache", memory.item_groups_cache);
 }
 
+function sanitiseSnapshot(snapshot = []) {
+        if (!Array.isArray(snapshot)) {
+                return [];
+        }
+        try {
+                return JSON.parse(JSON.stringify(snapshot));
+        } catch (error) {
+                console.error("Failed to sanitise pricing rules snapshot", error);
+                return [];
+        }
+}
+
 export function savePricingRulesSnapshot(snapshot = [], context = null, staleAt = null) {
-        memory.pricing_rules_snapshot = Array.isArray(snapshot) ? snapshot : [];
+        memory.pricing_rules_snapshot = sanitiseSnapshot(snapshot);
         memory.pricing_rules_context = context || null;
         memory.pricing_rules_last_sync = new Date().toISOString();
         memory.pricing_rules_stale_at = staleAt || null;
