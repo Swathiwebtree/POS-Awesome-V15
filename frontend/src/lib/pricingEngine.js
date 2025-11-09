@@ -175,23 +175,35 @@ const applyOneRule = (currentRate, rule, qty, baseRate) => {
 
         let newRate = currentRate;
         let change = 0;
-        let type = rule.discount_type || rule.rate_or_discount || rule.price_or_discount;
+
+        const rawType = String(rule.rate_or_discount_type || "").toLowerCase();
+        const priceMode = String(rule.price_or_discount || "").toLowerCase();
+        const discountType = String(rule.discount_type || "").toLowerCase();
+
+        const isAmount = rawType === "discount amount" || discountType === "amount";
+        const isMargin = discountType === "margin" || !!rule.margin_type;
+        const isPriceOverride = priceMode === "price" && (rawType === "rate" || rawType === "price" || (!rawType && discountType === "rate"));
+
+        let type = rule.discount_type || rule.rate_or_discount_type || rule.price_or_discount;
 
         if (rule.is_free_item_rule) {
                 return { newRate: currentRate, discount: 0, detail: null };
         }
 
-        if ((rule.price_or_discount || "").toLowerCase() === "price") {
-                if (rule.discount_type === "Amount") {
+        if (isPriceOverride) {
+                if (isAmount) {
                         newRate = currentRate - value;
+                        type = "Amount";
                 } else {
                         newRate = value || currentRate;
+                        type = "Rate";
                 }
-        } else if ((rule.discount_type || "").toLowerCase() === "margin" || rule.margin_type) {
+        } else if (isMargin) {
                 newRate = applyMargin(baseRate, rule);
                 type = rule.margin_type || "Margin";
-        } else if ((rule.discount_type || "").toLowerCase() === "amount") {
-                        newRate = currentRate - value;
+        } else if (isAmount) {
+                newRate = currentRate - value;
+                type = "Amount";
         } else {
                 const percent = value;
                 newRate = currentRate * (1 - percent / 100);

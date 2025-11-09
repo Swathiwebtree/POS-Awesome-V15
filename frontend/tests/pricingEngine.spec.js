@@ -216,6 +216,50 @@ describe("pricingEngine - applyLocalPricingRules", () => {
                 });
                 expect(invalid.rate).toBeCloseTo(30);
         });
+
+        it("treats discount percentage price rules as percentage adjustments", () => {
+                const rule = {
+                        name: "PRICE-PERCENT",
+                        price_or_discount: "Price",
+                        rate_or_discount_type: "Discount Percentage",
+                        discount_type: "Rate",
+                        rate_or_discount: 10,
+                        specificity: 3,
+                        priority: 8,
+                };
+                const indexes = buildIndexes({ items: { "ITEM-9": [rule] } });
+                const result = applyLocalPricingRules({
+                        item: { item_code: "ITEM-9" },
+                        qty: 6,
+                        baseRate: 60,
+                        ctx: {},
+                        indexes,
+                });
+                expect(result.rate).toBeCloseTo(54);
+                expect(result.discountPerUnit).toBeCloseTo(6);
+        });
+
+        it("continues to honour explicit price overrides", () => {
+                const rule = {
+                        name: "PRICE-OVERRIDE",
+                        price_or_discount: "Price",
+                        rate_or_discount_type: "Rate",
+                        discount_type: "Rate",
+                        rate_or_discount: 42,
+                        specificity: 3,
+                        priority: 6,
+                };
+                const indexes = buildIndexes({ items: { "ITEM-10": [rule] } });
+                const result = applyLocalPricingRules({
+                        item: { item_code: "ITEM-10" },
+                        qty: 3,
+                        baseRate: 60,
+                        ctx: {},
+                        indexes,
+                });
+                expect(result.rate).toBeCloseTo(42);
+                expect(result.discountPerUnit).toBeCloseTo(18);
+        });
 });
 
 describe("pricingEngine - computeFreeItems", () => {
