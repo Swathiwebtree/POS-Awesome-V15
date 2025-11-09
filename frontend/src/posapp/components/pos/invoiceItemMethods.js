@@ -757,10 +757,41 @@ export default {
                                 ? this.flt(baseRate * item.qty, precision)
                                 : baseRate * item.qty;
 
-                        const appliedRules = Array.isArray(update.pricing_rules)
-                                ? update.pricing_rules.filter((name) => !!name)
-                                : [];
-                        const detailed = appliedRules.map((name) => ({ name }));
+                        const rulesProvided = Object.prototype.hasOwnProperty.call(update, "pricing_rules");
+                        const detailsProvided = Object.prototype.hasOwnProperty.call(update, "pricing_rule_details");
+
+                        const appliedRules = rulesProvided
+                                ? Array.isArray(update.pricing_rules)
+                                        ? update.pricing_rules.filter((name) => !!name)
+                                        : []
+                                : Array.isArray(item.pricing_rules)
+                                        ? item.pricing_rules.filter((name) => !!name)
+                                        : [];
+
+                        let detailed;
+                        if (detailsProvided && Array.isArray(update.pricing_rule_details)) {
+                                detailed = update.pricing_rule_details
+                                        .map((detail) => {
+                                                if (!detail) {
+                                                        return null;
+                                                }
+                                                if (typeof detail === "string") {
+                                                        return { name: detail };
+                                                }
+                                                const name = detail.name || detail.pricing_rule || detail.rule || null;
+                                                if (!name) {
+                                                        return null;
+                                                }
+                                                const type = detail.type || detail.discount_type || null;
+                                                return type ? { name, type } : { name };
+                                        })
+                                        .filter((detail) => !!detail);
+                        } else if (!rulesProvided && Array.isArray(item.pricing_rule_details)) {
+                                detailed = item.pricing_rule_details.map((detail) => ({ ...detail }));
+                        } else {
+                                detailed = appliedRules.map((name) => ({ name }));
+                        }
+
                         this._updatePricingBadge(item, detailed);
                 });
 
