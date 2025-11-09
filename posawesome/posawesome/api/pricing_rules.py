@@ -115,7 +115,7 @@ def _normalise_rule(doc: frappe._dict) -> frappe._dict:
     output = frappe._dict(
         name=doc.name,
         priority=cint(doc.priority or 0),
-        stop_further_rules=cint(doc.stop_further_rules or 0),
+        stop_further_rules=cint(doc.get("stop_further_rules") or 0),
         apply_multiple_pricing_rules=cint(doc.apply_multiple_pricing_rules or 0),
         apply_on=doc.apply_on,
         min_qty=flt(doc.min_qty or 0),
@@ -169,46 +169,51 @@ def get_active_pricing_rules(params: dict | None = None, **kwargs):
     ctx_date = _coerce_date(ctx.get("date"))
 
     PricingRule = DocType("Pricing Rule")
+    meta = frappe.get_meta("Pricing Rule")
+
+    select_columns = [
+        PricingRule.name,
+        PricingRule.priority,
+        PricingRule.apply_multiple_pricing_rules,
+        PricingRule.apply_on,
+        PricingRule.min_qty,
+        PricingRule.valid_from,
+        PricingRule.valid_upto,
+        PricingRule.price_or_product_discount,
+        PricingRule.rate_or_discount,
+        PricingRule.discount_percentage,
+        PricingRule.discount_amount,
+        PricingRule.rate,
+        PricingRule.currency,
+        PricingRule.for_price_list,
+        PricingRule.company,
+        PricingRule.customer,
+        PricingRule.customer_group,
+        PricingRule.territory,
+        PricingRule.for_price_list_rate,
+        PricingRule.uom,
+        PricingRule.margin_type,
+        PricingRule.margin_rate_or_amount,
+        PricingRule.apply_discount_on_rate,
+        PricingRule.same_item,
+        PricingRule.free_item,
+        PricingRule.free_qty,
+        PricingRule.free_qty_per_unit,
+        PricingRule.apply_per_threshold,
+        PricingRule.max_free_qty,
+        PricingRule.is_recursive,
+        PricingRule.recurse_for,
+        PricingRule.apply_recursion_over,
+        PricingRule.round_free_qty,
+        PricingRule.dont_enforce_free_item_qty,
+    ]
+
+    if meta.has_field("stop_further_rules"):
+        select_columns.append(PricingRule.stop_further_rules)
 
     query = (
         frappe.qb.from_(PricingRule)
-        .select(
-            PricingRule.name,
-            PricingRule.priority,
-            PricingRule.stop_further_rules,
-            PricingRule.apply_multiple_pricing_rules,
-            PricingRule.apply_on,
-            PricingRule.min_qty,
-            PricingRule.valid_from,
-            PricingRule.valid_upto,
-            PricingRule.price_or_product_discount,
-            PricingRule.rate_or_discount,
-            PricingRule.discount_percentage,
-            PricingRule.discount_amount,
-            PricingRule.rate,
-            PricingRule.currency,
-            PricingRule.for_price_list,
-            PricingRule.company,
-            PricingRule.customer,
-            PricingRule.customer_group,
-            PricingRule.territory,
-            PricingRule.for_price_list_rate,
-            PricingRule.uom,
-            PricingRule.margin_type,
-            PricingRule.margin_rate_or_amount,
-            PricingRule.apply_discount_on_rate,
-            PricingRule.same_item,
-            PricingRule.free_item,
-            PricingRule.free_qty,
-            PricingRule.free_qty_per_unit,
-            PricingRule.apply_per_threshold,
-            PricingRule.max_free_qty,
-            PricingRule.is_recursive,
-            PricingRule.recurse_for,
-            PricingRule.apply_recursion_over,
-            PricingRule.round_free_qty,
-            PricingRule.dont_enforce_free_item_qty,
-        )
+        .select(*select_columns)
         .where(PricingRule.selling == 1)
         .where(Coalesce(PricingRule.disable, 0) == 0)
         .where(PricingRule.company == ctx.company)
