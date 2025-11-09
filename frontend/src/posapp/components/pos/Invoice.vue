@@ -358,7 +358,7 @@ import { useInvoiceStore } from "../../stores/invoiceStore.js";
 import { useCustomersStore } from "../../stores/customersStore.js";
 import { storeToRefs } from "pinia";
 import stockCoordinator from "../../utils/stockCoordinator.js";
-import { isOffline } from "../../offline/index.js";
+import { isOffline } from "../../../offline/index.js";
 
 export default {
 	name: "POSInvoice",
