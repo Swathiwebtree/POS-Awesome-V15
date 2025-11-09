@@ -1427,16 +1427,20 @@ export default {
 	},
 
 	// Prepare items array for invoice doc
-	get_invoice_items() {
-		const items_list = [];
-		const isReturn = this.isReturnInvoice;
-		const usesPosInvoice = this.pos_profile.create_pos_invoice_instead_of_sales_invoice;
+        get_invoice_items() {
+                const items_list = [];
+                const isReturn = this.isReturnInvoice;
+                const usesPosInvoice = this.pos_profile.create_pos_invoice_instead_of_sales_invoice;
+                const omitFreebies = !isOffline();
 
-		this.items.forEach((item) => {
-			const new_item = {
-				item_code: item.item_code,
-				// Retain the item name for offline invoices
-				// Fallback to item_code if item_name is not available
+                this.items.forEach((item) => {
+                        if (omitFreebies && item && (item.is_free_item || item.auto_free_source)) {
+                                return;
+                        }
+                        const new_item = {
+                                item_code: item.item_code,
+                                // Retain the item name for offline invoices
+                                // Fallback to item_code if item_name is not available
 				item_name: item.item_name || item.item_code,
 				name_overridden: item.name_overridden ? 1 : 0,
 				posa_row_id: item.posa_row_id,

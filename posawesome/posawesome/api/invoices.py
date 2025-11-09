@@ -199,6 +199,38 @@ def _deduplicate_free_items(invoice_doc):
         invoice_doc.set("items", unique)
 
 
+def _strip_client_freebies_from_payload(payload):
+    """Remove auto-applied POS freebies from inbound payloads before saving."""
+
+    if not payload or not isinstance(payload, dict):
+        return
+
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return
+
+    cleaned = []
+    modified = False
+
+    for row in items:
+        if not isinstance(row, dict):
+            cleaned.append(row)
+            continue
+
+        auto_marker = row.get("auto_free_source")
+        is_free = cint(row.get("is_free_item"))
+        has_name = bool(row.get("name"))
+
+        if auto_marker or (is_free and not has_name):
+            modified = True
+            continue
+
+        cleaned.append(row)
+
+    if modified:
+        payload["items"] = cleaned
+
+
 def _should_block(pos_profile):
     allow_negative = cint(frappe.db.get_single_value("Stock Settings", "allow_negative_stock") or 0)
     if allow_negative:
@@ -345,6 +377,7 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 @frappe.whitelist()
 def update_invoice(data):
     data = json.loads(data)
+    _strip_client_freebies_from_payload(data)
     # Determine doctype based on POS Profile setting
     pos_profile = data.get("pos_profile")
     doctype = "Sales Invoice"
@@ -540,6 +573,7 @@ def update_invoice(data):
 def submit_invoice(invoice, data):
     data = json.loads(data)
     invoice = json.loads(invoice)
+    _strip_client_freebies_from_payload(invoice)
     pos_profile = invoice.get("pos_profile")
     doctype = "Sales Invoice"
     if pos_profile and frappe.db.get_value(
@@ -1012,6 +1046,7 @@ def get_sales_invoice_child_table(sales_invoice, sales_invoice_item):
 @frappe.whitelist()
 def update_invoice_from_order(data):
     data = json.loads(data)
+    _strip_client_freebies_from_payload(data)
     invoice_doc = frappe.get_doc("Sales Invoice", data.get("name"))
     invoice_doc.update(data)
     _deduplicate_free_items(invoice_doc)
