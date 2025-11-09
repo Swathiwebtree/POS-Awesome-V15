@@ -260,6 +260,31 @@ describe("pricingEngine - applyLocalPricingRules", () => {
                 expect(result.rate).toBeCloseTo(42);
                 expect(result.discountPerUnit).toBeCloseTo(18);
         });
+
+        it("applies discounts when stock quantity meets the minimum", () => {
+                const rule = {
+                        name: "STOCK-THRESHOLD",
+                        price_or_discount: "Discount",
+                        discount_type: "Rate",
+                        rate_or_discount: 10,
+                        specificity: 3,
+                        priority: 5,
+                        min_qty: 10,
+                };
+                const indexes = buildIndexes({ items: { "ITEM-STOCK": [rule] } });
+                const result = applyLocalPricingRules({
+                        item: { item_code: "ITEM-STOCK", stock_qty: 12, qty: 1 },
+                        qty: 1,
+                        docQty: 1,
+                        baseRate: 100,
+                        ctx: {},
+                        indexes,
+                });
+
+                expect(result.rate).toBeCloseTo(90);
+                expect(result.discountPerUnit).toBeCloseTo(10);
+                expect(result.applied[0].name).toBe("STOCK-THRESHOLD");
+        });
 });
 
 describe("pricingEngine - computeFreeItems", () => {
@@ -307,6 +332,30 @@ describe("pricingEngine - computeFreeItems", () => {
                 expect(freebies).toHaveLength(1);
                 expect(freebies[0].qty).toBe(3);
                 expect(freebies[0].item_code).toBe("BONUS");
+        });
+
+        it("uses stock quantity to trigger same-item freebies", () => {
+                const rule = {
+                        name: "FREE-STOCK",
+                        is_free_item_rule: 1,
+                        min_qty: 5,
+                        free_qty: 1,
+                        specificity: 3,
+                        priority: 5,
+                        same_item: 1,
+                };
+                const indexes = buildIndexes({ items: { "ITEM-STOCK": [rule] } });
+                const freebies = computeFreeItems({
+                        item: { item_code: "ITEM-STOCK", stock_uom: "Nos", stock_qty: 6, qty: 0.5 },
+                        qty: 0.5,
+                        docQty: 0.5,
+                        ctx: {},
+                        indexes,
+                });
+
+                expect(freebies).toHaveLength(1);
+                expect(freebies[0].qty).toBe(1);
+                expect(freebies[0].uom).toBe("Nos");
         });
 
         it("skips freebies outside date range", () => {

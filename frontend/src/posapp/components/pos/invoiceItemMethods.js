@@ -136,6 +136,43 @@ export default {
                 }
                 return 0;
         },
+        _resolvePricingQty(item) {
+                if (!item) {
+                        return 0;
+                }
+
+                const parse = (value) => {
+                        const numeric = Number.parseFloat(value);
+                        return Number.isFinite(numeric) ? numeric : null;
+                };
+
+                const direct = [
+                        item.stock_qty,
+                        item.base_qty,
+                        item.base_quantity,
+                        item.transfer_qty,
+                ].map(parse).find((value) => value !== null);
+
+                if (direct !== undefined && direct !== null) {
+                        return direct;
+                }
+
+                const qty = parse(item.qty);
+                if (qty === null) {
+                        return 0;
+                }
+
+                const factor = [
+                        item.conversion_factor,
+                        item.uom_conversion_factor,
+                ].map(parse).find((value) => value !== null && value !== 0 && value !== 1);
+
+                if (factor !== undefined && factor !== null) {
+                        return qty * factor;
+                }
+
+                return qty;
+        },
         _updatePricingBadge(item, applied = []) {
                 if (!item) {
                         return;
@@ -169,15 +206,24 @@ export default {
                 item.pricing_rules = JSON.stringify(names);
         },
         _applyPricingToLine(item, ctx, indexes, freebiesMap) {
-                if (!item || Number.parseFloat(item.qty || 0) === 0) {
+                if (!item) {
                         return;
                 }
 
                 const allowRateUpdate = !item.locked_price && !item.posa_offer_applied && !item._manual_rate_set;
-                const signedQty = Number.parseFloat(item.qty || 0) || 0;
-                const qty = Math.abs(signedQty);
+                const rawDocQty = Number.parseFloat(item.qty || 0);
+                const signedDocQty = Number.isFinite(rawDocQty) ? rawDocQty : 0;
+                const docQty = Math.abs(signedDocQty);
+                const rawPricingQty = this._resolvePricingQty(item);
+                const pricingQty = Number.isFinite(rawPricingQty) ? rawPricingQty : signedDocQty;
+                const qty = Math.abs(pricingQty);
+
+                if (docQty === 0 && qty === 0) {
+                        return;
+                }
+
                 const baseRate = this._resolveBaseRate(item);
-                const pricing = applyLocalPricingRules({ item, qty, baseRate, ctx, indexes });
+                const pricing = applyLocalPricingRules({ item, qty, docQty, baseRate, ctx, indexes });
 
                 this._updatePricingBadge(item, pricing.applied);
 
@@ -202,7 +248,7 @@ export default {
                                 effectiveBaseRate = discountedRate;
                         }
 
-                        const baseAmount = effectiveBaseRate * signedQty;
+                        const baseAmount = effectiveBaseRate * signedDocQty;
                         const convertedRate = this._fromBaseCurrency(effectiveBaseRate);
                         const convertedDiscount = this._fromBaseCurrency(baseDiscountPerUnit);
                         const normalizedBaseDiscount = Math.abs(baseDiscountPerUnit);
@@ -228,15 +274,20 @@ export default {
                                 : baseAmount;
                 }
 
-                const freebies = computeFreeItems({ item, qty, ctx, indexes });
+                const freebies = computeFreeItems({ item, qty, docQty, ctx, indexes });
                 if (Array.isArray(freebies)) {
                         freebies.forEach((entry) => {
                                 const key = `${entry.rule}::${entry.item_code}::${item.posa_row_id}`;
                                 const existing = freebiesMap.get(key) || { qty: 0 };
+                                const parsedEntryQty = Number.parseFloat(entry.qty || 0) || 0;
+                                const parsedExistingQty = Number.parseFloat(existing.qty || 0) || 0;
+                                const parsedEntryStock = Number.parseFloat(entry.stock_qty || entry.qty || 0) || 0;
+                                const parsedExistingStock = Number.parseFloat(existing.stock_qty || existing.qty || 0) || 0;
                                 freebiesMap.set(key, {
                                         ...existing,
                                         ...entry,
-                                        qty: (entry.qty || 0) + (existing.qty || 0),
+                                        qty: parsedEntryQty + parsedExistingQty,
+                                        stock_qty: parsedEntryStock + parsedExistingStock,
                                         parentRowId: item.posa_row_id,
                                 });
                         });
@@ -365,12 +416,33 @@ export default {
 
                 const applyFreeLineState = (line, data) => {
                         const qty = this.flt ? this.flt(data.qty, this.float_precision) : data.qty;
-                        if (Number.parseFloat(line.qty || 0) !== qty) {
-                                line.qty = qty;
-                                line.stock_qty = qty;
-                                if (this.calc_stock_qty) {
-                                        this.calc_stock_qty(line, qty);
+                        const hasUom = data.uom && line.uom !== data.uom;
+                        if (hasUom) {
+                                line.uom = data.uom;
+                        }
+
+                        const hasConversion = data.conversion_factor !== undefined && data.conversion_factor !== null;
+                        if (hasConversion) {
+                                const parsed = Number.parseFloat(data.conversion_factor);
+                                if (Number.isFinite(parsed) && parsed > 0) {
+                                        line.conversion_factor = parsed;
                                 }
+                        }
+
+                        const requiresQtyUpdate = Number.parseFloat(line.qty || 0) !== qty || hasUom || hasConversion;
+                        const parsedStockQty = Number.parseFloat(data.stock_qty);
+                        const hasStockQty = Number.isFinite(parsedStockQty);
+
+                        if (requiresQtyUpdate) {
+                                line.qty = qty;
+                                if (hasStockQty) {
+                                        line.stock_qty = parsedStockQty;
+                                }
+                                if (this.calc_stock_qty) {
+                                        this.calc_stock_qty(line, line.qty);
+                                }
+                        } else if (hasStockQty) {
+                                line.stock_qty = parsedStockQty;
                         }
                         line.is_free_item = 1;
                         line.locked_price = true;
@@ -413,17 +485,43 @@ export default {
                         }
 
                         const catalogItem = itemsStore?.getItemByCode?.(data.item_code) || null;
+                        const parentLine = data.parentRowId
+                                ? this.items.find((line) => line && line.posa_row_id === data.parentRowId)
+                                : null;
+                        const resolvedUom = data.uom || catalogItem?.uom || parentLine?.uom || catalogItem?.stock_uom || parentLine?.stock_uom || null;
+                        const parsedConversion = Number.parseFloat(data.conversion_factor);
+                        const resolvedConversion = Number.isFinite(parsedConversion) && parsedConversion > 0
+                                ? parsedConversion
+                                : resolvedUom && parentLine && parentLine.uom === resolvedUom
+                                        ? parentLine.conversion_factor
+                                        : resolvedUom && catalogItem && catalogItem.uom === resolvedUom
+                                                ? catalogItem.conversion_factor
+                                                : resolvedUom && resolvedUom === (catalogItem?.stock_uom || parentLine?.stock_uom)
+                                                        ? 1
+                                                        : null;
+                        const quantity = this.flt ? this.flt(data.qty, this.float_precision) : data.qty;
+
                         const template = {
                                 ...(catalogItem || {}),
                                 item_code: data.item_code,
                                 item_name: catalogItem?.item_name || data.item_code,
-                                qty: data.qty,
+                                qty: quantity,
                                 rate: 0,
                                 price_list_rate: 0,
+                                uom: resolvedUom || (catalogItem ? catalogItem.uom : undefined),
                         };
                         const freeLine = this.get_new_item(template);
-                        freeLine.qty = data.qty;
-                        freeLine.stock_qty = data.qty;
+                        freeLine.qty = quantity;
+                        if (resolvedUom) {
+                                freeLine.uom = resolvedUom;
+                        }
+                        if (resolvedConversion !== null && resolvedConversion !== undefined) {
+                                freeLine.conversion_factor = resolvedConversion;
+                        }
+                        const parsedStockQty = Number.parseFloat(data.stock_qty);
+                        if (Number.isFinite(parsedStockQty)) {
+                                freeLine.stock_qty = parsedStockQty;
+                        }
                         freeLine.rate = 0;
                         freeLine.base_rate = 0;
                         freeLine.price_list_rate = 0;
@@ -553,11 +651,18 @@ export default {
                                 const baseDiscount = Number.isFinite(baseDiscountRaw)
                                         ? baseDiscountRaw
                                         : toBase(item.discount_amount);
+                                const stockQty = this._resolvePricingQty(item);
+                                const conversionFactor = Number.parseFloat(item.conversion_factor || 1);
 
                                 return {
                                         posa_row_id: item.posa_row_id,
                                         item_code: item.item_code,
                                         qty: item.qty,
+                                        stock_qty: Number.isFinite(stockQty) ? stockQty : undefined,
+                                        base_qty: Number.isFinite(stockQty) ? stockQty : undefined,
+                                        conversion_factor: Number.isFinite(conversionFactor) && conversionFactor > 0
+                                                ? conversionFactor
+                                                : undefined,
                                         rate: baseRate || 0,
                                         price_list_rate: basePriceListRate || 0,
                                         discount_amount: baseDiscount || 0,
@@ -586,6 +691,12 @@ export default {
                                 source_rule: item.source_rule || null,
                                 posa_row_id: item.posa_row_id,
                                 uom: item.uom,
+                                stock_qty: Number.isFinite(Number.parseFloat(item.stock_qty))
+                                        ? Number.parseFloat(item.stock_qty)
+                                        : undefined,
+                                conversion_factor: Number.isFinite(Number.parseFloat(item.conversion_factor || 1))
+                                        ? Number.parseFloat(item.conversion_factor || 1)
+                                        : undefined,
                         }));
 
                 const response = await frappe.call({
@@ -673,6 +784,8 @@ export default {
                                 qty: Number.parseFloat(entry.qty || 0) || 0,
                                 parentRowId,
                                 uom: entry.uom,
+                                stock_qty: Number.parseFloat(entry.stock_qty || entry.base_qty || entry.qty || 0) || 0,
+                                conversion_factor: Number.parseFloat(entry.conversion_factor || entry.cf || 0) || undefined,
                                 rate: Number.parseFloat(entry.rate || 0) || 0,
                         });
                 });
