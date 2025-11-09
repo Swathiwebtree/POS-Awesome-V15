@@ -572,10 +572,9 @@ export default {
 
                 this._applyingPricingRules = true;
                 try {
+                        await this._applyLocalPricingRules(force);
                         if (hasServerContext) {
                                 await this._applyServerPricingRules(ctx);
-                        } else {
-                                await this._applyLocalPricingRules(force);
                         }
                 } catch (error) {
                         console.error("Failed to apply pricing rules via server", error);
