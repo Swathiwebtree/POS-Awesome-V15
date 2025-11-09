@@ -229,8 +229,16 @@ const applyOneRule = (currentRate, rule, qty, baseRate) => {
 
 const isFreeRule = (rule) => rule && (rule.is_free_item_rule || (rule.price_or_discount || "").toLowerCase() === "product");
 
-export const applyLocalPricingRules = ({ item, qty, baseRate, ctx, indexes }) => {
-        const absoluteQty = Math.max(0, Number.parseFloat(qty || 0));
+export const applyLocalPricingRules = ({ item, qty, docQty, baseRate, ctx, indexes }) => {
+        const rawRuleQty = Number.parseFloat(qty ?? item?.qty ?? 0);
+        const rawDocQty = docQty !== undefined ? Number.parseFloat(docQty) : Number.parseFloat(item?.qty ?? rawRuleQty);
+        const rawStockQty = Number.parseFloat(item?.stock_qty ?? item?.base_qty ?? item?.base_quantity ?? 0);
+
+        const absoluteQty = Math.max(0, Number.isFinite(rawRuleQty) ? rawRuleQty : 0);
+        const absoluteDocQty = Math.max(0, Number.isFinite(rawDocQty) ? rawDocQty : 0);
+        const absoluteStockQty = Math.max(0, Number.isFinite(rawStockQty) ? rawStockQty : 0);
+        const effectiveQty = Math.max(absoluteQty, absoluteDocQty, absoluteStockQty);
+
         const effectiveBase = Number.isFinite(baseRate) ? baseRate : Number.parseFloat(item?.base_price_list_rate || item?.price_list_rate || item?.rate || 0);
         const startRate = Number.isFinite(effectiveBase) ? effectiveBase : 0;
 
@@ -242,7 +250,7 @@ export const applyLocalPricingRules = ({ item, qty, baseRate, ctx, indexes }) =>
                 .filter((rule) => matchPriceListAndCurrency(rule, ctx?.price_list, ctx?.currency))
                 .filter((rule) => {
                         const minimum = Number.parseFloat(rule.min_qty || 0);
-                        return absoluteQty >= minimum;
+                        return effectiveQty >= minimum;
                 })
                 .sort(ruleSort);
 
@@ -254,7 +262,7 @@ export const applyLocalPricingRules = ({ item, qty, baseRate, ctx, indexes }) =>
         let rate = startRate;
 
         for (const rule of filtered) {
-                const { newRate, discount, detail } = applyOneRule(rate, rule, absoluteQty, startRate);
+                const { newRate, discount, detail } = applyOneRule(rate, rule, effectiveQty, startRate);
                 rate = newRate;
                 if (detail) {
                         applied.push(detail);
@@ -288,8 +296,15 @@ const computeThresholdInfo = (rule, qty) => {
         return { minimum, multiplier };
 };
 
-export const computeFreeItems = ({ item, qty, ctx, indexes }) => {
-        const absoluteQty = Math.max(0, Number.parseFloat(qty || 0));
+export const computeFreeItems = ({ item, qty, docQty, ctx, indexes }) => {
+        const rawRuleQty = Number.parseFloat(qty ?? item?.qty ?? 0);
+        const rawDocQty = docQty !== undefined ? Number.parseFloat(docQty) : Number.parseFloat(item?.qty ?? rawRuleQty);
+        const rawStockQty = Number.parseFloat(item?.stock_qty ?? item?.base_qty ?? item?.base_quantity ?? 0);
+
+        const absoluteQty = Math.max(0, Number.isFinite(rawRuleQty) ? rawRuleQty : 0);
+        const absoluteDocQty = Math.max(0, Number.isFinite(rawDocQty) ? rawDocQty : 0);
+        const absoluteStockQty = Math.max(0, Number.isFinite(rawStockQty) ? rawStockQty : 0);
+        const effectiveQty = Math.max(absoluteQty, absoluteDocQty, absoluteStockQty);
         const candidates = collectCandidates(item, indexes)
                 .filter((rule) => isFreeRule(rule))
                 .filter((rule) => inDateRange(ctx?.date, rule.valid_from, rule.valid_upto))
@@ -297,7 +312,7 @@ export const computeFreeItems = ({ item, qty, ctx, indexes }) => {
                 .filter((rule) => matchPriceListAndCurrency(rule, ctx?.price_list, ctx?.currency))
                 .filter((rule) => {
                         const minimum = Number.parseFloat(rule.min_qty || rule.recurse_for || 1) || 1;
-                        return absoluteQty >= minimum;
+                        return effectiveQty >= minimum;
                 })
                 .sort(ruleSort);
 
@@ -308,17 +323,17 @@ export const computeFreeItems = ({ item, qty, ctx, indexes }) => {
         const freebies = [];
 
         for (const rule of candidates) {
-        const { minimum, multiplier } = computeThresholdInfo(rule, absoluteQty);
-        let freeQty = 0;
-        const thresholdQty = minimum;
-        const freePerThreshold = rule.free_qty_per_unit
-                ? Number.parseFloat(rule.free_qty_per_unit || 0) || 0
-                : Number.parseFloat(rule.free_qty || 0) || 0;
+                const { minimum, multiplier } = computeThresholdInfo(rule, effectiveQty);
+                let freeQty = 0;
+                const thresholdQty = minimum;
+                const freePerThreshold = rule.free_qty_per_unit
+                        ? Number.parseFloat(rule.free_qty_per_unit || 0) || 0
+                        : Number.parseFloat(rule.free_qty || 0) || 0;
 
                 if (rule.apply_per_threshold || rule.is_recursive || rule.recurse_for) {
                         freeQty = multiplier * freePerThreshold;
                 } else if (rule.free_qty_per_unit) {
-                        freeQty = absoluteQty * Number.parseFloat(rule.free_qty_per_unit || 0);
+                        freeQty = effectiveQty * Number.parseFloat(rule.free_qty_per_unit || 0);
                 } else {
                         freeQty = Number.parseFloat(rule.free_qty || 0) || 0;
                 }
@@ -338,17 +353,24 @@ export const computeFreeItems = ({ item, qty, ctx, indexes }) => {
                         continue;
                 }
 
+                const sameItem = !!rule.same_item;
+                const uom = sameItem ? item.stock_uom || item.uom : null;
+                const conversionFactor = sameItem ? 1 : null;
+
                 freebies.push({
-                        item_code: rule.same_item ? item.item_code : rule.free_item || item.item_code,
+                        item_code: sameItem ? item.item_code : rule.free_item || item.item_code,
                         qty: freeQty,
+                        stock_qty: freeQty,
                         rule: rule.name,
-                        same_item: !!rule.same_item,
+                        same_item: sameItem,
                         min_qty: minimum,
                         multiplier,
                         apply_per_threshold: !!rule.apply_per_threshold || !!rule.is_recursive || !!rule.recurse_for,
                         max_free_qty: rule.max_free_qty,
                         threshold_qty: thresholdQty,
                         free_qty_per_threshold: freePerThreshold,
+                        uom,
+                        conversion_factor: conversionFactor,
                 });
 
                 if (rule.stop_further_rules) {
