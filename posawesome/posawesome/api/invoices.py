@@ -129,14 +129,30 @@ def _merge_duplicate_taxes(invoice_doc):
 
 
 def _deduplicate_free_items(invoice_doc):
-    """Drop duplicate free lines created by local + server pricing rules."""
+    """Merge duplicate free lines created by overlapping pricing rules."""
 
     items = invoice_doc.get("items", [])
     if not items:
         return
 
     unique = []
-    seen = set()
+    seen = {}
+
+    def _normalise_qty(row):
+        qty = flt(row.get("qty"))
+        if not qty:
+            return 0
+        return qty
+
+    def _normalise_stock_qty(row):
+        stock_qty = flt(row.get("stock_qty"))
+        if stock_qty:
+            return stock_qty
+        qty = flt(row.get("qty"))
+        if not qty:
+            return 0
+        conversion_factor = flt(row.get("conversion_factor") or 1) or 1
+        return qty * conversion_factor
 
     for item in items:
         if cint(item.get("is_free_item")):
@@ -150,11 +166,33 @@ def _deduplicate_free_items(invoice_doc):
                 cstr(item.get("item_code") or ""),
                 cstr(item.get("warehouse") or ""),
                 cstr(item.get("uom") or ""),
-                flt(item.get("qty")),
             )
-            if key in seen:
+
+            existing = seen.get(key)
+            if existing:
+                existing.qty = _normalise_qty(existing) + _normalise_qty(item)
+                existing.stock_qty = _normalise_stock_qty(existing) + _normalise_stock_qty(item)
+                # Ensure monetary fields remain zeroed for freebies
+                for field in (
+                    "rate",
+                    "base_rate",
+                    "amount",
+                    "base_amount",
+                    "net_rate",
+                    "net_amount",
+                    "base_net_rate",
+                    "base_net_amount",
+                    "discount_amount",
+                    "base_discount_amount",
+                ):
+                    if field in existing and flt(existing.get(field)):
+                        existing.set(field, 0)
                 continue
-            seen.add(key)
+
+            seen[key] = item
+            unique.append(item)
+            continue
+
         unique.append(item)
 
     if len(unique) != len(items):
