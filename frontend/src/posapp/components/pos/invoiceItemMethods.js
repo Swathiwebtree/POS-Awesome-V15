@@ -245,10 +245,83 @@ export default {
         _syncAutoFreeLines(freebiesMap = new Map()) {
                 const expectedKeys = new Set(freebiesMap.keys());
                 const existing = new Map();
+                const legacyFreeLines = [];
+
+                const resolveRuleName = (line) => {
+                        if (!line) {
+                                return "";
+                        }
+
+                        const preferString = (value) => {
+                                if (!value) {
+                                        return "";
+                                }
+                                if (typeof value === "string") {
+                                        return value;
+                                }
+                                if (Array.isArray(value)) {
+                                        for (const entry of value) {
+                                                const resolved = preferString(entry);
+                                                if (resolved) {
+                                                        return resolved;
+                                                }
+                                        }
+                                        return "";
+                                }
+                                if (typeof value === "object") {
+                                        return (
+                                                value.name ||
+                                                value.rule ||
+                                                value.pricing_rule ||
+                                                value.pricingRule ||
+                                                ""
+                                        );
+                                }
+                                return "";
+                        };
+
+                        if (line.source_rule) {
+                                return String(line.source_rule);
+                        }
+
+                        if (line.pricing_rule) {
+                                return preferString(line.pricing_rule);
+                        }
+
+                        const raw = line.pricing_rules;
+                        if (typeof raw === "string") {
+                                const trimmed = raw.trim();
+                                if (!trimmed) {
+                                        return "";
+                                }
+                                if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+                                        try {
+                                                const parsed = JSON.parse(trimmed);
+                                                return preferString(parsed);
+                                        } catch (error) {
+                                                console.warn("Failed to parse pricing_rules JSON", error);
+                                                return trimmed;
+                                        }
+                                }
+                                return trimmed;
+                        }
+
+                        return preferString(raw);
+                };
 
                 this.items.forEach((line, index) => {
                         if (line && line.auto_free_source) {
                                 existing.set(line.auto_free_source, { line, index });
+                        } else if (line && line.is_free_item) {
+                                const ruleName = resolveRuleName(line);
+                                if (ruleName) {
+                                        legacyFreeLines.push({
+                                                line,
+                                                index,
+                                                rule: ruleName,
+                                                used: false,
+                                        });
+                                }
                         }
                 });
 
@@ -290,30 +363,52 @@ export default {
                         };
                 };
 
+                const applyFreeLineState = (line, data) => {
+                        const qty = this.flt ? this.flt(data.qty, this.float_precision) : data.qty;
+                        if (Number.parseFloat(line.qty || 0) !== qty) {
+                                line.qty = qty;
+                                line.stock_qty = qty;
+                                if (this.calc_stock_qty) {
+                                        this.calc_stock_qty(line, qty);
+                                }
+                        }
+                        line.is_free_item = 1;
+                        line.locked_price = true;
+                        line.rate = 0;
+                        line.base_rate = 0;
+                        line.price_list_rate = 0;
+                        line.base_price_list_rate = 0;
+                        line.discount_amount = 0;
+                        line.base_discount_amount = 0;
+                        line.amount = 0;
+                        line.base_amount = 0;
+                        line.source_rule = data.rule;
+                        line.pricing_rule_badge = buildFreeBadgeMeta(data);
+                };
+
                 for (const [key, data] of freebiesMap.entries()) {
                         const match = existing.get(key);
                         if (match) {
-                                const line = match.line;
-                                const qty = this.flt ? this.flt(data.qty, this.float_precision) : data.qty;
-                                if (Number.parseFloat(line.qty || 0) !== qty) {
-                                        line.qty = qty;
-                                        line.stock_qty = qty;
-                                        if (this.calc_stock_qty) {
-                                                this.calc_stock_qty(line, qty);
-                                        }
-                                }
-                                line.is_free_item = 1;
-                                line.locked_price = true;
-                                line.rate = 0;
-                                line.base_rate = 0;
-                                line.price_list_rate = 0;
-                                line.base_price_list_rate = 0;
-                                line.discount_amount = 0;
-                                line.base_discount_amount = 0;
-                                line.amount = 0;
-                                line.base_amount = 0;
-                                line.source_rule = data.rule;
-                                line.pricing_rule_badge = buildFreeBadgeMeta(data);
+                                applyFreeLineState(match.line, data);
+                                continue;
+                        }
+
+                        const normalizedRule = data.rule || "";
+                        const legacyMatchIndex = legacyFreeLines.findIndex(
+                                (entry) =>
+                                        !entry.used &&
+                                        entry.line &&
+                                        entry.line.item_code === data.item_code &&
+                                        (!normalizedRule || entry.rule === normalizedRule),
+                        );
+
+                        if (legacyMatchIndex >= 0) {
+                                const legacyEntry = legacyFreeLines[legacyMatchIndex];
+                                legacyEntry.used = true;
+                                legacyEntry.line.auto_free_source = key;
+                                legacyEntry.line.parent_row_id = data.parentRowId;
+                                applyFreeLineState(legacyEntry.line, data);
+                                existing.set(key, { line: legacyEntry.line, index: legacyEntry.index });
                                 continue;
                         }
 
