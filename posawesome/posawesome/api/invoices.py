@@ -128,6 +128,109 @@ def _merge_duplicate_taxes(invoice_doc):
         invoice_doc.calculate_taxes_and_totals()
 
 
+def _deduplicate_free_items(invoice_doc):
+    """Merge duplicate free lines created by overlapping pricing rules."""
+
+    items = invoice_doc.get("items", [])
+    if not items:
+        return
+
+    unique = []
+    seen = {}
+
+    def _normalise_qty(row):
+        qty = flt(row.get("qty"))
+        if not qty:
+            return 0
+        return qty
+
+    def _normalise_stock_qty(row):
+        stock_qty = flt(row.get("stock_qty"))
+        if stock_qty:
+            return stock_qty
+        qty = flt(row.get("qty"))
+        if not qty:
+            return 0
+        conversion_factor = flt(row.get("conversion_factor") or 1) or 1
+        return qty * conversion_factor
+
+    for item in items:
+        if cint(item.get("is_free_item")):
+            key = (
+                cstr(
+                    item.get("source_rule")
+                    or item.get("pricing_rule")
+                    or item.get("pricing_rules")
+                    or ""
+                ),
+                cstr(item.get("item_code") or ""),
+                cstr(item.get("warehouse") or ""),
+                cstr(item.get("uom") or ""),
+            )
+
+            existing = seen.get(key)
+            if existing:
+                existing.qty = _normalise_qty(existing) + _normalise_qty(item)
+                existing.stock_qty = _normalise_stock_qty(existing) + _normalise_stock_qty(item)
+                # Ensure monetary fields remain zeroed for freebies
+                for field in (
+                    "rate",
+                    "base_rate",
+                    "amount",
+                    "base_amount",
+                    "net_rate",
+                    "net_amount",
+                    "base_net_rate",
+                    "base_net_amount",
+                    "discount_amount",
+                    "base_discount_amount",
+                ):
+                    if field in existing and flt(existing.get(field)):
+                        existing.set(field, 0)
+                continue
+
+            seen[key] = item
+            unique.append(item)
+            continue
+
+        unique.append(item)
+
+    if len(unique) != len(items):
+        invoice_doc.set("items", unique)
+
+
+def _strip_client_freebies_from_payload(payload):
+    """Remove auto-applied POS freebies from inbound payloads before saving."""
+
+    if not payload or not isinstance(payload, dict):
+        return
+
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return
+
+    cleaned = []
+    modified = False
+
+    for row in items:
+        if not isinstance(row, dict):
+            cleaned.append(row)
+            continue
+
+        auto_marker = row.get("auto_free_source")
+        is_free = cint(row.get("is_free_item"))
+        has_name = bool(row.get("name"))
+
+        if auto_marker or (is_free and not has_name):
+            modified = True
+            continue
+
+        cleaned.append(row)
+
+    if modified:
+        payload["items"] = cleaned
+
+
 def _should_block(pos_profile):
     allow_negative = cint(frappe.db.get_single_value("Stock Settings", "allow_negative_stock") or 0)
     if allow_negative:
@@ -274,6 +377,7 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 @frappe.whitelist()
 def update_invoice(data):
     data = json.loads(data)
+    _strip_client_freebies_from_payload(data)
     # Determine doctype based on POS Profile setting
     pos_profile = data.get("pos_profile")
     doctype = "Sales Invoice"
@@ -342,6 +446,8 @@ def update_invoice(data):
 
     invoice_doc.ignore_pricing_rule = 1
     invoice_doc.flags.ignore_pricing_rule = True
+
+    _deduplicate_free_items(invoice_doc)
 
     # Set missing values first
     invoice_doc.set_missing_values()
@@ -467,6 +573,7 @@ def update_invoice(data):
 def submit_invoice(invoice, data):
     data = json.loads(data)
     invoice = json.loads(invoice)
+    _strip_client_freebies_from_payload(invoice)
     pos_profile = invoice.get("pos_profile")
     doctype = "Sales Invoice"
     if pos_profile and frappe.db.get_value(
@@ -482,6 +589,8 @@ def submit_invoice(invoice, data):
     else:
         invoice_doc = frappe.get_doc(doctype, invoice_name)
         invoice_doc.update(invoice)
+
+    _deduplicate_free_items(invoice_doc)
 
     # Ensure item name overrides are respected on submit
     _apply_item_name_overrides(invoice_doc)
@@ -937,8 +1046,10 @@ def get_sales_invoice_child_table(sales_invoice, sales_invoice_item):
 @frappe.whitelist()
 def update_invoice_from_order(data):
     data = json.loads(data)
+    _strip_client_freebies_from_payload(data)
     invoice_doc = frappe.get_doc("Sales Invoice", data.get("name"))
     invoice_doc.update(data)
+    _deduplicate_free_items(invoice_doc)
     invoice_doc.save()
     return invoice_doc
 
