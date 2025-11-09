@@ -189,5 +189,7 @@ describe("invoiceItemMethods._applyPricingToLine", () => {
                 invoiceItemMethods._applyPricingToLine.call(context, item, {}, {}, new Map());
 
                 expect(item.discount_percentage).toBeCloseTo(10);
+                expect(item.discount_amount).toBeCloseTo(10);
+                expect(item.base_discount_amount).toBeCloseTo(10);
         });
 });

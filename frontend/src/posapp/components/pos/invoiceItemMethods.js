@@ -185,17 +185,19 @@ export default {
                         const baseAmount = pricing.rate * (item.qty || 0);
                         const convertedRate = this._fromBaseCurrency(pricing.rate);
                         const convertedDiscount = this._fromBaseCurrency(baseDiscountPerUnit);
+                        const normalizedBaseDiscount = Math.abs(baseDiscountPerUnit);
+                        const normalizedDiscount = Math.abs(convertedDiscount);
 
                         item.base_price_list_rate = baseRate;
                         item.base_rate = pricing.rate;
-                        item.base_discount_amount = baseDiscountPerUnit;
+                        item.base_discount_amount = normalizedBaseDiscount;
                         item.price_list_rate = this.flt
                                 ? this.flt(this._fromBaseCurrency(baseRate), this.currency_precision)
                                 : this._fromBaseCurrency(baseRate);
                         item.rate = this.flt ? this.flt(convertedRate, this.currency_precision) : convertedRate;
                         item.discount_amount = this.flt
-                                ? this.flt(convertedDiscount, this.currency_precision)
-                                : convertedDiscount;
+                                ? this.flt(normalizedDiscount, this.currency_precision)
+                                : normalizedDiscount;
                         const rawDiscountPercentage = baseRate ? (baseDiscountPerUnit / baseRate) * 100 : 0;
                         item.discount_percentage = baseRate
                                 ? this.flt(Math.abs(rawDiscountPercentage), this.float_precision)
