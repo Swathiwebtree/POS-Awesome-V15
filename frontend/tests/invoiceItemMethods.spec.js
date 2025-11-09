@@ -6,8 +6,13 @@ vi.mock("../src/posapp/utils/stockCoordinator.js", () => ({
                 applyAvailabilityToItem: vi.fn(),
         },
 }));
+vi.mock("../src/lib/pricingEngine.js", () => ({
+        applyLocalPricingRules: vi.fn(() => ({ rate: 0, discountPerUnit: 0, applied: [] })),
+        computeFreeItems: vi.fn(() => []),
+}));
 
 import invoiceItemMethods from "../src/posapp/components/pos/invoiceItemMethods.js";
+import { applyLocalPricingRules, computeFreeItems } from "../src/lib/pricingEngine.js";
 
 const createContext = () => ({
         pos_profile: {
@@ -145,5 +150,50 @@ describe("invoiceItemMethods._applyItemDetailPayload", () => {
                 expect(item.base_discount_amount).toBeCloseTo(5);
                 expect(item.rate).toBeCloseTo(95);
                 expect(item.base_rate).toBeCloseTo(95);
+        });
+});
+
+describe("invoiceItemMethods._applyPricingToLine", () => {
+        beforeEach(() => {
+                applyLocalPricingRules.mockReset();
+                computeFreeItems.mockReset();
+                computeFreeItems.mockReturnValue([]);
+        });
+
+        it("keeps the item rate discounted even if the pricing engine suggests an increased rate", () => {
+                const context = {
+                        ...createContext(),
+                        _fromBaseCurrency: invoiceItemMethods._fromBaseCurrency,
+                        _resolveBaseRate: invoiceItemMethods._resolveBaseRate,
+                        _updatePricingBadge: vi.fn(),
+                };
+
+                const item = {
+                        item_code: "ITEM-NEG",
+                        qty: 1,
+                        price_list_rate: 100,
+                        base_price_list_rate: 100,
+                        rate: 100,
+                        base_rate: 100,
+                        locked_price: 0,
+                        posa_offer_applied: 0,
+                        _manual_rate_set: false,
+                };
+
+                applyLocalPricingRules.mockReturnValue({
+                        rate: 110,
+                        discountPerUnit: -10,
+                        applied: [],
+                });
+
+                invoiceItemMethods._applyPricingToLine.call(context, item, {}, {}, new Map());
+
+                expect(item.base_rate).toBeCloseTo(90);
+                expect(item.rate).toBeCloseTo(90);
+                expect(item.discount_percentage).toBeCloseTo(10);
+                expect(item.discount_amount).toBeCloseTo(10);
+                expect(item.base_discount_amount).toBeCloseTo(10);
+                expect(item.amount).toBeCloseTo(90);
+                expect(item.base_amount).toBeCloseTo(90);
         });
 });
