@@ -149,32 +149,30 @@
 			</template>
 
 			<!-- Discount percentage column -->
-			<template v-slot:item.discount_value="{ item }">
-				<div class="currency-display right-aligned">
-					<span class="amount-value">
-						{{
-							formatFloat(
-								item.discount_percentage ||
-									(item.price_list_rate
-										? (item.discount_amount / item.price_list_rate) * 100
-										: 0),
-							)
-						}}%
-					</span>
-				</div>
-			</template>
+                        <template v-slot:item.discount_value="{ item }">
+                                <div class="currency-display right-aligned">
+                                        <span class="amount-value">
+                                                {{
+                                                        formatFloat(
+                                                                Math.abs(
+                                                                        item.discount_percentage ||
+                                                                                (item.price_list_rate
+                                                                                        ? (item.discount_amount / item.price_list_rate) * 100
+                                                                                        : 0),
+                                                                ),
+                                                        )
+                                                }}%
+                                        </span>
+                                </div>
+                        </template>
 
 			<!-- Discount amount column -->
 			<template v-slot:item.discount_amount="{ item }">
 				<div class="currency-display right-aligned">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
-					<span
-						class="amount-value"
-						:class="{ 'negative-number': isNegative(item.discount_amount || 0) }"
-						>{{ formatCurrency(item.discount_amount || 0) }}</span
-					>
-				</div>
-			</template>
+                                        <span class="amount-value">{{ formatCurrency(Math.abs(item.discount_amount || 0)) }}</span>
+                                </div>
+                        </template>
 
 			<!-- Price list rate column -->
 			<template v-slot:item.price_list_rate="{ item }">
@@ -331,7 +329,7 @@
 											:label="frappe._('Discount %')"
 											class="pos-themed-input"
 											hide-details
-											:model-value="formatFloat(item.discount_percentage || 0)"
+                                                                                :model-value="formatFloat(Math.abs(item.discount_percentage || 0))"
 											@change="[
 												setFormatedCurrency(
 													item,
@@ -359,7 +357,7 @@
 											:label="frappe._('Discount Amount')"
 											class="pos-themed-input"
 											hide-details
-											:model-value="formatCurrency(item.discount_amount || 0)"
+                                                                                :model-value="formatCurrency(Math.abs(item.discount_amount || 0))"
 											@change="[
 												setFormatedCurrency(
 													item,

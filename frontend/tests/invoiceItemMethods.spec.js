@@ -160,7 +160,7 @@ describe("invoiceItemMethods._applyPricingToLine", () => {
                 computeFreeItems.mockReturnValue([]);
         });
 
-        it("stores a positive discount percentage even if the pricing engine returns a negative value", () => {
+        it("keeps the item rate discounted even if the pricing engine suggests an increased rate", () => {
                 const context = {
                         ...createContext(),
                         _fromBaseCurrency: invoiceItemMethods._fromBaseCurrency,
@@ -188,8 +188,12 @@ describe("invoiceItemMethods._applyPricingToLine", () => {
 
                 invoiceItemMethods._applyPricingToLine.call(context, item, {}, {}, new Map());
 
+                expect(item.base_rate).toBeCloseTo(90);
+                expect(item.rate).toBeCloseTo(90);
                 expect(item.discount_percentage).toBeCloseTo(10);
                 expect(item.discount_amount).toBeCloseTo(10);
                 expect(item.base_discount_amount).toBeCloseTo(10);
+                expect(item.amount).toBeCloseTo(90);
+                expect(item.base_amount).toBeCloseTo(90);
         });
 });

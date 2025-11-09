@@ -174,22 +174,42 @@ export default {
                 }
 
                 const allowRateUpdate = !item.locked_price && !item.posa_offer_applied && !item._manual_rate_set;
-                const qty = Math.abs(Number.parseFloat(item.qty || 0));
+                const signedQty = Number.parseFloat(item.qty || 0) || 0;
+                const qty = Math.abs(signedQty);
                 const baseRate = this._resolveBaseRate(item);
                 const pricing = applyLocalPricingRules({ item, qty, baseRate, ctx, indexes });
 
                 this._updatePricingBadge(item, pricing.applied);
 
                 if (allowRateUpdate) {
-                        const baseDiscountPerUnit = pricing.discountPerUnit || 0;
-                        const baseAmount = pricing.rate * (item.qty || 0);
-                        const convertedRate = this._fromBaseCurrency(pricing.rate);
+                        const proposedRate = Number.isFinite(pricing.rate) ? pricing.rate : baseRate;
+                        const proposedDiscount = Number.isFinite(pricing.discountPerUnit)
+                                ? pricing.discountPerUnit
+                                : baseRate - proposedRate;
+
+                        let baseDiscountPerUnit = Math.abs(Number.parseFloat(proposedDiscount || 0));
+                        if (!Number.isFinite(baseDiscountPerUnit)) {
+                                baseDiscountPerUnit = 0;
+                        }
+                        const maxDiscount = Math.max(baseRate, 0);
+                        if (baseDiscountPerUnit > maxDiscount) {
+                                baseDiscountPerUnit = maxDiscount;
+                        }
+                        const discountedRate = Math.max(baseRate - baseDiscountPerUnit, 0);
+                        let effectiveBaseRate = Math.min(proposedRate, baseRate);
+
+                        if (discountedRate < effectiveBaseRate) {
+                                effectiveBaseRate = discountedRate;
+                        }
+
+                        const baseAmount = effectiveBaseRate * signedQty;
+                        const convertedRate = this._fromBaseCurrency(effectiveBaseRate);
                         const convertedDiscount = this._fromBaseCurrency(baseDiscountPerUnit);
                         const normalizedBaseDiscount = Math.abs(baseDiscountPerUnit);
                         const normalizedDiscount = Math.abs(convertedDiscount);
 
                         item.base_price_list_rate = baseRate;
-                        item.base_rate = pricing.rate;
+                        item.base_rate = effectiveBaseRate;
                         item.base_discount_amount = normalizedBaseDiscount;
                         item.price_list_rate = this.flt
                                 ? this.flt(this._fromBaseCurrency(baseRate), this.currency_precision)
@@ -198,7 +218,7 @@ export default {
                         item.discount_amount = this.flt
                                 ? this.flt(normalizedDiscount, this.currency_precision)
                                 : normalizedDiscount;
-                        const rawDiscountPercentage = baseRate ? (baseDiscountPerUnit / baseRate) * 100 : 0;
+                        const rawDiscountPercentage = baseRate ? (normalizedBaseDiscount / baseRate) * 100 : 0;
                         item.discount_percentage = baseRate
                                 ? this.flt(Math.abs(rawDiscountPercentage), this.float_precision)
                                 : 0;
