@@ -95,8 +95,8 @@ def _serialize_rule(base, target_field: str | None, targets: Iterable[str] | Non
 def _normalise_rule(doc: frappe._dict) -> frappe._dict:
     """Map ERPNext fields to the lightweight payload expected by the frontend."""
 
-    price_or_product_discount = doc.price_or_product_discount or ""
-    rate_or_discount = doc.rate_or_discount or ""
+    price_or_product_discount = doc.get("price_or_product_discount") or ""
+    rate_or_discount = doc.get("rate_or_discount") or ""
 
     discount_type = ""
     if rate_or_discount in {"Discount Percentage", "Discount Rate"}:
@@ -109,44 +109,51 @@ def _normalise_rule(doc: frappe._dict) -> frappe._dict:
         discount_type = "Rate"
 
     slabs = []
-    if doc.min_qty:
-        slabs.append({"min_qty": flt(doc.min_qty), "rate_or_discount": flt(doc.rate or doc.discount_percentage or doc.discount_amount or 0)})
+    if doc.get("min_qty"):
+        slabs.append(
+            {
+                "min_qty": flt(doc.get("min_qty")),
+                "rate_or_discount": flt(
+                    doc.get("rate") or doc.get("discount_percentage") or doc.get("discount_amount") or 0
+                ),
+            }
+        )
 
     output = frappe._dict(
-        name=doc.name,
-        priority=cint(doc.priority or 0),
+        name=doc.get("name"),
+        priority=cint(doc.get("priority") or 0),
         stop_further_rules=cint(doc.get("stop_further_rules") or 0),
-        apply_multiple_pricing_rules=cint(doc.apply_multiple_pricing_rules or 0),
-        apply_on=doc.apply_on,
-        min_qty=flt(doc.min_qty or 0),
-        valid_from=str(doc.valid_from) if doc.valid_from else None,
-        valid_upto=str(doc.valid_upto) if doc.valid_upto else None,
+        apply_multiple_pricing_rules=cint(doc.get("apply_multiple_pricing_rules") or 0),
+        apply_on=doc.get("apply_on"),
+        min_qty=flt(doc.get("min_qty") or 0),
+        valid_from=str(doc.get("valid_from")) if doc.get("valid_from") else None,
+        valid_upto=str(doc.get("valid_upto")) if doc.get("valid_upto") else None,
         price_or_discount=price_or_product_discount,
         discount_type=discount_type,
-        rate_or_discount=flt(doc.rate or doc.discount_percentage or doc.discount_amount or 0),
-        currency=doc.currency,
-        price_list=doc.for_price_list,
-        company=doc.company,
-        customer=doc.customer,
-        customer_group=doc.customer_group,
-        territory=doc.territory,
-        for_price_list_rate=flt(doc.for_price_list_rate or 0),
-        uom=doc.uom,
+        rate_or_discount=flt(doc.get("rate") or doc.get("discount_percentage") or doc.get("discount_amount") or 0),
+        currency=doc.get("currency"),
+        price_list=doc.get("for_price_list"),
+        company=doc.get("company"),
+        customer=doc.get("customer"),
+        customer_group=doc.get("customer_group"),
+        territory=doc.get("territory"),
+        for_price_list_rate=flt(doc.get("for_price_list_rate") or 0),
+        uom=doc.get("uom"),
         slabs=slabs,
-        margin_type=doc.margin_type,
-        margin_rate_or_amount=flt(doc.margin_rate_or_amount or 0),
-        apply_discount_on_rate=cint(doc.apply_discount_on_rate or 0),
+        margin_type=doc.get("margin_type"),
+        margin_rate_or_amount=flt(doc.get("margin_rate_or_amount") or 0),
+        apply_discount_on_rate=cint(doc.get("apply_discount_on_rate") or 0),
         is_free_item_rule=1 if price_or_product_discount == "Product" else 0,
-        same_item=cint(doc.same_item or 0),
-        free_item=doc.free_item,
-        free_qty=flt(doc.free_qty or 0),
-        free_qty_per_unit=flt(doc.free_qty_per_unit or 0),
-        apply_per_threshold=cint(doc.is_recursive or doc.apply_per_threshold or 0),
-        max_free_qty=flt(doc.max_free_qty) if doc.max_free_qty is not None else None,
-        recurse_for=flt(doc.recurse_for or 0),
-        apply_recursion_over=flt(doc.apply_recursion_over or 0),
-        round_free_qty=cint(doc.round_free_qty or 0),
-        dont_enforce_free_item_qty=cint(doc.dont_enforce_free_item_qty or 0),
+        same_item=cint(doc.get("same_item") or 0),
+        free_item=doc.get("free_item"),
+        free_qty=flt(doc.get("free_qty") or 0),
+        free_qty_per_unit=flt(doc.get("free_qty_per_unit") or 0),
+        apply_per_threshold=cint(doc.get("is_recursive") or doc.get("apply_per_threshold") or 0),
+        max_free_qty=flt(doc.get("max_free_qty")) if doc.get("max_free_qty") is not None else None,
+        recurse_for=flt(doc.get("recurse_for") or 0),
+        apply_recursion_over=flt(doc.get("apply_recursion_over") or 0),
+        round_free_qty=cint(doc.get("round_free_qty") or 0),
+        dont_enforce_free_item_qty=cint(doc.get("dont_enforce_free_item_qty") or 0),
     )
 
     return output
@@ -190,7 +197,6 @@ def get_active_pricing_rules(params: dict | None = None, **kwargs):
         PricingRule.customer,
         PricingRule.customer_group,
         PricingRule.territory,
-        PricingRule.for_price_list_rate,
         PricingRule.uom,
         PricingRule.margin_type,
         PricingRule.margin_rate_or_amount,
@@ -210,6 +216,9 @@ def get_active_pricing_rules(params: dict | None = None, **kwargs):
 
     if meta.has_field("stop_further_rules"):
         select_columns.append(PricingRule.stop_further_rules)
+
+    if meta.has_field("for_price_list_rate"):
+        select_columns.append(PricingRule.for_price_list_rate)
 
     query = (
         frappe.qb.from_(PricingRule)
