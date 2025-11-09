@@ -292,13 +292,46 @@ def _build_doc_context(ctx: frappe._dict):
 
 
 def _build_pricing_args(line: frappe._dict, ctx: frappe._dict) -> frappe._dict:
+    raw_qty = flt(line.qty or 0)
+
+    stock_candidates = [
+        line.get("stock_qty"),
+        line.get("base_qty"),
+        line.get("base_quantity"),
+        line.get("transfer_qty"),
+    ]
+
+    stock_qty = None
+    for candidate in stock_candidates:
+        value = flt(candidate or 0)
+        if value:
+            stock_qty = value
+            break
+
+    if stock_qty is None:
+        conversion_candidates = [
+            line.get("conversion_factor"),
+            line.get("uom_conversion_factor"),
+        ]
+        for factor in conversion_candidates:
+            numeric = flt(factor or 0)
+            if numeric not in (0, 1):
+                stock_qty = raw_qty * numeric
+                break
+
+    if stock_qty is None:
+        stock_qty = raw_qty
+
+    qty = abs(raw_qty)
+    effective_stock_qty = abs(stock_qty)
+
     return frappe._dict(
         doctype="Sales Invoice Item",
         parent="POS-AWESOME-CART",
         parenttype="Sales Invoice",
         item_code=line.item_code,
-        qty=flt(line.qty or 0),
-        stock_qty=flt(line.qty or 0),
+        qty=qty,
+        stock_qty=effective_stock_qty,
         price_list_rate=flt(line.base_price_list_rate or line.price_list_rate or 0),
         rate=flt(line.base_rate or line.rate or 0),
         currency=ctx.get("currency"),
