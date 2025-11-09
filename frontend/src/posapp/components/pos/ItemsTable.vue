@@ -37,14 +37,27 @@
 					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">
 						{{ __("Bundle") }}
 					</v-chip>
-					<v-chip v-if="item.name_overridden" color="primary" size="x-small" class="ml-1">
-						{{ __("Edited") }}
-					</v-chip>
-					<v-icon
-						v-if="pos_profile.posa_allow_line_item_name_override && !item.posa_is_replace"
-						size="x-small"
-						class="ml-1"
-						@click.stop="openNameDialog(item)"
+                                        <v-chip v-if="item.name_overridden" color="primary" size="x-small" class="ml-1">
+                                                {{ __("Edited") }}
+                                        </v-chip>
+                                        <v-tooltip v-if="item.pricing_rule_badge" location="bottom">
+                                                <template #activator="{ props }">
+                                                        <v-chip
+                                                                v-bind="props"
+                                                                color="primary"
+                                                                size="x-small"
+                                                                class="ml-1"
+                                                        >
+                                                                {{ item.pricing_rule_badge.label }}
+                                                        </v-chip>
+                                                </template>
+                                                <span>{{ item.pricing_rule_badge.tooltip }}</span>
+                                        </v-tooltip>
+                                        <v-icon
+                                                v-if="pos_profile.posa_allow_line_item_name_override && !item.posa_is_replace"
+                                                size="x-small"
+                                                class="ml-1"
+                                                @click.stop="openNameDialog(item)"
 						>mdi-pencil</v-icon
 					>
 					<v-icon

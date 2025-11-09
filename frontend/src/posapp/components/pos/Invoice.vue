@@ -133,21 +133,33 @@
 							clearable
 							autocomplete="off"
 						></v-text-field>
-						<v-btn
-							density="compact"
-							variant="text"
-							color="primary"
-							prepend-icon="mdi-cog-outline"
-							@click="toggleColumnSelection"
-							class="column-selector-btn"
-						>
-							{{ __("Columns") }}
-						</v-btn>
+                                                <v-btn
+                                                        density="compact"
+                                                        variant="text"
+                                                        color="primary"
+                                                        prepend-icon="mdi-cog-outline"
+                                                        @click="toggleColumnSelection"
+                                                        class="column-selector-btn"
+                                                >
+                                                        {{ __("Columns") }}
+                                                </v-btn>
+                                                <v-btn
+                                                        density="compact"
+                                                        variant="text"
+                                                        color="primary"
+                                                        prepend-icon="mdi-cash-refresh"
+                                                        class="column-selector-btn"
+                                                        @click="reconcile_prices"
+                                                        :loading="pricing_reconcile_in_progress"
+                                                        :disabled="pricing_reconcile_in_progress"
+                                                >
+                                                        {{ __("Recalculate Prices") }}
+                                                </v-btn>
 
-						<v-dialog v-model="show_column_selector" max-width="500px">
-							<v-card>
-								<v-card-title class="text-h6 pa-4 d-flex align-center">
-									<span>{{ __("Select Columns to Display") }}</span>
+                                                <v-dialog v-model="show_column_selector" max-width="500px">
+                                                        <v-card>
+                                                                <v-card-title class="text-h6 pa-4 d-flex align-center">
+                                                                        <span>{{ __("Select Columns to Display") }}</span>
 									<v-spacer></v-spacer>
 									<v-btn
 										icon="mdi-close"
@@ -346,6 +358,7 @@ import { useInvoiceStore } from "../../stores/invoiceStore.js";
 import { useCustomersStore } from "../../stores/customersStore.js";
 import { storeToRefs } from "pinia";
 import stockCoordinator from "../../utils/stockCoordinator.js";
+import { isOffline } from "../../offline/index.js";
 
 export default {
 	name: "POSInvoice",
@@ -429,6 +442,7 @@ export default {
                         invoiceHeight: null,
                         paymentVisible: false, // Track current payment view state
                         _busHandlers: {},
+                        pricing_reconcile_in_progress: false,
                 };
         },
 
@@ -670,11 +684,198 @@ export default {
 			this.packed_dialog_items = this.packed_items.filter((it) => it.bundle_id === bundle_id);
 			this.show_packed_dialog = true;
 		},
-		toggleColumnSelection() {
-			// Create a copy of selected columns for temporary editing
-			this.temp_selected_columns = [...this.selected_columns];
-			this.show_column_selector = true;
-		},
+                toggleColumnSelection() {
+                        // Create a copy of selected columns for temporary editing
+                        this.temp_selected_columns = [...this.selected_columns];
+                        this.show_column_selector = true;
+                },
+
+                async reconcile_prices() {
+                        if (this.pricing_reconcile_in_progress) {
+                                return;
+                        }
+                        if (typeof isOffline === "function" && isOffline()) {
+                                this.eventBus.emit("show_message", {
+                                        title: __("Cannot reconcile while offline"),
+                                        color: "warning",
+                                });
+                                return;
+                        }
+
+                        this.pricing_reconcile_in_progress = true;
+                        try {
+                                const context = this._getPricingContext ? this._getPricingContext() : {};
+                                const paidLines = this.items
+                                        .filter((item) => item && !item.is_free_item && !item.auto_free_source)
+                                        .map((item) => {
+                                                const baseRate = this._toBaseCurrency
+                                                        ? this._toBaseCurrency(item.rate)
+                                                        : item.base_rate || item.rate;
+                                                const basePriceListRate = this._toBaseCurrency
+                                                        ? this._toBaseCurrency(item.price_list_rate)
+                                                        : item.base_price_list_rate || item.price_list_rate;
+                                                const baseDiscount = this._toBaseCurrency
+                                                        ? this._toBaseCurrency(item.discount_amount)
+                                                        : item.base_discount_amount || item.discount_amount;
+                                                return {
+                                                        posa_row_id: item.posa_row_id,
+                                                        item_code: item.item_code,
+                                                        qty: item.qty,
+                                                        rate: baseRate || 0,
+                                                        price_list_rate: basePriceListRate || 0,
+                                                        discount_amount: baseDiscount || 0,
+                                                        discount_percentage: item.discount_percentage || 0,
+                                                        warehouse: item.warehouse,
+                                                        uom: item.uom,
+                                                        item_group: item.item_group,
+                                                        brand: item.brand,
+                                                        pricing_rules: item.pricing_rules || null,
+                                                };
+                                        });
+                                const freeLines = this.items
+                                        .filter((item) => item && item.auto_free_source)
+                                        .map((item) => ({
+                                                item_code: item.item_code,
+                                                qty: item.qty,
+                                                source_rule: item.source_rule || null,
+                                                posa_row_id: item.posa_row_id,
+                                                uom: item.uom,
+                                        }));
+
+                                const response = await frappe.call({
+                                        method: "posawesome.posawesome.api.pricing_rules.reconcile_line_prices",
+                                        args: {
+                                                cart_payload: JSON.stringify({
+                                                        context,
+                                                        lines: paidLines,
+                                                        free_lines: freeLines,
+                                                }),
+                                        },
+                                });
+
+                                const message = response?.message || {};
+                                const updates = Array.isArray(message.updates) ? message.updates : [];
+                                const serverFree = Array.isArray(message.free_lines) ? message.free_lines : [];
+
+                                let hasChanges = false;
+                                const precision = this.currency_precision || 2;
+
+                                updates.forEach((update) => {
+                                        const targetId = update.row_id;
+                                        const item = this.items.find(
+                                                (line) =>
+                                                        line &&
+                                                        !line.is_free_item &&
+                                                        (line.posa_row_id === targetId ||
+                                                                line.name === targetId ||
+                                                                (line.item_code === targetId && !line.auto_free_source)),
+                                        );
+                                        if (!item) {
+                                                return;
+                                        }
+                                        const prevBaseRate = Number.parseFloat(item.base_rate || 0) || 0;
+                                        const baseRate = Number.parseFloat(update.rate || prevBaseRate || 0) || 0;
+                                        const basePriceListRate = Number.parseFloat(
+                                                update.price_list_rate || item.base_price_list_rate || 0,
+                                        );
+                                        const baseDiscount = Number.parseFloat(update.discount_amount || item.base_discount_amount || 0);
+                                        const discountPercentage = Number.parseFloat(
+                                                update.discount_percentage || item.discount_percentage || 0,
+                                        );
+                                        const convertedRate = this._fromBaseCurrency
+                                                ? this._fromBaseCurrency(baseRate)
+                                                : baseRate;
+                                        const convertedPriceListRate = this._fromBaseCurrency
+                                                ? this._fromBaseCurrency(basePriceListRate)
+                                                : basePriceListRate;
+                                        const convertedDiscount = this._fromBaseCurrency
+                                                ? this._fromBaseCurrency(baseDiscount)
+                                                : baseDiscount;
+
+                                        item.base_rate = baseRate;
+                                        item.base_price_list_rate = basePriceListRate;
+                                        item.base_discount_amount = baseDiscount;
+                                        item.discount_percentage = discountPercentage;
+                                        item.rate = this.flt ? this.flt(convertedRate, precision) : convertedRate;
+                                        item.price_list_rate = this.flt
+                                                ? this.flt(convertedPriceListRate, precision)
+                                                : convertedPriceListRate;
+                                        item.discount_amount = this.flt
+                                                ? this.flt(convertedDiscount, precision)
+                                                : convertedDiscount;
+                                        item.amount = this.flt
+                                                ? this.flt(item.rate * item.qty, precision)
+                                                : item.rate * item.qty;
+                                        item.base_amount = this.flt
+                                                ? this.flt(baseRate * item.qty, precision)
+                                                : baseRate * item.qty;
+
+                                        const appliedRules = Array.isArray(update.pricing_rules)
+                                                ? update.pricing_rules.map((name) => ({ name }))
+                                                : [];
+                                        if (this._updatePricingBadge) {
+                                                this._updatePricingBadge(item, appliedRules);
+                                        }
+
+                                        if (Math.abs(prevBaseRate - baseRate) > 1e-6) {
+                                                hasChanges = true;
+                                        }
+                                });
+
+                                const aggregateFreebies = (entries) => {
+                                        const map = new Map();
+                                        entries.forEach((entry) => {
+                                                const key = `${entry.source_rule || entry.pricing_rules || ""}::${entry.item_code}`;
+                                                const qty = Number.parseFloat(entry.qty || 0) || 0;
+                                                map.set(key, (map.get(key) || 0) + qty);
+                                        });
+                                        return map;
+                                };
+
+                                const serverFreeMap = aggregateFreebies(serverFree);
+                                const localFreeMap = aggregateFreebies(
+                                        this.items
+                                                .filter((line) => line && line.auto_free_source)
+                                                .map((line) => ({
+                                                        source_rule: line.source_rule || line.pricing_rules || null,
+                                                        item_code: line.item_code,
+                                                        qty: line.qty,
+                                                })),
+                                );
+
+                                if (serverFreeMap.size !== localFreeMap.size) {
+                                        hasChanges = true;
+                                } else {
+                                        serverFreeMap.forEach((qty, key) => {
+                                                if (Math.abs((localFreeMap.get(key) || 0) - qty) > 1e-6) {
+                                                        hasChanges = true;
+                                                }
+                                        });
+                                }
+
+                                await this.applyPricingRulesForCart(true);
+
+                                if (hasChanges) {
+                                        this.eventBus.emit("show_message", {
+                                                title: __("Prices reconciled with server."),
+                                                color: "success",
+                                        });
+                                } else {
+                                        this.eventBus.emit("show_message", {
+                                                title: __("Prices are already up to date."),
+                                                color: "info",
+                                        });
+                                }
+                        } catch (error) {
+                                console.error("Failed to reconcile prices", error);
+                                this.eventBus.emit("show_message", {
+                                        title: __("Failed to reconcile prices"),
+                                        color: "error",
+                                });
+                        } finally {
+                                this.pricing_reconcile_in_progress = false;
+                        }
+                },
 
 		cancelColumnSelection() {
 			// Discard changes
@@ -1025,11 +1226,12 @@ export default {
 			return this.price_lists;
 		},
 
-		async update_currency(currency) {
-			if (!currency) return;
-			this.selected_currency = currency;
-			await this.update_currency_and_rate();
-		},
+                async update_currency(currency) {
+                        if (!currency) return;
+                        this.selected_currency = currency;
+                        await this.update_currency_and_rate();
+                        await this.applyPricingRulesForCart(true);
+                },
 
 		update_exchange_rate() {
 			if (!this.exchange_rate || this.exchange_rate <= 0) {
@@ -1053,10 +1255,10 @@ export default {
 			this.sync_exchange_rate();
 		},
 
-		update_item_rates() {
-			console.log("Updating item rates with exchange rate:", this.exchange_rate);
+                async update_item_rates() {
+                        console.log("Updating item rates with exchange rate:", this.exchange_rate);
 
-			this.items.forEach((item) => {
+                        this.items.forEach((item) => {
 				// Set skip flag to avoid double calculations
 				item._skip_calc = true;
 
@@ -1133,11 +1335,12 @@ export default {
 
 				// Apply any other pricing rules if needed
 				this.calc_item_price(item);
-			});
+                        });
 
-			// Force UI update after all calculations
-			this.$forceUpdate();
-		},
+                        // Force UI update after all calculations
+                        this.$forceUpdate();
+                        await this.applyPricingRulesForCart(true);
+                },
 
 		formatCurrency(value, precision = null) {
 			const prec = precision != null ? precision : this.currency_precision;

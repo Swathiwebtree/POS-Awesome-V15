@@ -16,6 +16,9 @@ import { useDiscounts } from "../../composables/useDiscounts.js";
 import { useItemAddition } from "../../composables/useItemAddition.js";
 import { useStockUtils } from "../../composables/useStockUtils.js";
 import stockCoordinator from "../../utils/stockCoordinator.js";
+import { usePricingRulesStore } from "../../stores/pricingRulesStore.js";
+import { useItemsStore } from "../../stores/itemsStore.js";
+import { applyLocalPricingRules, computeFreeItems } from "../../../lib/pricingEngine.js";
 
 const ITEM_DETAIL_CACHE_TTL = 5000;
 const STOCK_CACHE_TTL = 5000;
@@ -45,28 +48,342 @@ export default {
 		const bucket = this._itemTaskCache.get(rowId);
 		return bucket ? bucket[taskName] || null : null;
 	},
-	_setItemTaskPromise(rowId, taskName, promise) {
-		if (!rowId || !promise) {
-			return promise;
-		}
-		const bucket = this._ensureTaskBucket(rowId);
-		const trackedPromise = Promise.resolve(promise).finally(() => {
-			const activeBucket = this._itemTaskCache ? this._itemTaskCache.get(rowId) : null;
-			if (activeBucket) {
-				delete activeBucket[taskName];
-				if (!Object.keys(activeBucket).length) {
-					this._itemTaskCache.delete(rowId);
-				}
-			}
-		});
-		bucket[taskName] = trackedPromise;
-		return trackedPromise;
-	},
-	resetItemTaskCache(rowId, taskName = null) {
-		if (!this._itemTaskCache) {
-			return;
-		}
-		if (!rowId) {
+        _setItemTaskPromise(rowId, taskName, promise) {
+                if (!rowId || !promise) {
+                        return promise;
+                }
+                const bucket = this._ensureTaskBucket(rowId);
+                const trackedPromise = Promise.resolve(promise).finally(() => {
+                        const activeBucket = this._itemTaskCache ? this._itemTaskCache.get(rowId) : null;
+                        if (activeBucket) {
+                                delete activeBucket[taskName];
+                                if (!Object.keys(activeBucket).length) {
+                                        this._itemTaskCache.delete(rowId);
+                                }
+                        }
+                });
+                bucket[taskName] = trackedPromise;
+                return trackedPromise;
+        },
+        _getPricingRulesStore() {
+                if (!this._pricingRulesStore) {
+                        this._pricingRulesStore = usePricingRulesStore();
+                }
+                return this._pricingRulesStore;
+        },
+        _getItemsStore() {
+                if (!this._itemsStore) {
+                        this._itemsStore = useItemsStore();
+                }
+                return this._itemsStore;
+        },
+        _getPricingContext() {
+                const priceList = this.get_price_list ? this.get_price_list() : this.selected_price_list;
+                const selectedCurrency = this.selected_currency || this.price_list_currency || this.pos_profile?.currency;
+                const doc = typeof this.get_invoice_doc === "function" ? this.get_invoice_doc() : this.invoice_doc || {};
+                const customerInfo = this.customer_info || {};
+
+                return {
+                        company: this.pos_profile?.company || doc.company || null,
+                        price_list: priceList || this.pos_profile?.selling_price_list || null,
+                        currency: selectedCurrency || this.pos_profile?.currency || null,
+                        date:
+                                this.posting_date ||
+                                this.posting_date_display ||
+                                doc.posting_date ||
+                                new Date().toISOString().slice(0, 10),
+                        customer: this.customer || doc.customer || customerInfo.customer || null,
+                        customer_group: doc.customer_group || customerInfo.customer_group || null,
+                        territory: doc.territory || customerInfo.territory || null,
+                };
+        },
+        async _ensurePricingRules(force = false) {
+                const store = this._getPricingRulesStore();
+                const ctx = this._getPricingContext();
+                if (!ctx.company || !ctx.price_list || !ctx.currency) {
+                        return { store, ctx };
+                }
+                await store.ensureActiveRules(ctx, { force });
+                return { store, ctx };
+        },
+        _toBaseCurrency(value) {
+                const rate = Number.parseFloat(this.exchange_rate || 1) || 1;
+                if (!rate || rate === 0) {
+                        return Number.parseFloat(value || 0) || 0;
+                }
+                return Number.parseFloat(value || 0) / rate;
+        },
+        _fromBaseCurrency(value) {
+                const rate = Number.parseFloat(this.exchange_rate || 1) || 1;
+                const numeric = Number.parseFloat(value || 0) || 0;
+                return rate ? numeric * rate : numeric;
+        },
+        _resolveBaseRate(item) {
+                if (!item) {
+                        return 0;
+                }
+                const candidates = [
+                        item.base_price_list_rate,
+                        item.price_list_rate,
+                        item.base_rate,
+                        item.rate,
+                ];
+                for (const candidate of candidates) {
+                        const numeric = Number.parseFloat(candidate);
+                        if (Number.isFinite(numeric) && !Number.isNaN(numeric)) {
+                                return numeric;
+                        }
+                }
+                return 0;
+        },
+        _updatePricingBadge(item, applied = []) {
+                if (!item) {
+                        return;
+                }
+                if (!Array.isArray(applied) || !applied.length) {
+                        delete item.pricing_rule_badge;
+                        item.pricing_rule_details = [];
+                        item.pricing_rules = null;
+                        return;
+                }
+
+                const names = applied.map((detail) => detail.name).filter(Boolean);
+                const first = names[0];
+                const extraCount = names.length > 1 ? names.length - 1 : 0;
+                const label = extraCount
+                        ? `${__("Pricing Rule")}: ${first} (+${extraCount})`
+                        : `${__("Pricing Rule")}: ${first}`;
+                const tooltip = applied
+                        .map((detail) => {
+                                const typeLabel = detail.type ? ` (${detail.type})` : "";
+                                return `${detail.name}${typeLabel}`;
+                        })
+                        .join("\n");
+
+                item.pricing_rule_badge = {
+                        label,
+                        tooltip,
+                        names,
+                };
+                item.pricing_rule_details = applied;
+                item.pricing_rules = JSON.stringify(names);
+        },
+        _applyPricingToLine(item, ctx, indexes, freebiesMap) {
+                if (!item || Number.parseFloat(item.qty || 0) === 0) {
+                        return;
+                }
+
+                const allowRateUpdate = !item.locked_price && !item.posa_offer_applied && !item._manual_rate_set;
+                const qty = Math.abs(Number.parseFloat(item.qty || 0));
+                const baseRate = this._resolveBaseRate(item);
+                const pricing = applyLocalPricingRules({ item, qty, baseRate, ctx, indexes });
+
+                this._updatePricingBadge(item, pricing.applied);
+
+                if (allowRateUpdate) {
+                        const baseDiscountPerUnit = pricing.discountPerUnit || 0;
+                        const baseAmount = pricing.rate * (item.qty || 0);
+                        const convertedRate = this._fromBaseCurrency(pricing.rate);
+                        const convertedDiscount = this._fromBaseCurrency(baseDiscountPerUnit);
+
+                        item.base_price_list_rate = baseRate;
+                        item.base_rate = pricing.rate;
+                        item.base_discount_amount = baseDiscountPerUnit;
+                        item.price_list_rate = this.flt
+                                ? this.flt(this._fromBaseCurrency(baseRate), this.currency_precision)
+                                : this._fromBaseCurrency(baseRate);
+                        item.rate = this.flt ? this.flt(convertedRate, this.currency_precision) : convertedRate;
+                        item.discount_amount = this.flt
+                                ? this.flt(convertedDiscount, this.currency_precision)
+                                : convertedDiscount;
+                        item.discount_percentage = baseRate
+                                ? this.flt((baseDiscountPerUnit / baseRate) * 100, this.float_precision)
+                                : 0;
+                        item.amount = this.flt ? this.flt(item.rate * item.qty, this.currency_precision) : item.rate * item.qty;
+                        item.base_amount = this.flt
+                                ? this.flt(baseAmount, this.currency_precision)
+                                : baseAmount;
+                }
+
+                const freebies = computeFreeItems({ item, qty, ctx, indexes });
+                if (Array.isArray(freebies)) {
+                        freebies.forEach((entry) => {
+                                const key = `${entry.rule}::${entry.item_code}::${item.posa_row_id}`;
+                                const existing = freebiesMap.get(key) || { qty: 0 };
+                                freebiesMap.set(key, {
+                                        ...existing,
+                                        ...entry,
+                                        qty: (entry.qty || 0) + (existing.qty || 0),
+                                        parentRowId: item.posa_row_id,
+                                });
+                        });
+                }
+        },
+        _syncAutoFreeLines(freebiesMap = new Map()) {
+                const expectedKeys = new Set(freebiesMap.keys());
+                const existing = new Map();
+
+                this.items.forEach((line, index) => {
+                        if (line && line.auto_free_source) {
+                                existing.set(line.auto_free_source, { line, index });
+                        }
+                });
+
+                const itemsStore = this._getItemsStore();
+
+                const buildFreeBadgeMeta = (data) => {
+                        const ruleLabel = data?.rule || "";
+                        const label = `${__("Free")} (${__("Rule")}: ${ruleLabel})`;
+
+                        const parsedFreeQty = Number.parseFloat(data?.qty ?? 0);
+                        const freeQty = Number.isFinite(parsedFreeQty) ? parsedFreeQty : 0;
+
+                        const parsedThreshold = Number.parseFloat(
+                                data?.threshold_qty ?? data?.min_qty ?? data?.minimum ?? 0,
+                        );
+                        const thresholdQty = Number.isFinite(parsedThreshold) ? parsedThreshold : 0;
+
+                        const parsedPerThreshold = Number.parseFloat(data?.free_qty_per_threshold ?? data?.free_qty ?? 0);
+                        const perThreshold = Number.isFinite(parsedPerThreshold) ? parsedPerThreshold : null;
+
+                        const parsedMultiplier = Number.parseFloat(data?.multiplier ?? 0);
+                        const multiplier = Number.isFinite(parsedMultiplier) ? parsedMultiplier : null;
+
+                        const parts = [];
+                        if (data?.apply_per_threshold && thresholdQty > 0 && perThreshold !== null) {
+                                const perThresholdValue = perThreshold !== null ? perThreshold : freeQty;
+                                parts.push(`${__("Every")} ${thresholdQty} → ${perThresholdValue} ${__("Free")}`);
+                                if (multiplier !== null && multiplier >= 0) {
+                                        parts.push(`${__("Qualified")}: ${multiplier}`);
+                                }
+                        } else if (thresholdQty > 0) {
+                                parts.push(`${__("Minimum Qty")}: ${thresholdQty}`);
+                        }
+                        parts.push(`${__("Free Qty")}: ${freeQty}`);
+
+                        return {
+                                label,
+                                tooltip: parts.join("; "),
+                        };
+                };
+
+                for (const [key, data] of freebiesMap.entries()) {
+                        const match = existing.get(key);
+                        if (match) {
+                                const line = match.line;
+                                const qty = this.flt ? this.flt(data.qty, this.float_precision) : data.qty;
+                                if (Number.parseFloat(line.qty || 0) !== qty) {
+                                        line.qty = qty;
+                                        line.stock_qty = qty;
+                                        if (this.calc_stock_qty) {
+                                                this.calc_stock_qty(line, qty);
+                                        }
+                                }
+                                line.is_free_item = 1;
+                                line.locked_price = true;
+                                line.rate = 0;
+                                line.base_rate = 0;
+                                line.price_list_rate = 0;
+                                line.base_price_list_rate = 0;
+                                line.discount_amount = 0;
+                                line.base_discount_amount = 0;
+                                line.amount = 0;
+                                line.base_amount = 0;
+                                line.source_rule = data.rule;
+                                line.pricing_rule_badge = buildFreeBadgeMeta(data);
+                                continue;
+                        }
+
+                        const catalogItem = itemsStore?.getItemByCode?.(data.item_code) || null;
+                        const template = {
+                                ...(catalogItem || {}),
+                                item_code: data.item_code,
+                                item_name: catalogItem?.item_name || data.item_code,
+                                qty: data.qty,
+                                rate: 0,
+                                price_list_rate: 0,
+                        };
+                        const freeLine = this.get_new_item(template);
+                        freeLine.qty = data.qty;
+                        freeLine.stock_qty = data.qty;
+                        freeLine.rate = 0;
+                        freeLine.base_rate = 0;
+                        freeLine.price_list_rate = 0;
+                        freeLine.base_price_list_rate = 0;
+                        freeLine.amount = 0;
+                        freeLine.base_amount = 0;
+                        freeLine.discount_amount = 0;
+                        freeLine.base_discount_amount = 0;
+                        freeLine.is_free_item = 1;
+                        freeLine.locked_price = true;
+                        freeLine._manual_rate_set = true;
+                        freeLine.source_rule = data.rule;
+                        freeLine.auto_free_source = key;
+                        freeLine.parent_row_id = data.parentRowId;
+                        freeLine.pricing_rule_badge = buildFreeBadgeMeta(data);
+
+                        const parentIndex = this.items.findIndex((line) => line.posa_row_id === data.parentRowId);
+                        const insertAt = parentIndex >= 0 ? parentIndex + 1 : this.items.length;
+                        this.items.splice(insertAt, 0, freeLine);
+                        if (this.calc_stock_qty) {
+                                this.calc_stock_qty(freeLine, freeLine.qty);
+                        }
+                }
+
+                const removable = [];
+                this.items.forEach((line, index) => {
+                        if (line && line.auto_free_source && !expectedKeys.has(line.auto_free_source)) {
+                                removable.push(index);
+                        }
+                });
+
+                removable.reverse().forEach((idx) => {
+                        const [line] = this.items.splice(idx, 1);
+                        if (line && line.bundle_id) {
+                                this.packed_items = this.packed_items.filter((packed) => packed.bundle_id !== line.bundle_id);
+                        }
+                });
+        },
+        async applyPricingRulesForCart(force = false) {
+                if (this._applyingPricingRules) {
+                        this._pendingPricingRules = true;
+                        return;
+                }
+                this._applyingPricingRules = true;
+                try {
+                        const { store, ctx } = await this._ensurePricingRules(force);
+                        if (!store) {
+                                return;
+                        }
+                        const indexes = store.getIndexes ? store.getIndexes() : {};
+                        const freebiesMap = new Map();
+
+                        for (const item of this.items) {
+                                if (!item || item.is_free_item) {
+                                        continue;
+                                }
+                                this._applyPricingToLine(item, ctx, indexes, freebiesMap);
+                        }
+
+                        this._syncAutoFreeLines(freebiesMap);
+                        if (typeof this.$forceUpdate === "function") {
+                                this.$forceUpdate();
+                        }
+                } catch (error) {
+                        console.error("Failed to apply pricing rules locally", error);
+                } finally {
+                        this._applyingPricingRules = false;
+                        if (this._pendingPricingRules) {
+                                this._pendingPricingRules = false;
+                                this.applyPricingRulesForCart(force);
+                        }
+                }
+        },
+        resetItemTaskCache(rowId, taskName = null) {
+                if (!this._itemTaskCache) {
+                        return;
+                }
+                if (!rowId) {
 			this._itemTaskCache = new Map();
 			return;
 		}
@@ -183,15 +500,18 @@ export default {
 	clearItemStockCache() {
 		this.item_stock_cache = {};
 	},
-	remove_item(item) {
-		return removeItem(item, this);
-	},
+        remove_item(item) {
+                const result = removeItem(item, this);
+                this.applyPricingRulesForCart();
+                return result;
+        },
 
-	async add_item(item, options = {}) {
-		const res = await addItem(item, this);
+        async add_item(item, options = {}) {
+                const res = await addItem(item, this);
+                await this.applyPricingRulesForCart();
 
-		const shouldNotify =
-			options?.notifyOnSuccess === true && !options?.skipNotification && this.eventBus?.emit;
+                const shouldNotify =
+                        options?.notifyOnSuccess === true && !options?.skipNotification && this.eventBus?.emit;
 
 		if (shouldNotify) {
 			const rawQty = typeof item?.qty === "number" ? item.qty : parseFloat(item?.qty);
@@ -528,16 +848,18 @@ export default {
 			});
 		}
 
-		if (data.is_return) {
-			this.return_doc = data;
-		} else {
-			this.eventBus.emit("set_pos_coupons", data.posa_coupons);
-		}
+                if (data.is_return) {
+                        this.return_doc = data;
+                } else {
+                        this.eventBus.emit("set_pos_coupons", data.posa_coupons);
+                }
 
-		console.log("load_invoice completed, invoice state:", {
-			invoiceType: this.invoiceType,
-			is_return: this.invoice_doc.is_return,
-			items: this.items.length,
+                await this.applyPricingRulesForCart(true);
+
+                console.log("load_invoice completed, invoice state:", {
+                        invoiceType: this.invoiceType,
+                        is_return: this.invoice_doc.is_return,
+                        items: this.items.length,
 			customer: this.customer,
 		});
 	},
@@ -2648,6 +2970,7 @@ export default {
                         this.selected_price_list = price_list;
                 }
                 this.eventBus.emit("update_customer_price_list", price_list);
+                this.applyPricingRulesForCart(true);
         },
 
         sync_invoice_customer_details(details = null) {
@@ -2955,14 +3278,18 @@ export default {
 	},
 
 	// Calculate prices and discounts for an item based on field change
-	calc_prices(item, value, $event) {
-		return calcPrices(item, value, $event, this);
-	},
+        calc_prices(item, value, $event) {
+                const outcome = calcPrices(item, value, $event, this);
+                this.applyPricingRulesForCart();
+                return outcome;
+        },
 
-	// Calculate item price and discount fields
-	calc_item_price(item) {
-		return calcItemPrice(item, this);
-	},
+        // Calculate item price and discount fields
+        calc_item_price(item) {
+                const outcome = calcItemPrice(item, this);
+                this.applyPricingRulesForCart();
+                return outcome;
+        },
 
 	// Update UOM (unit of measure) for an item and recalculate prices
 	calc_uom(item, value) {
@@ -2973,17 +3300,20 @@ export default {
 	},
 
 	// Calculate stock quantity for an item (simplified - validation handled centrally)
-	calc_stock_qty(item, value) {
-		calcStockQty(item, value, this);
-		if (this.update_qty_limits) {
-			this.update_qty_limits(item);
-		}
+        calc_stock_qty(item, value) {
+                calcStockQty(item, value, this);
+                if (this.update_qty_limits) {
+                        this.update_qty_limits(item);
+                }
 
-		if (flt(item.qty) === 0) {
-			this.remove_item(item);
-			this.$forceUpdate();
-		}
-	},
+                if (flt(item.qty) === 0) {
+                        this.remove_item(item);
+                        this.$forceUpdate();
+                }
+                if (!this._applyingPricingRules) {
+                        this.applyPricingRulesForCart();
+                }
+        },
 
 	// Update quantity limits based on available stock (simplified - validation handled centrally)
         update_qty_limits(item) {

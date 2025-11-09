@@ -33,9 +33,13 @@ export const memory = {
 	sales_persons_storage: [],
 	item_details_cache: {},
 	tax_template_cache: {},
-	translation_cache: {},
-	coupons_cache: {},
-	item_groups_cache: [],
+        translation_cache: {},
+        coupons_cache: {},
+        item_groups_cache: [],
+        pricing_rules_snapshot: [],
+        pricing_rules_context: null,
+        pricing_rules_last_sync: null,
+        pricing_rules_stale_at: null,
 	items_last_sync: null,
 	customers_last_sync: null,
 	// Track the current cache schema version
@@ -109,10 +113,10 @@ export function resetOfflineState() {
 }
 
 export function reduceCacheUsage() {
-	clearPriceListCache();
-	memory.item_details_cache = {};
-	memory.uom_cache = {};
-	memory.offers_cache = [];
+        clearPriceListCache();
+        memory.item_details_cache = {};
+        memory.uom_cache = {};
+        memory.offers_cache = [];
 	memory.customer_balance_cache = {};
 	memory.local_stock_cache = {};
 	memory.stock_cache_ready = false;
@@ -125,7 +129,42 @@ export function reduceCacheUsage() {
 	persist("local_stock_cache", memory.local_stock_cache);
 	persist("stock_cache_ready", memory.stock_cache_ready);
 	persist("coupons_cache", memory.coupons_cache);
-	persist("item_groups_cache", memory.item_groups_cache);
+        persist("item_groups_cache", memory.item_groups_cache);
+}
+
+export function savePricingRulesSnapshot(snapshot = [], context = null, staleAt = null) {
+        memory.pricing_rules_snapshot = Array.isArray(snapshot) ? snapshot : [];
+        memory.pricing_rules_context = context || null;
+        memory.pricing_rules_last_sync = new Date().toISOString();
+        memory.pricing_rules_stale_at = staleAt || null;
+
+        persist("pricing_rules_snapshot", memory.pricing_rules_snapshot);
+        persist("pricing_rules_context", memory.pricing_rules_context);
+        persist("pricing_rules_last_sync", memory.pricing_rules_last_sync);
+        persist("pricing_rules_stale_at", memory.pricing_rules_stale_at);
+}
+
+export function getCachedPricingRulesSnapshot() {
+        return {
+                snapshot: Array.isArray(memory.pricing_rules_snapshot)
+                        ? memory.pricing_rules_snapshot
+                        : [],
+                context: memory.pricing_rules_context || null,
+                lastSync: memory.pricing_rules_last_sync || null,
+                staleAt: memory.pricing_rules_stale_at || null,
+        };
+}
+
+export function clearPricingRulesSnapshot() {
+        memory.pricing_rules_snapshot = [];
+        memory.pricing_rules_context = null;
+        memory.pricing_rules_last_sync = null;
+        memory.pricing_rules_stale_at = null;
+
+        persist("pricing_rules_snapshot", memory.pricing_rules_snapshot);
+        persist("pricing_rules_context", memory.pricing_rules_context);
+        persist("pricing_rules_last_sync", memory.pricing_rules_last_sync);
+        persist("pricing_rules_stale_at", memory.pricing_rules_stale_at);
 }
 
 // --- Generic getters and setters for cached data ----------------------------
