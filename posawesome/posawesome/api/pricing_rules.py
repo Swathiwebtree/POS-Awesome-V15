@@ -130,6 +130,7 @@ def _normalise_rule(doc: frappe._dict) -> frappe._dict:
         valid_upto=str(doc.get("valid_upto")) if doc.get("valid_upto") else None,
         price_or_discount=price_or_product_discount,
         discount_type=discount_type,
+        rate_or_discount_type=rate_or_discount,
         rate_or_discount=flt(doc.get("rate") or doc.get("discount_percentage") or doc.get("discount_amount") or 0),
         currency=doc.get("currency"),
         price_list=doc.get("for_price_list"),
@@ -382,7 +383,7 @@ def reconcile_line_prices(cart_payload: dict | str | None = None):
 
         _collect_freebies(freebies, details.get("free_item_data"))
 
-        doc.items.append(
+        doc.setdefault("items", []).append(
             frappe._dict(
                 {
                     "item_code": args.item_code,

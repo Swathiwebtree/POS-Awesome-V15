@@ -174,30 +174,53 @@ export default {
                 }
 
                 const allowRateUpdate = !item.locked_price && !item.posa_offer_applied && !item._manual_rate_set;
-                const qty = Math.abs(Number.parseFloat(item.qty || 0));
+                const signedQty = Number.parseFloat(item.qty || 0) || 0;
+                const qty = Math.abs(signedQty);
                 const baseRate = this._resolveBaseRate(item);
                 const pricing = applyLocalPricingRules({ item, qty, baseRate, ctx, indexes });
 
                 this._updatePricingBadge(item, pricing.applied);
 
                 if (allowRateUpdate) {
-                        const baseDiscountPerUnit = pricing.discountPerUnit || 0;
-                        const baseAmount = pricing.rate * (item.qty || 0);
-                        const convertedRate = this._fromBaseCurrency(pricing.rate);
+                        const proposedRate = Number.isFinite(pricing.rate) ? pricing.rate : baseRate;
+                        const proposedDiscount = Number.isFinite(pricing.discountPerUnit)
+                                ? pricing.discountPerUnit
+                                : baseRate - proposedRate;
+
+                        let baseDiscountPerUnit = Math.abs(Number.parseFloat(proposedDiscount || 0));
+                        if (!Number.isFinite(baseDiscountPerUnit)) {
+                                baseDiscountPerUnit = 0;
+                        }
+                        const maxDiscount = Math.max(baseRate, 0);
+                        if (baseDiscountPerUnit > maxDiscount) {
+                                baseDiscountPerUnit = maxDiscount;
+                        }
+                        const discountedRate = Math.max(baseRate - baseDiscountPerUnit, 0);
+                        let effectiveBaseRate = Math.min(proposedRate, baseRate);
+
+                        if (discountedRate < effectiveBaseRate) {
+                                effectiveBaseRate = discountedRate;
+                        }
+
+                        const baseAmount = effectiveBaseRate * signedQty;
+                        const convertedRate = this._fromBaseCurrency(effectiveBaseRate);
                         const convertedDiscount = this._fromBaseCurrency(baseDiscountPerUnit);
+                        const normalizedBaseDiscount = Math.abs(baseDiscountPerUnit);
+                        const normalizedDiscount = Math.abs(convertedDiscount);
 
                         item.base_price_list_rate = baseRate;
-                        item.base_rate = pricing.rate;
-                        item.base_discount_amount = baseDiscountPerUnit;
+                        item.base_rate = effectiveBaseRate;
+                        item.base_discount_amount = normalizedBaseDiscount;
                         item.price_list_rate = this.flt
                                 ? this.flt(this._fromBaseCurrency(baseRate), this.currency_precision)
                                 : this._fromBaseCurrency(baseRate);
                         item.rate = this.flt ? this.flt(convertedRate, this.currency_precision) : convertedRate;
                         item.discount_amount = this.flt
-                                ? this.flt(convertedDiscount, this.currency_precision)
-                                : convertedDiscount;
+                                ? this.flt(normalizedDiscount, this.currency_precision)
+                                : normalizedDiscount;
+                        const rawDiscountPercentage = baseRate ? (normalizedBaseDiscount / baseRate) * 100 : 0;
                         item.discount_percentage = baseRate
-                                ? this.flt((baseDiscountPerUnit / baseRate) * 100, this.float_precision)
+                                ? this.flt(Math.abs(rawDiscountPercentage), this.float_precision)
                                 : 0;
                         item.amount = this.flt ? this.flt(item.rate * item.qty, this.currency_precision) : item.rate * item.qty;
                         item.base_amount = this.flt
@@ -222,10 +245,83 @@ export default {
         _syncAutoFreeLines(freebiesMap = new Map()) {
                 const expectedKeys = new Set(freebiesMap.keys());
                 const existing = new Map();
+                const legacyFreeLines = [];
+
+                const resolveRuleName = (line) => {
+                        if (!line) {
+                                return "";
+                        }
+
+                        const preferString = (value) => {
+                                if (!value) {
+                                        return "";
+                                }
+                                if (typeof value === "string") {
+                                        return value;
+                                }
+                                if (Array.isArray(value)) {
+                                        for (const entry of value) {
+                                                const resolved = preferString(entry);
+                                                if (resolved) {
+                                                        return resolved;
+                                                }
+                                        }
+                                        return "";
+                                }
+                                if (typeof value === "object") {
+                                        return (
+                                                value.name ||
+                                                value.rule ||
+                                                value.pricing_rule ||
+                                                value.pricingRule ||
+                                                ""
+                                        );
+                                }
+                                return "";
+                        };
+
+                        if (line.source_rule) {
+                                return String(line.source_rule);
+                        }
+
+                        if (line.pricing_rule) {
+                                return preferString(line.pricing_rule);
+                        }
+
+                        const raw = line.pricing_rules;
+                        if (typeof raw === "string") {
+                                const trimmed = raw.trim();
+                                if (!trimmed) {
+                                        return "";
+                                }
+                                if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+                                        try {
+                                                const parsed = JSON.parse(trimmed);
+                                                return preferString(parsed);
+                                        } catch (error) {
+                                                console.warn("Failed to parse pricing_rules JSON", error);
+                                                return trimmed;
+                                        }
+                                }
+                                return trimmed;
+                        }
+
+                        return preferString(raw);
+                };
 
                 this.items.forEach((line, index) => {
                         if (line && line.auto_free_source) {
                                 existing.set(line.auto_free_source, { line, index });
+                        } else if (line && line.is_free_item) {
+                                const ruleName = resolveRuleName(line);
+                                if (ruleName) {
+                                        legacyFreeLines.push({
+                                                line,
+                                                index,
+                                                rule: ruleName,
+                                                used: false,
+                                        });
+                                }
                         }
                 });
 
@@ -267,30 +363,52 @@ export default {
                         };
                 };
 
+                const applyFreeLineState = (line, data) => {
+                        const qty = this.flt ? this.flt(data.qty, this.float_precision) : data.qty;
+                        if (Number.parseFloat(line.qty || 0) !== qty) {
+                                line.qty = qty;
+                                line.stock_qty = qty;
+                                if (this.calc_stock_qty) {
+                                        this.calc_stock_qty(line, qty);
+                                }
+                        }
+                        line.is_free_item = 1;
+                        line.locked_price = true;
+                        line.rate = 0;
+                        line.base_rate = 0;
+                        line.price_list_rate = 0;
+                        line.base_price_list_rate = 0;
+                        line.discount_amount = 0;
+                        line.base_discount_amount = 0;
+                        line.amount = 0;
+                        line.base_amount = 0;
+                        line.source_rule = data.rule;
+                        line.pricing_rule_badge = buildFreeBadgeMeta(data);
+                };
+
                 for (const [key, data] of freebiesMap.entries()) {
                         const match = existing.get(key);
                         if (match) {
-                                const line = match.line;
-                                const qty = this.flt ? this.flt(data.qty, this.float_precision) : data.qty;
-                                if (Number.parseFloat(line.qty || 0) !== qty) {
-                                        line.qty = qty;
-                                        line.stock_qty = qty;
-                                        if (this.calc_stock_qty) {
-                                                this.calc_stock_qty(line, qty);
-                                        }
-                                }
-                                line.is_free_item = 1;
-                                line.locked_price = true;
-                                line.rate = 0;
-                                line.base_rate = 0;
-                                line.price_list_rate = 0;
-                                line.base_price_list_rate = 0;
-                                line.discount_amount = 0;
-                                line.base_discount_amount = 0;
-                                line.amount = 0;
-                                line.base_amount = 0;
-                                line.source_rule = data.rule;
-                                line.pricing_rule_badge = buildFreeBadgeMeta(data);
+                                applyFreeLineState(match.line, data);
+                                continue;
+                        }
+
+                        const normalizedRule = data.rule || "";
+                        const legacyMatchIndex = legacyFreeLines.findIndex(
+                                (entry) =>
+                                        !entry.used &&
+                                        entry.line &&
+                                        entry.line.item_code === data.item_code &&
+                                        (!normalizedRule || entry.rule === normalizedRule),
+                        );
+
+                        if (legacyMatchIndex >= 0) {
+                                const legacyEntry = legacyFreeLines[legacyMatchIndex];
+                                legacyEntry.used = true;
+                                legacyEntry.line.auto_free_source = key;
+                                legacyEntry.line.parent_row_id = data.parentRowId;
+                                applyFreeLineState(legacyEntry.line, data);
+                                existing.set(key, { line: legacyEntry.line, index: legacyEntry.index });
                                 continue;
                         }
 
@@ -1309,16 +1427,20 @@ export default {
 	},
 
 	// Prepare items array for invoice doc
-	get_invoice_items() {
-		const items_list = [];
-		const isReturn = this.isReturnInvoice;
-		const usesPosInvoice = this.pos_profile.create_pos_invoice_instead_of_sales_invoice;
+        get_invoice_items() {
+                const items_list = [];
+                const isReturn = this.isReturnInvoice;
+                const usesPosInvoice = this.pos_profile.create_pos_invoice_instead_of_sales_invoice;
+                const omitFreebies = !isOffline();
 
-		this.items.forEach((item) => {
-			const new_item = {
-				item_code: item.item_code,
-				// Retain the item name for offline invoices
-				// Fallback to item_code if item_name is not available
+                this.items.forEach((item) => {
+                        if (omitFreebies && item && (item.is_free_item || item.auto_free_source)) {
+                                return;
+                        }
+                        const new_item = {
+                                item_code: item.item_code,
+                                // Retain the item name for offline invoices
+                                // Fallback to item_code if item_name is not available
 				item_name: item.item_name || item.item_code,
 				name_overridden: item.name_overridden ? 1 : 0,
 				posa_row_id: item.posa_row_id,
@@ -2771,12 +2893,12 @@ export default {
 			this.set_batch_qty(item, null, false);
 		}
 
-		if (!item.locked_price) {
-			if (forceUpdate || !item.base_rate) {
-				if (data.price_list_rate !== 0 || !item.base_price_list_rate) {
-					item.base_price_list_rate = data.price_list_rate;
-					if (!item.posa_offer_applied) {
-						item.base_rate = data.price_list_rate;
+                if (!item.locked_price) {
+                        if (forceUpdate || !item.base_rate) {
+                                if (data.price_list_rate !== 0 || !item.base_price_list_rate) {
+                                        item.base_price_list_rate = data.price_list_rate;
+                                        if (!item.posa_offer_applied) {
+                                                item.base_rate = data.price_list_rate;
 					}
 				}
 			}
@@ -2821,15 +2943,61 @@ export default {
 						this.currency_precision,
 					);
 				} else {
-					item.price_list_rate = item.base_rate;
-				}
-			}
+                                        item.price_list_rate = item.base_rate;
+                                }
+                        }
 
-			if (
-				!item.posa_offer_applied &&
-				this.pos_profile.posa_apply_customer_discount &&
-				this.customer_info.posa_discount > 0 &&
-				this.customer_info.posa_discount <= 100 &&
+                        const serverDiscountPercentage = Number.parseFloat(data.discount_percentage);
+                        const hasServerPercentage =
+                                Number.isFinite(serverDiscountPercentage) && serverDiscountPercentage !== 0;
+                        if (hasServerPercentage && !item.posa_offer_applied && !item._manual_rate_set) {
+                                const existingDiscount = Number(item.discount_amount) || 0;
+                                const EPSILON = 0.000001;
+                                if (Math.abs(existingDiscount) < EPSILON) {
+                                        const resolvedPercentage = this.flt(
+                                                serverDiscountPercentage,
+                                                this.float_precision,
+                                        );
+
+                                        const priceListRateCandidate =
+                                                item.price_list_rate ?? data.price_list_rate ?? item.rate ?? 0;
+                                        const priceListRate = Number(priceListRateCandidate) || 0;
+
+                                        const basePriceListRateCandidate =
+                                                item.base_price_list_rate ?? data.price_list_rate ?? priceListRate;
+                                        const basePriceListRate = Number(basePriceListRateCandidate) || 0;
+
+                                        const hasRate =
+                                                Math.abs(priceListRate) > EPSILON ||
+                                                Math.abs(basePriceListRate) > EPSILON;
+
+                                        if (hasRate) {
+                                                const discountAmount = this.flt(
+                                                        (priceListRate * resolvedPercentage) / 100,
+                                                        this.currency_precision,
+                                                );
+                                                const baseDiscountAmount = this.flt(
+                                                        (basePriceListRate * resolvedPercentage) / 100,
+                                                        this.currency_precision,
+                                                );
+
+                                                const newRate = Math.max(priceListRate - discountAmount, 0);
+                                                const newBaseRate = Math.max(basePriceListRate - baseDiscountAmount, 0);
+
+                                                item.discount_percentage = resolvedPercentage;
+                                                item.discount_amount = discountAmount;
+                                                item.base_discount_amount = baseDiscountAmount;
+                                                item.rate = this.flt(newRate, this.currency_precision);
+                                                item.base_rate = this.flt(newBaseRate, this.currency_precision);
+                                        }
+                                }
+                        }
+
+                        if (
+                                !item.posa_offer_applied &&
+                                this.pos_profile.posa_apply_customer_discount &&
+                                this.customer_info.posa_discount > 0 &&
+                                this.customer_info.posa_discount <= 100 &&
 				item.posa_is_offer == 0 &&
 				!item.posa_is_replace
 			) {
