@@ -261,4 +261,66 @@ describe("invoiceItemMethods._applyServerPricingRules", () => {
 
                 delete global.frappe;
         });
+
+        it("preserves offer-adjusted item rates when reconciling with server", async () => {
+                const offeredItem = {
+                        posa_row_id: "ROW-2",
+                        item_code: "ITEM-OFFER",
+                        qty: 3,
+                        rate: 75,
+                        base_rate: 75,
+                        price_list_rate: 90,
+                        base_price_list_rate: 90,
+                        discount_amount: 15,
+                        base_discount_amount: 15,
+                        discount_percentage: 16.6667,
+                        posa_offer_applied: 1,
+                        locked_price: 0,
+                };
+
+                const context = {
+                        ...createContext(),
+                        items: [offeredItem],
+                        _syncAutoFreeLines: vi.fn(),
+                        _updatePricingBadge: vi.fn(),
+                        $forceUpdate: vi.fn(),
+                };
+                context._fromBaseCurrency = invoiceItemMethods._fromBaseCurrency;
+                context._toBaseCurrency = invoiceItemMethods._toBaseCurrency;
+                context._resolvePricingQty = invoiceItemMethods._resolvePricingQty;
+
+                global.frappe = {
+                        call: vi.fn(async () => ({
+                                message: {
+                                        updates: [
+                                                {
+                                                        row_id: offeredItem.posa_row_id,
+                                                        rate: 120,
+                                                        price_list_rate: 120,
+                                                        discount_amount: 0,
+                                                        discount_percentage: 0,
+                                                },
+                                        ],
+                                        free_lines: [],
+                                },
+                        })),
+                };
+
+                await invoiceItemMethods._applyServerPricingRules.call(context, {
+                        company: "Test Co",
+                        price_list: "Standard",
+                        currency: "USD",
+                });
+
+                expect(global.frappe.call).toHaveBeenCalledTimes(1);
+                expect(offeredItem.rate).toBeCloseTo(75);
+                expect(offeredItem.base_rate).toBeCloseTo(75);
+                expect(offeredItem.price_list_rate).toBeCloseTo(90);
+                expect(offeredItem.base_price_list_rate).toBeCloseTo(90);
+                expect(offeredItem.discount_amount).toBeCloseTo(15);
+                expect(offeredItem.base_discount_amount).toBeCloseTo(15);
+                expect(offeredItem.discount_percentage).toBeCloseTo(16.6667);
+
+                delete global.frappe;
+        });
 });

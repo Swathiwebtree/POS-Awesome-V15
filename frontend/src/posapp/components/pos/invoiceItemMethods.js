@@ -737,8 +737,12 @@ export default {
 
                         const manualOverride = item._manual_rate_set === true;
                         const priceLocked = item.locked_price === true;
+                        const offerApplied =
+                                item.posa_offer_applied === true ||
+                                item.posa_offer_applied === 1 ||
+                                item.posa_offer_applied === "1";
 
-                        if (!manualOverride && !priceLocked) {
+                        if (!manualOverride && !priceLocked && !offerApplied) {
                                 const convertedRate = fromBase(baseRate);
                                 const convertedPriceListRate = fromBase(basePriceListRate);
                                 const convertedDiscount = fromBase(baseDiscount);
