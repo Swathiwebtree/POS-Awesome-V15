@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/posapp/utils/stockCoordinator.js", () => ({
         default: {
@@ -167,6 +167,7 @@ describe("invoiceItemMethods._applyPricingToLine", () => {
                         _resolveBaseRate: invoiceItemMethods._resolveBaseRate,
                         _updatePricingBadge: vi.fn(),
                 };
+                context._resolvePricingQty = invoiceItemMethods._resolvePricingQty;
 
                 const item = {
                         item_code: "ITEM-NEG",
@@ -195,5 +196,131 @@ describe("invoiceItemMethods._applyPricingToLine", () => {
                 expect(item.base_discount_amount).toBeCloseTo(10);
                 expect(item.amount).toBeCloseTo(90);
                 expect(item.base_amount).toBeCloseTo(90);
+        });
+});
+
+describe("invoiceItemMethods._applyServerPricingRules", () => {
+        it("does not override manual rate overrides from server responses", async () => {
+                const manualItem = {
+                        posa_row_id: "ROW-1",
+                        item_code: "ITEM-1",
+                        qty: 2,
+                        rate: 120,
+                        base_rate: 120,
+                        price_list_rate: 150,
+                        base_price_list_rate: 150,
+                        discount_amount: 60,
+                        base_discount_amount: 60,
+                        discount_percentage: 40,
+                        _manual_rate_set: true,
+                        locked_price: 0,
+                };
+
+                const context = {
+                        ...createContext(),
+                        items: [manualItem],
+                        _syncAutoFreeLines: vi.fn(),
+                        _updatePricingBadge: vi.fn(),
+                        $forceUpdate: vi.fn(),
+                };
+                context._fromBaseCurrency = invoiceItemMethods._fromBaseCurrency;
+                context._toBaseCurrency = invoiceItemMethods._toBaseCurrency;
+                context._resolvePricingQty = invoiceItemMethods._resolvePricingQty;
+
+                global.frappe = {
+                        call: vi.fn(async () => ({
+                                message: {
+                                        updates: [
+                                                {
+                                                        row_id: manualItem.posa_row_id,
+                                                        rate: 80,
+                                                        price_list_rate: 110,
+                                                        discount_amount: 30,
+                                                        discount_percentage: 27,
+                                                },
+                                        ],
+                                        free_lines: [],
+                                },
+                        })),
+                };
+
+                await invoiceItemMethods._applyServerPricingRules.call(context, {
+                        company: "Test Co",
+                        price_list: "Standard",
+                        currency: "USD",
+                });
+
+                expect(global.frappe.call).toHaveBeenCalledTimes(1);
+                expect(manualItem.rate).toBeCloseTo(120);
+                expect(manualItem.base_rate).toBeCloseTo(120);
+                expect(manualItem.price_list_rate).toBeCloseTo(150);
+                expect(manualItem.base_price_list_rate).toBeCloseTo(150);
+                expect(manualItem.discount_amount).toBeCloseTo(60);
+                expect(manualItem.base_discount_amount).toBeCloseTo(60);
+                expect(manualItem.discount_percentage).toBeCloseTo(40);
+
+                delete global.frappe;
+        });
+
+        it("preserves offer-adjusted item rates when reconciling with server", async () => {
+                const offeredItem = {
+                        posa_row_id: "ROW-2",
+                        item_code: "ITEM-OFFER",
+                        qty: 3,
+                        rate: 75,
+                        base_rate: 75,
+                        price_list_rate: 90,
+                        base_price_list_rate: 90,
+                        discount_amount: 15,
+                        base_discount_amount: 15,
+                        discount_percentage: 16.6667,
+                        posa_offer_applied: 1,
+                        locked_price: 0,
+                };
+
+                const context = {
+                        ...createContext(),
+                        items: [offeredItem],
+                        _syncAutoFreeLines: vi.fn(),
+                        _updatePricingBadge: vi.fn(),
+                        $forceUpdate: vi.fn(),
+                };
+                context._fromBaseCurrency = invoiceItemMethods._fromBaseCurrency;
+                context._toBaseCurrency = invoiceItemMethods._toBaseCurrency;
+                context._resolvePricingQty = invoiceItemMethods._resolvePricingQty;
+
+                global.frappe = {
+                        call: vi.fn(async () => ({
+                                message: {
+                                        updates: [
+                                                {
+                                                        row_id: offeredItem.posa_row_id,
+                                                        rate: 120,
+                                                        price_list_rate: 120,
+                                                        discount_amount: 0,
+                                                        discount_percentage: 0,
+                                                },
+                                        ],
+                                        free_lines: [],
+                                },
+                        })),
+                };
+
+                await invoiceItemMethods._applyServerPricingRules.call(context, {
+                        company: "Test Co",
+                        price_list: "Standard",
+                        currency: "USD",
+                });
+
+                expect(global.frappe.call).toHaveBeenCalledTimes(1);
+                expect(offeredItem.rate).toBeCloseTo(75);
+                expect(offeredItem.base_rate).toBeCloseTo(75);
+                expect(offeredItem.price_list_rate).toBeCloseTo(90);
+                expect(offeredItem.base_price_list_rate).toBeCloseTo(90);
+                expect(offeredItem.discount_amount).toBeCloseTo(15);
+                expect(offeredItem.base_discount_amount).toBeCloseTo(15);
+                expect(offeredItem.discount_percentage).toBeCloseTo(16.6667);
+
+                delete global.frappe;
         });
 });
