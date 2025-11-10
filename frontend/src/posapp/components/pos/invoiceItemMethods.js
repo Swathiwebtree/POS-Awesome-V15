@@ -735,27 +735,32 @@ export default {
                         const discountPercentage =
                                 Number.parseFloat(update.discount_percentage ?? item.discount_percentage ?? 0) || 0;
 
-                        const convertedRate = fromBase(baseRate);
-                        const convertedPriceListRate = fromBase(basePriceListRate);
-                        const convertedDiscount = fromBase(baseDiscount);
+                        const manualOverride = item._manual_rate_set === true;
+                        const priceLocked = item.locked_price === true;
 
-                        item.base_rate = baseRate;
-                        item.base_price_list_rate = basePriceListRate;
-                        item.base_discount_amount = baseDiscount;
-                        item.discount_percentage = discountPercentage;
-                        item.rate = this.flt ? this.flt(convertedRate, precision) : convertedRate;
-                        item.price_list_rate = this.flt
-                                ? this.flt(convertedPriceListRate, precision)
-                                : convertedPriceListRate;
-                        item.discount_amount = this.flt
-                                ? this.flt(convertedDiscount, precision)
-                                : convertedDiscount;
-                        item.amount = this.flt
-                                ? this.flt(item.rate * item.qty, precision)
-                                : item.rate * item.qty;
-                        item.base_amount = this.flt
-                                ? this.flt(baseRate * item.qty, precision)
-                                : baseRate * item.qty;
+                        if (!manualOverride && !priceLocked) {
+                                const convertedRate = fromBase(baseRate);
+                                const convertedPriceListRate = fromBase(basePriceListRate);
+                                const convertedDiscount = fromBase(baseDiscount);
+
+                                item.base_rate = baseRate;
+                                item.base_price_list_rate = basePriceListRate;
+                                item.base_discount_amount = baseDiscount;
+                                item.discount_percentage = discountPercentage;
+                                item.rate = this.flt ? this.flt(convertedRate, precision) : convertedRate;
+                                item.price_list_rate = this.flt
+                                        ? this.flt(convertedPriceListRate, precision)
+                                        : convertedPriceListRate;
+                                item.discount_amount = this.flt
+                                        ? this.flt(convertedDiscount, precision)
+                                        : convertedDiscount;
+                                item.amount = this.flt
+                                        ? this.flt(item.rate * item.qty, precision)
+                                        : item.rate * item.qty;
+                                item.base_amount = this.flt
+                                        ? this.flt(baseRate * item.qty, precision)
+                                        : baseRate * item.qty;
+                        }
 
                         const rulesProvided = Object.prototype.hasOwnProperty.call(update, "pricing_rules");
                         const detailsProvided = Object.prototype.hasOwnProperty.call(update, "pricing_rule_details");
