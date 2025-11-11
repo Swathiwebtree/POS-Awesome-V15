@@ -110,12 +110,7 @@
 						type="number"
 					></v-text-field>
 					<v-btn
-						:disabled="
-							!!item.posa_is_replace ||
-							((!stock_settings.allow_negative_stock || blockSaleBeyondAvailableQty) &&
-								item.max_qty !== undefined &&
-								item.qty >= item.max_qty)
-						"
+						:disabled="!!item.posa_is_replace || item.disable_increment"
 						size="small"
 						variant="flat"
 						class="pos-table__qty-btn pos-table__qty-btn--plus plus-btn qty-control-btn"
@@ -262,7 +257,7 @@
 											{{
 												__("In stock: {0}", [
 													formatFloat(
-														item.max_qty,
+														item._base_actual_qty,
 														hide_qty_decimals ? 0 : undefined,
 													),
 												])
@@ -439,7 +434,7 @@
 											:label="frappe._('Available QTY')"
 											class="pos-themed-input"
 											hide-details
-											:model-value="formatFloat(item.actual_qty)"
+											:model-value="formatFloat(item._base_actual_qty)"
 											disabled
 											prepend-inner-icon="mdi-package-variant"
 										></v-text-field>

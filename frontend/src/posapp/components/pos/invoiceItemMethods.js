@@ -3828,8 +3828,8 @@ export default {
                         return;
                 }
 
-                if (item && item.available_qty !== undefined) {
-                        item.max_qty = flt(item.available_qty / (item.conversion_factor || 1));
+                if (item && item._base_actual_qty !== undefined) {
+                        item.max_qty = flt(item._base_actual_qty / (item.conversion_factor || 1));
 
                         // Set increment disable flag based on stock limits
                         item.disable_increment =

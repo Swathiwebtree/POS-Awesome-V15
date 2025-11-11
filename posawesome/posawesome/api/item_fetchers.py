@@ -434,7 +434,7 @@ class ItemDetailAggregator:
             )
         # Stock, metadata, UOM and barcode data are reused both for batches and the
         # final merged item rows, so collect them up front.
-        stock_rows = get_bin_qty(self.warehouse, item_codes_tuple, ttl=1)
+        stock_rows = get_bin_qty(self.warehouse, item_codes_tuple, ttl=self.cache_ttl)
         meta_rows = get_item_meta(item_codes_tuple, ttl=self.cache_ttl)
         uom_rows = get_uoms(item_codes_tuple, ttl=self.cache_ttl)
         barcode_rows = get_barcodes(item_codes_tuple, ttl=self.cache_ttl)
