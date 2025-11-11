@@ -286,7 +286,7 @@ const computeThresholdInfo = (rule, qty) => {
         const minimum = Number.parseFloat(rule.min_qty || rule.recurse_for || 1) || 1;
         let multiplier = 0;
 
-        if (rule.apply_per_threshold || rule.is_recursive || rule.recurse_for) {
+        if (rule.apply_per_threshold) {
                 const divisor = Number.parseFloat(rule.recurse_for || rule.min_qty || 1) || 1;
                 multiplier = Math.floor(qty / divisor);
         } else {
@@ -330,7 +330,7 @@ export const computeFreeItems = ({ item, qty, docQty, ctx, indexes }) => {
                         ? Number.parseFloat(rule.free_qty_per_unit || 0) || 0
                         : Number.parseFloat(rule.free_qty || 0) || 0;
 
-                if (rule.apply_per_threshold || rule.is_recursive || rule.recurse_for) {
+                if (rule.apply_per_threshold) {
                         freeQty = multiplier * freePerThreshold;
                 } else if (rule.free_qty_per_unit) {
                         freeQty = effectiveQty * Number.parseFloat(rule.free_qty_per_unit || 0);
