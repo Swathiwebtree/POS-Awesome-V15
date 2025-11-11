@@ -147,7 +147,7 @@ def _normalise_rule(doc: frappe._dict) -> frappe._dict:
         is_free_item_rule=1 if price_or_product_discount == "Product" else 0,
         same_item=cint(doc.get("same_item") or 0),
         free_item=doc.get("free_item"),
-        free_qty=flt(doc.get("free_qty") or 0),
+        free_qty=flt(doc.get("free_qty") or 0) if cint(doc.get("is_recursive") or doc.get("apply_per_threshold") or 0) else 1,
         free_qty_per_unit=flt(doc.get("free_qty_per_unit") or 0),
         apply_per_threshold=cint(doc.get("is_recursive") or doc.get("apply_per_threshold") or 0),
         max_free_qty=flt(doc.get("max_free_qty")) if doc.get("max_free_qty") is not None else None,
