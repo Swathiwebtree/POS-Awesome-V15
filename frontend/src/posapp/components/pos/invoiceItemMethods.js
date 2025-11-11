@@ -3832,9 +3832,12 @@ export default {
                         item.max_qty = flt(item._base_actual_qty / (item.conversion_factor || 1));
 
                         // Set increment disable flag based on stock limits
-                        item.disable_increment =
-                                (!this.stock_settings.allow_negative_stock || this.blockSaleBeyondAvailableQty) &&
-                                item.qty >= item.max_qty;
+                        const blockSale = this.pos_profile?.posa_block_sale_beyond_available_qty || this.blockSaleBeyondAvailableQty;
+                        if (blockSale) {
+                            item.disable_increment = item.qty >= item.max_qty;
+                        } else {
+                            item.disable_increment = !this.stock_settings.allow_negative_stock && item.qty >= item.max_qty;
+                        }
                 }
         },
 
