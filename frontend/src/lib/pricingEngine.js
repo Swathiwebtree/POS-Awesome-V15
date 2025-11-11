@@ -332,8 +332,6 @@ export const computeFreeItems = ({ item, qty, docQty, ctx, indexes }) => {
 
                 if (rule.apply_per_threshold || rule.is_recursive || rule.recurse_for) {
                         freeQty = multiplier * freePerThreshold;
-                } else if (rule.free_qty_per_unit) {
-                        freeQty = effectiveQty * Number.parseFloat(rule.free_qty_per_unit || 0);
                 } else {
                         freeQty = Number.parseFloat(rule.free_qty || 0) || 0;
                 }
