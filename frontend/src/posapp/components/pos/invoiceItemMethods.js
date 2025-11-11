@@ -3805,20 +3805,38 @@ export default {
 	},
 
 	// Calculate stock quantity for an item (simplified - validation handled centrally)
-        calc_stock_qty(item, value) {
-                calcStockQty(item, value, this);
-                if (this.update_qty_limits) {
-                        this.update_qty_limits(item);
-                }
+	calc_stock_qty(item, value) {
+		calcStockQty(item, value, this);
+		if (this.update_qty_limits) {
+			this.update_qty_limits(item);
+		}
 
-                if (flt(item.qty) === 0) {
-                        this.remove_item(item);
-                        this.$forceUpdate();
-                }
-                if (!this._applyingPricingRules) {
-                        this.applyPricingRulesForCart();
-                }
-        },
+		const blockSale = this.pos_profile?.posa_block_sale_beyond_available_qty || this.blockSaleBeyondAvailableQty;
+		let clamped = false;
+		if (blockSale && item.max_qty !== undefined && flt(item.qty) > item.max_qty) {
+			this.eventBus.emit("show_message", {
+				title: __("Quantity exceeds available stock"),
+				text: __("The quantity for {0} has been adjusted to the maximum available stock.", [
+					item.item_name,
+				]),
+				color: "warning",
+			});
+			item.qty = item.max_qty;
+			clamped = true;
+		}
+
+		if (flt(item.qty) === 0) {
+			this.remove_item(item);
+			this.$forceUpdate();
+			return;
+		}
+
+		if (clamped) {
+			this.calc_item_price(item);
+		} else if (!this._applyingPricingRules) {
+			this.applyPricingRulesForCart();
+		}
+	},
 
 	// Update quantity limits based on available stock (simplified - validation handled centrally)
         update_qty_limits(item) {
