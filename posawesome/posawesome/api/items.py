@@ -13,7 +13,7 @@ from erpnext.stock.doctype.batch.batch import (
 )
 from erpnext.stock.get_item_details import get_item_details
 from frappe import _, as_json
-from frappe.utils import cstr, flt, get_datetime, nowdate
+from frappe.utils import cint, cstr, flt, get_datetime, nowdate
 from frappe.utils.background_jobs import enqueue
 from frappe.utils.caching import redis_cache
 
@@ -926,35 +926,170 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
     return res
 
 
+def _get_scale_barcode_settings():
+    """Return the Scale Barcode Settings single document if it exists."""
+
+    try:
+        return frappe.get_cached_doc("Scale Barcode Settings")
+    except frappe.DoesNotExistError:
+        return None
+    except Exception:
+        frappe.log_error("Unable to load Scale Barcode Settings", "POS Awesome")
+        return None
+
+
+def _extract_numeric_segment(barcode: str, start: int, length: int, decimals: int = 0):
+    """Extract a numeric value from ``barcode`` using 1-indexed ``start`` and ``length``."""
+
+    if not (start and length):
+        return None
+
+    start_index = max(start - 1, 0)
+    end_index = start_index + max(length, 0)
+    if len(barcode) < end_index:
+        return None
+
+    whole = barcode[start_index:end_index]
+    decimal_part = ""
+    if decimals and decimals > 0:
+        decimal_end = end_index + decimals
+        if len(barcode) < decimal_end:
+            return None
+        decimal_part = barcode[end_index:decimal_end]
+
+    number_str = whole
+    if decimal_part:
+        number_str = f"{whole}.{decimal_part}"
+
+    try:
+        return flt(number_str)
+    except Exception:
+        return None
+
+
+def _parse_scale_barcode_data(barcode: str) -> Optional[Dict[str, Any]]:
+    """Parse barcode data according to the configured scale barcode settings."""
+
+    barcode_value = cstr(barcode or "").strip()
+    if not barcode_value:
+        return None
+
+    settings = _get_scale_barcode_settings()
+    if not settings:
+        return None
+
+    prefix_included = cint(settings.prefix_included_or_not)
+    prefix_length = cint(settings.no_of_prefix_characters) if prefix_included else 0
+    prefix_value = cstr(settings.prefix or "")
+
+    if prefix_included:
+        if prefix_value and not barcode_value.startswith(prefix_value):
+            return None
+        if prefix_length and len(barcode_value) < prefix_length:
+            return None
+
+    item_start = cint(settings.item_code_starting_digit)
+    item_digits = cint(settings.item_code_total_digits)
+    if not (item_start and item_digits):
+        return None
+
+    item_start_index = max(item_start - 1, 0)
+    item_end_index = item_start_index + item_digits
+    if len(barcode_value) < item_end_index:
+        return None
+
+    item_code = barcode_value[item_start_index:item_end_index]
+    data: Dict[str, Any] = {"barcode": barcode_value, "item_code": item_code}
+
+    qty = _extract_numeric_segment(
+        barcode_value,
+        cint(settings.weight_starting_digit),
+        cint(settings.weight_total_digits),
+        cint(settings.weight_decimals),
+    )
+    if qty is not None:
+        data["qty"] = qty
+
+    if cint(settings.price_included_in_barcode_or_not):
+        price = _extract_numeric_segment(
+            barcode_value,
+            cint(settings.price_starting_digit),
+            cint(settings.price_total_digit),
+            cint(settings.price_decimals),
+        )
+        if price is not None:
+            data["price"] = price
+
+    return data
+
+
+@frappe.whitelist()
+def parse_scale_barcode(barcode: str):
+    """Public API to parse a scale barcode and return decoded data."""
+
+    data = _parse_scale_barcode_data(barcode)
+    return data or None
+
+
 @frappe.whitelist()
 def get_items_from_barcode(selling_price_list, currency, barcode):
-    search_item = frappe.db.get_value(
-        "Item Barcode",
-        {"barcode": barcode},
-        ["parent as item_code", "posa_uom"],
-        as_dict=1,
-    )
-    if search_item:
-        item_doc = frappe.get_cached_doc("Item", search_item.item_code)
-        item_price = frappe.db.get_value(
+    scale_data = _parse_scale_barcode_data(barcode)
+    item_code = None
+    scale_qty = None
+    scale_price = None
+
+    if scale_data:
+        item_code = scale_data.get("item_code")
+        scale_qty = scale_data.get("qty")
+        scale_price = scale_data.get("price")
+
+    if not item_code:
+        search_item = frappe.db.get_value(
+            "Item Barcode",
+            {"barcode": barcode},
+            ["parent as item_code", "posa_uom"],
+            as_dict=1,
+        )
+        if not search_item:
+            return None
+        item_code = search_item.item_code
+        item_uom = search_item.posa_uom
+    else:
+        item_uom = None
+
+    if not item_code or not frappe.db.exists("Item", item_code):
+        return None
+
+    item_doc = frappe.get_cached_doc("Item", item_code)
+
+    if not item_uom:
+        item_uom = getattr(item_doc, "stock_uom", None)
+
+    rate = None
+    if scale_price is not None:
+        rate = flt(scale_price)
+    else:
+        rate = frappe.db.get_value(
             "Item Price",
             {
-                "item_code": search_item.item_code,
+                "item_code": item_code,
                 "price_list": selling_price_list,
                 "currency": currency,
             },
             "price_list_rate",
         )
 
-        return {
-            "item_code": item_doc.name,
-            "item_name": item_doc.item_name,
-            "barcode": barcode,
-            "rate": item_price or 0,
-            "uom": search_item.posa_uom or item_doc.stock_uom,
-            "currency": currency,
-        }
-    return None
+    return {
+        "item_code": item_doc.name,
+        "item_name": item_doc.item_name,
+        "barcode": barcode,
+        "rate": rate or 0,
+        "price_list_rate": rate or 0,
+        "uom": item_uom or item_doc.stock_uom,
+        "currency": currency,
+        "scale_qty": scale_qty,
+        "scale_price": scale_price,
+    }
 
 
 def build_item_cache(item_code):
