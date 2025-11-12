@@ -1,5 +1,10 @@
 const DEFAULT_PRECISION = 6;
 
+const parseOptionalFloat = (value) => {
+        const numeric = Number.parseFloat(value);
+        return Number.isFinite(numeric) ? numeric : null;
+};
+
 export const round = (value, precision = DEFAULT_PRECISION) => {
         const numeric = Number.parseFloat(value || 0);
         if (!Number.isFinite(numeric)) {
@@ -357,6 +362,38 @@ export const computeFreeItems = ({ item, qty, docQty, ctx, indexes }) => {
                 const uom = sameItem ? item.stock_uom || item.uom : null;
                 const conversionFactor = sameItem ? 1 : null;
 
+                const rawBaseRate =
+                        parseOptionalFloat(rule.free_item_base_rate) ??
+                        parseOptionalFloat(rule.base_free_item_rate) ??
+                        parseOptionalFloat(rule.free_item_rate);
+                const rawDisplayRate =
+                        parseOptionalFloat(rule.free_item_rate) ?? parseOptionalFloat(rule.rate_for_free_item);
+
+                const baseRate = rawBaseRate ?? rawDisplayRate ?? null;
+
+                const rawBasePriceListRate =
+                        parseOptionalFloat(rule.free_item_base_price_list_rate) ??
+                        parseOptionalFloat(rule.free_item_price_list_rate) ??
+                        parseOptionalFloat(rule.base_for_price_list_rate);
+                const rawDisplayPriceListRate =
+                        parseOptionalFloat(rule.free_item_price_list_rate) ??
+                        parseOptionalFloat(rule.for_price_list_rate);
+
+                const basePriceListRate = rawBasePriceListRate ?? rawDisplayPriceListRate ?? baseRate;
+
+                let baseDiscount =
+                        parseOptionalFloat(rule.free_item_base_discount_amount) ??
+                        parseOptionalFloat(rule.free_item_discount_amount);
+                if (baseDiscount === null && basePriceListRate !== null && baseRate !== null) {
+                        baseDiscount = Math.max(basePriceListRate - baseRate, 0);
+                }
+
+                const discountPercentage =
+                        parseOptionalFloat(rule.free_item_discount_percentage) ??
+                        (basePriceListRate
+                                ? Math.max(((baseDiscount ?? 0) / basePriceListRate) * 100, 0)
+                                : null);
+
                 freebies.push({
                         item_code: sameItem ? item.item_code : rule.free_item || item.item_code,
                         qty: freeQty,
@@ -371,6 +408,24 @@ export const computeFreeItems = ({ item, qty, docQty, ctx, indexes }) => {
                         free_qty_per_threshold: freePerThreshold,
                         uom,
                         conversion_factor: conversionFactor,
+                        ...(baseRate !== null
+                                ? { base_rate: baseRate, rate: rawDisplayRate ?? baseRate }
+                                : {}),
+                        ...(basePriceListRate !== null
+                                ? {
+                                          base_price_list_rate: basePriceListRate,
+                                          price_list_rate: rawDisplayPriceListRate ?? basePriceListRate,
+                                  }
+                                : {}),
+                        ...(baseDiscount !== null
+                                ? {
+                                          base_discount_amount: baseDiscount,
+                                          discount_amount: parseOptionalFloat(rule.free_item_discount_amount) ?? baseDiscount,
+                                  }
+                                : {}),
+                        ...(discountPercentage !== null
+                                ? { discount_percentage: discountPercentage }
+                                : {}),
                 });
 
                 if (rule.stop_further_rules) {
