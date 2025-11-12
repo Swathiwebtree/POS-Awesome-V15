@@ -11,6 +11,9 @@ def execute():
     if not frappe.db.table_exists("Workspace"):
         return
 
+    if not frappe.db.exists("DocType", SHORTCUT_LABEL):
+        return
+
     if not frappe.db.exists("Workspace", "POS Awesome"):
         return
 
