@@ -1771,7 +1771,7 @@ export default {
                 const omitFreebies = !isOffline();
 
                 this.items.forEach((item) => {
-                        if (omitFreebies && item && (item.is_free_item || item.auto_free_source)) {
+                        if (omitFreebies && item && item.auto_free_source) {
                                 return;
                         }
                         const new_item = {
