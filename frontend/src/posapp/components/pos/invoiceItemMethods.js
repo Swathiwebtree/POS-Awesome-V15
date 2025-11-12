@@ -1174,7 +1174,7 @@ export default {
 
 			const manualSnapshots = this._snapshotManualValuesFromDocItems(this.items);
 
-			await this.update_items_details(this.items);
+			// await this.update_items_details(this.items);
 
 			if (manualSnapshots.length) {
 				this._restoreManualSnapshots(this.items, manualSnapshots);
@@ -1390,7 +1390,7 @@ export default {
 			this.invoice_doc = data;
 			this.posa_offers = data.posa_offers || [];
 			this.items = data.items;
-			this.update_items_details(this.items);
+			// this.update_items_details(this.items);
 			this.items.forEach((item) => {
 				if (!item.posa_row_id) {
 					item.posa_row_id = this.makeid(20);
