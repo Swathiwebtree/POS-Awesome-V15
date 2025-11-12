@@ -127,6 +127,16 @@
   {
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Scale Barcode Settings",
+   "link_count": 0,
+   "link_to": "Scale Barcode Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Shift",
    "link_count": 2,
    "onboard": 0,
@@ -165,13 +175,20 @@
  "roles": [],
  "sequence_id": 1.0,
  "shortcuts": [
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "POS Awesome App",
-   "link_to": "posapp",
-   "type": "Page"
-  }
+ {
+  "color": "Grey",
+  "doc_view": "List",
+  "label": "POS Awesome App",
+  "link_to": "posapp",
+  "type": "Page"
+ },
+ {
+  "color": "Grey",
+  "doc_view": "List",
+  "label": "Scale Barcode Settings",
+  "link_to": "Scale Barcode Settings",
+  "type": "DocType"
+ }
  ],
  "title": "POS Awesome"
 }
