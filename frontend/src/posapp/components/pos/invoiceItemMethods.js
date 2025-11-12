@@ -725,6 +725,73 @@ export default {
 
                 const sameItemFreeParents = new Map();
 
+                const existingFreebieSnapshots = new Map();
+
+                const registerExistingFreebie = (key, line) => {
+                        if (!key || !line) {
+                                return;
+                        }
+
+                        const segments = key.split("::");
+                        const parentSegment = segments.length > 2 ? segments.slice(2).join("::") : null;
+
+                        const sameItemFlag =
+                                asServerBool(line.same_item) ||
+                                line.same_item === 1 ||
+                                line.same_item === "1";
+
+                        const snapshot = {
+                                parentRowId: line.parent_row_id || parentSegment || null,
+                                qty: parseServerFloat(line.qty),
+                                stock_qty: parseServerFloat(line.stock_qty),
+                                base_rate: parseServerFloat(line.base_rate ?? line.rate),
+                                rate: parseServerFloat(line.rate),
+                                base_price_list_rate: parseServerFloat(
+                                        line.base_price_list_rate ?? line.price_list_rate,
+                                ),
+                                price_list_rate: parseServerFloat(line.price_list_rate),
+                                base_discount_amount: parseServerFloat(
+                                        line.base_discount_amount ?? line.discount_amount,
+                                ),
+                                discount_amount: parseServerFloat(line.discount_amount),
+                                discount_percentage: parseServerFloat(line.discount_percentage),
+                                uom: line.uom,
+                                conversion_factor: parseServerFloat(line.conversion_factor),
+                                same_item: sameItemFlag ? 1 : 0,
+                        };
+
+                        existingFreebieSnapshots.set(key, snapshot);
+
+                        if (segments.length >= 2) {
+                                const baseKey = `${segments[0]}::${segments[1]}`;
+                                if (baseKey && !existingFreebieSnapshots.has(baseKey)) {
+                                        existingFreebieSnapshots.set(baseKey, { ...snapshot });
+                                }
+                        }
+                };
+
+                this.items.forEach((line) => {
+                        if (line && line.auto_free_source) {
+                                registerExistingFreebie(line.auto_free_source, line);
+                        }
+                });
+
+                const resolveWithFallback = (primary, fallback, treatZeroAsMissing = false) => {
+                        const fallbackFinite = Number.isFinite(fallback) ? fallback : null;
+                        if (!Number.isFinite(primary)) {
+                                return fallbackFinite;
+                        }
+                        if (
+                                treatZeroAsMissing &&
+                                primary <= 0 &&
+                                Number.isFinite(fallback) &&
+                                fallback > 0
+                        ) {
+                                return fallback;
+                        }
+                        return primary;
+                };
+
                 const paidLines = this.items
                         .filter((item) => item && !item.is_free_item && !item.auto_free_source)
                         .map((item) => {
@@ -814,54 +881,136 @@ export default {
                                 entry.parent_docname ||
                                 null;
                         const keyBase = `${ruleName || ""}::${entry.item_code}`;
-                        const key = parentRowId ? `${keyBase}::${parentRowId}` : keyBase;
-                        const qty = parseServerFloat(entry.qty) ?? 0;
+
+                        const fallbackSnapshot =
+                                existingFreebieSnapshots.get(
+                                        parentRowId ? `${keyBase}::${parentRowId}` : keyBase,
+                                ) || existingFreebieSnapshots.get(keyBase) || null;
+
+                        const normalizedParentRowId = parentRowId || fallbackSnapshot?.parentRowId || null;
+                        const key = normalizedParentRowId ? `${keyBase}::${normalizedParentRowId}` : keyBase;
+
+                        const qtyRaw = parseServerFloat(entry.qty);
+                        const qty = resolveWithFallback(qtyRaw, fallbackSnapshot?.qty, false) ?? 0;
+
+                        const stockQtyRaw = parseServerFloat(entry.stock_qty ?? entry.base_qty ?? entry.qty);
                         const stockQty =
-                                parseServerFloat(entry.stock_qty ?? entry.base_qty ?? entry.qty) ?? qty;
-                        const conversionFactor = parseServerFloat(entry.conversion_factor ?? entry.cf);
-                        const sameItem = asServerBool(entry.same_item);
-                        const baseRate = parseServerFloat(entry.base_rate ?? entry.rate);
-                        const displayRate = parseServerFloat(entry.rate);
-                        const basePriceListRate = parseServerFloat(
-                                entry.base_price_list_rate ?? entry.price_list_rate,
+                                resolveWithFallback(
+                                        stockQtyRaw,
+                                        fallbackSnapshot?.stock_qty ?? fallbackSnapshot?.qty,
+                                        false,
+                                ) ?? qty;
+
+                        const conversionFactorRaw = parseServerFloat(entry.conversion_factor ?? entry.cf);
+                        const conversionFactor = resolveWithFallback(
+                                conversionFactorRaw,
+                                fallbackSnapshot?.conversion_factor,
+                                false,
                         );
-                        const displayPriceListRate = parseServerFloat(entry.price_list_rate);
-                        const baseDiscount = parseServerFloat(
-                                entry.base_discount_amount ?? entry.discount_amount,
+
+                        let baseRate = resolveWithFallback(
+                                parseServerFloat(entry.base_rate ?? entry.rate),
+                                fallbackSnapshot?.base_rate ?? fallbackSnapshot?.rate,
+                                true,
                         );
-                        const discountAmount = parseServerFloat(entry.discount_amount);
-                        const discountPercentage = parseServerFloat(entry.discount_percentage);
+                        let displayRate = resolveWithFallback(
+                                parseServerFloat(entry.rate),
+                                fallbackSnapshot?.rate,
+                                true,
+                        );
+
+                        let basePriceListRate = resolveWithFallback(
+                                parseServerFloat(entry.base_price_list_rate ?? entry.price_list_rate),
+                                fallbackSnapshot?.base_price_list_rate ?? fallbackSnapshot?.price_list_rate,
+                                true,
+                        );
+                        let displayPriceListRate = resolveWithFallback(
+                                parseServerFloat(entry.price_list_rate),
+                                fallbackSnapshot?.price_list_rate,
+                                true,
+                        );
+
+                        let baseDiscount = resolveWithFallback(
+                                parseServerFloat(entry.base_discount_amount ?? entry.discount_amount),
+                                fallbackSnapshot?.base_discount_amount ?? fallbackSnapshot?.discount_amount,
+                                true,
+                        );
+                        let discountAmount = resolveWithFallback(
+                                parseServerFloat(entry.discount_amount),
+                                fallbackSnapshot?.discount_amount,
+                                true,
+                        );
+                        let discountPercentage = resolveWithFallback(
+                                parseServerFloat(entry.discount_percentage),
+                                fallbackSnapshot?.discount_percentage,
+                                true,
+                        );
+
+                        if (!Number.isFinite(baseRate) && Number.isFinite(displayRate)) {
+                                baseRate = displayRate;
+                        }
+                        if (!Number.isFinite(displayRate) && Number.isFinite(baseRate)) {
+                                displayRate = baseRate;
+                        }
+
+                        if (!Number.isFinite(basePriceListRate) && Number.isFinite(displayPriceListRate)) {
+                                basePriceListRate = displayPriceListRate;
+                        }
+                        if (!Number.isFinite(displayPriceListRate) && Number.isFinite(basePriceListRate)) {
+                                displayPriceListRate = basePriceListRate;
+                        }
+
+                        if (!Number.isFinite(baseDiscount) && Number.isFinite(discountAmount)) {
+                                baseDiscount = discountAmount;
+                        }
+                        if (!Number.isFinite(discountAmount) && Number.isFinite(baseDiscount)) {
+                                discountAmount = baseDiscount;
+                        }
+
+                        if (!Number.isFinite(discountPercentage) && Number.isFinite(baseDiscount) && Number.isFinite(basePriceListRate) && basePriceListRate) {
+                                discountPercentage = Math.max((baseDiscount / basePriceListRate) * 100, 0);
+                        }
+
+                        const sameItem =
+                                asServerBool(entry.same_item) ||
+                                (!!fallbackSnapshot && (fallbackSnapshot.same_item === 1 || fallbackSnapshot.same_item === true));
+
+                        const uom = entry.uom || fallbackSnapshot?.uom;
 
                         freebiesMap.set(key, {
                                 rule: ruleName,
                                 item_code: entry.item_code,
                                 qty,
-                                parentRowId,
-                                uom: entry.uom,
+                                parentRowId: normalizedParentRowId,
+                                uom,
                                 stock_qty: stockQty,
                                 conversion_factor: Number.isFinite(conversionFactor)
                                         ? conversionFactor
                                         : undefined,
                                 ...(sameItem ? { same_item: 1 } : {}),
-                                ...(baseRate !== null ? { base_rate: baseRate } : {}),
-                                ...(displayRate !== null ? { rate: displayRate } : {}),
-                                ...(basePriceListRate !== null
+                                ...(Number.isFinite(baseRate) ? { base_rate: baseRate } : {}),
+                                ...(Number.isFinite(displayRate) ? { rate: displayRate } : {}),
+                                ...(Number.isFinite(basePriceListRate)
                                         ? { base_price_list_rate: basePriceListRate }
                                         : {}),
-                                ...(displayPriceListRate !== null
+                                ...(Number.isFinite(displayPriceListRate)
                                         ? { price_list_rate: displayPriceListRate }
                                         : {}),
-                                ...(baseDiscount !== null ? { base_discount_amount: baseDiscount } : {}),
-                                ...(discountAmount !== null ? { discount_amount: discountAmount } : {}),
-                                ...(discountPercentage !== null
+                                ...(Number.isFinite(baseDiscount)
+                                        ? { base_discount_amount: baseDiscount }
+                                        : {}),
+                                ...(Number.isFinite(discountAmount)
+                                        ? { discount_amount: discountAmount }
+                                        : {}),
+                                ...(Number.isFinite(discountPercentage)
                                         ? { discount_percentage: discountPercentage }
                                         : {}),
                         });
 
-                        if (sameItem && parentRowId) {
-                                const bucket = sameItemFreeParents.get(parentRowId) || new Set();
+                        if (sameItem && normalizedParentRowId) {
+                                const bucket = sameItemFreeParents.get(normalizedParentRowId) || new Set();
                                 bucket.add(entry.item_code);
-                                sameItemFreeParents.set(parentRowId, bucket);
+                                sameItemFreeParents.set(normalizedParentRowId, bucket);
                         }
                 });
 
