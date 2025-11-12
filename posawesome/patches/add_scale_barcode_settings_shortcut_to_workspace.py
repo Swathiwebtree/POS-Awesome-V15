@@ -99,35 +99,39 @@ def ensure_links(workspace):
         )
         updated = True
 
-    pos_card_index = next(
-        (idx for idx, link in enumerate(links) if link.type == "Card Break" and link.label == "POS"),
+    profile_card = next(
+        (link for link in links if link.type == "Card Break" and link.label == "Profile"),
         None,
     )
 
-    if pos_card_index is not None and existing:
-        desired_index = pos_card_index + 1
-        for idx in range(pos_card_index + 1, len(links)):
-            link = links[idx]
-            if link.type == "Card Break":
-                break
-            if link.type == "Link" and link.link_to == "posapp":
-                desired_index = idx + 1
+    if profile_card and existing:
+        pos_profile_link = next(
+            (link for link in links if link.type == "Link" and link.link_to == "POS Profile"),
+            None,
+        )
+
+        profile_card_index = links.index(profile_card)
+        next_card_index = next(
+            (idx for idx in range(profile_card_index + 1, len(links)) if links[idx].type == "Card Break"),
+            len(links),
+        )
+
+        desired_index = profile_card_index + 1
+        if pos_profile_link:
+            desired_index = links.index(pos_profile_link) + 1
+        if desired_index > next_card_index:
+            desired_index = next_card_index
 
         current_index = links.index(existing)
-        if current_index != desired_index and desired_index <= len(links):
-            links.insert(desired_index, links.pop(current_index))
+        if current_index != desired_index:
+            shortcut_link = links.pop(current_index)
+            if current_index < desired_index:
+                desired_index -= 1
+            links.insert(desired_index, shortcut_link)
             updated = True
 
-        pos_links = 0
-        for link in links[pos_card_index + 1 :]:
-            if link.type == "Card Break":
-                break
-            if link.type == "Link":
-                pos_links += 1
-        pos_card = links[pos_card_index]
-        if pos_card.link_count != pos_links:
-            pos_card.link_count = pos_links
-            updated = True
+    updated |= _update_card_break_count(links, "Profile")
+    updated |= _update_card_break_count(links, "POS")
 
     for idx, link in enumerate(workspace.links or [], start=1):
         if link.idx != idx:
@@ -135,6 +139,30 @@ def ensure_links(workspace):
             updated = True
 
     return updated
+
+
+def _update_card_break_count(links, label):
+    card = next(
+        (link for link in links if link.type == "Card Break" and link.label == label),
+        None,
+    )
+
+    if not card:
+        return False
+
+    card_index = links.index(card)
+    link_count = 0
+    for link in links[card_index + 1 :]:
+        if link.type == "Card Break":
+            break
+        if link.type == "Link":
+            link_count += 1
+
+    if card.link_count != link_count:
+        card.link_count = link_count
+        return True
+
+    return False
 
 
 def ensure_content(workspace):
