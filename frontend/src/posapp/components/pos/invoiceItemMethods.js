@@ -1194,6 +1194,12 @@ export default {
 
 		this.customer = data.customer;
 		this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
+		if (data.posa_delivery_charges) {
+			this.selected_delivery_charge = this.delivery_charges.find(
+				(charge) => charge.name === data.posa_delivery_charges,
+			);
+			this.delivery_charges_rate = data.posa_delivery_charges_rate;
+		}
                 const docDiscountAmount = flt(data.discount_amount);
                 const docDiscountPercentage =
                         data.additional_discount_percentage !== undefined &&
