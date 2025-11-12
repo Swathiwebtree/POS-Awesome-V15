@@ -40,7 +40,7 @@ def ensure_shortcut(workspace):
                 "label": SHORTCUT_LABEL,
                 "link_to": SHORTCUT_LABEL,
                 "type": "DocType",
-                "doc_view": "Form",
+                "doc_view": "",
                 "color": "Grey",
             },
         )
@@ -48,8 +48,8 @@ def ensure_shortcut(workspace):
         existing = next((s for s in shortcuts if s.link_to == SHORTCUT_LABEL), None)
         updated = True
 
-    if existing and existing.doc_view != "Form":
-        existing.doc_view = "Form"
+    if existing and existing.doc_view not in ("", None):
+        existing.doc_view = ""
         updated = True
 
     for idx, shortcut in enumerate(workspace.shortcuts or [], start=1):
