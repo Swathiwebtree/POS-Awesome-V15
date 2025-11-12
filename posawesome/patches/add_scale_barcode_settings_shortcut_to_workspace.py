@@ -45,7 +45,7 @@ def ensure_shortcut(workspace):
                 "label": SHORTCUT_LABEL,
                 "link_to": SHORTCUT_LABEL,
                 "type": "DocType",
-                "doc_view": "",
+                "doc_view": "List",
                 "color": "Grey",
             },
         )
@@ -53,9 +53,16 @@ def ensure_shortcut(workspace):
         existing = next((s for s in shortcuts if s.link_to == SHORTCUT_LABEL), None)
         updated = True
 
-    if existing and existing.doc_view not in ("", None):
-        existing.doc_view = ""
-        updated = True
+    if existing:
+        if existing.doc_view not in ("List", None):
+            existing.doc_view = "List"
+            updated = True
+        if existing.type != "DocType":
+            existing.type = "DocType"
+            updated = True
+        if getattr(existing, "color", None) != "Grey":
+            existing.color = "Grey"
+            updated = True
 
     for idx, shortcut in enumerate(workspace.shortcuts or [], start=1):
         if shortcut.idx != idx:
@@ -104,6 +111,23 @@ def ensure_links(workspace):
         )
         updated = True
 
+    if existing:
+        if existing.type != "Link":
+            existing.type = "Link"
+            updated = True
+        if existing.hidden != 0:
+            existing.hidden = 0
+            updated = True
+        if existing.link_type != "DocType":
+            existing.link_type = "DocType"
+            updated = True
+        if existing.link_to != SHORTCUT_LABEL:
+            existing.link_to = SHORTCUT_LABEL
+            updated = True
+        if existing.label != SHORTCUT_LABEL:
+            existing.label = SHORTCUT_LABEL
+            updated = True
+
     scale_card = next(
         (
             link
@@ -135,6 +159,16 @@ def ensure_links(workspace):
             None,
         )
         updated = True
+    if scale_card:
+        if scale_card.type != "Card Break":
+            scale_card.type = "Card Break"
+            updated = True
+        if scale_card.hidden != 0:
+            scale_card.hidden = 0
+            updated = True
+        if scale_card.label != SCALE_CARD_LABEL:
+            scale_card.label = SCALE_CARD_LABEL
+            updated = True
 
     if scale_card:
         shift_card = next(
@@ -230,20 +264,27 @@ def _update_card_break_count(links, label):
 def ensure_content(workspace):
     content_raw = workspace.content or "[]"
 
+    fallback_used = False
+
     try:
-        content = json.loads(content_raw)
+        content = frappe.parse_json(content_raw) or []
     except Exception:
-        return False
+        content = _load_default_content()
+        fallback_used = True
+
+    if not isinstance(content, list):
+        content = _load_default_content()
+        fallback_used = True
 
     updated = False
 
     updated |= _ensure_shortcut_block(content)
     updated |= _ensure_scale_card_block(content)
 
-    if updated:
+    if updated or fallback_used:
         workspace.content = json.dumps(content)
 
-    return updated
+    return updated or fallback_used
 
 
 def _ensure_shortcut_block(content):
@@ -372,3 +413,27 @@ def _ensure_scale_card_block(content):
 
     content.insert(insert_at, card_block)
     return True
+
+
+def _load_default_content():
+    try:
+        path = frappe.get_app_path(
+            "posawesome",
+            "posawesome",
+            "workspace",
+            "pos_awesome",
+            "pos_awesome.json",
+        )
+    except Exception:
+        return []
+
+    try:
+        with open(path, encoding="utf-8") as source:
+            data = json.load(source)
+    except Exception:
+        return []
+
+    try:
+        return frappe.parse_json(data.get("content") or "[]") or []
+    except Exception:
+        return []

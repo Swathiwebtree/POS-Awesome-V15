@@ -192,7 +192,7 @@
   },
   {
    "color": "Grey",
-   "doc_view": "",
+   "doc_view": "List",
    "label": "Scale Barcode Settings",
    "link_to": "Scale Barcode Settings",
    "type": "DocType"
