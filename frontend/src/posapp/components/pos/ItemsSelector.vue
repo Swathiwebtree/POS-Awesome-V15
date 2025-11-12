@@ -2947,19 +2947,44 @@ export default {
 				});
 			}, 12);
 		},
-		async processScannedItem(scannedCode) {
-			const mark = perfMarkStart("pos:scan-process");
-			this.pendingScanCode = scannedCode;
-			// Handle scale barcodes by extracting the item code and quantity
-			let searchCode = scannedCode;
-			let qtyFromBarcode = null;
-			if (
-				this.pos_profile?.posa_scale_barcode_start &&
-				scannedCode.startsWith(this.pos_profile.posa_scale_barcode_start)
-			) {
-				searchCode = this.get_search(scannedCode);
-				qtyFromBarcode = parseFloat(this.get_item_qty(scannedCode));
-			}
+                async processScannedItem(scannedCode) {
+                        const mark = perfMarkStart("pos:scan-process");
+                        this.pendingScanCode = scannedCode;
+                        // Handle scale barcodes by extracting the item code and quantity
+                        let searchCode = scannedCode;
+                        let qtyFromBarcode = null;
+                        let priceFromBarcode = null;
+                        let scaleResponse = null;
+
+                        try {
+                                const res = await frappe.call({
+                                        method: "posawesome.posawesome.api.items.parse_scale_barcode",
+                                        args: { barcode: scannedCode },
+                                });
+                                if (res && res.message) {
+                                        scaleResponse = res.message;
+                                }
+                        } catch (error) {
+                                console.error("Failed to parse scale barcode via API:", error);
+                        }
+
+                        if (scaleResponse && scaleResponse.item_code) {
+                                searchCode = scaleResponse.item_code;
+                                const parsedQty = parseFloat(scaleResponse.qty);
+                                if (!Number.isNaN(parsedQty)) {
+                                        qtyFromBarcode = parsedQty;
+                                }
+                                const parsedPrice = parseFloat(scaleResponse.price);
+                                if (!Number.isNaN(parsedPrice)) {
+                                        priceFromBarcode = parsedPrice;
+                                }
+                        } else if (
+                                this.pos_profile?.posa_scale_barcode_start &&
+                                scannedCode.startsWith(this.pos_profile.posa_scale_barcode_start)
+                        ) {
+                                searchCode = this.get_search(scannedCode);
+                                qtyFromBarcode = parseFloat(this.get_item_qty(scannedCode));
+                        }
 
 			// First try to find exact match by processed code using the pre-built index
 			const barcodeIndex = this.ensureBarcodeIndex();
@@ -2981,9 +3006,14 @@ export default {
 
 			if (foundItem) {
 				console.log("Found item by processed code:", foundItem);
-				await this.addScannedItemToInvoice(foundItem, searchCode, qtyFromBarcode);
-				return;
-			}
+                                await this.addScannedItemToInvoice(
+                                        foundItem,
+                                        searchCode,
+                                        qtyFromBarcode,
+                                        priceFromBarcode,
+                                );
+                                return;
+                        }
 
 			// If not found locally, attempt to fetch from server using processed code
 			try {
@@ -3030,9 +3060,14 @@ export default {
 					await savePriceListItems(this.customer_price_list, this.items);
 					this.eventBus.emit("set_all_items", this.items);
 					await this.update_items_details([newItem]);
-					await this.addScannedItemToInvoice(newItem, searchCode, qtyFromBarcode);
-					return;
-				}
+                                        await this.addScannedItemToInvoice(
+                                                newItem,
+                                                searchCode,
+                                                qtyFromBarcode,
+                                                priceFromBarcode,
+                                        );
+                                        return;
+                                }
 
 				this.first_search = scannedCode;
 				this.search = scannedCode;
@@ -3136,11 +3171,16 @@ export default {
 			}
 			return index.get(normalized) || index.get(normalized.toLowerCase()) || null;
 		},
-		async addScannedItemToInvoice(item, scannedCode, qtyFromBarcode = null) {
-			console.log("Adding scanned item to invoice:", item, scannedCode);
+                async addScannedItemToInvoice(
+                        item,
+                        scannedCode,
+                        qtyFromBarcode = null,
+                        priceFromBarcode = null,
+                ) {
+                        console.log("Adding scanned item to invoice:", item, scannedCode);
 
-			// Clone the item to avoid mutating list data
-			const newItem = { ...item };
+                        // Clone the item to avoid mutating list data
+                        const newItem = { ...item };
 
 			// If the scanned barcode has a specific UOM, apply it
 			if (Array.isArray(newItem.item_barcode)) {
@@ -3173,11 +3213,47 @@ export default {
 				}
 			}
 
-			// Apply quantity from scale barcode if available
-			if (qtyFromBarcode !== null && !isNaN(qtyFromBarcode)) {
-				newItem.qty = qtyFromBarcode;
-				newItem._barcode_qty = true;
-			}
+                        let effectiveQty = qtyFromBarcode;
+                        if (
+                                (effectiveQty === null || Number.isNaN(effectiveQty)) &&
+                                newItem._scale_qty !== undefined &&
+                                newItem._scale_qty !== null
+                        ) {
+                                const parsedScaleQty = parseFloat(newItem._scale_qty);
+                                if (!Number.isNaN(parsedScaleQty)) {
+                                        effectiveQty = parsedScaleQty;
+                                }
+                        }
+
+                        // Apply quantity from scale barcode if available
+                        if (effectiveQty !== null && !Number.isNaN(effectiveQty)) {
+                                newItem.qty = effectiveQty;
+                                newItem._barcode_qty = true;
+                        }
+
+                        let effectivePrice = priceFromBarcode;
+                        if (
+                                (effectivePrice === null || Number.isNaN(effectivePrice)) &&
+                                newItem._scale_price !== undefined &&
+                                newItem._scale_price !== null
+                        ) {
+                                const parsedScalePrice = parseFloat(newItem._scale_price);
+                                if (!Number.isNaN(parsedScalePrice)) {
+                                        effectivePrice = parsedScalePrice;
+                                }
+                        }
+
+                        if (effectivePrice !== null && !Number.isNaN(effectivePrice)) {
+                                const parsedPrice = parseFloat(effectivePrice);
+                                if (!Number.isNaN(parsedPrice)) {
+                                        newItem.rate = parsedPrice;
+                                        newItem.price_list_rate = parsedPrice;
+                                        newItem.base_rate = parsedPrice;
+                                        newItem.base_price_list_rate = parsedPrice;
+                                        newItem._manual_rate_set = true;
+                                        newItem.skip_force_update = true;
+                                }
+                        }
 
 			const requestedQtyRaw =
 				qtyFromBarcode !== null && !isNaN(qtyFromBarcode) ? qtyFromBarcode : (newItem.qty ?? 1);
@@ -3286,13 +3362,13 @@ export default {
 			setTimeout(() => {
 				items.forEach((item, index) => {
 					const button = dialog.$wrapper.find(`[data-item-index="${index}"]`);
-					button.on("click", () => {
-						this.addScannedItemToInvoice(item, scannedCode);
-						dialog.hide();
-					});
-				});
-			}, 100);
-		},
+                                        button.on("click", () => {
+                                                this.addScannedItemToInvoice(item, scannedCode, null, null);
+                                                dialog.hide();
+                                        });
+                                });
+                        }, 100);
+                },
 		generateItemSelectionHTML(items, scannedCode) {
 			let html = `<div class="mb-3"><strong>Scanned Code:</strong> ${scannedCode}</div>`;
 			html += '<div class="item-selection-list">';
