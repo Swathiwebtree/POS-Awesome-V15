@@ -455,4 +455,79 @@ describe("invoiceItemMethods._applyServerPricingRules", () => {
 
                 delete global.frappe;
         });
+
+        it("retains paid item pricing when freebies lack parent linkage and server clears price list data", async () => {
+                const paidItem = {
+                        posa_row_id: "ROW-4",
+                        item_code: "ITEM-SAME-NP",
+                        qty: 2,
+                        rate: 60,
+                        base_rate: 60,
+                        price_list_rate: 80,
+                        base_price_list_rate: 80,
+                        discount_amount: 20,
+                        base_discount_amount: 20,
+                        discount_percentage: 25,
+                        locked_price: 0,
+                };
+
+                const context = {
+                        ...createContext(),
+                        items: [paidItem],
+                        _syncAutoFreeLines: vi.fn(),
+                        _updatePricingBadge: vi.fn(),
+                        $forceUpdate: vi.fn(),
+                };
+                context._fromBaseCurrency = invoiceItemMethods._fromBaseCurrency;
+                context._toBaseCurrency = invoiceItemMethods._toBaseCurrency;
+                context._resolvePricingQty = invoiceItemMethods._resolvePricingQty;
+
+                global.frappe = {
+                        call: vi.fn(async () => ({
+                                message: {
+                                        updates: [
+                                                {
+                                                        row_id: paidItem.posa_row_id,
+                                                        rate: 0,
+                                                        price_list_rate: 0,
+                                                        discount_amount: 0,
+                                                        discount_percentage: 0,
+                                                        pricing_rules: ["RULE-SAME-NP"],
+                                                },
+                                        ],
+                                        free_lines: [
+                                                {
+                                                        item_code: paidItem.item_code,
+                                                        qty: 1,
+                                                        pricing_rules: "RULE-SAME-NP",
+                                                        same_item: 1,
+                                                        rate: 0,
+                                                },
+                                        ],
+                                },
+                        })),
+                };
+
+                await invoiceItemMethods._applyServerPricingRules.call(context, {
+                        company: "Test Co",
+                        price_list: "Standard",
+                        currency: "USD",
+                });
+
+                expect(global.frappe.call).toHaveBeenCalledTimes(1);
+                expect(paidItem.rate).toBeCloseTo(60);
+                expect(paidItem.base_rate).toBeCloseTo(60);
+                expect(paidItem.price_list_rate).toBeCloseTo(80);
+                expect(paidItem.base_price_list_rate).toBeCloseTo(80);
+                expect(paidItem.discount_amount).toBeCloseTo(20);
+                expect(paidItem.base_discount_amount).toBeCloseTo(20);
+                expect(paidItem.discount_percentage).toBeCloseTo(25);
+
+                expect(context._syncAutoFreeLines).toHaveBeenCalledTimes(1);
+                const freebiesArg = context._syncAutoFreeLines.mock.calls[0][0];
+                const serverEntries = Array.from(freebiesArg.values());
+                expect(serverEntries[0].same_item).toBe(1);
+
+                delete global.frappe;
+        });
 });

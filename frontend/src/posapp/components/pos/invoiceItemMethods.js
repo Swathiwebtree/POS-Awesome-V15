@@ -724,6 +724,7 @@ export default {
                 const asServerBool = (value) => value === true || value === 1 || value === "1";
 
                 const sameItemFreeParents = new Map();
+                const sameItemFreeCodes = new Set();
 
                 const existingFreebieSnapshots = new Map();
 
@@ -1007,10 +1008,14 @@ export default {
                                         : {}),
                         });
 
-                        if (sameItem && normalizedParentRowId) {
-                                const bucket = sameItemFreeParents.get(normalizedParentRowId) || new Set();
-                                bucket.add(entry.item_code);
-                                sameItemFreeParents.set(normalizedParentRowId, bucket);
+                        if (sameItem) {
+                                if (normalizedParentRowId) {
+                                        const bucket = sameItemFreeParents.get(normalizedParentRowId) || new Set();
+                                        bucket.add(entry.item_code);
+                                        sameItemFreeParents.set(normalizedParentRowId, bucket);
+                                } else {
+                                        sameItemFreeCodes.add(entry.item_code);
+                                }
                         }
                 });
 
@@ -1051,18 +1056,68 @@ export default {
                                         parentKey && sameItemFreeParents.has(parentKey)
                                                 ? sameItemFreeParents.get(parentKey)
                                                 : null;
-                                const hasSameItemFree =
+                                let hasSameItemFree =
                                         sameItemCodes instanceof Set && sameItemCodes.has(item.item_code);
+                                if (!hasSameItemFree && sameItemFreeCodes.has(item.item_code)) {
+                                        hasSameItemFree = true;
+                                }
                                 const originalBaseRate = Number.isFinite(Number.parseFloat(item.base_rate))
                                         ? Number.parseFloat(item.base_rate)
                                         : toBase(item.rate);
+                                const originalBasePriceList = Number.isFinite(
+                                        Number.parseFloat(item.base_price_list_rate),
+                                )
+                                        ? Number.parseFloat(item.base_price_list_rate)
+                                        : toBase(item.price_list_rate);
+                                const originalBaseDiscount = Number.isFinite(
+                                        Number.parseFloat(item.base_discount_amount),
+                                )
+                                        ? Number.parseFloat(item.base_discount_amount)
+                                        : toBase(item.discount_amount);
                                 const epsilon = 1e-6;
                                 const zeroRateFromServer = basePriceListRate > 0 && baseRate <= 0;
-                                const fullDiscount =
+                                const zeroPriceListFromServer =
+                                        !Number.isFinite(basePriceListRate) || basePriceListRate <= 0;
+                                const serverRemovedPriceList =
+                                        zeroPriceListFromServer && Number.isFinite(originalBasePriceList)
+                                                ? originalBasePriceList > 0
+                                                : false;
+                                const serverRemovedDiscount =
+                                        (!Number.isFinite(baseDiscount) || baseDiscount <= 0) &&
+                                        Number.isFinite(originalBaseDiscount)
+                                                ? originalBaseDiscount > 0
+                                                : false;
+                                const serverRemovedPercentage =
+                                        (!Number.isFinite(discountPercentage) || discountPercentage <= 0) &&
+                                        Number.isFinite(originalBaseDiscount) &&
+                                        Number.isFinite(originalBasePriceList) &&
+                                        originalBasePriceList > 0
+                                                ? originalBaseDiscount >= originalBasePriceList - epsilon
+                                                : false;
+                                const serverFullDiscount =
                                         discountPercentage >= 99.99 ||
-                                        (basePriceListRate > 0 && baseDiscount >= basePriceListRate - epsilon);
+                                        (Number.isFinite(basePriceListRate) &&
+                                                basePriceListRate > 0 &&
+                                                Number.isFinite(baseDiscount) &&
+                                                baseDiscount >= basePriceListRate - epsilon);
+                                const fallbackFullDiscount =
+                                        Number.isFinite(originalBasePriceList) &&
+                                        originalBasePriceList > 0 &&
+                                        Number.isFinite(originalBaseDiscount)
+                                                ? originalBaseDiscount >= originalBasePriceList - epsilon
+                                                : false;
 
-                                if (hasSameItemFree && originalBaseRate > 0 && zeroRateFromServer && fullDiscount) {
+                                const serverZeroedValues =
+                                        zeroRateFromServer ||
+                                        serverRemovedPriceList ||
+                                        serverRemovedDiscount ||
+                                        serverRemovedPercentage;
+
+                                if (
+                                        hasSameItemFree &&
+                                        originalBaseRate > 0 &&
+                                        (serverZeroedValues || serverFullDiscount || fallbackFullDiscount)
+                                ) {
                                         allowServerRateUpdate = false;
                                 }
                         }
