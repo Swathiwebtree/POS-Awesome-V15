@@ -531,3 +531,80 @@ describe("invoiceItemMethods._applyServerPricingRules", () => {
                 delete global.frappe;
         });
 });
+
+describe("invoiceItemMethods._applyManualRateOverridesToDoc", () => {
+        it("does not apply free-line overrides to paid parent items sharing an item code", () => {
+                const doc = {
+                        items: [
+                                {
+                                        name: "ITEM-PAID-ROW",
+                                        item_code: "CLEANER",
+                                        idx: 1,
+                                        rate: 1900,
+                                        base_rate: 1900,
+                                        price_list_rate: 1900,
+                                        base_price_list_rate: 1900,
+                                        discount_amount: 0,
+                                        base_discount_amount: 0,
+                                        is_free_item: 0,
+                                },
+                                {
+                                        name: "ITEM-FREE-ROW",
+                                        item_code: "CLEANER",
+                                        idx: 2,
+                                        rate: 0,
+                                        base_rate: 0,
+                                        price_list_rate: 100,
+                                        base_price_list_rate: 100,
+                                        discount_amount: 100,
+                                        base_discount_amount: 100,
+                                        is_free_item: 1,
+                                        auto_free_source: "RULE-001::CLEANER::PARENT-ROW",
+                                        parent_row_id: "PARENT-ROW",
+                                        source_rule: "RULE-001",
+                                },
+                        ],
+                };
+
+                const overrides = [
+                        {
+                                keys: {
+                                        item_code: "CLEANER",
+                                        is_free_item: 1,
+                                        auto_free_source: "RULE-001::CLEANER::PARENT-ROW",
+                                        parent_row_id: "PARENT-ROW",
+                                        source_rule: "RULE-001",
+                                },
+                                values: {
+                                        rate: 100,
+                                        base_rate: 100,
+                                        price_list_rate: 100,
+                                        base_price_list_rate: 100,
+                                        discount_amount: 0,
+                                        base_discount_amount: 0,
+                                        discount_percentage: 0,
+                                        amount: 100,
+                                        base_amount: 100,
+                                },
+                        },
+                ];
+
+                const context = {
+                        ...createContext(),
+                        _doesManualOverrideMatchItem: invoiceItemMethods._doesManualOverrideMatchItem,
+                        _assignManualOverrideValues: invoiceItemMethods._assignManualOverrideValues,
+                        _isFreeLine: invoiceItemMethods._isFreeLine,
+                };
+
+                invoiceItemMethods._applyManualRateOverridesToDoc.call(context, doc, overrides);
+
+                const [paidLine, freeLine] = doc.items;
+                expect(paidLine.rate).toBe(1900);
+                expect(paidLine.price_list_rate).toBe(1900);
+                expect(paidLine.discount_amount).toBe(0);
+
+                expect(freeLine.rate).toBe(100);
+                expect(freeLine.price_list_rate).toBe(100);
+                expect(freeLine.discount_amount).toBe(0);
+        });
+});

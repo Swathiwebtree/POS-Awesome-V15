@@ -118,6 +118,25 @@ export default {
                 const numeric = Number.parseFloat(value || 0) || 0;
                 return rate ? numeric * rate : numeric;
         },
+        _isFreeLine(item) {
+                if (!item) {
+                        return false;
+                }
+                const coerce = (value) => value === true || value === 1 || value === "1";
+                if (coerce(item.is_free_item)) {
+                        return true;
+                }
+                if (coerce(item.same_item)) {
+                        return true;
+                }
+                if (typeof item.auto_free_source === "string" && item.auto_free_source) {
+                        return true;
+                }
+                if (typeof item.free_item_source === "string" && item.free_item_source) {
+                        return true;
+                }
+                return false;
+        },
         _resolveBaseRate(item) {
                 if (!item) {
                         return 0;
@@ -2632,52 +2651,144 @@ export default {
                         return [];
                 }
 
-		return items
-			.filter((item) => item && item._manual_rate_set)
-			.map((item) => ({
-				keys: {
-					name: item.name || null,
-					posa_row_id: item.posa_row_id || null,
-					item_code: item.item_code || null,
-					idx: item.idx !== undefined && item.idx !== null ? Number(item.idx) : null,
-					batch_no: item.batch_no || null,
-					serial_no: item.serial_no || null,
-				},
-				values: {
-					rate: item.rate,
-					base_rate: item.base_rate,
-					price_list_rate: item.price_list_rate,
-					base_price_list_rate: item.base_price_list_rate,
-					discount_amount: item.discount_amount,
-					base_discount_amount: item.base_discount_amount,
-					discount_percentage: item.discount_percentage,
-					amount: item.amount,
-					base_amount: item.base_amount,
-					conversion_factor: item.conversion_factor,
-					uom: item.uom,
-				},
-			}));
-	},
+                return items
+                        .filter((item) => item && item._manual_rate_set)
+                        .map((item) => {
+                                const keys = {
+                                        name: item.name || null,
+                                        posa_row_id: item.posa_row_id || null,
+                                        item_code: item.item_code || null,
+                                        idx: item.idx !== undefined && item.idx !== null ? Number(item.idx) : null,
+                                        batch_no: item.batch_no || null,
+                                        serial_no: item.serial_no || null,
+                                };
 
-	_doesManualOverrideMatchItem(override, item) {
-		if (!override?.keys || !item) {
-			return false;
-		}
+                                const determineFreeLine = () => {
+                                        if (typeof this._isFreeLine === "function") {
+                                                return this._isFreeLine(item);
+                                        }
+                                        const coerce = (value) => value === true || value === 1 || value === "1";
+                                        return (
+                                                coerce(item?.is_free_item) ||
+                                                coerce(item?.same_item) ||
+                                                (typeof item?.auto_free_source === "string" && item.auto_free_source) ||
+                                                (typeof item?.free_item_source === "string" && item.free_item_source)
+                                        );
+                                };
 
-		const { name, posa_row_id, item_code, idx, batch_no, serial_no } = override.keys;
+                                if (determineFreeLine()) {
+                                        keys.is_free_item = 1;
+                                        if (item.auto_free_source) {
+                                                keys.auto_free_source = item.auto_free_source;
+                                        }
+                                        if (item.parent_row_id) {
+                                                keys.parent_row_id = item.parent_row_id;
+                                        }
+                                        const rawRule = Array.isArray(item.pricing_rules)
+                                                ? item.pricing_rules.find((rule) => !!rule)
+                                                : item.pricing_rules;
+                                        const normalizedRule = rawRule || item.source_rule || item.pricing_rule || null;
+                                        if (normalizedRule) {
+                                                keys.source_rule = normalizedRule;
+                                        }
+                                }
 
-		if (name && item.name && name === item.name) {
-			return true;
-		}
+                                return {
+                                        keys,
+                                        values: {
+                                                rate: item.rate,
+                                                base_rate: item.base_rate,
+                                                price_list_rate: item.price_list_rate,
+                                                base_price_list_rate: item.base_price_list_rate,
+                                                discount_amount: item.discount_amount,
+                                                base_discount_amount: item.base_discount_amount,
+                                                discount_percentage: item.discount_percentage,
+                                                amount: item.amount,
+                                                base_amount: item.base_amount,
+                                                conversion_factor: item.conversion_factor,
+                                                uom: item.uom,
+                                        },
+                                };
+                        });
+        },
 
-		if (posa_row_id && item.posa_row_id && posa_row_id === item.posa_row_id) {
-			return true;
-		}
+        _doesManualOverrideMatchItem(override, item) {
+                if (!override?.keys || !item) {
+                        return false;
+                }
 
-		if (item_code && item.item_code === item_code) {
-			if (idx !== null && idx !== undefined) {
-				const itemIdx = item.idx !== undefined && item.idx !== null ? Number(item.idx) : null;
-				if (itemIdx !== null && itemIdx === idx) {
+                const {
+                        name,
+                        posa_row_id,
+                        item_code,
+                        idx,
+                        batch_no,
+                        serial_no,
+                        auto_free_source,
+                        parent_row_id,
+                        source_rule,
+                        is_free_item,
+                } = override.keys;
+
+                if (name && item.name && name === item.name) {
+                        return true;
+                }
+
+                if (posa_row_id && item.posa_row_id && posa_row_id === item.posa_row_id) {
+                        return true;
+                }
+
+                const coerce = (value) => value === true || value === 1 || value === "1";
+
+                if (is_free_item !== undefined && is_free_item !== null) {
+                        const expectsFree = coerce(is_free_item);
+                        const itemIsFree =
+                                (typeof this._isFreeLine === "function" && this._isFreeLine(item)) ||
+                                coerce(item.is_free_item) ||
+                                coerce(item.same_item) ||
+                                Boolean(
+                                        (typeof item.auto_free_source === "string" && item.auto_free_source) ||
+                                                (typeof item.free_item_source === "string" && item.free_item_source),
+                                );
+
+                        if (expectsFree !== itemIsFree) {
+                                return false;
+                        }
+                }
+
+                if (auto_free_source) {
+                        const itemSource =
+                                typeof item.auto_free_source === "string" && item.auto_free_source
+                                        ? item.auto_free_source
+                                        : typeof item.free_item_source === "string" && item.free_item_source
+                                                ? item.free_item_source
+                                                : null;
+                        if (itemSource && itemSource !== auto_free_source) {
+                                return false;
+                        }
+                }
+
+                if (parent_row_id) {
+                        const itemParent = item.parent_row_id || null;
+                        if (itemParent && itemParent !== parent_row_id) {
+                                return false;
+                        }
+                }
+
+                if (source_rule) {
+                        const rawRule = Array.isArray(item.pricing_rules)
+                                ? item.pricing_rules.find((rule) => !!rule)
+                                : item.pricing_rules;
+                        const itemRule = rawRule || item.source_rule || item.pricing_rule || null;
+                        if (itemRule && itemRule !== source_rule) {
+                                return false;
+                        }
+                }
+
+                if (item_code && item.item_code === item_code) {
+                        if (idx !== null && idx !== undefined) {
+                                const itemIdx = item.idx !== undefined && item.idx !== null ? Number(item.idx) : null;
+                                if (itemIdx !== null && itemIdx === idx) {
 					return true;
 				}
 			}
