@@ -1193,6 +1193,8 @@ export default {
 		}
 
 		this.customer = data.customer;
+		await this.set_delivery_charges();
+
 		this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
 		if (data.posa_delivery_charges) {
 			this.selected_delivery_charge = this.delivery_charges.find(
@@ -1313,8 +1315,6 @@ export default {
                 } else {
                         this.eventBus.emit("set_pos_coupons", data.posa_coupons);
                 }
-
-                await this.applyPricingRulesForCart(true);
 
                 console.log("load_invoice completed, invoice state:", {
                         invoiceType: this.invoiceType,
