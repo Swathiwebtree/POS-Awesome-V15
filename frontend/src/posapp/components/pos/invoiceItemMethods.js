@@ -2687,6 +2687,11 @@ export default {
 				console.log("Ensured negative payment amounts for return:", invoice_doc.payments);
 			}
 
+			// Defer showing payment dialog until next DOM update cycle
+			// This prevents a race condition where the dialog opens before
+			// the invoice UI has finished re-rendering with updated totals
+			await this.$nextTick();
+
 			console.log("Showing payment dialog with currency:", invoice_doc.currency);
 			if (typeof this.paymentVisible !== "undefined") {
 				this.paymentVisible = true;
