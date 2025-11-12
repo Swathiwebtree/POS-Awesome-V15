@@ -1145,6 +1145,7 @@ export default {
                 }
 
                 this.invoice_doc = data;
+                this.posa_offers = data.posa_offers || [];
                 this.items = data.items || [];
 		this.packed_items = data.packed_items || [];
 		console.log("Items set:", this.items.length, "items");
@@ -1178,8 +1179,6 @@ export default {
 			if (manualSnapshots.length) {
 				this._restoreManualSnapshots(this.items, manualSnapshots);
 			}
-
-			this.posa_offers = data.posa_offers || [];
 		} else {
 			console.log("Warning: No items in return invoice");
 		}
@@ -1383,9 +1382,9 @@ export default {
 				this.invoiceTypes = ["Return"];
 			}
 			this.invoice_doc = data;
+			this.posa_offers = data.posa_offers || [];
 			this.items = data.items;
 			this.update_items_details(this.items);
-			this.posa_offers = data.posa_offers || [];
 			this.items.forEach((item) => {
 				if (!item.posa_row_id) {
 					item.posa_row_id = this.makeid(20);
@@ -1771,7 +1770,7 @@ export default {
                 const omitFreebies = !isOffline();
 
                 this.items.forEach((item) => {
-                        if (omitFreebies && item && (item.is_free_item || item.auto_free_source)) {
+                        if (omitFreebies && item && item.auto_free_source) {
                                 return;
                         }
                         const new_item = {

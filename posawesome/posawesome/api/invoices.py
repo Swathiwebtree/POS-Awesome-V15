@@ -221,7 +221,7 @@ def _strip_client_freebies_from_payload(payload):
         is_free = cint(row.get("is_free_item"))
         has_name = bool(row.get("name"))
 
-        if auto_marker or (is_free and not has_name):
+        if auto_marker:
             modified = True
             continue
 
