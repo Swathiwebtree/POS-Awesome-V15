@@ -378,6 +378,99 @@ export default {
 
                 const itemsStore = this._getItemsStore();
 
+                const parseFinite = (value) => {
+                        const numeric = Number.parseFloat(value);
+                        return Number.isFinite(numeric) ? numeric : null;
+                };
+
+                const currencyPrecision = Number.isFinite(this.currency_precision)
+                        ? this.currency_precision
+                        : 2;
+                const floatPrecision = Number.isFinite(this.float_precision) ? this.float_precision : 2;
+
+                const formatCurrency = (value) => {
+                        if (!Number.isFinite(value)) {
+                                return 0;
+                        }
+                        return this.flt ? this.flt(value, currencyPrecision) : value;
+                };
+
+                const formatPercentage = (value) => {
+                        if (!Number.isFinite(value)) {
+                                return 0;
+                        }
+                        return this.flt ? this.flt(value, floatPrecision) : value;
+                };
+
+                const convertFromBase = (value) => {
+                        const numeric = parseFinite(value);
+                        if (numeric === null) {
+                                return null;
+                        }
+                        if (typeof this._fromBaseCurrency === "function") {
+                                try {
+                                        const converted = this._fromBaseCurrency(numeric);
+                                        if (Number.isFinite(converted)) {
+                                                return formatCurrency(converted);
+                                        }
+                                } catch (error) {
+                                        console.warn("Failed to convert from base currency", error);
+                                }
+                        }
+                        return formatCurrency(numeric);
+                };
+
+                const applyFreeLinePricing = (line, data, qty) => {
+                        const baseRate = parseFinite(data?.base_rate ?? data?.rate);
+                        const basePriceListRate = parseFinite(
+                                data?.base_price_list_rate ?? data?.price_list_rate ?? (baseRate !== null ? baseRate : null),
+                        );
+                        let baseDiscount = parseFinite(data?.base_discount_amount ?? data?.discount_amount);
+                        if (baseDiscount === null && basePriceListRate !== null && baseRate !== null) {
+                                baseDiscount = Math.max(basePriceListRate - baseRate, 0);
+                        }
+
+                        const resolvedBaseRate = baseRate !== null ? baseRate : 0;
+                        const resolvedBasePriceListRate =
+                                basePriceListRate !== null ? basePriceListRate : resolvedBaseRate;
+                        const resolvedBaseDiscount =
+                                baseDiscount !== null ? Math.max(baseDiscount, 0) : Math.max(resolvedBasePriceListRate - resolvedBaseRate, 0);
+
+                        const discountPercentageRaw = parseFinite(data?.discount_percentage);
+                        const resolvedDiscountPercentage =
+                                discountPercentageRaw !== null
+                                        ? Math.max(discountPercentageRaw, 0)
+                                        : resolvedBasePriceListRate
+                                                ? Math.max((resolvedBaseDiscount / resolvedBasePriceListRate) * 100, 0)
+                                                : 0;
+
+                        const baseAmount = resolvedBaseRate * qty;
+                        const convertedRate = convertFromBase(resolvedBaseRate);
+                        const convertedPriceListRate = convertFromBase(resolvedBasePriceListRate);
+                        const convertedDiscount = convertFromBase(resolvedBaseDiscount);
+                        const convertedAmount = convertFromBase(baseAmount);
+
+                        line.base_rate = resolvedBaseRate;
+                        line.base_price_list_rate = resolvedBasePriceListRate;
+                        line.base_discount_amount = resolvedBaseDiscount;
+                        line.base_amount = baseAmount;
+
+                        line.rate = convertedRate !== null ? convertedRate : formatCurrency(resolvedBaseRate);
+                        line.price_list_rate =
+                                convertedPriceListRate !== null
+                                        ? convertedPriceListRate
+                                        : formatCurrency(resolvedBasePriceListRate);
+                        line.discount_amount =
+                                convertedDiscount !== null
+                                        ? Math.max(convertedDiscount, 0)
+                                        : formatCurrency(Math.max(resolvedBaseDiscount, 0));
+                        line.amount =
+                                convertedAmount !== null
+                                        ? convertedAmount
+                                        : formatCurrency(resolvedBaseRate * qty);
+                        line.discount_percentage = formatPercentage(resolvedDiscountPercentage);
+                };
+
                 const buildFreeBadgeMeta = (data) => {
                         const ruleLabel = data?.rule || "";
                         const label = `${__("Free")} (${__("Rule")}: ${ruleLabel})`;
@@ -446,14 +539,7 @@ export default {
                         }
                         line.is_free_item = 1;
                         line.locked_price = true;
-                        line.rate = 0;
-                        line.base_rate = 0;
-                        line.price_list_rate = 0;
-                        line.base_price_list_rate = 0;
-                        line.discount_amount = 0;
-                        line.base_discount_amount = 0;
-                        line.amount = 0;
-                        line.base_amount = 0;
+                        applyFreeLinePricing(line, data, qty);
                         line.source_rule = data.rule;
                         line.pricing_rule_badge = buildFreeBadgeMeta(data);
                 };
@@ -522,14 +608,6 @@ export default {
                         if (Number.isFinite(parsedStockQty)) {
                                 freeLine.stock_qty = parsedStockQty;
                         }
-                        freeLine.rate = 0;
-                        freeLine.base_rate = 0;
-                        freeLine.price_list_rate = 0;
-                        freeLine.base_price_list_rate = 0;
-                        freeLine.amount = 0;
-                        freeLine.base_amount = 0;
-                        freeLine.discount_amount = 0;
-                        freeLine.base_discount_amount = 0;
                         freeLine.is_free_item = 1;
                         freeLine.locked_price = true;
                         freeLine._manual_rate_set = true;
@@ -537,6 +615,8 @@ export default {
                         freeLine.auto_free_source = key;
                         freeLine.parent_row_id = data.parentRowId;
                         freeLine.pricing_rule_badge = buildFreeBadgeMeta(data);
+
+                        applyFreeLinePricing(freeLine, data, quantity);
 
                         const parentIndex = this.items.findIndex((line) => line.posa_row_id === data.parentRowId);
                         const insertAt = parentIndex >= 0 ? parentIndex + 1 : this.items.length;
@@ -636,6 +716,15 @@ export default {
                         return numeric;
                 };
 
+                const parseServerFloat = (value) => {
+                        const numeric = Number.parseFloat(value);
+                        return Number.isFinite(numeric) ? numeric : null;
+                };
+
+                const asServerBool = (value) => value === true || value === 1 || value === "1";
+
+                const sameItemFreeParents = new Map();
+
                 const paidLines = this.items
                         .filter((item) => item && !item.is_free_item && !item.auto_free_source)
                         .map((item) => {
@@ -713,6 +802,69 @@ export default {
                 const updates = Array.isArray(message.updates) ? message.updates : [];
                 const serverFree = Array.isArray(message.free_lines) ? message.free_lines : [];
 
+                serverFree.forEach((entry) => {
+                        if (!entry || !entry.item_code) {
+                                return;
+                        }
+                        const ruleName = entry.pricing_rules || entry.source_rule || "";
+                        const parentRowId =
+                                entry.parent_row_id ||
+                                entry.parent_detail_docname ||
+                                entry.parent_row ||
+                                entry.parent_docname ||
+                                null;
+                        const keyBase = `${ruleName || ""}::${entry.item_code}`;
+                        const key = parentRowId ? `${keyBase}::${parentRowId}` : keyBase;
+                        const qty = parseServerFloat(entry.qty) ?? 0;
+                        const stockQty =
+                                parseServerFloat(entry.stock_qty ?? entry.base_qty ?? entry.qty) ?? qty;
+                        const conversionFactor = parseServerFloat(entry.conversion_factor ?? entry.cf);
+                        const sameItem = asServerBool(entry.same_item);
+                        const baseRate = parseServerFloat(entry.base_rate ?? entry.rate);
+                        const displayRate = parseServerFloat(entry.rate);
+                        const basePriceListRate = parseServerFloat(
+                                entry.base_price_list_rate ?? entry.price_list_rate,
+                        );
+                        const displayPriceListRate = parseServerFloat(entry.price_list_rate);
+                        const baseDiscount = parseServerFloat(
+                                entry.base_discount_amount ?? entry.discount_amount,
+                        );
+                        const discountAmount = parseServerFloat(entry.discount_amount);
+                        const discountPercentage = parseServerFloat(entry.discount_percentage);
+
+                        freebiesMap.set(key, {
+                                rule: ruleName,
+                                item_code: entry.item_code,
+                                qty,
+                                parentRowId,
+                                uom: entry.uom,
+                                stock_qty: stockQty,
+                                conversion_factor: Number.isFinite(conversionFactor)
+                                        ? conversionFactor
+                                        : undefined,
+                                ...(sameItem ? { same_item: 1 } : {}),
+                                ...(baseRate !== null ? { base_rate: baseRate } : {}),
+                                ...(displayRate !== null ? { rate: displayRate } : {}),
+                                ...(basePriceListRate !== null
+                                        ? { base_price_list_rate: basePriceListRate }
+                                        : {}),
+                                ...(displayPriceListRate !== null
+                                        ? { price_list_rate: displayPriceListRate }
+                                        : {}),
+                                ...(baseDiscount !== null ? { base_discount_amount: baseDiscount } : {}),
+                                ...(discountAmount !== null ? { discount_amount: discountAmount } : {}),
+                                ...(discountPercentage !== null
+                                        ? { discount_percentage: discountPercentage }
+                                        : {}),
+                        });
+
+                        if (sameItem && parentRowId) {
+                                const bucket = sameItemFreeParents.get(parentRowId) || new Set();
+                                bucket.add(entry.item_code);
+                                sameItemFreeParents.set(parentRowId, bucket);
+                        }
+                });
+
                 updates.forEach((update) => {
                         const targetId = update.row_id;
                         const item = this.items.find(
@@ -742,7 +894,31 @@ export default {
                                 item.posa_offer_applied === 1 ||
                                 item.posa_offer_applied === "1";
 
-                        if (!manualOverride && !priceLocked && !offerApplied) {
+                        let allowServerRateUpdate = !manualOverride && !priceLocked && !offerApplied;
+
+                        if (allowServerRateUpdate) {
+                                const parentKey = item.posa_row_id || item.name || targetId || null;
+                                const sameItemCodes =
+                                        parentKey && sameItemFreeParents.has(parentKey)
+                                                ? sameItemFreeParents.get(parentKey)
+                                                : null;
+                                const hasSameItemFree =
+                                        sameItemCodes instanceof Set && sameItemCodes.has(item.item_code);
+                                const originalBaseRate = Number.isFinite(Number.parseFloat(item.base_rate))
+                                        ? Number.parseFloat(item.base_rate)
+                                        : toBase(item.rate);
+                                const epsilon = 1e-6;
+                                const zeroRateFromServer = basePriceListRate > 0 && baseRate <= 0;
+                                const fullDiscount =
+                                        discountPercentage >= 99.99 ||
+                                        (basePriceListRate > 0 && baseDiscount >= basePriceListRate - epsilon);
+
+                                if (hasSameItemFree && originalBaseRate > 0 && zeroRateFromServer && fullDiscount) {
+                                        allowServerRateUpdate = false;
+                                }
+                        }
+
+                        if (allowServerRateUpdate) {
                                 const convertedRate = fromBase(baseRate);
                                 const convertedPriceListRate = fromBase(basePriceListRate);
                                 const convertedDiscount = fromBase(baseDiscount);
@@ -802,31 +978,6 @@ export default {
                         }
 
                         this._updatePricingBadge(item, detailed);
-                });
-
-                serverFree.forEach((entry) => {
-                        if (!entry || !entry.item_code) {
-                                return;
-                        }
-                        const ruleName = entry.pricing_rules || entry.source_rule || "";
-                        const parentRowId =
-                                entry.parent_row_id ||
-                                entry.parent_detail_docname ||
-                                entry.parent_row ||
-                                entry.parent_docname ||
-                                null;
-                        const keyBase = `${ruleName || ""}::${entry.item_code}`;
-                        const key = parentRowId ? `${keyBase}::${parentRowId}` : keyBase;
-                        freebiesMap.set(key, {
-                                rule: ruleName,
-                                item_code: entry.item_code,
-                                qty: Number.parseFloat(entry.qty || 0) || 0,
-                                parentRowId,
-                                uom: entry.uom,
-                                stock_qty: Number.parseFloat(entry.stock_qty || entry.base_qty || entry.qty || 0) || 0,
-                                conversion_factor: Number.parseFloat(entry.conversion_factor || entry.cf || 0) || undefined,
-                                rate: Number.parseFloat(entry.rate || 0) || 0,
-                        });
                 });
 
                 this._syncAutoFreeLines(freebiesMap);

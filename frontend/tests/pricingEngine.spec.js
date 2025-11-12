@@ -378,5 +378,39 @@ describe("pricingEngine - computeFreeItems", () => {
                 });
                 expect(freebies).toHaveLength(0);
         });
+
+        it("includes pricing metadata when a free item rate is provided", () => {
+                const rule = {
+                        name: "FREE-RATE",
+                        is_free_item_rule: 1,
+                        min_qty: 1,
+                        free_qty: 1,
+                        specificity: 3,
+                        priority: 5,
+                        free_item: "BONUS-ITEM",
+                        free_item_rate: 25,
+                        free_item_price_list_rate: 40,
+                        free_item_discount_amount: 15,
+                        free_item_discount_percentage: 37.5,
+                };
+                const indexes = buildIndexes({ items: { "ITEM-12": [rule] } });
+                const freebies = computeFreeItems({
+                        item: { item_code: "ITEM-12" },
+                        qty: 2,
+                        ctx: {},
+                        indexes,
+                });
+
+                expect(freebies).toHaveLength(1);
+                const freeLine = freebies[0];
+                expect(freeLine.item_code).toBe("BONUS-ITEM");
+                expect(freeLine.rate).toBe(25);
+                expect(freeLine.base_rate).toBe(25);
+                expect(freeLine.price_list_rate).toBe(40);
+                expect(freeLine.base_price_list_rate).toBe(40);
+                expect(freeLine.discount_amount).toBe(15);
+                expect(freeLine.base_discount_amount).toBe(15);
+                expect(freeLine.discount_percentage).toBeCloseTo(37.5);
+        });
 });
 
