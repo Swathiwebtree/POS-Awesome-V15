@@ -1,4 +1,5 @@
 /* global __, frappe, flt */
+import { debounce } from "lodash";
 import {
 	isOffline,
 	saveCustomerBalance,
@@ -1331,13 +1332,13 @@ export default {
 	},
         remove_item(item) {
                 const result = removeItem(item, this);
-                this.applyPricingRulesForCart();
+                this.schedulePricingRuleApplication();
                 return result;
         },
 
         async add_item(item, options = {}) {
                 const res = await addItem(item, this);
-                await this.applyPricingRulesForCart();
+                this.schedulePricingRuleApplication();
 
                 const shouldNotify =
                         options?.notifyOnSuccess === true && !options?.skipNotification && this.eventBus?.emit;
@@ -3951,7 +3952,7 @@ export default {
                         this.selected_price_list = price_list;
                 }
                 this.eventBus.emit("update_customer_price_list", price_list);
-                this.applyPricingRulesForCart(true);
+                this.schedulePricingRuleApplication(true);
         },
 
         sync_invoice_customer_details(details = null) {
@@ -4261,14 +4262,14 @@ export default {
 	// Calculate prices and discounts for an item based on field change
         calc_prices(item, value, $event) {
                 const outcome = calcPrices(item, value, $event, this);
-                this.applyPricingRulesForCart();
+                this.schedulePricingRuleApplication();
                 return outcome;
         },
 
         // Calculate item price and discount fields
         calc_item_price(item) {
                 const outcome = calcItemPrice(item, this);
-                this.applyPricingRulesForCart();
+                this.schedulePricingRuleApplication();
                 return outcome;
         },
 
@@ -4310,7 +4311,7 @@ export default {
 		if (clamped) {
 			this.calc_item_price(item);
 		} else if (!this._applyingPricingRules) {
-			this.applyPricingRulesForCart();
+			this.schedulePricingRuleApplication();
 		}
 	},
 
@@ -4388,6 +4389,10 @@ export default {
 	set_batch_qty(item, value, update = true) {
 		return setBatchQty(item, value, update, this);
 	},
+
+	schedulePricingRuleApplication: debounce(function (force = false) {
+		this.applyPricingRulesForCart(force);
+	}, 150),
 
 	change_price_list_rate(item) {
 		const vm = this;
