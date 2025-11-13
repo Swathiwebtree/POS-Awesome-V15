@@ -1296,164 +1296,181 @@ export default {
 		},
 		// Submit payment after validation
 		async submit(event, payment_received = false, print = false) {
-			// For return invoices, ensure payment amounts are negative
-			if (this.invoice_doc.is_return) {
-				this.ensureReturnPaymentsAreNegative();
-			}
-			// Validate total payments only if not credit sale and invoice total is not zero
-			if (
-				!this.is_credit_sale &&
-				!this.invoice_doc.is_return &&
-				this.total_payments <= 0 &&
-				(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
-			) {
-				this.eventBus.emit("show_message", {
-					title: `Please enter payment amount`,
-					color: "error",
-				});
-				frappe.utils.play_sound("error");
-				return;
-			}
-			// Validate cash payments when credit sale is off
-			if (!this.is_credit_sale && !this.invoice_doc.is_return) {
-				let has_cash_payment = false;
-				let cash_amount = 0;
-				this.invoice_doc.payments.forEach((payment) => {
-					if (payment.mode_of_payment.toLowerCase().includes("cash")) {
-						has_cash_payment = true;
-						cash_amount = this.flt(payment.amount);
+			this.loading = true;
+			try {
+				// For return invoices, ensure payment amounts are negative
+				if (this.invoice_doc.is_return) {
+					this.ensureReturnPaymentsAreNegative();
+				}
+				// Validate total payments only if not credit sale and invoice total is not zero
+				if (
+					!this.is_credit_sale &&
+					!this.invoice_doc.is_return &&
+					this.total_payments <= 0 &&
+					(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
+				) {
+					this.eventBus.emit("show_message", {
+						title: `Please enter payment amount`,
+						color: "error",
+					});
+					frappe.utils.play_sound("error");
+					return;
+				}
+				// Validate cash payments when credit sale is off
+				if (!this.is_credit_sale && !this.invoice_doc.is_return) {
+					let has_cash_payment = false;
+					let cash_amount = 0;
+					this.invoice_doc.payments.forEach((payment) => {
+						if (payment.mode_of_payment.toLowerCase().includes("cash")) {
+							has_cash_payment = true;
+							cash_amount = this.flt(payment.amount);
+						}
+					});
+					if (has_cash_payment && cash_amount > 0) {
+						if (
+							!this.pos_profile.posa_allow_partial_payment &&
+							cash_amount < (this.invoice_doc.rounded_total || this.invoice_doc.grand_total) &&
+							(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
+						) {
+							this.eventBus.emit("show_message", {
+								title: `Cash payment cannot be less than invoice total when partial payment is not allowed`,
+								color: "error",
+							});
+							frappe.utils.play_sound("error");
+							return;
+						}
 					}
-				});
-				if (has_cash_payment && cash_amount > 0) {
-					if (
-						!this.pos_profile.posa_allow_partial_payment &&
-						cash_amount < (this.invoice_doc.rounded_total || this.invoice_doc.grand_total) &&
-						(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
-					) {
+				}
+				// Validate partial payments only if not credit sale and invoice total is not zero
+				if (
+					!this.is_credit_sale &&
+					!this.pos_profile.posa_allow_partial_payment &&
+					this.total_payments <
+						(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) &&
+					(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
+				) {
+					this.eventBus.emit("show_message", {
+						title: `The amount paid is not complete`,
+						color: "error",
+					});
+					frappe.utils.play_sound("error");
+					return;
+				}
+				// Validate phone payment
+				let phone_payment_is_valid = true;
+				if (!payment_received) {
+					this.invoice_doc.payments.forEach((payment) => {
+						if (
+							payment.type === "Phone" &&
+							![0, "0", "", null, undefined].includes(payment.amount)
+						) {
+							phone_payment_is_valid = false;
+						}
+					});
+					if (!phone_payment_is_valid) {
 						this.eventBus.emit("show_message", {
-							title: `Cash payment cannot be less than invoice total when partial payment is not allowed`,
+							title: __("Please request phone payment or use another payment method"),
 							color: "error",
 						});
 						frappe.utils.play_sound("error");
 						return;
 					}
 				}
-			}
-			// Validate partial payments only if not credit sale and invoice total is not zero
-			if (
-				!this.is_credit_sale &&
-				!this.pos_profile.posa_allow_partial_payment &&
-				this.total_payments < (this.invoice_doc.rounded_total || this.invoice_doc.grand_total) &&
-				(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
-			) {
-				this.eventBus.emit("show_message", {
-					title: `The amount paid is not complete`,
-					color: "error",
-				});
-				frappe.utils.play_sound("error");
-				return;
-			}
-			// Validate phone payment
-			let phone_payment_is_valid = true;
-			if (!payment_received) {
-				this.invoice_doc.payments.forEach((payment) => {
-					if (payment.type === "Phone" && ![0, "0", "", null, undefined].includes(payment.amount)) {
-						phone_payment_is_valid = false;
-					}
-				});
-				if (!phone_payment_is_valid) {
+				// Validate paid_change
+				const changeLimit = Math.max(-this.diff_payment, 0);
+				if (this.paid_change > changeLimit) {
 					this.eventBus.emit("show_message", {
-						title: __("Please request phone payment or use another payment method"),
+						title: `Paid change cannot be greater than total change!`,
 						color: "error",
 					});
 					frappe.utils.play_sound("error");
 					return;
 				}
-			}
-                        // Validate paid_change
-                        const changeLimit = Math.max(-this.diff_payment, 0);
-                        if (this.paid_change > changeLimit) {
-                                this.eventBus.emit("show_message", {
-                                        title: `Paid change cannot be greater than total change!`,
-                                        color: "error",
-                                });
-                                frappe.utils.play_sound("error");
-                                return;
-                        }
-                        // Validate cashback
-                        let total_change = this.flt(this.flt(this.paid_change) + this.flt(-this.credit_change));
-                        if (this.is_cashback && total_change !== changeLimit) {
-                                this.eventBus.emit("show_message", {
-                                        title: `Error in change calculations!`,
-                                        color: "error",
-                                });
-                                frappe.utils.play_sound("error");
-				return;
-			}
-			// Validate customer credit redemption
-			let credit_calc_check = this.customer_credit_dict.filter((row) => {
-				return this.flt(row.credit_to_redeem) > this.flt(row.total_credit);
-			});
-			if (credit_calc_check.length > 0) {
-				this.eventBus.emit("show_message", {
-					title: `Redeemed credit cannot be greater than its total.`,
-					color: "error",
-				});
-				frappe.utils.play_sound("error");
-				return;
-			}
-			if (
-				!this.invoice_doc.is_return &&
-				this.redeemed_customer_credit >
-					(this.invoice_doc.rounded_total || this.invoice_doc.grand_total)
-			) {
-				this.eventBus.emit("show_message", {
-					title: `Cannot redeem customer credit more than invoice total`,
-					color: "error",
-				});
-				frappe.utils.play_sound("error");
-				return;
-			}
-			// Validate stock availability before submitting
-			if (!isOffline()) {
-				try {
-					const itemsToCheck = this.invoice_doc.items.filter((it) => !it.is_bundle);
-					const stockCheck = await frappe.call({
-						method: "posawesome.posawesome.api.invoices.validate_cart_items",
-						args: { items: JSON.stringify(itemsToCheck) },
+				// Validate cashback
+				let total_change = this.flt(this.flt(this.paid_change) + this.flt(-this.credit_change));
+				if (this.is_cashback && total_change !== changeLimit) {
+					this.eventBus.emit("show_message", {
+						title: `Error in change calculations!`,
+						color: "error",
 					});
-					if (stockCheck.message && stockCheck.message.length) {
-						const msg = stockCheck.message
-							.map(
-								(e) =>
-									`${e.item_code} (${e.warehouse}) - ${this.formatFloat(e.available_qty)}`,
-							)
-							.join("\n");
-						const blocking =
-							!this.stock_settings.allow_negative_stock || this.blockSaleBeyondAvailableQty;
-						this.eventBus.emit("show_message", {
-							title: blocking
-								? __("Insufficient stock:\n{0}", [msg])
-								: __("Stock is lower than requested:\n{0}", [msg]),
-							color: blocking ? "error" : "warning",
-						});
-						if (blocking) {
-							frappe.utils.play_sound("error");
-							this.loading = false;
-							return;
-						}
-					}
-				} catch (e) {
-					console.error("Stock validation failed", e);
+					frappe.utils.play_sound("error");
+					return;
 				}
-			}
+				// Validate customer credit redemption
+				let credit_calc_check = this.customer_credit_dict.filter((row) => {
+					return this.flt(row.credit_to_redeem) > this.flt(row.total_credit);
+				});
+				if (credit_calc_check.length > 0) {
+					this.eventBus.emit("show_message", {
+						title: `Redeemed credit cannot be greater than its total.`,
+						color: "error",
+					});
+					frappe.utils.play_sound("error");
+					return;
+				}
+				if (
+					!this.invoice_doc.is_return &&
+					this.redeemed_customer_credit >
+						(this.invoice_doc.rounded_total || this.invoice_doc.grand_total)
+				) {
+					this.eventBus.emit("show_message", {
+						title: `Cannot redeem customer credit more than invoice total`,
+						color: "error",
+					});
+					frappe.utils.play_sound("error");
+					return;
+				}
+				// Validate stock availability before submitting
+				if (!isOffline()) {
+					try {
+						const itemsToCheck = this.invoice_doc.items.filter((it) => !it.is_bundle);
+						const stockCheck = await frappe.call({
+							method: "posawesome.posawesome.api.invoices.validate_cart_items",
+							args: { items: JSON.stringify(itemsToCheck) },
+						});
+						if (stockCheck.message && stockCheck.message.length) {
+							const msg = stockCheck.message
+								.map(
+									(e) =>
+										`${e.item_code} (${e.warehouse}) - ${this.formatFloat(
+											e.available_qty,
+										)}`,
+								)
+								.join("\n");
+							const blocking =
+								!this.stock_settings.allow_negative_stock || this.blockSaleBeyondAvailableQty;
+							this.eventBus.emit("show_message", {
+								title: blocking
+									? __("Insufficient stock:\n{0}", [msg])
+									: __("Stock is lower than requested:\n{0}", [msg]),
+								color: blocking ? "error" : "warning",
+							});
+							if (blocking) {
+								frappe.utils.play_sound("error");
+								return;
+							}
+						}
+					} catch (e) {
+						console.error("Stock validation failed", e);
+					}
+				}
 
-			// Proceed to submit the invoice
-			this.loading = true;
-			this.submit_invoice(print);
+				// Proceed to submit the invoice
+				await this.submit_invoice(print);
+			} catch (error) {
+				console.error("An error occurred during submission:", error);
+				// Optionally, emit a generic error message to the user
+				this.eventBus.emit("show_message", {
+					title: __("An unexpected error occurred. Please check the console for details."),
+					color: "error",
+				});
+			} finally {
+				this.loading = false;
+			}
 		},
+
 		// Submit invoice to backend after all validations
-		submit_invoice(print) {
+		async submit_invoice(print) {
 			// For return invoices, ensure payments are negative one last time
 			if (this.invoice_doc.is_return) {
 				this.ensureReturnPaymentsAreNegative();
@@ -1471,159 +1488,145 @@ export default {
 					row.credit_to_redeem = this.flt(row.credit_to_redeem);
 				});
 			}
-                        const changeLimit = !this.invoice_doc.is_return
-                                ? Math.max(-this.diff_payment, 0)
-                                : 0;
-                        const paidChange = !this.invoice_doc.is_return
-                                ? this.flt(Math.min(this.paid_change, changeLimit), this.currency_precision)
-                                : 0;
-                        const creditChange = !this.invoice_doc.is_return
-                                ? this.flt(Math.max(changeLimit - paidChange, 0), this.currency_precision)
-                                : 0;
+			const changeLimit = !this.invoice_doc.is_return ? Math.max(-this.diff_payment, 0) : 0;
+			const paidChange = !this.invoice_doc.is_return
+				? this.flt(Math.min(this.paid_change, changeLimit), this.currency_precision)
+				: 0;
+			const creditChange = !this.invoice_doc.is_return
+				? this.flt(Math.max(changeLimit - paidChange, 0), this.currency_precision)
+				: 0;
 
-                        if (this.invoice_doc) {
-                                this.invoice_doc.paid_change = paidChange;
-                                this.invoice_doc.credit_change = creditChange;
-                        }
+			if (this.invoice_doc) {
+				this.invoice_doc.paid_change = paidChange;
+				this.invoice_doc.credit_change = creditChange;
+			}
 
-                        if (!this.invoice_doc.is_return) {
-                                this.credit_change = creditChange ? -creditChange : 0;
-                                this.paid_change = paidChange;
-                        }
+			if (!this.invoice_doc.is_return) {
+				this.credit_change = creditChange ? -creditChange : 0;
+				this.paid_change = paidChange;
+			}
 
-                        let data = {
-                                total_change: changeLimit,
-                                paid_change: paidChange,
-                                credit_change: creditChange,
+			let data = {
+				total_change: changeLimit,
+				paid_change: paidChange,
+				credit_change: creditChange,
 				redeemed_customer_credit: this.redeemed_customer_credit,
 				customer_credit_dict: this.customer_credit_dict,
 				is_cashback: this.is_cashback,
 			};
-			const vm = this;
 
 			if (isOffline()) {
 				try {
 					saveOfflineInvoice({ data: data, invoice: this.invoice_doc });
 					this.eventBus.emit("pending_invoices_changed", getPendingOfflineInvoiceCount());
-					vm.eventBus.emit("show_message", {
+					this.eventBus.emit("show_message", {
 						title: __("Invoice saved offline"),
 						color: "warning",
 					});
 					if (print) {
 						this.print_offline_invoice(this.invoice_doc);
 					}
-					vm.eventBus.emit("clear_invoice");
-					vm.eventBus.emit("focus_item_search");
-					vm.eventBus.emit("reset_posting_date");
-					vm.back_to_invoice();
-					vm.loading = false;
+					this.eventBus.emit("clear_invoice");
+					this.eventBus.emit("focus_item_search");
+					this.eventBus.emit("reset_posting_date");
+					this.back_to_invoice();
 					return;
 				} catch (error) {
-					vm.eventBus.emit("show_message", {
+					this.eventBus.emit("show_message", {
 						title: __("Cannot Save Offline Invoice: ") + (error.message || __("Unknown error")),
 						color: "error",
 					});
-					vm.loading = false;
 					return;
 				}
 			}
-			frappe.call({
-				method:
-					this.invoiceType === "Order" && this.pos_profile.posa_create_only_sales_order
-						? "posawesome.posawesome.api.sales_orders.submit_sales_order"
-						: this.invoiceType === "Quotation"
-							? "posawesome.posawesome.api.quotations.submit_quotation"
-							: "posawesome.posawesome.api.invoices.submit_invoice",
-				args: {
-					data: data,
-					invoice: this.invoice_doc,
-					order: this.invoice_doc,
-				},
-				callback: function (r) {
-					if (r.exc) {
-						console.error("Error submitting invoice:", r.exc);
-						// Show detailed error message to help debugging
-						let errorMsg = r.exc.toString();
-						if (errorMsg.includes("Amount must be negative")) {
-							vm.eventBus.emit("show_message", {
-								title: __("Fixing payment amounts for return invoice..."),
-								color: "warning",
-							});
-							// Force fix the amounts
-							vm.invoice_doc.payments.forEach((payment) => {
-								if (payment.amount > 0) {
-									payment.amount = -Math.abs(payment.amount);
-								}
-								if (payment.base_amount > 0) {
-									payment.base_amount = -Math.abs(payment.base_amount);
-								}
-							});
-							// Retry submission once
-							console.log("Retrying submission with fixed payment amounts");
-							setTimeout(() => {
-								vm.submit_invoice(print);
-							}, 500);
-						} else {
-							vm.eventBus.emit("show_message", {
-								title: __("Error submitting invoice: ") + errorMsg,
-								color: "error",
-							});
+
+			try {
+				const r = await frappe.call({
+					method:
+						this.invoiceType === "Order" && this.pos_profile.posa_create_only_sales_order
+							? "posawesome.posawesome.api.sales_orders.submit_sales_order"
+							: this.invoiceType === "Quotation"
+								? "posawesome.posawesome.api.quotations.submit_quotation"
+								: "posawesome.posawesome.api.invoices.submit_invoice",
+					args: {
+						data: data,
+						invoice: this.invoice_doc,
+						order: this.invoice_doc,
+					},
+				});
+
+				if (!r.message) {
+					this.eventBus.emit("show_message", {
+						title: __("Error submitting invoice: No response from server"),
+						color: "error",
+					});
+					return;
+				}
+
+				if (print) {
+					this.load_print_page();
+				}
+				this.customer_credit_dict = [];
+				this.redeem_customer_credit = false;
+				this.is_cashback = true;
+				this.is_credit_return = false;
+				this.sales_person = "";
+				this.eventBus.emit("set_last_invoice", this.invoice_doc.name);
+				this.eventBus.emit("show_message", {
+					title:
+						this.invoiceType === "Order" && this.pos_profile.posa_create_only_sales_order
+							? __("Sales Order {0} is Submitted", [r.message.name])
+							: this.invoiceType === "Quotation"
+								? __("Quotation {0} is Submitted", [r.message.name])
+								: __("Invoice {0} is Submitted", [r.message.name]),
+					color: "success",
+				});
+				frappe.utils.play_sound("submit");
+				const submittedItems = Array.isArray(this.invoice_doc.items) ? this.invoice_doc.items : [];
+				updateLocalStock(submittedItems);
+				stockCoordinator.applyInvoiceConsumption(submittedItems, {
+					source: "invoice",
+				});
+				const submittedCodes = submittedItems
+					.map((item) => (item ? item.item_code : null))
+					.filter((code) => code !== undefined && code !== null);
+				this.eventBus.emit("invoice_stock_adjusted", {
+					items: submittedItems,
+					item_codes: submittedCodes,
+					timestamp: Date.now(),
+				});
+				this.addresses = [];
+				this.eventBus.emit("clear_invoice");
+				this.eventBus.emit("focus_item_search");
+				this.eventBus.emit("reset_posting_date");
+				this.back_to_invoice();
+			} catch (exc) {
+				console.error("Error submitting invoice:", exc);
+				let errorMsg = exc.toString();
+				if (errorMsg.includes("Amount must be negative")) {
+					this.eventBus.emit("show_message", {
+						title: __("Fixing payment amounts for return invoice..."),
+						color: "warning",
+					});
+					this.invoice_doc.payments.forEach((payment) => {
+						if (payment.amount > 0) {
+							payment.amount = -Math.abs(payment.amount);
 						}
-						vm.loading = false;
-						return;
-					}
-					if (!r.message) {
-						vm.eventBus.emit("show_message", {
-							title: __("Error submitting invoice: No response from server"),
-							color: "error",
-						});
-						vm.loading = false;
-						return;
-					}
-					if (print) {
-						vm.load_print_page();
-					}
-					vm.customer_credit_dict = [];
-					vm.redeem_customer_credit = false;
-					vm.is_cashback = true;
-					vm.is_credit_return = false;
-					vm.sales_person = "";
-					vm.eventBus.emit("set_last_invoice", vm.invoice_doc.name);
-                                        vm.eventBus.emit("show_message", {
-                                                title:
-                                                        vm.invoiceType === "Order" && vm.pos_profile.posa_create_only_sales_order
-                                                                ? __("Sales Order {0} is Submitted", [r.message.name])
-                                                                : vm.invoiceType === "Quotation"
-                                                                        ? __("Quotation {0} is Submitted", [r.message.name])
-                                                                        : __("Invoice {0} is Submitted", [r.message.name]),
-                                                color: "success",
-                                        });
-                                        frappe.utils.play_sound("submit");
-                                        // Update local stock quantities immediately after successful
-                                        // invoice submission so item availability reflects changes
-                                        const submittedItems = Array.isArray(vm.invoice_doc.items)
-                                                ? vm.invoice_doc.items
-                                                : [];
-                                        updateLocalStock(submittedItems);
-                                        stockCoordinator.applyInvoiceConsumption(submittedItems, {
-                                                source: "invoice",
-                                        });
-                                        const submittedCodes = submittedItems
-                                                .map((item) => (item ? item.item_code : null))
-                                                .filter((code) => code !== undefined && code !== null);
-                                        vm.eventBus.emit("invoice_stock_adjusted", {
-                                                items: submittedItems,
-                                                item_codes: submittedCodes,
-                                                timestamp: Date.now(),
-                                        });
-                                        vm.addresses = [];
-                                        vm.eventBus.emit("clear_invoice");
-                                        vm.eventBus.emit("focus_item_search");
-                                        vm.eventBus.emit("reset_posting_date");
-                                        vm.back_to_invoice();
-					vm.loading = false;
-				},
-			});
+						if (payment.base_amount > 0) {
+							payment.base_amount = -Math.abs(payment.base_amount);
+						}
+					});
+					console.log("Retrying submission with fixed payment amounts");
+					setTimeout(() => {
+						this.submit_invoice(print);
+					}, 500);
+				} else {
+					this.eventBus.emit("show_message", {
+						title: __("Error submitting invoice: ") + errorMsg,
+						color: "error",
+					});
+				}
+			}
 		},
 		// Set full amount for a payment method (or negative for returns)
 		set_full_amount(idx) {
