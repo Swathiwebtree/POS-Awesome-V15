@@ -74,7 +74,7 @@
 			<template v-slot:item.qty="{ item }">
 				<div class="pos-table__qty-counter" :class="{ 'rtl-layout': isRTL }" :title="`RTL: ${isRTL}`">
 					<v-btn
-						:disabled="!!item.posa_is_replace"
+						:disabled="!!item.posa_is_replace || (isReturnInvoice && (item.is_free_item || item.posa_is_offer || item.posa_is_replace))"
 						size="small"
 						variant="flat"
 						class="pos-table__qty-btn pos-table__qty-btn--minus minus-btn qty-control-btn"
@@ -108,9 +108,10 @@
 						ref="qtyInput"
 						:autofocus="true"
 						type="number"
+						:disabled="isReturnInvoice && (item.is_free_item || item.posa_is_offer || item.posa_is_replace)"
 					></v-text-field>
 					<v-btn
-						:disabled="!!item.posa_is_replace || item.disable_increment"
+						:disabled="!!item.posa_is_replace || item.disable_increment || (isReturnInvoice && (item.is_free_item || item.posa_is_offer || item.posa_is_replace))"
 						size="small"
 						variant="flat"
 						class="pos-table__qty-btn pos-table__qty-btn--plus plus-btn qty-control-btn"
@@ -1187,12 +1188,26 @@ export default {
 			}
 		},
 		handleMinusClick(item) {
-			if (item.qty <= 1) {
-				// Remove the item when quantity would become 0 or less
-				this.removeItem(item);
+			if (this.isReturnInvoice) {
+				// In returns, promotional items should be removed entirely, not decremented
+				if (item.is_free_item || item.posa_is_offer || item.posa_is_replace) {
+					this.removeItem(item);
+					return;
+				}
+				// For regular items in returns, increment towards 0
+				if (item.qty < 0) {
+					this.addOne(item);
+				} else {
+					this.removeItem(item);
+				}
 			} else {
-				// Use the existing subtractOne function
-				this.subtractOne(item);
+				if (item.qty <= 1) {
+					// Remove the item when quantity would become 0 or less
+					this.removeItem(item);
+				} else {
+					// Use the existing subtractOne function
+					this.subtractOne(item);
+				}
 			}
 		},
 

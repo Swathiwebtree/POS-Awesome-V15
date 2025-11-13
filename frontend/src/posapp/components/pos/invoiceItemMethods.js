@@ -661,6 +661,9 @@ export default {
                 });
         },
         async applyPricingRulesForCart(force = false) {
+                if (this.isReturnInvoice) {
+                        return;
+                }
                 if (this._applyingPricingRules) {
                         this._pendingPricingRules = true;
                         return;
