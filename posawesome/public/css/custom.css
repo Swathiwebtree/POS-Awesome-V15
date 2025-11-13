@@ -99,13 +99,18 @@
 }
 
 .v-card::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
+	background: rgba(0, 0, 0, 0.05);
 }
 
-.customer-vehicle-row .customer-autocomplete{
-    height: 58px;
+.customer-vehicle-row .customer-autocomplete {
+	height: 58px;
 }
 
-.v-btn.v-btn--density-default.summary-outline-btn{ height: 42px!important;margin-bottom: 15px;}
+.v-btn.v-btn--density-default.summary-outline-btn {
+	height: 42px !important;
+	margin-bottom: 15px;
+}
 
-.v-btn.v-btn--density-default.summary-btn{ height: 42px!important;}
+.v-btn.v-btn--density-default.summary-btn {
+	height: 42px !important;
+}

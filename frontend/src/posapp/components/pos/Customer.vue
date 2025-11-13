@@ -1,88 +1,171 @@
 <template>
-	<div class="customer-vehicle-row" style="display:flex; gap:12px; align-items:flex-start;">
-		<div style="flex: 1 1 0;">
+	<div class="customer-vehicle-row" style="display: flex; gap: 12px; align-items: flex-start">
+		<div style="flex: 1 1 0">
 			<Skeleton v-if="loadingVehicles" height="58" class="w-100" />
-			
-			<v-autocomplete v-else-if="vehicles.length > 1" ref="vehicleDropdown"
-				class="vehicle-autocomplete sleek-field" density="compact" clearable variant="solo"
-				:label="frappe._('Vehicle No')" v-model="selectedVehicle" :items="vehicles" item-title="vehicle_no"
-				item-value="name" hide-details :disabled="loadingVehicles" @update:modelValue="onVehicleSelect"
-				@update:search="onVehicleSearch" :virtual-scroll="true" :virtual-scroll-item-height="58">
+
+			<v-autocomplete
+				v-else-if="vehicles.length > 1"
+				ref="vehicleDropdown"
+				class="vehicle-autocomplete sleek-field"
+				density="compact"
+				clearable
+				variant="solo"
+				:label="frappe._('Vehicle No')"
+				v-model="selectedVehicle"
+				:items="vehicles"
+				item-title="vehicle_no"
+				item-value="name"
+				hide-details
+				:disabled="loadingVehicles"
+				@update:modelValue="onVehicleSelect"
+				@update:search="onVehicleSearch"
+				:virtual-scroll="true"
+				:virtual-scroll-item-height="58"
+			>
 				<template #prepend-inner>
 					<v-tooltip text="Edit vehicle">
 						<template #activator="{ props }">
-							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
-								@click.stop="edit_vehicle">mdi-car-edit</v-icon>
+							<v-icon
+								v-bind="props"
+								class="icon-button"
+								@mousedown.prevent.stop
+								@click.stop="edit_vehicle"
+								>mdi-car-edit</v-icon
+							>
 						</template>
 					</v-tooltip>
 				</template>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
-								@click.stop="new_vehicle">mdi-plus</v-icon>
+							<v-icon
+								v-bind="props"
+								class="icon-button"
+								@mousedown.prevent.stop
+								@click.stop="new_vehicle"
+								>mdi-plus</v-icon
+							>
 						</template>
 					</v-tooltip>
 				</template>
 				<template #item="{ props, item }">
 					<v-list-item v-bind="props">
 						<v-list-item-title>{{ item.raw.vehicle_no }}</v-list-item-title>
-						<v-list-item-subtitle v-if="item.raw.model">Model: {{ item.raw.model }}</v-list-item-subtitle>
-						<v-list-item-subtitle v-if="item.raw.customer_name">Customer: {{ item.raw.customer_name }}</v-list-item-subtitle>
-						<v-list-item-subtitle v-if="item.raw.mobile_no">Mobile: {{ item.raw.mobile_no }}</v-list-item-subtitle>
+						<v-list-item-subtitle v-if="item.raw.model"
+							>Model: {{ item.raw.model }}</v-list-item-subtitle
+						>
+						<v-list-item-subtitle v-if="item.raw.customer_name"
+							>Customer: {{ item.raw.customer_name }}</v-list-item-subtitle
+						>
+						<v-list-item-subtitle v-if="item.raw.mobile_no"
+							>Mobile: {{ item.raw.mobile_no }}</v-list-item-subtitle
+						>
 					</v-list-item>
 				</template>
 			</v-autocomplete>
-			
-			<v-text-field v-else-if="vehicles.length === 1 && vehicles[0].name" readonly dense variant="solo"
-				:label="frappe._('Vehicle No')" v-model="vehicle_no">
+
+			<v-text-field
+				v-else-if="vehicles.length === 1 && vehicles[0].name"
+				readonly
+				dense
+				variant="solo"
+				:label="frappe._('Vehicle No')"
+				v-model="vehicle_no"
+			>
 				<template #prepend-inner>
 					<v-tooltip text="Edit vehicle">
 						<template #activator="{ props }">
-							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
-								@click.stop="edit_vehicle">mdi-car-edit</v-icon>
+							<v-icon
+								v-bind="props"
+								class="icon-button"
+								@mousedown.prevent.stop
+								@click.stop="edit_vehicle"
+								>mdi-car-edit</v-icon
+							>
 						</template>
 					</v-tooltip>
 				</template>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
-								@click.stop="new_vehicle">mdi-plus</v-icon>
+							<v-icon
+								v-bind="props"
+								class="icon-button"
+								@mousedown.prevent.stop
+								@click.stop="new_vehicle"
+								>mdi-plus</v-icon
+							>
 						</template>
 					</v-tooltip>
 				</template>
 			</v-text-field>
 
-			<v-text-field v-else v-model="vehicle_no" dense variant="solo" :label="frappe._('Vehicle No')"
-				placeholder="Enter vehicle no and press Enter" @keydown.enter.prevent="onVehicleNoEnter" hide-details>
+			<v-text-field
+				v-else
+				v-model="vehicle_no"
+				dense
+				variant="solo"
+				:label="frappe._('Vehicle No')"
+				placeholder="Enter vehicle no and press Enter"
+				@keydown.enter.prevent="onVehicleNoEnter"
+				hide-details
+			>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
-								@click.stop="new_vehicle">mdi-plus</v-icon>
+							<v-icon
+								v-bind="props"
+								class="icon-button"
+								@mousedown.prevent.stop
+								@click.stop="new_vehicle"
+								>mdi-plus</v-icon
+							>
 						</template>
 					</v-tooltip>
 				</template>
 			</v-text-field>
 		</div>
 
-		<div style="flex: 1 1 0;">
+		<div style="flex: 1 1 0">
 			<Skeleton v-if="loadingCustomers" height="58" class="w-100" />
-			<v-autocomplete v-else ref="customerDropdown" class="customer-autocomplete sleek-field" density="compact"
-				clearable variant="solo" color="#4169E1" :label="frappe._('Customer')" v-model="internalCustomer"
-				:items="filteredCustomers" item-title="customer_name" item-value="name"
+			<v-autocomplete
+				v-else
+				ref="customerDropdown"
+				class="customer-autocomplete sleek-field"
+				density="compact"
+				clearable
+				variant="solo"
+				color="#4169E1"
+				:label="frappe._('Customer')"
+				v-model="internalCustomer"
+				:items="filteredCustomers"
+				item-title="customer_name"
+				item-value="name"
 				:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-				:no-data-text="isCustomerBackgroundLoading ? __('Loading customer data...') : __('Customers not found')"
-				hide-details :customFilter="() => true" :disabled="effectiveReadonly || loadingCustomers"
-				:menu-props="{ closeOnContentClick: false }" @update:menu="onCustomerMenuToggle"
-				@update:modelValue="onCustomerChange" @update:search="onCustomerSearch" @keydown.enter="handleEnter"
-				:virtual-scroll="true" :virtual-scroll-item-height="58">
+				:no-data-text="
+					isCustomerBackgroundLoading ? __('Loading customer data...') : __('Customers not found')
+				"
+				hide-details
+				:customFilter="() => true"
+				:disabled="effectiveReadonly || loadingCustomers"
+				:menu-props="{ closeOnContentClick: false }"
+				@update:menu="onCustomerMenuToggle"
+				@update:modelValue="onCustomerChange"
+				@update:search="onCustomerSearch"
+				@keydown.enter="handleEnter"
+				:virtual-scroll="true"
+				:virtual-scroll-item-height="58"
+			>
 				<template #prepend-inner>
 					<v-tooltip text="Edit customer">
 						<template #activator="{ props }">
-							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
-								@click.stop="edit_customer">mdi-account-edit</v-icon>
+							<v-icon
+								v-bind="props"
+								class="icon-button"
+								@mousedown.prevent.stop
+								@click.stop="edit_customer"
+								>mdi-account-edit</v-icon
+							>
 						</template>
 					</v-tooltip>
 				</template>
@@ -90,8 +173,13 @@
 				<template #append-inner>
 					<v-tooltip text="Add new customer">
 						<template #activator="{ props }">
-							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
-								@click.stop="new_customer">mdi-plus</v-icon>
+							<v-icon
+								v-bind="props"
+								class="icon-button"
+								@mousedown.prevent.stop
+								@click.stop="new_customer"
+								>mdi-plus</v-icon
+							>
 						</template>
 					</v-tooltip>
 				</template>
@@ -183,7 +271,7 @@
 <script>
 /* global frappe __ */
 import UpdateCustomer from "./UpdateCustomer.vue";
-import UpdateVehicle from './UpdateVehicle.vue';
+import UpdateVehicle from "./UpdateVehicle.vue";
 import Skeleton from "../ui/Skeleton.vue";
 import {
 	db,
@@ -612,7 +700,7 @@ export default {
 					if (!db.isOpen()) await db.open();
 					const local = await db.table("vehicles").where("customer").equals(customerName).toArray();
 					if (local && local.length) {
-						fetchedVehicles = local.map(r => ({
+						fetchedVehicles = local.map((r) => ({
 							name: r.name || r.id,
 							vehicle_no: r.vehicle_no,
 							model: r.model,
@@ -635,7 +723,7 @@ export default {
 					const serverVehicles = res?.message || [];
 
 					// Merge/Deduplicate server results with local results
-					const localNames = new Set(fetchedVehicles.map(v => v.name));
+					const localNames = new Set(fetchedVehicles.map((v) => v.name));
 					for (const v of serverVehicles) {
 						if (!localNames.has(v.name)) {
 							fetchedVehicles.push({
@@ -682,7 +770,7 @@ export default {
 				return;
 			}
 
-			const vehicle = (this.vehicles || []).find(v => v.name === val);
+			const vehicle = (this.vehicles || []).find((v) => v.name === val);
 			if (vehicle) {
 				this.selectedVehicle = val;
 				this.vehicle_no = vehicle.vehicle_no || "";
@@ -755,16 +843,16 @@ export default {
 
 					// Add vehicle to list if not present
 					if (vehicleName) {
-						const existingVehicle = this.vehicles.find(v => v.name === vehicleName);
+						const existingVehicle = this.vehicles.find((v) => v.name === vehicleName);
 						if (!existingVehicle) {
-							this.vehicles.push({ 
-								name: vehicleName, 
-								vehicle_no: vehicleNo, 
-								model: '', 
-								make: '',
+							this.vehicles.push({
+								name: vehicleName,
+								vehicle_no: vehicleNo,
+								model: "",
+								make: "",
 								customer_name: this.internalCustomer,
 								customer: customerName,
-								mobile_no: ''
+								mobile_no: "",
 							});
 						}
 					}
@@ -782,7 +870,8 @@ export default {
 		},
 
 		edit_vehicle() {
-			const vehicle_to_edit = this.vehicles.find(v => v.name === this.selectedVehicle) ||
+			const vehicle_to_edit =
+				this.vehicles.find((v) => v.name === this.selectedVehicle) ||
 				(this.vehicles.length === 1 && this.vehicles[0].name ? this.vehicles[0] : null);
 
 			if (vehicle_to_edit) {
@@ -793,16 +882,16 @@ export default {
 		},
 
 		new_vehicle() {
-            // FIX: Always emit the event to open the dialog. 
-            // The UpdateVehicle dialog should handle the case of a missing customer.
-            // If the user is on the text-input field, we can pass the vehicle_no they typed.
-            const payload = {
-                customer: this.customer,
-                vehicle_no: this.vehicles.length === 0 ? this.vehicle_no : null,
-            };
-            
-            // This emits the event to open the vehicle creation form
-            this.eventBus.emit("open_update_vehicle", payload); 
+			// FIX: Always emit the event to open the dialog.
+			// The UpdateVehicle dialog should handle the case of a missing customer.
+			// If the user is on the text-input field, we can pass the vehicle_no they typed.
+			const payload = {
+				customer: this.customer,
+				vehicle_no: this.vehicles.length === 0 ? this.vehicle_no : null,
+			};
+
+			// This emits the event to open the vehicle creation form
+			this.eventBus.emit("open_update_vehicle", payload);
 		},
 	},
 
@@ -909,13 +998,13 @@ export default {
 			this.eventBus.on("add_vehicle_to_list", (vehicle) => {
 				if (vehicle.customer === this.customer) {
 					// Remove placeholder and old entry if updating
-					this.vehicles = this.vehicles.filter(v => v.name && v.name !== vehicle.name);
+					this.vehicles = this.vehicles.filter((v) => v.name && v.name !== vehicle.name);
 					this.vehicles.push({
 						name: vehicle.name,
 						vehicle_no: vehicle.vehicle_no,
-						model: vehicle.model || '',
-						make: vehicle.make || '',
-						mobile_no: vehicle.mobile_no || '',
+						model: vehicle.model || "",
+						make: vehicle.make || "",
+						mobile_no: vehicle.mobile_no || "",
 						customer_name: vehicle.customer_name,
 						customer: vehicle.customer,
 					});

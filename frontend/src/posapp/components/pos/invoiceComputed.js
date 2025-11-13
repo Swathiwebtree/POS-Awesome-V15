@@ -7,7 +7,7 @@ export default {
 			qty += this.flt(item.qty || 0);
 		});
 		const result = this.flt(qty, this.float_precision);
-		console.log('[invoiceComputed] total_qty:', result);
+		console.log("[invoiceComputed] total_qty:", result);
 		return result;
 	},
 
@@ -21,7 +21,7 @@ export default {
 			sum += qty * rate;
 		});
 		const result = this.flt(sum, this.currency_precision);
-		console.log('[invoiceComputed] Total:', result);
+		console.log("[invoiceComputed] Total:", result);
 		return result;
 	},
 
@@ -37,7 +37,7 @@ export default {
 		});
 
 		const result = this.flt(sum, this.currency_precision);
-		console.log('[invoiceComputed] subtotal:', result);
+		console.log("[invoiceComputed] subtotal:", result);
 		return result;
 	},
 
@@ -54,7 +54,7 @@ export default {
 		total -= additional_discount;
 
 		const result = this.flt(total, this.currency_precision);
-		console.log('[invoiceComputed] net_total:', result);
+		console.log("[invoiceComputed] net_total:", result);
 		return result;
 	},
 
@@ -64,15 +64,15 @@ export default {
 		const tax = this.flt(this.total_tax || 0);
 		const discount = this.flt(this.discount_amount || 0);
 		const delivery = this.flt(this.delivery_charges_rate || 0);
-		
+
 		const total = this.flt(subtotal + tax - discount + delivery);
 
-		console.log('[invoiceComputed] grand_total:', {
-			subtotal, 
-			tax, 
+		console.log("[invoiceComputed] grand_total:", {
+			subtotal,
+			tax,
 			discount,
 			delivery,
-			result: total
+			result: total,
 		});
 
 		return total;
@@ -81,7 +81,7 @@ export default {
 	// Calculate rounded total
 	rounded_total() {
 		const rounded = this.roundAmount(this.grand_total);
-		console.log('[invoiceComputed] rounded_total:', rounded);
+		console.log("[invoiceComputed] rounded_total:", rounded);
 		return rounded;
 	},
 
@@ -97,7 +97,7 @@ export default {
 			}
 		});
 		const result = this.flt(sum, this.float_precision);
-		console.log('[invoiceComputed] total_items_discount_amount:', result);
+		console.log("[invoiceComputed] total_items_discount_amount:", result);
 		return result;
 	},
 
@@ -130,7 +130,7 @@ export default {
 
 	// Get display currency
 	displayCurrency() {
-		return this.selected_currency || this.pos_profile?.currency || 'USD';
+		return this.selected_currency || this.pos_profile?.currency || "USD";
 	},
 
 	// Determine if current invoice is a return

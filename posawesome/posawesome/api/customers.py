@@ -15,8 +15,8 @@ from .vehicles import create_vehicle
 VEHICLE_DOCTYPE = "Vehicle Master"
 
 
-
 # ---------------- LOYALTY POINTS FUNCTIONS ----------------
+
 
 def get_loyalty_points(customer_name, loyalty_program=None, company_name=None):
     """Get current loyalty points balance for a customer"""
@@ -24,33 +24,35 @@ def get_loyalty_points(customer_name, loyalty_program=None, company_name=None):
         # Build flexible query that works with or without loyalty_program/company
         conditions = ["customer = %(customer)s"]
         params = {"customer": customer_name}
-        
+
         if loyalty_program:
-            conditions.append("(loyalty_program = %(loyalty_program)s OR loyalty_program IS NULL OR loyalty_program = '')")
+            conditions.append(
+                "(loyalty_program = %(loyalty_program)s OR loyalty_program IS NULL OR loyalty_program = '')"
+            )
             params["loyalty_program"] = loyalty_program
-            
+
         if company_name:
             conditions.append("(company = %(company)s OR company IS NULL OR company = '')")
             params["company"] = company_name
-        
+
         # Include both draft (0) and submitted (1) entries
         conditions.append("docstatus IN (0, 1)")
-        
+
         where_clause = " AND ".join(conditions)
-        
+
         query = f"""
             SELECT IFNULL(SUM(loyalty_points), 0) as total_points
             FROM `tabLoyalty Point Entry`
             WHERE {where_clause}
         """
-        
+
         points_data = frappe.db.sql(query, params, as_dict=1)
         total_points = flt(points_data[0].total_points) if points_data else 0
-        
+
         frappe.logger().debug(f"Loyalty Points - Customer: {customer_name}, Points: {total_points}")
-        
+
         return total_points
-        
+
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), _("Get Loyalty Points Error"))
         frappe.logger().error(f"Error getting loyalty points: {str(e)}")
@@ -71,35 +73,34 @@ def update_loyalty_points(customer_name, company_name, points_amount, entry_type
         # Validate inputs
         points_amount = flt(points_amount)
         if points_amount <= 0:
-            return {
-                "status": "error",
-                "message": _("Points amount must be greater than 0")
-            }
-        
+            return {"status": "error", "message": _("Points amount must be greater than 0")}
+
         # Get customer details
         customer = frappe.get_doc("Customer", customer_name)
-        
+
         if not customer.loyalty_program:
             return {
                 "status": "error",
-                "message": _("Customer {0} does not have a loyalty program assigned").format(customer_name)
+                "message": _("Customer {0} does not have a loyalty program assigned").format(customer_name),
             }
-        
+
         loyalty_program = customer.loyalty_program
-        
+
         # Get loyalty program details for conversion factor
         loyalty_program_doc = frappe.get_doc("Loyalty Program", loyalty_program)
         conversion_factor = flt(loyalty_program_doc.conversion_factor) or 1
-        
+
         # Calculate redemption amount
         redemption_amount = points_amount * conversion_factor
-        
+
         # Check if customer has enough points for redemption
         if entry_type == "Redeem":
             current_points = get_loyalty_points(customer_name, loyalty_program, company_name)
-            
-            frappe.logger().info(f"Redemption Check - Customer: {customer_name}, Current: {current_points}, Requested: {points_amount}")
-            
+
+            frappe.logger().info(
+                f"Redemption Check - Customer: {customer_name}, Current: {current_points}, Requested: {points_amount}"
+            )
+
             if current_points < points_amount:
                 return {
                     "status": "error",
@@ -107,58 +108,59 @@ def update_loyalty_points(customer_name, company_name, points_amount, entry_type
                         flt(current_points, 2), flt(points_amount, 2)
                     ),
                     "available_points": current_points,
-                    "requested_points": points_amount
+                    "requested_points": points_amount,
                 }
-        
+
         # Create Loyalty Point Entry
-        loyalty_point_entry = frappe.get_doc({
-            "doctype": "Loyalty Point Entry",
-            "customer": customer_name,
-            "loyalty_program": loyalty_program,
-            "company": company_name,
-            "loyalty_points": points_amount if entry_type == "Earn" else -points_amount,
-            "purchase_amount": redemption_amount if entry_type == "Redeem" else 0,
-            "expiry_date": frappe.utils.add_days(
-                frappe.utils.nowdate(), 
-                loyalty_program_doc.expiry_duration or 365
-            ),
-            "posting_date": frappe.utils.nowdate(),
-            "posting_time": frappe.utils.nowtime()
-        })
-        
+        loyalty_point_entry = frappe.get_doc(
+            {
+                "doctype": "Loyalty Point Entry",
+                "customer": customer_name,
+                "loyalty_program": loyalty_program,
+                "company": company_name,
+                "loyalty_points": points_amount if entry_type == "Earn" else -points_amount,
+                "purchase_amount": redemption_amount if entry_type == "Redeem" else 0,
+                "expiry_date": frappe.utils.add_days(
+                    frappe.utils.nowdate(), loyalty_program_doc.expiry_duration or 365
+                ),
+                "posting_date": frappe.utils.nowdate(),
+                "posting_time": frappe.utils.nowtime(),
+            }
+        )
+
         loyalty_point_entry.insert(ignore_permissions=True)
         loyalty_point_entry.submit()
-        
+
         frappe.db.commit()
-        
+
         # Get updated balance
         new_balance = get_loyalty_points(customer_name, loyalty_program, company_name)
-        
-        frappe.logger().info(f"Loyalty points updated - Entry: {loyalty_point_entry.name}, New Balance: {new_balance}")
-        
+
+        frappe.logger().info(
+            f"Loyalty points updated - Entry: {loyalty_point_entry.name}, New Balance: {new_balance}"
+        )
+
         return {
             "status": "success",
             "message": _("Loyalty points updated successfully"),
             "points": points_amount,
             "redemption_amount": redemption_amount,
             "new_balance": new_balance,
-            "loyalty_point_entry": loyalty_point_entry.name
+            "loyalty_point_entry": loyalty_point_entry.name,
         }
-        
+
     except Exception as e:
         frappe.db.rollback()
         error_msg = str(e)
         frappe.log_error(frappe.get_traceback(), _("Loyalty Points Update Error"))
         frappe.logger().error(f"Loyalty points update failed: {error_msg}")
-        
+
         # Return error response instead of throwing
-        return {
-            "status": "error",
-            "message": _("Error updating loyalty points: {0}").format(error_msg)
-        }
+        return {"status": "error", "message": _("Error updating loyalty points: {0}").format(error_msg)}
 
 
 # ---------------- POS Customer Utilities ----------------
+
 
 def get_customer_groups(pos_profile):
     """Return list of all child customer groups for a POS profile"""
@@ -209,7 +211,7 @@ def get_customer_group_condition(pos_profile):
 @frappe.whitelist()
 def get_customer_names(pos_profile=None, limit=200, start_after=None, modified_after=None):
     """Fetch customers filtered by POS profile with pagination and optional caching"""
-    
+
     if not pos_profile:
         active_profile_doc = get_active_pos_profile()
         pos_profile = active_profile_doc.as_json() if active_profile_doc else "{}"
@@ -276,8 +278,7 @@ def get_customers_count(pos_profile=None):
             active_profile_doc = get_active_pos_profile()
             if not active_profile_doc:
                 frappe.log_error(
-                    "No active POS Profile found for current session.",
-                    "POS Awesome - get_customers_count"
+                    "No active POS Profile found for current session.", "POS Awesome - get_customers_count"
                 )
                 return 0
 
@@ -323,12 +324,12 @@ def get_customer_info(customer):
     # Loyalty Points
     if customer_doc.loyalty_program:
         current_company = frappe.db.get_single_value("Global Defaults", "default_company") or "webtree"
-        
+
         conversion_factor = frappe.db.get_value(
             "Loyalty Program", customer_doc.loyalty_program, "conversion_factor"
         )
         res["conversion_factor"] = flt(conversion_factor) or 1
-        
+
         # Get loyalty points using the helper function
         loyalty_points = get_loyalty_points(customer_doc.name, customer_doc.loyalty_program, current_company)
         res["loyalty_points"] = loyalty_points
@@ -372,9 +373,9 @@ def get_customer_info(customer):
         VEHICLE_DOCTYPE,
         filters={"customer": customer_doc.name},
         fields=["name", "vehicle_no", "model", "make", "chasis_no"],
-        limit_page_length=10
+        limit_page_length=10,
     )
-    
+
     res["vehicles"] = [
         {
             "name": v.name,
@@ -386,9 +387,10 @@ def get_customer_info(customer):
             "mobile_no": customer_doc.mobile_no,
             "customer": customer_doc.name,
         }
-        for v in vehicles if v.get("vehicle_no")
+        for v in vehicles
+        if v.get("vehicle_no")
     ]
-    
+
     if res["vehicles"]:
         res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
 
@@ -403,16 +405,12 @@ def get_customer_by_mobile(mobile_no):
     """
     if not mobile_no:
         return None
-    
+
     # Try to find the customer where the mobile_no matches
-    customer_name = frappe.db.get_value(
-        "Customer", 
-        {"mobile_no": mobile_no}, 
-        "name"
-    )
-    
+    customer_name = frappe.db.get_value("Customer", {"mobile_no": mobile_no}, "name")
+
     if customer_name:
-        # Fetch key details needed by the frontend 
+        # Fetch key details needed by the frontend
         customer_doc = frappe.get_doc("Customer", customer_name)
         return {
             "name": customer_doc.name,
@@ -421,16 +419,17 @@ def get_customer_by_mobile(mobile_no):
             "email_id": customer_doc.email_id,
             "tax_id": customer_doc.tax_id,
         }
-    
+
     return None
+
 
 @frappe.whitelist()
 def get_customer_by_vehicle(vehicle_no):
     """Return customer details for a vehicle number (exact match) with mobile info"""
-    
+
     if not vehicle_no:
         frappe.throw(_("Vehicle number is required"))
-    
+
     try:
         vehicle_data = frappe.get_all(
             VEHICLE_DOCTYPE,
@@ -438,16 +437,16 @@ def get_customer_by_vehicle(vehicle_no):
             fields=["name", "customer", "model", "chasis_no", "vehicle_no"],
             limit_page_length=1,
         )
-        
+
         if not vehicle_data:
             return {}
-            
+
         vehicle = vehicle_data[0]
         cust_name = vehicle.get("customer")
-        
+
         if not cust_name:
             return {"vehicle": vehicle, "customer": {}}
-        
+
         # Retrieve customer details including mobile number
         try:
             cust_doc = frappe.get_doc("Customer", cust_name)
@@ -471,10 +470,11 @@ def get_customer_by_vehicle(vehicle_no):
             }
         except frappe.DoesNotExistError:
             return {"vehicle": vehicle, "customer": {}}
-            
+
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Vehicle Lookup Error")
         return {}
+
 
 @frappe.whitelist()
 def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
@@ -485,7 +485,7 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
     try:
         customer_args = json.loads(customer)
         vehicle_args = json.loads(vehicle)
-        
+
         # 1. Validate mandatory customer fields
         if not customer_args.get("customer_name"):
             frappe.throw(_("Customer Name is required."))
@@ -493,10 +493,10 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
             frappe.throw(_("Customer Group is required."))
         if not customer_args.get("territory"):
             frappe.throw(_("Territory is required."))
-            
+
         # Determine method
         cust_method = customer_args.get("method", "create")
-        
+
         # 2. Call the existing create_customer logic
         customer_doc = create_customer(
             customer_name=customer_args.get("customer_name"),
@@ -512,15 +512,15 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
             territory=customer_args.get("territory"),
             customer_type=customer_args.get("customer_type"),
             gender=customer_args.get("gender"),
-            method=cust_method, 
+            method=cust_method,
             address_line1=customer_args.get("address_line1"),
             city=customer_args.get("city"),
             country=customer_args.get("country"),
         )
-        
+
         if not customer_doc:
             frappe.throw(_("Failed to create or update customer."))
-            
+
         # 3. Create Vehicle if data is provided and this is a NEW customer creation
         vehicle_doc = None
         if vehicle_args.get("vehicle_no") and cust_method == "create":
@@ -542,37 +542,40 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
                 )
             except Exception as ve:
                 frappe.log_error(
-                    f"Failed to create vehicle for {customer_doc.name}: {str(ve)}\n{frappe.get_traceback()}", 
-                    "Customer-Vehicle Creation Error"
+                    f"Failed to create vehicle for {customer_doc.name}: {str(ve)}\n{frappe.get_traceback()}",
+                    "Customer-Vehicle Creation Error",
                 )
                 # Don't throw - customer was created successfully
                 frappe.msgprint(
-                    _("Customer created successfully, but failed to create Vehicle: {0}").format(str(ve)), 
-                    title=_("Warning"), 
-                    indicator='orange'
+                    _("Customer created successfully, but failed to create Vehicle: {0}").format(str(ve)),
+                    title=_("Warning"),
+                    indicator="orange",
                 )
-                
+
         # 4. Return the documents
         return {
-            "customer": customer_doc.as_dict(), 
-            "vehicle": {
-                "name": vehicle_doc.get("name") if vehicle_doc else None,
-                "vehicle_no": vehicle_doc.get("vehicle_no") if vehicle_doc else None,
-                "make": vehicle_doc.get("make") if vehicle_doc else None,
-                "model": vehicle_doc.get("model") if vehicle_doc else None,
-                "customer": customer_doc.name,
-                "customer_name": customer_doc.customer_name,
-                "mobile_no": customer_args.get("mobile_no"), 
-            } if vehicle_doc else None
+            "customer": customer_doc.as_dict(),
+            "vehicle": (
+                {
+                    "name": vehicle_doc.get("name") if vehicle_doc else None,
+                    "vehicle_no": vehicle_doc.get("vehicle_no") if vehicle_doc else None,
+                    "make": vehicle_doc.get("make") if vehicle_doc else None,
+                    "model": vehicle_doc.get("model") if vehicle_doc else None,
+                    "customer": customer_doc.name,
+                    "customer_name": customer_doc.customer_name,
+                    "mobile_no": customer_args.get("mobile_no"),
+                }
+                if vehicle_doc
+                else None
+            ),
         }
-        
+
     # CRITICAL: Re-raise ValidationError without modification to avoid BrokenPipeError
     except ValidationError:
         raise
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "Create Customer with Vehicle Error")
         raise
-
 
 
 @frappe.whitelist()
@@ -654,8 +657,8 @@ def create_customer(
                     make_address(json.dumps(args))
                 except Exception as e:
                     frappe.log_error(
-                        f"Failed to create address for customer {customer.name}: {str(e)}", 
-                        "Address Creation Error"
+                        f"Failed to create address for customer {customer.name}: {str(e)}",
+                        "Address Creation Error",
                     )
 
             return customer
@@ -699,8 +702,8 @@ def create_customer(
                     address_doc.save()
                 except Exception as e:
                     frappe.log_error(
-                        f"Failed to update address for customer {customer_id}: {str(e)}", 
-                        "Address Update Error"
+                        f"Failed to update address for customer {customer_id}: {str(e)}",
+                        "Address Update Error",
                     )
         else:
             if address_line1 and address_line1.strip():
@@ -719,8 +722,8 @@ def create_customer(
                     make_address(json.dumps(args))
                 except Exception as e:
                     frappe.log_error(
-                        f"Failed to create address for customer {customer_doc.name}: {str(e)}", 
-                        "Address Creation Error"
+                        f"Failed to create address for customer {customer_doc.name}: {str(e)}",
+                        "Address Creation Error",
                     )
 
         return customer_doc
@@ -745,11 +748,12 @@ def search_customers(search_term=""):
         filters=filters,
         fields=["name", "customer_name"],
         limit_page_length=20,
-        or_filters=bool(search_term) # Use OR filtering if a search term exists
+        or_filters=bool(search_term),  # Use OR filtering if a search term exists
     )
-    
+
     return customers
-    
+
+
 @frappe.whitelist()
 def set_customer_info(customer, fieldname, value=""):
     """Update customer information and linked contacts"""
@@ -814,12 +818,12 @@ def get_customer_addresses(customer):
 def make_address(args):
     """Create a new address"""
     args = json.loads(args)
-    
+
     # Validate that address_line1 is provided
     address_line1 = args.get("address_line1", "").strip()
     if not address_line1:
         frappe.throw(_("Address Line 1 is mandatory to create an address"))
-    
+
     address = frappe.get_doc(
         {
             "doctype": "Address",

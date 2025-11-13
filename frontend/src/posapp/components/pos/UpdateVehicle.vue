@@ -38,11 +38,11 @@
 									:loading="loading_customers"
 									@update:search="search_customers"
 								>
-								<template #no-data>
-									<div class="pa-2 text-center text-caption text-medium-emphasis">
-										{{ __("No customers found. Start typing to search.") }}
-									</div>
-								</template>
+									<template #no-data>
+										<div class="pa-2 text-center text-caption text-medium-emphasis">
+											{{ __("No customers found. Start typing to search.") }}
+										</div>
+									</template>
 								</v-autocomplete>
 							</v-col>
 
@@ -72,11 +72,11 @@
 									@update:search="search_models"
 									clearable
 								>
-								<template #no-data>
-									<div class="pa-2 text-center text-caption text-medium-emphasis">
-										{{ __("No models found. Type to enter a new one.") }}
-									</div>
-								</template>
+									<template #no-data>
+										<div class="pa-2 text-center text-caption text-medium-emphasis">
+											{{ __("No models found. Type to enter a new one.") }}
+										</div>
+									</template>
 								</v-autocomplete>
 							</v-col>
 
@@ -125,7 +125,6 @@
 									v-model="mobile_no"
 								></v-text-field>
 							</v-col>
-
 						</v-row>
 					</v-container>
 				</v-card-text>
@@ -134,7 +133,13 @@
 					<v-btn color="grey-darken-1" variant="text" @click="close_dialog">
 						{{ __("Cancel") }}
 					</v-btn>
-					<v-btn color="primary" variant="tonal" :loading="loading" @click="save_vehicle" :disabled="!is_valid">
+					<v-btn
+						color="primary"
+						variant="tonal"
+						:loading="loading"
+						@click="save_vehicle"
+						:disabled="!is_valid"
+					>
 						{{ __("Save") }}
 					</v-btn>
 				</v-card-actions>
@@ -151,20 +156,20 @@ export default {
 		loading: false,
 		vehicle_id: null,
 		vehicle_no: "",
-		customer: "", 
+		customer: "",
 		customer_list: [],
 		loading_customers: false,
-		
+
 		// New Data Properties for Model List
 		loading_models: false,
-		model_list: [], 
+		model_list: [],
 
 		make: "",
 		model: "", // Holds the selected or typed model name
 		mobile_no: "",
-		chasis_no: "", 
-        color: "", 
-        registration_number: "",
+		chasis_no: "",
+		color: "",
+		registration_number: "",
 	}),
 
 	computed: {
@@ -172,8 +177,8 @@ export default {
 			return this.$theme.current === "dark";
 		},
 		is_valid() {
-			return this.vehicle_no && this.customer; 
-		}
+			return this.vehicle_no && this.customer;
+		},
 	},
 
 	methods: {
@@ -181,14 +186,14 @@ export default {
 			this.vehicle_id = null;
 			this.vehicle_no = "";
 			this.customer = "";
-            this.loading = false;
+			this.loading = false;
 			this.make = "";
 			this.model = "";
 			this.mobile_no = "";
-			this.customer_list = []; 
+			this.customer_list = [];
 			this.chasis_no = "";
-            this.color = "";
-            this.registration_number = "";
+			this.color = "";
+			this.registration_number = "";
 			this.model_list = []; // Reset model list
 		},
 
@@ -216,13 +221,13 @@ export default {
 				this.loading_customers = false;
 			}
 		},
-		
+
 		// --- Model Search Logic (New) ---
 		async search_models(search_term = "") {
 			this.loading_models = true;
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.vehicles.get_vehicle_models", 
+					method: "posawesome.posawesome.api.vehicles.get_vehicle_models",
 					args: { search_term },
 				});
 
@@ -239,14 +244,15 @@ export default {
 
 		async open_dialog(payload) {
 			this.reset_dialog();
-			
+
 			// Load initial data for Customer and Model
 			await Promise.all([
 				this.search_customers(),
-				this.search_models() // Call new function to load models
+				this.search_models(), // Call new function to load models
 			]);
-            
-			if (payload.name) { // Editing an existing vehicle
+
+			if (payload.name) {
+				// Editing an existing vehicle
 				this.vehicle_id = payload.name;
 				this.vehicle_no = payload.vehicle_no;
 				this.customer = payload.customer;
@@ -254,27 +260,27 @@ export default {
 				this.model = payload.model || "";
 				this.mobile_no = payload.mobile_no || "";
 				this.chasis_no = payload.chasis_no || "";
-                this.color = payload.color || "";
-                this.registration_number = payload.registration_number || "";
-                
-                // Ensure the selected customer is available in the list
-                if (this.customer && !this.customer_list.find(c => c.name === this.customer)) {
-                     const cust_doc = await frappe.call({
-                        method: "frappe.client.get",
-                        args: { doctype: "Customer", name: this.customer },
-                     });
-                     if (cust_doc) {
-                        this.customer_list.push({
-                            name: cust_doc.name, 
-                            customer_name: cust_doc.customer_name
-                        });
-                     }
-                }
-			} else if (payload.customer) { 
+				this.color = payload.color || "";
+				this.registration_number = payload.registration_number || "";
+
+				// Ensure the selected customer is available in the list
+				if (this.customer && !this.customer_list.find((c) => c.name === this.customer)) {
+					const cust_doc = await frappe.call({
+						method: "frappe.client.get",
+						args: { doctype: "Customer", name: this.customer },
+					});
+					if (cust_doc) {
+						this.customer_list.push({
+							name: cust_doc.name,
+							customer_name: cust_doc.customer_name,
+						});
+					}
+				}
+			} else if (payload.customer) {
 				this.customer = payload.customer;
-                this.vehicle_no = payload.vehicle_no || ''; 
+				this.vehicle_no = payload.vehicle_no || "";
 			}
-            
+
 			this.vehicleDialog = true;
 		},
 
@@ -335,11 +341,11 @@ export default {
 	},
 
 	created() {
-		this.eventBus.on("open_update_vehicle", this.open_dialog); 
+		this.eventBus.on("open_update_vehicle", this.open_dialog);
 	},
-    beforeUnmount() {
-        this.eventBus.off("open_update_vehicle", this.open_dialog);
-    }
+	beforeUnmount() {
+		this.eventBus.off("open_update_vehicle", this.open_dialog);
+	},
 };
 </script>
 

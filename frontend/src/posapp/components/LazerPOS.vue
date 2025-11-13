@@ -70,7 +70,7 @@ import ExitModule from "./modules/ExitModule.vue";
 const transactionSubmodulesMap = {
 	"Vehicles Master": "VehiclesMaster",
 	"Service Issue Note": "ServiceIssueNote",
-	"Quotation": "Quotation",
+	Quotation: "Quotation",
 	"Petty Cash": "PettyCash",
 	"Receipt Voucher": "ReceiptVoucher",
 	"Item Inquiry": "ItemInquiry",

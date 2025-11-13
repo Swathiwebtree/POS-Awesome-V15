@@ -2,43 +2,40 @@
 	<v-app class="container1" :class="rtlClasses">
 		<AppLoadingOverlay :visible="globalLoading" />
 		<v-main class="main-content">
-		<div id="app" :class="{ 'fullscreen-active': isFullscreen }">
-			<Navbar
-				:pos-profile="posProfile"
-				:pending-invoices="pendingInvoices"
-				:last-invoice-id="lastInvoiceId"
-				:network-online="networkOnline"
-				:server-online="serverOnline"
-				:server-connecting="serverConnecting"
-				:is-ip-host="isIpHost"
-				:sync-totals="syncTotals"
-				:manual-offline="manualOffline"
-				:is-dark="isDark"
-				:cache-usage="cacheUsage"
-				:cache-usage-loading="cacheUsageLoading"
-				:cache-usage-details="cacheUsageDetails"
-				:cache-ready="cacheReady"
-				:loading-progress="loadingProgress"
-				:loading-active="loadingActive"
-				:loading-message="loadingMessage"
-				@change-page="setPage($event)"
-				@nav-click="handleNavClick"
-				@close-shift="handleCloseShift"
-				@print-last-invoice="handlePrintLastInvoice"
-				@sync-invoices="handleSyncInvoices"
-				@toggle-offline="handleToggleOffline"
-				@toggle-theme="handleToggleTheme"
-				@logout="handleLogout"
-				@refresh-cache-usage="handleRefreshCacheUsage"
-				@update-after-delete="handleUpdateAfterDelete"
-			/>
+			<div id="app" :class="{ 'fullscreen-active': isFullscreen }">
+				<Navbar
+					:pos-profile="posProfile"
+					:pending-invoices="pendingInvoices"
+					:last-invoice-id="lastInvoiceId"
+					:network-online="networkOnline"
+					:server-online="serverOnline"
+					:server-connecting="serverConnecting"
+					:is-ip-host="isIpHost"
+					:sync-totals="syncTotals"
+					:manual-offline="manualOffline"
+					:is-dark="isDark"
+					:cache-usage="cacheUsage"
+					:cache-usage-loading="cacheUsageLoading"
+					:cache-usage-details="cacheUsageDetails"
+					:cache-ready="cacheReady"
+					:loading-progress="loadingProgress"
+					:loading-active="loadingActive"
+					:loading-message="loadingMessage"
+					@change-page="setPage($event)"
+					@nav-click="handleNavClick"
+					@close-shift="handleCloseShift"
+					@print-last-invoice="handlePrintLastInvoice"
+					@sync-invoices="handleSyncInvoices"
+					@toggle-offline="handleToggleOffline"
+					@toggle-theme="handleToggleTheme"
+					@logout="handleLogout"
+					@refresh-cache-usage="handleRefreshCacheUsage"
+					@update-after-delete="handleUpdateAfterDelete"
+				/>
 
-			<!-- Main POS Content -->
-			<POS
-			:pos-profile="posProfile"
-			@toggle-fullscreen="handleFullscreenToggle"
-		   />
-	    </div>
+				<!-- Main POS Content -->
+				<POS :pos-profile="posProfile" @toggle-fullscreen="handleFullscreenToggle" />
+			</div>
 			<div class="page-content">
 				<component v-bind:is="page" class="mx-4 md-4"></component>
 			</div>
@@ -185,12 +182,12 @@ export default {
 
 		handleFullscreenToggle(fullscreen) {
 			this.isFullscreen = fullscreen;
-			
+
 			// Update body styles
 			if (fullscreen) {
-				document.body.classList.add('pos-fullscreen');
+				document.body.classList.add("pos-fullscreen");
 			} else {
-				document.body.classList.remove('pos-fullscreen');
+				document.body.classList.remove("pos-fullscreen");
 			}
 		},
 		async initializeData() {

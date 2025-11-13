@@ -151,7 +151,9 @@
 										<v-row dense>
 											<v-col
 												cols="12"
-												v-for="column in available_columns.filter((col) => !col.required)"
+												v-for="column in available_columns.filter(
+													(col) => !col.required,
+												)"
 												:key="column.key"
 											>
 												<v-switch
@@ -175,9 +177,12 @@
 											__("Cancel")
 										}}</v-btn>
 										<v-spacer></v-spacer>
-										<v-btn color="primary" variant="tonal" @click="updateSelectedColumns">{{
-											__("Apply")
-										}}</v-btn>
+										<v-btn
+											color="primary"
+											variant="tonal"
+											@click="updateSelectedColumns"
+											>{{ __("Apply") }}</v-btn
+										>
 									</v-card-actions>
 								</v-card>
 							</v-dialog>
@@ -260,7 +265,9 @@
 												<span class="currency-symbol">{{
 													currencySymbol(displayCurrency)
 												}}</span>
-												<span class="amount-value">{{ formatCurrency(item.rate) }}</span>
+												<span class="amount-value">{{
+													formatCurrency(item.rate)
+												}}</span>
 											</div>
 										</template>
 										<template v-slot:item.warehouse="{ item }">
@@ -444,9 +451,9 @@ export default {
 		...shortcutMethods,
 		...offerMethods,
 		...invoiceItemMethods,
-		
+
 		handleItemGroupUpdate(newGroup) {
-			console.log('[Invoice] Item group updated:', newGroup);
+			console.log("[Invoice] Item group updated:", newGroup);
 			this.item_group = newGroup;
 		},
 
@@ -486,7 +493,7 @@ export default {
 		},
 
 		apply_additional_discount() {
-			console.log('[Invoice] apply_additional_discount called');
+			console.log("[Invoice] apply_additional_discount called");
 
 			// Get subtotal from computed property (already calculated)
 			const totalBeforeDiscount = this.subtotal;
@@ -495,7 +502,7 @@ export default {
 			// Calculate discount based on percentage or fixed amount
 			if (this.flt(this.additional_discount_percentage) > 0) {
 				discountAmount = this.flt(
-					(totalBeforeDiscount * this.flt(this.additional_discount_percentage)) / 100
+					(totalBeforeDiscount * this.flt(this.additional_discount_percentage)) / 100,
 				);
 			} else if (this.flt(this.additional_discount) > 0) {
 				discountAmount = this.flt(this.additional_discount);
@@ -504,13 +511,13 @@ export default {
 			// Update discount_amount (this triggers grand_total recalculation)
 			this.discount_amount = this.flt(discountAmount);
 
-			console.log('[Invoice] Discount calculated:', {
+			console.log("[Invoice] Discount calculated:", {
 				subtotal: totalBeforeDiscount,
 				discount_percentage: this.additional_discount_percentage,
 				discount_amount: this.additional_discount,
 				calculated_discount: discountAmount,
 				grand_total: this.grand_total,
-				rounded_total: this.rounded_total
+				rounded_total: this.rounded_total,
 			});
 
 			// Sync to invoice_doc
@@ -550,37 +557,37 @@ export default {
 		},
 
 		handleShowOffers() {
-			console.log('[Invoice] handleShowOffers called');
-			this.eventBus.emit('show_offers', 'true');
+			console.log("[Invoice] handleShowOffers called");
+			this.eventBus.emit("show_offers", "true");
 		},
 
 		handleShowCoupons() {
-			console.log('[Invoice] handleShowCoupons called');
-			this.eventBus.emit('show_coupons', 'true');
+			console.log("[Invoice] handleShowCoupons called");
+			this.eventBus.emit("show_coupons", "true");
 		},
 
 		get_draft_invoices() {
-			this.eventBus.emit('open_drafts_modal');
+			this.eventBus.emit("open_drafts_modal");
 		},
 
 		get_draft_orders() {
-			this.eventBus.emit('select_order');
+			this.eventBus.emit("select_order");
 		},
 
 		open_returns() {
-			this.eventBus.emit('open_returns');
+			this.eventBus.emit("open_returns");
 		},
 
 		show_payment() {
-			console.log('[Invoice] show_payment called');
+			console.log("[Invoice] show_payment called");
 			const invoice = this.prepareForPayment();
 			if (invoice && invoice.items && invoice.items.length > 0) {
-				this.eventBus.emit('payment_ready', invoice);
-				this.eventBus.emit('show_payment', 'true');
+				this.eventBus.emit("payment_ready", invoice);
+				this.eventBus.emit("show_payment", "true");
 			} else {
 				frappe.show_alert({
-					message: this.__('Please add items before proceeding to payment'),
-					indicator: 'warning'
+					message: this.__("Please add items before proceeding to payment"),
+					indicator: "warning",
 				});
 			}
 		},
@@ -1108,42 +1115,44 @@ export default {
 		},
 
 		get_invoice_doc() {
-			console.log('[Invoice] get_invoice_doc() called');
+			console.log("[Invoice] get_invoice_doc() called");
 
 			if (!this.invoice_doc) {
 				this.invoice_doc = {
-					doctype: 'Sales Invoice',
+					doctype: "Sales Invoice",
 					items: [],
-					payments: []
+					payments: [],
 				};
 			}
 
 			// CRITICAL: Sync ALL values
 			this.invoice_doc.items = this.items || [];
-			this.invoice_doc.customer = this.customer || '';
+			this.invoice_doc.customer = this.customer || "";
 			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
-			this.invoice_doc.currency = this.selected_currency || (this.pos_profile?.currency) || 'USD';
+			this.invoice_doc.currency = this.selected_currency || this.pos_profile?.currency || "USD";
 
 			// SYNC TOTALS - THIS IS THE KEY PART
 			this.invoice_doc.net_total = this.flt(this.subtotal || 0);
 			this.invoice_doc.total_taxes_and_charges = this.flt(this.total_tax || 0);
 			this.invoice_doc.discount_amount = this.flt(this.discount_amount || 0);
 			this.invoice_doc.additional_discount = this.flt(this.additional_discount || 0);
-			this.invoice_doc.additional_discount_percentage = this.flt(this.additional_discount_percentage || 0);
+			this.invoice_doc.additional_discount_percentage = this.flt(
+				this.additional_discount_percentage || 0,
+			);
 			this.invoice_doc.grand_total = this.flt(this.grand_total || 0);
 			this.invoice_doc.rounded_total = this.flt(this.rounded_total || this.grand_total || 0);
 
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
-			this.invoice_doc.pos_profile = this.pos_profile?.name || '';
-			this.invoice_doc.company = this.pos_profile?.company || '';
+			this.invoice_doc.pos_profile = this.pos_profile?.name || "";
+			this.invoice_doc.company = this.pos_profile?.company || "";
 
-			console.log('[Invoice] get_invoice_doc returning:', {
+			console.log("[Invoice] get_invoice_doc returning:", {
 				items: (this.invoice_doc.items || []).length,
 				net_total: this.invoice_doc.net_total,
 				discount: this.invoice_doc.discount_amount,
 				grand_total: this.invoice_doc.grand_total,
-				rounded_total: this.invoice_doc.rounded_total
+				rounded_total: this.invoice_doc.rounded_total,
 			});
 
 			return this.invoice_doc;
@@ -1156,20 +1165,20 @@ export default {
 		// Broadcast invoice updates to parent/sibling components
 		broadcastInvoiceUpdate() {
 			if (this.invoice_doc && this.eventBus) {
-				console.log('[Invoice] Broadcasting invoice update');
-				this.eventBus.emit('invoice_updated', this.invoice_doc);
+				console.log("[Invoice] Broadcasting invoice update");
+				this.eventBus.emit("invoice_updated", this.invoice_doc);
 			}
 		},
 
 		// Get full invoice with all calculated values
 		getFullInvoiceData() {
-			console.log('[Invoice] getFullInvoiceData() called');
+			console.log("[Invoice] getFullInvoiceData() called");
 
 			const invoiceData = {
 				// Basic info
-				name: this.invoice_doc?.name || '',
-				doctype: 'Sales Invoice',
-				customer: this.customer || '',
+				name: this.invoice_doc?.name || "",
+				doctype: "Sales Invoice",
+				customer: this.customer || "",
 				posting_date: this.posting_date || frappe.datetime.nowdate(),
 
 				// Items
@@ -1196,33 +1205,33 @@ export default {
 				payments: this.invoice_doc?.payments || [],
 
 				// POS specific
-				pos_profile: this.pos_profile?.name || '',
-				company: this.pos_profile?.company || '',
+				pos_profile: this.pos_profile?.name || "",
+				company: this.pos_profile?.company || "",
 				is_return: this.invoice_doc?.is_return || 0,
 
 				// Other fields
-				...this.invoice_doc
+				...this.invoice_doc,
 			};
 
-			console.log('[Invoice] Full invoice data:', invoiceData);
+			console.log("[Invoice] Full invoice data:", invoiceData);
 			return invoiceData;
 		},
 
 		// Ensure invoice_doc is updated before payment
 		prepareForPayment() {
-			console.log('[Invoice] prepareForPayment() called');
+			console.log("[Invoice] prepareForPayment() called");
 
 			// Call get_invoice_doc to ensure sync
 			const invoiceData = this.get_invoice_doc();
 
-			console.log('[Invoice] prepareForPayment result:', {
+			console.log("[Invoice] prepareForPayment result:", {
 				items_count: (invoiceData.items || []).length,
 				subtotal: invoiceData.net_total,
 				tax: invoiceData.total_taxes_and_charges,
 				discount: invoiceData.discount_amount,
 				grand_total: invoiceData.grand_total,
 				rounded_total: invoiceData.rounded_total,
-				currency: invoiceData.currency
+				currency: invoiceData.currency,
 			});
 
 			return invoiceData;
@@ -1345,7 +1354,7 @@ export default {
 			}
 
 			// Use Vue.set to ensure reactivity
-			const index = this.items.findIndex(i => i.posa_row_id === item.posa_row_id);
+			const index = this.items.findIndex((i) => i.posa_row_id === item.posa_row_id);
 			if (index !== -1) {
 				// Create new object to trigger reactivity
 				this.$set(this.items, index, { ...item });
@@ -1385,7 +1394,7 @@ export default {
 			}
 
 			// Use Vue.set to ensure reactivity
-			const index = this.items.findIndex(i => i.posa_row_id === item.posa_row_id);
+			const index = this.items.findIndex((i) => i.posa_row_id === item.posa_row_id);
 			if (index !== -1) {
 				// Create new object to trigger reactivity
 				this.$set(this.items, index, { ...item });
@@ -1398,19 +1407,19 @@ export default {
 		},
 
 		async save_and_clear_invoice() {
-			console.log('[Invoice] save_and_clear_invoice() called');
+			console.log("[Invoice] save_and_clear_invoice() called");
 
 			// Ensure invoice_doc exists
 			if (!this.invoice_doc) {
-				console.warn('[Invoice] Creating new invoice_doc');
+				console.warn("[Invoice] Creating new invoice_doc");
 				this.invoice_doc = {};
 			}
 
 			// Validate invoice has items
 			if (!this.items || this.items.length === 0) {
 				frappe.show_alert({
-					message: this.__('Please add items to invoice before saving'),
-					indicator: 'warning'
+					message: this.__("Please add items to invoice before saving"),
+					indicator: "warning",
 				});
 				return null;
 			}
@@ -1418,14 +1427,14 @@ export default {
 			// Validate customer
 			if (!this.customer || String(this.customer).trim().length === 0) {
 				frappe.show_alert({
-					message: this.__('Please select a customer before saving'),
-					indicator: 'warning'
+					message: this.__("Please select a customer before saving"),
+					indicator: "warning",
 				});
 				return null;
 			}
 
 			// Sync all current values to invoice_doc
-			this.invoice_doc.doctype = 'Sales Invoice';
+			this.invoice_doc.doctype = "Sales Invoice";
 			this.invoice_doc.items = this.items;
 			this.invoice_doc.customer = this.customer;
 			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
@@ -1442,29 +1451,29 @@ export default {
 			this.invoice_doc.pos_profile = this.pos_profile.name;
 			this.invoice_doc.company = this.pos_profile.company;
 
-			console.log('[Invoice] Invoice ready to save:', {
+			console.log("[Invoice] Invoice ready to save:", {
 				customer: this.invoice_doc.customer,
 				items_count: this.invoice_doc.items.length,
 				grand_total: this.invoice_doc.grand_total,
-				currency: this.invoice_doc.currency
+				currency: this.invoice_doc.currency,
 			});
 
 			try {
 				// Call save via frappe method
 				const response = await frappe.call({
-					method: 'frappe.client.insert',
+					method: "frappe.client.insert",
 					args: {
-						doc: this.invoice_doc
-					}
+						doc: this.invoice_doc,
+					},
 				});
 
 				if (response.message) {
 					const saved_doc = response.message;
-					console.log('[Invoice] Invoice saved successfully:', saved_doc.name);
+					console.log("[Invoice] Invoice saved successfully:", saved_doc.name);
 
 					frappe.show_alert({
-						message: this.__('Invoice saved as draft: {0}', [saved_doc.name]),
-						indicator: 'green'
+						message: this.__("Invoice saved as draft: {0}", [saved_doc.name]),
+						indicator: "green",
 					});
 
 					// Store the saved doc name
@@ -1474,42 +1483,44 @@ export default {
 					this.clear_invoice();
 
 					// Emit event
-					this.eventBus.emit('invoice_saved_successfully', { name: saved_name });
+					this.eventBus.emit("invoice_saved_successfully", { name: saved_name });
 
 					return saved_doc;
 				}
 			} catch (error) {
-				console.error('[Invoice] Error saving invoice:', error);
+				console.error("[Invoice] Error saving invoice:", error);
 				frappe.show_alert({
-					message: this.__('Error saving invoice: ') + (error.message || error),
-					indicator: 'red'
+					message: this.__("Error saving invoice: ") + (error.message || error),
+					indicator: "red",
 				});
 				return null;
 			}
 		},
 
 		async save_invoice() {
-			console.log('[Invoice] save_invoice() called');
+			console.log("[Invoice] save_invoice() called");
 
 			let invoice = this.get_invoice_doc();
 
 			if (!invoice) {
-				throw new Error('Invoice document not found');
+				throw new Error("Invoice document not found");
 			}
 
 			return new Promise((resolve, reject) => {
-				invoice.save('Save', function () {
-					console.log('[Invoice] Invoice saved via frappe.db.save');
-					resolve(invoice);
-				}).catch(error => {
-					console.error('[Invoice] Error in save:', error);
-					reject(error);
-				});
+				invoice
+					.save("Save", function () {
+						console.log("[Invoice] Invoice saved via frappe.db.save");
+						resolve(invoice);
+					})
+					.catch((error) => {
+						console.error("[Invoice] Error in save:", error);
+						reject(error);
+					});
 			});
 		},
 
 		clear_invoice() {
-			console.log('[Invoice] Clearing invoice');
+			console.log("[Invoice] Clearing invoice");
 
 			// Reset all data
 			this.invoice_doc = null;
@@ -1521,9 +1532,9 @@ export default {
 			this.total_tax = 0;
 
 			// Emit event
-			this.eventBus.emit('invoice_cleared');
+			this.eventBus.emit("invoice_cleared");
 
-			console.log('[Invoice] Invoice cleared successfully');
+			console.log("[Invoice] Invoice cleared successfully");
 		},
 
 		// Handle item reordering from drag and drop
@@ -1559,38 +1570,38 @@ export default {
 
 	mounted() {
 		// ADD THESE NEW EVENT LISTENERS
-		this.eventBus.on('get_current_invoice_from_component', () => {
-			console.log('[Invoice] get_current_invoice_from_component event received');
+		this.eventBus.on("get_current_invoice_from_component", () => {
+			console.log("[Invoice] get_current_invoice_from_component event received");
 			const invoiceData = this.prepareForPayment();
 			if (invoiceData) {
-				this.eventBus.emit('current_invoice_data', invoiceData);
+				this.eventBus.emit("current_invoice_data", invoiceData);
 			}
 		});
 
-		this.eventBus.on('prepare_invoice_for_payment', () => {
-			console.log('[Invoice] prepare_invoice_for_payment event received');
+		this.eventBus.on("prepare_invoice_for_payment", () => {
+			console.log("[Invoice] prepare_invoice_for_payment event received");
 			const invoice = this.prepareForPayment();
-			this.eventBus.emit('invoice_prepared', invoice);
+			this.eventBus.emit("invoice_prepared", invoice);
 		});
 
-		this.eventBus.on('show_payment_modal', () => {
-			console.log('[Invoice] show_payment_modal event received');
+		this.eventBus.on("show_payment_modal", () => {
+			console.log("[Invoice] show_payment_modal event received");
 			this.show_payment();
 		});
-		this.eventBus.on('update_offers_counters', (data) => {
-			console.log('[Invoice] Offers counter updated:', data);
+		this.eventBus.on("update_offers_counters", (data) => {
+			console.log("[Invoice] Offers counter updated:", data);
 			this.offersCount = data.offersCount || 0;
 		});
 
-		this.eventBus.on('update_coupons_counters', (data) => {
-			console.log('[Invoice] Coupons counter updated:', data);
+		this.eventBus.on("update_coupons_counters", (data) => {
+			console.log("[Invoice] Coupons counter updated:", data);
 			this.couponsCount = data.couponsCount || 0;
 		});
 
 		// FIXED: Listen for item groups registration
-		this.eventBus.on('register_item_groups', (groups) => {
-			console.log('[Invoice] Item groups registered:', groups);
-			this.items_group = ['ALL', ...groups];
+		this.eventBus.on("register_item_groups", (groups) => {
+			console.log("[Invoice] Item groups registered:", groups);
+			this.items_group = ["ALL", ...groups];
 		});
 
 		// Load saved column preferences
@@ -1705,19 +1716,19 @@ export default {
 		});
 
 		// Listener to get current invoice on demand
-		this.eventBus.on('get_current_invoice_from_component', () => {
-			console.log('[Invoice] get_current_invoice_from_component event received');
+		this.eventBus.on("get_current_invoice_from_component", () => {
+			console.log("[Invoice] get_current_invoice_from_component event received");
 			const invoiceData = this.prepareForPayment();
 			if (invoiceData) {
-				this.eventBus.emit('current_invoice_data', invoiceData);
+				this.eventBus.emit("current_invoice_data", invoiceData);
 			}
 		});
 
 		// Listener to prepare invoice for payment
-		this.eventBus.on('prepare_invoice_for_payment', () => {
-			console.log('[Invoice] prepare_invoice_for_payment event received');
+		this.eventBus.on("prepare_invoice_for_payment", () => {
+			console.log("[Invoice] prepare_invoice_for_payment event received");
 			this.prepareForPayment();
-			this.eventBus.emit('invoice_prepared', this.invoice_doc);
+			this.eventBus.emit("invoice_prepared", this.invoice_doc);
 		});
 
 		this.eventBus.on("set_new_line", (data) => {
@@ -1750,9 +1761,9 @@ export default {
 
 	// Cleanup event listeners before component is destroyed
 	beforeUnmount() {
-		this.eventBus.off('update_offers_counters');
-		this.eventBus.off('update_coupons_counters');
-		this.eventBus.off('register_item_groups');
+		this.eventBus.off("update_offers_counters");
+		this.eventBus.off("update_coupons_counters");
+		this.eventBus.off("register_item_groups");
 		// Existing cleanup
 		this.eventBus.off("register_pos_profile");
 		this.eventBus.off("add_item");
@@ -1762,8 +1773,8 @@ export default {
 		// Cleanup reset_posting_date listener
 		this.eventBus.off("reset_posting_date");
 
-		this.eventBus.off('get_current_invoice_from_component');
-		this.eventBus.off('prepare_invoice_for_payment');
+		this.eventBus.off("get_current_invoice_from_component");
+		this.eventBus.off("prepare_invoice_for_payment");
 	},
 
 	// Register global keyboard shortcuts when component is created
@@ -1788,19 +1799,19 @@ export default {
 		invoice_doc: {
 			handler(newVal) {
 				if (newVal) {
-					console.log('[Invoice] invoice_doc changed, broadcasting update');
+					console.log("[Invoice] invoice_doc changed, broadcasting update");
 					this.broadcastInvoiceUpdate();
 				}
 			},
-			deep: true
+			deep: true,
 		},
 
 		// Watch items changes and update invoice_doc
 		items: {
 			handler(newVal, oldVal) {
-				console.log('[Invoice] Items changed:', {
+				console.log("[Invoice] Items changed:", {
 					count: newVal.length,
-					oldCount: oldVal ? oldVal.length : 0
+					oldCount: oldVal ? oldVal.length : 0,
 				});
 
 				// Update invoice_doc items
@@ -1826,12 +1837,12 @@ export default {
 				});
 			},
 			deep: true,
-			immediate: false
+			immediate: false,
 		},
 
 		// Watch totals and sync to invoice_doc
 		grand_total(newVal) {
-			console.log('[Invoice] grand_total changed:', newVal);
+			console.log("[Invoice] grand_total changed:", newVal);
 			if (this.invoice_doc) {
 				this.invoice_doc.grand_total = newVal;
 				this.invoice_doc.rounded_total = this.rounded_total;
@@ -1839,11 +1850,11 @@ export default {
 		},
 
 		total_qty(newVal) {
-			console.log('[Invoice] total_qty computed changed:', newVal);
+			console.log("[Invoice] total_qty computed changed:", newVal);
 		},
 
 		subtotal(newVal) {
-			console.log('[Invoice] subtotal computed changed:', newVal);
+			console.log("[Invoice] subtotal computed changed:", newVal);
 			if (this.invoice_doc) {
 				this.invoice_doc.net_total = newVal;
 			}
@@ -1851,27 +1862,27 @@ export default {
 
 		// WATCH DISCOUNT
 		discount_amount(newVal) {
-			console.log('[Invoice] discount_amount changed:', newVal);
+			console.log("[Invoice] discount_amount changed:", newVal);
 			if (this.invoice_doc) {
 				this.invoice_doc.discount_amount = newVal;
 			}
 		},
 
 		customer(newVal) {
-			console.log('[Invoice] customer changed:', newVal);
+			console.log("[Invoice] customer changed:", newVal);
 			if (this.invoice_doc) {
 				this.invoice_doc.customer = newVal;
 			}
 		},
 
 		item_group(newVal) {
-			console.log('[Invoice] Item group changed to:', newVal);
-			this.eventBus.emit('update_item_group', newVal);
+			console.log("[Invoice] Item group changed to:", newVal);
+			this.eventBus.emit("update_item_group", newVal);
 		},
 
 		items_view(newVal) {
-			console.log('[Invoice] Items view changed to:', newVal);
-			this.eventBus.emit('update_items_view', newVal);
+			console.log("[Invoice] Items view changed to:", newVal);
+			this.eventBus.emit("update_items_view", newVal);
 		},
 	},
 };

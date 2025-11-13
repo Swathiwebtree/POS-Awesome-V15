@@ -106,7 +106,7 @@
 							<v-spacer></v-spacer>
 							<div class="d-flex align-center">
 								<v-btn-group density="compact" variant="outlined">
-									<v-btn 
+									<v-btn
 										size="small"
 										:color="items_view === 'list' ? 'primary' : ''"
 										@click="handleItemsViewUpdate('list')"
@@ -114,7 +114,7 @@
 									>
 										<v-icon>mdi-view-list</v-icon>
 									</v-btn>
-									<v-btn 
+									<v-btn
 										size="small"
 										:color="items_view === 'card' ? 'primary' : ''"
 										@click="handleItemsViewUpdate('card')"
@@ -132,7 +132,9 @@
 									:title="isFullscreen ? __('Exit Fullscreen') : __('Fullscreen')"
 									class="ml-2"
 								>
-									<v-icon>{{ isFullscreen ? 'mdi-arrow-collapse' : 'mdi-arrow-expand' }}</v-icon>
+									<v-icon>{{
+										isFullscreen ? "mdi-arrow-collapse" : "mdi-arrow-expand"
+									}}</v-icon>
 								</v-btn>
 							</div>
 
@@ -242,7 +244,9 @@
 										>
 											<template v-slot:placeholder>
 												<div class="image-placeholder">
-													<v-icon size="40" color="grey-lighten-2">mdi-image</v-icon>
+													<v-icon size="40" color="grey-lighten-2"
+														>mdi-image</v-icon
+													>
 												</div>
 											</template>
 										</v-img>
@@ -256,14 +260,22 @@
 											<div class="card-item-price">
 												<div class="primary-price">
 													<span class="currency-symbol">
-														{{ currencySymbol(item.original_currency || pos_profile.currency) }}
+														{{
+															currencySymbol(
+																item.original_currency ||
+																	pos_profile.currency,
+															)
+														}}
 													</span>
 													<span class="price-amount">
 														{{
 															format_currency(
 																item.base_price_list_rate || item.rate,
-																item.original_currency || pos_profile.currency,
-																ratePrecision(item.base_price_list_rate || item.rate),
+																item.original_currency ||
+																	pos_profile.currency,
+																ratePrecision(
+																	item.base_price_list_rate || item.rate,
+																),
 															)
 														}}
 													</span>
@@ -275,19 +287,36 @@
 													"
 													class="secondary-price"
 												>
-													<span class="currency-symbol">{{ currencySymbol(selected_currency) }}</span>
+													<span class="currency-symbol">{{
+														currencySymbol(selected_currency)
+													}}</span>
 													<span class="price-amount">
-														{{ format_currency(item.rate, selected_currency, ratePrecision(item.rate)) }}
+														{{
+															format_currency(
+																item.rate,
+																selected_currency,
+																ratePrecision(item.rate),
+															)
+														}}
 													</span>
 												</div>
 											</div>
 											<div class="card-item-stock">
-												<v-icon size="small" class="stock-icon">mdi-package-variant</v-icon>
+												<v-icon size="small" class="stock-icon"
+													>mdi-package-variant</v-icon
+												>
 												<span
 													class="stock-amount"
-													:class="{ 'negative-number': isNegative(item.actual_qty) }"
+													:class="{
+														'negative-number': isNegative(item.actual_qty),
+													}"
 												>
-													{{ format_number(item.actual_qty, hide_qty_decimals ? 0 : 4) || 0 }}
+													{{
+														format_number(
+															item.actual_qty,
+															hide_qty_decimals ? 0 : 4,
+														) || 0
+													}}
 												</span>
 												<span class="stock-uom">{{ item.stock_uom || "" }}</span>
 											</div>
@@ -313,7 +342,9 @@
 								<template v-slot:item.rate="{ item }">
 									<div>
 										<div class="#4169E1">
-											{{ currencySymbol(item.original_currency || pos_profile.currency) }}
+											{{
+												currencySymbol(item.original_currency || pos_profile.currency)
+											}}
 											{{
 												format_currency(
 													item.base_price_list_rate || item.rate,
@@ -330,7 +361,13 @@
 											class="text-success"
 										>
 											{{ currencySymbol(selected_currency) }}
-											{{ format_currency(item.rate, selected_currency, ratePrecision(item.rate)) }}
+											{{
+												format_currency(
+													item.rate,
+													selected_currency,
+													ratePrecision(item.rate),
+												)
+											}}
 										</div>
 									</div>
 								</template>
@@ -492,12 +529,12 @@ export default {
 		// ADD THIS NEW WATCHER
 		items_view: {
 			handler(newVal) {
-				console.log('[ItemsSelector] items_view changed to:', newVal);
+				console.log("[ItemsSelector] items_view changed to:", newVal);
 				this.$nextTick(() => {
 					this.$forceUpdate();
 				});
 			},
-			immediate: false
+			immediate: false,
 		},
 		customer: _.debounce(function () {
 			if (this.pos_profile.posa_force_reload_items) {
@@ -600,7 +637,6 @@ export default {
 				}
 			}
 
-			
 			// No cache found - force a reload so prices are updated
 			this.items_loaded = false;
 			if (!isOffline()) {
@@ -713,18 +749,18 @@ export default {
 
 		toggleFullscreen() {
 			this.isFullscreen = !this.isFullscreen;
-			this.$emit('toggle-fullscreen', this.isFullscreen);
+			this.$emit("toggle-fullscreen", this.isFullscreen);
 		},
-		
+
 		handleItemsViewUpdate(newView) {
-			console.log('[POS] Items view updated:', newView);
+			console.log("[POS] Items view updated:", newView);
 			this.items_view = newView;
-			this.$emit('update:items_view', newView);
-			this.eventBus.emit('items_view_changed', newView);
+			this.$emit("update:items_view", newView);
+			this.eventBus.emit("items_view_changed", newView);
 		},
 
 		updateViewMode(newMode) {
-			console.log('[ItemsSelector] updateViewMode called:', newMode);
+			console.log("[ItemsSelector] updateViewMode called:", newMode);
 
 			// Update the view mode
 			this.items_view = newMode;
@@ -733,9 +769,9 @@ export default {
 			this.$forceUpdate();
 
 			// Emit to parent
-			this.$emit('update-view-mode', newMode);
+			this.$emit("update-view-mode", newMode);
 
-			console.log('[ItemsSelector] View mode is now:', this.items_view);
+			console.log("[ItemsSelector] View mode is now:", this.items_view);
 		},
 
 		handleAddToPOS(event) {
@@ -1691,14 +1727,14 @@ export default {
 			return items_headers;
 		},
 		select_item(event, item) {
-			console.log('[ItemsSelector] Card clicked:', item.item_name);
+			console.log("[ItemsSelector] Card clicked:", item.item_name);
 
 			// Add visual feedback
 			const card = event.currentTarget;
 			if (card) {
-				card.style.transform = 'scale(0.95)';
+				card.style.transform = "scale(0.95)";
 				setTimeout(() => {
-					card.style.transform = '';
+					card.style.transform = "";
 				}, 150);
 			}
 
@@ -1706,12 +1742,13 @@ export default {
 			try {
 				const targets = document.querySelectorAll(".items-table-container");
 				const target = targets[targets.length - 1];
-				const source = event.currentTarget?.querySelector?.(".card-item-image") || event.currentTarget;
+				const source =
+					event.currentTarget?.querySelector?.(".card-item-image") || event.currentTarget;
 				if (target && source && this.fly) {
 					this.fly(source, target, this.flyConfig);
 				}
 			} catch (e) {
-				console.log('Animation skipped:', e);
+				console.log("Animation skipped:", e);
 			}
 
 			// Add the item
@@ -1736,7 +1773,7 @@ export default {
 			await this.add_item(item);
 		},
 		async add_item(item) {
-			console.log('[ItemsSelector] Adding item:', item.item_name);
+			console.log("[ItemsSelector] Adding item:", item.item_name);
 
 			item = { ...item };
 
@@ -1815,14 +1852,17 @@ export default {
 			const payload = { ...item };
 			delete payload._barcode_qty;
 
-			console.log('[ItemsSelector] Emitting add_item event:', payload.item_name);
+			console.log("[ItemsSelector] Emitting add_item event:", payload.item_name);
 			this.eventBus.emit("add_item", payload);
 
 			// Show success feedback
-			frappe.show_alert({
-				message: `Added: ${item.item_name}`,
-				indicator: 'green'
-			}, 2);
+			frappe.show_alert(
+				{
+					message: `Added: ${item.item_name}`,
+					indicator: "green",
+				},
+				2,
+			);
 
 			this.qty = 1;
 		},
@@ -3423,7 +3463,10 @@ export default {
 .price-amount {
 	font-family: "SF Mono", "Monaco", "Courier New", monospace;
 	font-variant-numeric: lining-nums tabular-nums;
-	font-feature-settings: "tnum" 1, "lnum" 1, "kern" 1;
+	font-feature-settings:
+		"tnum" 1,
+		"lnum" 1,
+		"kern" 1;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 }
@@ -3450,7 +3493,10 @@ export default {
 	color: #2e7d32;
 	font-family: "SF Mono", "Monaco", "Courier New", monospace;
 	font-variant-numeric: lining-nums tabular-nums;
-	font-feature-settings: "tnum" 1, "lnum" 1, "kern" 1;
+	font-feature-settings:
+		"tnum" 1,
+		"lnum" 1,
+		"kern" 1;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 }
@@ -3472,7 +3518,7 @@ export default {
 		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 		gap: 14px;
 	}
-	
+
 	.card-item-image-container {
 		height: 140px;
 	}
@@ -3770,7 +3816,7 @@ export default {
 		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 		gap: 14px;
 	}
-	
+
 	.card-item-image-container {
 		height: 140px;
 	}
@@ -3830,5 +3876,4 @@ export default {
 		font-size: 0.9rem;
 	}
 }
-
 </style>

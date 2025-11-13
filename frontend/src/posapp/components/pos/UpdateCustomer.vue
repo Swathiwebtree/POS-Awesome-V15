@@ -353,8 +353,7 @@ export default {
 				} catch (error) {
 					console.error("Error processing 8-digit date:", error);
 				}
-			}
-			else if (newVal && /^\d{2}-\d{2}-\d{4}$/.test(newVal)) {
+			} else if (newVal && /^\d{2}-\d{2}-\d{4}$/.test(newVal)) {
 				try {
 					const parts = newVal.split("-");
 					const day = parts[0];
@@ -566,8 +565,7 @@ export default {
 						const month = this.birthday.substring(2, 4);
 						const year = this.birthday.substring(4);
 						formatted_birthday = `${year}-${month}-${day}`;
-					}
-					else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(this.birthday)) {
+					} else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(this.birthday)) {
 						const parts = this.birthday.split("-");
 						if (parts.length === 3) {
 							const day = parts[0].padStart(2, "0");
@@ -575,8 +573,7 @@ export default {
 							const year = parts[2];
 							formatted_birthday = `${year}-${month}-${day}`;
 						}
-					}
-					else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(this.birthday)) {
+					} else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(this.birthday)) {
 						const parts = this.birthday.split("/");
 						if (parts.length === 3) {
 							const day = parts[0].padStart(2, "0");
@@ -584,8 +581,7 @@ export default {
 							const year = parts[2];
 							formatted_birthday = `${year}-${month}-${day}`;
 						}
-					}
-					else if (this.birthday) {
+					} else if (this.birthday) {
 						try {
 							const date = new Date(this.birthday);
 							if (!isNaN(date.getTime())) {
@@ -624,12 +620,15 @@ export default {
 			};
 
 			// Arguments for Vehicle (only when creating a new customer)
-			const vehicleArgs = (this.withVehicle && !this.customer_id) ? {
-				vehicle_no: this.vehicle_no,
-				make: this.vehicle_make,
-				model: this.vehicle_model,
-				mobile_no: this.mobile_no,
-			} : {};
+			const vehicleArgs =
+				this.withVehicle && !this.customer_id
+					? {
+							vehicle_no: this.vehicle_no,
+							make: this.vehicle_make,
+							model: this.vehicle_model,
+							mobile_no: this.mobile_no,
+						}
+					: {};
 
 			const apiArgs = {
 				customer: JSON.stringify(customerArgs),
@@ -645,7 +644,10 @@ export default {
 					method: customerArgs.method,
 				};
 				saveOfflineCustomer({ args: offlineData });
-				vm.eventBus.emit("show_message", { title: __("Customer/Vehicle saved offline"), color: "warning" });
+				vm.eventBus.emit("show_message", {
+					title: __("Customer/Vehicle saved offline"),
+					color: "warning",
+				});
 
 				customerArgs.name = this.customer_name;
 				const emittedData = {
@@ -715,7 +717,7 @@ export default {
 						title: errorMessage,
 						color: "error",
 					});
-				}
+				},
 			});
 		},
 		onDateSelect() {

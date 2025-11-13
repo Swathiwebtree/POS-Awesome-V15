@@ -1948,26 +1948,26 @@ export default {
 	},
 	// Lifecycle hook: mounted
 	mounted() {
-		 // ADD THESE EVENT LISTENERS
-		this.eventBus.on('show_payment', (data) => {
-			if (data === 'true') {
-				console.log('[Payment] show_payment triggered');
+		// ADD THESE EVENT LISTENERS
+		this.eventBus.on("show_payment", (data) => {
+			if (data === "true") {
+				console.log("[Payment] show_payment triggered");
 				// Get invoice data from Invoice component
-				this.eventBus.emit('get_current_invoice_from_component');
+				this.eventBus.emit("get_current_invoice_from_component");
 			}
 		});
 
-		this.eventBus.on('current_invoice_data', (invoiceData) => {
-			console.log('[Payment] Received invoice data:', invoiceData);
+		this.eventBus.on("current_invoice_data", (invoiceData) => {
+			console.log("[Payment] Received invoice data:", invoiceData);
 			this.invoice_doc = invoiceData;
 			this.grand_total = invoiceData.grand_total || 0;
 			this.rounded_total = invoiceData.rounded_total || invoiceData.grand_total || 0;
-			this.customer = invoiceData.customer || '';
+			this.customer = invoiceData.customer || "";
 
 			// Set payment amount
 			this.payment_amount = this.rounded_total;
 
-			console.log('[Payment] Payment amount set to:', this.payment_amount);
+			console.log("[Payment] Payment amount set to:", this.payment_amount);
 
 			// Force UI update
 			this.$nextTick(() => {
