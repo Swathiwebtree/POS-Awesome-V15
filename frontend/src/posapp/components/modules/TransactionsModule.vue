@@ -7,10 +7,9 @@
 
 <script>
 import { defineAsyncComponent, computed } from "vue";
-import ModuleShell from "./ModuleShell.vue";
+import CashierLogin from "../CashierLogin.vue";
 
 // Lazy-load all transaction submodules
-const VehicleService = defineAsyncComponent(() => import("./transactions/VehicleService.vue"));
 const VehiclesMaster = defineAsyncComponent(() => import("./transactions/VehiclesMaster.vue"));
 const ServiceIssueNote = defineAsyncComponent(() => import("./transactions/ServiceIssueNote.vue"));
 const Quotation = defineAsyncComponent(() => import("./transactions/Quotation.vue"));
@@ -24,17 +23,16 @@ const RedeemedCouponPoints = defineAsyncComponent(() => import("./transactions/R
 export default {
 	name: "TransactionsModule",
 	components: {
-		ModuleShell,
+		CashierLogin,
 	},
 	props: {
 		defaultSubmodule: {
 			type: String,
-			default: "VehicleService", // default after cashier login
+			default: "VehiclesMaster", // default after cashier login
 		},
 	},
 	setup(props) {
 		const componentMap = {
-			VehicleService,
 			VehiclesMaster,
 			ServiceIssueNote,
 			Quotation,

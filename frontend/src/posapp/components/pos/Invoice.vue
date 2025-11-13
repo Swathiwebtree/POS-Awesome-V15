@@ -1,323 +1,335 @@
 <template>
 	<!-- Main Invoice Wrapper -->
-	<div class="pa-0">
+	<div class="invoice-container">
 		<!-- Cancel Sale Confirmation Dialog -->
 		<CancelSaleDialog v-model="cancel_dialog" @confirm="cancel_invoice" />
 
-		<!-- Main Invoice Card (contains all invoice content) -->
-		<v-card
-			ref="invoiceCard"
-			:style="{
-				height: invoiceHeight || 'var(--container-height)',
-				maxHeight: invoiceHeight || 'var(--container-height)',
-				backgroundColor: isDarkTheme ? '#121212' : '',
-				resize: 'vertical',
-				overflow: 'auto',
-			}"
-			:class="[
-				'cards my-0 py-0 mt-3 resizable',
-				isDarkTheme ? '' : 'bg-grey-lighten-5',
-				{ 'return-mode': isReturnInvoice },
-			]"
-			@mouseup="saveInvoiceHeight"
-			@touchend="saveInvoiceHeight"
-		>
-			<!-- Dynamic padding wrapper -->
-			<div class="dynamic-padding">
-				<v-alert
-					type="info"
-					density="compact"
-					class="mb-2"
-					v-if="pos_profile.create_pos_invoice_instead_of_sales_invoice"
-				>
-					{{ __("Invoices saved as POS Invoices") }}
-				</v-alert>
-				<!-- Top Row: Customer Selection and Invoice Type -->
-				<v-row align="center" class="items px-3 py-2">
-					<v-col :cols="pos_profile.posa_allow_sales_order ? 9 : 12" class="pb-0 pr-0">
-						<!-- Customer selection component -->
-						<Customer />
-					</v-col>
-					<!-- Invoice Type Selection (Only shown if sales orders are allowed) -->
-					<v-col v-if="pos_profile.posa_allow_sales_order" cols="3" class="pb-4">
-						<v-select
-							density="compact"
-							hide-details
-							variant="solo"
-							color="primary"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							:items="invoiceTypes"
-							:label="frappe._('Type')"
-							v-model="invoiceType"
-							:disabled="invoiceType == 'Return'"
-						></v-select>
-					</v-col>
-				</v-row>
+		<!-- Scrollable Content Area -->
+		<div class="invoice-content">
+			<!-- Main Invoice Card (contains all invoice content) -->
+			<v-card
+				ref="invoiceCard"
+				:style="{
+					backgroundColor: isDarkTheme ? '#121212' : '',
+				}"
+				:class="[
+					'cards my-0 py-0 resizable',
+					isDarkTheme ? '' : 'bg-grey-lighten-5',
+					{ 'return-mode': isReturnInvoice },
+				]"
+			>
+				<!-- Dynamic padding wrapper -->
+				<div class="dynamic-padding">
+					<v-alert
+						type="info"
+						density="compact"
+						class="mb-2"
+						v-if="pos_profile.create_pos_invoice_instead_of_sales_invoice"
+					>
+						{{ __("Invoices saved as POS Invoices") }}
+					</v-alert>
 
-				<!-- Delivery Charges Section (Only if enabled in POS profile) -->
-				<DeliveryCharges
-					:pos_profile="pos_profile"
-					:delivery_charges="delivery_charges"
-					:selected_delivery_charge="selected_delivery_charge"
-					:delivery_charges_rate="delivery_charges_rate"
-					:deliveryChargesFilter="deliveryChargesFilter"
-					:formatCurrency="formatCurrency"
-					:currencySymbol="currencySymbol"
-					:readonly="readonly"
-					@update:selected_delivery_charge="
-						(val) => {
-							selected_delivery_charge = val;
-							update_delivery_charges();
-						}
-					"
-				/>
+					<!-- Top Row: Customer Selection and Invoice Type -->
+					<v-row align="center" class="items px-3 py-2">
+						<v-col :cols="pos_profile.posa_allow_sales_order ? 9 : 12" class="pb-0 pr-0">
+							<!-- Customer selection component -->
+							<Customer />
+						</v-col>
+						<!-- Invoice Type Selection (Only shown if sales orders are allowed) -->
+						<v-col v-if="pos_profile.posa_allow_sales_order" cols="3" class="pb-4">
+							<v-select
+								density="compact"
+								hide-details
+								variant="solo"
+								color="primary"
+								:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+								class="dark-field sleek-field"
+								:items="invoiceTypes"
+								:label="frappe._('Type')"
+								v-model="invoiceType"
+								:disabled="invoiceType == 'Return'"
+							></v-select>
+						</v-col>
+					</v-row>
 
-				<!-- Posting Date and Customer Balance Section -->
-				<PostingDateRow
-					:pos_profile="pos_profile"
-					:posting_date_display="posting_date_display"
-					:customer_balance="customer_balance"
-					:price-list="selected_price_list"
-					:price-lists="price_lists"
-					:formatCurrency="formatCurrency"
-					@update:posting_date_display="
-						(val) => {
-							posting_date_display = val;
-						}
-					"
-					@update:priceList="
-						(val) => {
-							selected_price_list = val;
-						}
-					"
-				/>
+					<!-- Delivery Charges Section (Only if enabled in POS profile) -->
+					<DeliveryCharges
+						:pos_profile="pos_profile"
+						:delivery_charges="delivery_charges"
+						:selected_delivery_charge="selected_delivery_charge"
+						:delivery_charges_rate="delivery_charges_rate"
+						:deliveryChargesFilter="deliveryChargesFilter"
+						:formatCurrency="formatCurrency"
+						:currencySymbol="currencySymbol"
+						:readonly="readonly"
+						@update:selected_delivery_charge="
+							(val) => {
+								selected_delivery_charge = val;
+								update_delivery_charges();
+							}
+						"
+					/>
 
-				<!-- Multi-Currency Section (Only if enabled in POS profile) -->
-				<MultiCurrencyRow
-					:pos_profile="pos_profile"
-					:selected_currency="selected_currency"
-					:plc_conversion_rate="exchange_rate"
-					:conversion_rate="conversion_rate"
-					:available_currencies="available_currencies"
-					:isNumber="isNumber"
-					:price_list_currency="price_list_currency"
-					@update:selected_currency="
-						(val) => {
-							selected_currency = val;
-							update_currency(val);
-						}
-					"
-					@update:plc_conversion_rate="
-						(val) => {
-							exchange_rate = val;
-							update_exchange_rate();
-						}
-					"
-					@update:conversion_rate="
-						(val) => {
-							conversion_rate = val;
-							update_conversion_rate();
-						}
-					"
-				/>
+					<!-- Posting Date and Customer Balance Section -->
+					<PostingDateRow
+						:pos_profile="pos_profile"
+						:posting_date_display="posting_date_display"
+						:customer_balance="customer_balance"
+						:price-list="selected_price_list"
+						:price-lists="price_lists"
+						:formatCurrency="formatCurrency"
+						@update:posting_date_display="
+							(val) => {
+								posting_date_display = val;
+							}
+						"
+						@update:priceList="
+							(val) => {
+								selected_price_list = val;
+							}
+						"
+					/>
 
-				<!-- Items Table Section (Main items list for invoice) -->
-				<div class="items-table-wrapper">
-					<!-- Column selector button moved outside the table -->
-					<div class="column-selector-container">
-						<v-btn
-							density="compact"
-							variant="text"
-							color="#4169E1"
-							prepend-icon="mdi-cog-outline"
-							@click="toggleColumnSelection"
-							class="column-selector-btn"
-						>
-							{{ __("Columns") }}
-						</v-btn>
+					<!-- Multi-Currency Section (Only if enabled in POS profile) -->
+					<MultiCurrencyRow
+						:pos_profile="pos_profile"
+						:selected_currency="selected_currency"
+						:plc_conversion_rate="exchange_rate"
+						:conversion_rate="conversion_rate"
+						:available_currencies="available_currencies"
+						:isNumber="isNumber"
+						:price_list_currency="price_list_currency"
+						@update:selected_currency="
+							(val) => {
+								selected_currency = val;
+								update_currency(val);
+							}
+						"
+						@update:plc_conversion_rate="
+							(val) => {
+								exchange_rate = val;
+								update_exchange_rate();
+							}
+						"
+						@update:conversion_rate="
+							(val) => {
+								conversion_rate = val;
+								update_conversion_rate();
+							}
+						"
+					/>
 
-						<v-dialog v-model="show_column_selector" max-width="500px">
+					<!-- Items Table Section (Main items list for invoice) -->
+					<div class="items-table-wrapper">
+						<!-- Column selector button moved outside the table -->
+						<div class="column-selector-container">
+							<v-btn
+								density="compact"
+								variant="text"
+								color="#4169E1"
+								prepend-icon="mdi-cog-outline"
+								@click="toggleColumnSelection"
+								class="column-selector-btn"
+							>
+								{{ __("Columns") }}
+							</v-btn>
+
+							<v-dialog v-model="show_column_selector" max-width="500px">
+								<v-card>
+									<v-card-title class="text-h6 pa-4 d-flex align-center">
+										<span>{{ __("Select Columns to Display") }}</span>
+										<v-spacer></v-spacer>
+										<v-btn
+											icon="mdi-close"
+											variant="text"
+											density="compact"
+											@click="show_column_selector = false"
+										></v-btn>
+									</v-card-title>
+									<v-divider></v-divider>
+									<v-card-text class="pa-4">
+										<v-row dense>
+											<v-col
+												cols="12"
+												v-for="column in available_columns.filter((col) => !col.required)"
+												:key="column.key"
+											>
+												<v-switch
+													v-model="temp_selected_columns"
+													:label="column.title"
+													:value="column.key"
+													hide-details
+													density="compact"
+													color="primary"
+													class="column-switch mb-1"
+													:disabled="column.required"
+												></v-switch>
+											</v-col>
+										</v-row>
+										<div class="text-caption mt-2">
+											{{ __("Required columns cannot be hidden") }}
+										</div>
+									</v-card-text>
+									<v-card-actions class="pa-4 pt-0">
+										<v-btn color="error" variant="text" @click="cancelColumnSelection">{{
+											__("Cancel")
+										}}</v-btn>
+										<v-spacer></v-spacer>
+										<v-btn color="primary" variant="tonal" @click="updateSelectedColumns">{{
+											__("Apply")
+										}}</v-btn>
+									</v-card-actions>
+								</v-card>
+							</v-dialog>
+						</div>
+
+						<!-- ItemsTable component with reorder event handler -->
+						<ItemsTable
+							ref="itemsTable"
+							:headers="items_headers"
+							:items="items"
+							v-model:expanded="expanded"
+							:itemsPerPage="itemsPerPage"
+							:itemSearch="itemSearch"
+							:pos_profile="pos_profile"
+							:invoice_doc="invoice_doc"
+							:invoiceType="invoiceType"
+							:stock_settings="stock_settings"
+							:displayCurrency="displayCurrency"
+							:formatFloat="formatFloat"
+							:formatCurrency="formatCurrency"
+							:currencySymbol="currencySymbol"
+							:isNumber="isNumber"
+							:setFormatedQty="setFormatedQty"
+							:setFormatedCurrency="setFormatedCurrency"
+							:calcPrices="calc_prices"
+							:calcUom="calc_uom"
+							:setSerialNo="set_serial_no"
+							:setBatchQty="set_batch_qty"
+							:validateDueDate="validate_due_date"
+							:removeItem="remove_item"
+							:subtractOne="subtract_one"
+							:addOne="add_one"
+							:toggleOffer="toggleOffer"
+							:changePriceListRate="change_price_list_rate"
+							:isNegative="isNegative"
+							@update:expanded="handleExpandedUpdate"
+							@reorder-items="handleItemReorder"
+							@add-item-from-drag="handleItemDrop"
+							@show-drop-feedback="showDropFeedback"
+							@item-dropped="showDropFeedback(false)"
+							@view-packed="openPackedItems"
+						/>
+
+						<v-dialog v-model="show_packed_dialog" max-width="800px">
 							<v-card>
-								<v-card-title class="text-h6 pa-4 d-flex align-center">
-									<span>{{ __("Select Columns to Display") }}</span>
+								<v-card-title class="d-flex align-center">
+									<span>{{ __("Packing List") }} ({{ packed_dialog_items.length }})</span>
 									<v-spacer></v-spacer>
 									<v-btn
 										icon="mdi-close"
 										variant="text"
 										density="compact"
-										@click="show_column_selector = false"
+										@click="show_packed_dialog = false"
 									></v-btn>
 								</v-card-title>
 								<v-divider></v-divider>
-								<v-card-text class="pa-4">
-									<v-row dense>
-										<v-col
-											cols="12"
-											v-for="column in available_columns.filter((col) => !col.required)"
-											:key="column.key"
-										>
-											<v-switch
-												v-model="temp_selected_columns"
-												:label="column.title"
-												:value="column.key"
+								<v-card-text>
+									<v-alert type="warning" density="compact" class="mb-2">
+										{{
+											__(
+												"For 'Product Bundle' items, Warehouse, Serial No and Batch No will be considered from the 'Packing List' table. If Warehouse and Batch No are same for all packing items for any 'Product Bundle' item, those values can be entered in the main Item table; values will be copied to 'Packing List' table.",
+											)
+										}}
+									</v-alert>
+									<v-data-table
+										:headers="packedItemsHeaders"
+										:items="packed_dialog_items"
+										class="elevation-1"
+										hide-default-footer
+										density="compact"
+									>
+										<template v-slot:item.index="{ index }">
+											{{ index + 1 }}
+										</template>
+										<template v-slot:item.qty="{ item }">
+											{{ formatFloat(item.qty) }}
+										</template>
+										<template v-slot:item.rate="{ item }">
+											<div class="currency-display">
+												<span class="currency-symbol">{{
+													currencySymbol(displayCurrency)
+												}}</span>
+												<span class="amount-value">{{ formatCurrency(item.rate) }}</span>
+											</div>
+										</template>
+										<template v-slot:item.warehouse="{ item }">
+											<v-text-field
+												v-model="item.warehouse"
 												hide-details
 												density="compact"
-												color="primary"
-												class="column-switch mb-1"
-												:disabled="column.required"
-											></v-switch>
-										</v-col>
-									</v-row>
-									<div class="text-caption mt-2">
-										{{ __("Required columns cannot be hidden") }}
-									</div>
+											/>
+										</template>
+										<template v-slot:item.batch_no="{ item }">
+											<v-text-field
+												v-model="item.batch_no"
+												hide-details
+												density="compact"
+											/>
+										</template>
+										<template v-slot:item.serial_no="{ item }">
+											<v-text-field
+												v-model="item.serial_no"
+												hide-details
+												density="compact"
+											/>
+										</template>
+									</v-data-table>
 								</v-card-text>
-								<v-card-actions class="pa-4 pt-0">
-									<v-btn color="error" variant="text" @click="cancelColumnSelection">{{
-										__("Cancel")
-									}}</v-btn>
-									<v-spacer></v-spacer>
-									<v-btn color="primary" variant="tonal" @click="updateSelectedColumns">{{
-										__("Apply")
-									}}</v-btn>
-								</v-card-actions>
 							</v-card>
 						</v-dialog>
 					</div>
-
-					<!-- ItemsTable component with reorder event handler -->
-					<ItemsTable
-						ref="itemsTable"
-						:headers="items_headers"
-						:items="items"
-						v-model:expanded="expanded"
-						:itemsPerPage="itemsPerPage"
-						:itemSearch="itemSearch"
-						:pos_profile="pos_profile"
-						:invoice_doc="invoice_doc"
-						:invoiceType="invoiceType"
-						:stock_settings="stock_settings"
-						:displayCurrency="displayCurrency"
-						:formatFloat="formatFloat"
-						:formatCurrency="formatCurrency"
-						:currencySymbol="currencySymbol"
-						:isNumber="isNumber"
-						:setFormatedQty="setFormatedQty"
-						:setFormatedCurrency="setFormatedCurrency"
-						:calcPrices="calc_prices"
-						:calcUom="calc_uom"
-						:setSerialNo="set_serial_no"
-						:setBatchQty="set_batch_qty"
-						:validateDueDate="validate_due_date"
-						:removeItem="remove_item"
-						:subtractOne="subtract_one"
-						:addOne="add_one"
-						:toggleOffer="toggleOffer"
-						:changePriceListRate="change_price_list_rate"
-						:isNegative="isNegative"
-						@update:expanded="handleExpandedUpdate"
-						@reorder-items="handleItemReorder"
-						@add-item-from-drag="handleItemDrop"
-						@show-drop-feedback="showDropFeedback"
-						@item-dropped="showDropFeedback(false)"
-						@view-packed="openPackedItems"
-					/>
-					<v-dialog v-model="show_packed_dialog" max-width="800px">
-						<v-card>
-							<v-card-title class="d-flex align-center">
-								<span>{{ __("Packing List") }} ({{ packed_dialog_items.length }})</span>
-								<v-spacer></v-spacer>
-								<v-btn
-									icon="mdi-close"
-									variant="text"
-									density="compact"
-									@click="show_packed_dialog = false"
-								></v-btn>
-							</v-card-title>
-							<v-divider></v-divider>
-							<v-card-text>
-								<v-alert type="warning" density="compact" class="mb-2">
-									{{
-										__(
-											"For 'Product Bundle' items, Warehouse, Serial No and Batch No will be considered from the 'Packing List' table. If Warehouse and Batch No are same for all packing items for any 'Product Bundle' item, those values can be entered in the main Item table; values will be copied to 'Packing List' table.",
-										)
-									}}
-								</v-alert>
-								<v-data-table
-									:headers="packedItemsHeaders"
-									:items="packed_dialog_items"
-									class="elevation-1"
-									hide-default-footer
-									density="compact"
-								>
-									<template v-slot:item.index="{ index }">
-										{{ index + 1 }}
-									</template>
-									<template v-slot:item.qty="{ item }">
-										{{ formatFloat(item.qty) }}
-									</template>
-									<template v-slot:item.rate="{ item }">
-										<div class="currency-display">
-											<span class="currency-symbol">{{
-												currencySymbol(displayCurrency)
-											}}</span>
-											<span class="amount-value">{{ formatCurrency(item.rate) }}</span>
-										</div>
-									</template>
-									<template v-slot:item.warehouse="{ item }">
-										<v-text-field
-											v-model="item.warehouse"
-											hide-details
-											density="compact"
-										/>
-									</template>
-									<template v-slot:item.batch_no="{ item }">
-										<v-text-field
-											v-model="item.batch_no"
-											hide-details
-											density="compact"
-										/>
-									</template>
-									<template v-slot:item.serial_no="{ item }">
-										<v-text-field
-											v-model="item.serial_no"
-											hide-details
-											density="compact"
-										/>
-									</template>
-								</v-data-table>
-							</v-card-text>
-						</v-card>
-					</v-dialog>
 				</div>
-			</div>
-		</v-card>
-		<!-- Payment Section -->
-		<InvoiceSummary
-			:pos_profile="pos_profile"
-			:total_qty="total_qty"
-			:additional_discount="additional_discount"
-			:additional_discount_percentage="additional_discount_percentage"
-			:total_items_discount_amount="total_items_discount_amount"
-			:subtotal="subtotal"
-			:displayCurrency="displayCurrency"
-			:formatFloat="formatFloat"
-			:formatCurrency="formatCurrency"
-			:currencySymbol="currencySymbol"
-			:discount_percentage_offer_name="discount_percentage_offer_name"
-			:isNumber="isNumber"
-			@update:additional_discount="(val) => (additional_discount = val)"
-			@update:additional_discount_percentage="(val) => (additional_discount_percentage = val)"
-			@update_discount_umount="update_discount_umount"
-			@save-and-clear="save_and_clear_invoice"
-			@load-drafts="get_draft_invoices"
-			@select-order="get_draft_orders"
-			@cancel-sale="cancel_dialog = true"
-			@open-returns="open_returns"
-			@print-draft="print_draft_invoice"
-			@show-payment="show_payment"
-		/>
+			</v-card>
+		</div>
+
+		<!-- Fixed Footer Controls -->
+		<div class="invoice-controls">
+			<InvoiceSummary
+				:pos_profile="pos_profile"
+				:total_qty="total_qty"
+				:additional_discount="additional_discount"
+				:additional_discount_percentage="additional_discount_percentage"
+				:total_items_discount_amount="total_items_discount_amount"
+				:subtotal="subtotal"
+				:displayCurrency="displayCurrency"
+				:formatFloat="formatFloat"
+				:formatCurrency="formatCurrency"
+				:currencySymbol="currencySymbol"
+				:discount_percentage_offer_name="discount_percentage_offer_name"
+				:isNumber="isNumber"
+				:selectedCustomerId="customer"
+				:items_group="items_group"
+				v-model:item_group="item_group"
+				@update:item_group="handleItemGroupUpdate"
+				:active_price_list="selected_price_list"
+				:offersCount="offersCount"
+				:couponsCount="couponsCount"
+				v-model:items_view="items_view"
+				@update:additional_discount="(val) => (additional_discount = val)"
+				@update:additional_discount_percentage="(val) => (additional_discount_percentage = val)"
+				@update_discount_umount="apply_additional_discount"
+				@save-and-clear="save_and_clear_invoice"
+				@load-drafts="get_draft_invoices"
+				@select-order="get_draft_orders"
+				@cancel-sale="cancel_dialog = true"
+				@open-returns="open_returns"
+				@print-draft="print_draft_invoice"
+				@show-payment="show_payment"
+				@show-offers="handleShowOffers"
+				@show-coupons="handleShowCoupons"
+			/>
+		</div>
 	</div>
 </template>
 
@@ -383,6 +395,11 @@ export default {
 			posting_date: frappe.datetime.nowdate(), // Invoice posting date
 			posting_date_display: "", // Display value for date picker
 			items_headers: [],
+			items_group: ["ALL"],
+			item_group: "ALL",
+			items_view: "list",
+			offersCount: 0,
+			couponsCount: 0,
 			packedItemsHeaders: [
 				{ title: __("No."), key: "index" },
 				{ title: __("Parent Item"), key: "parent_item" },
@@ -407,7 +424,6 @@ export default {
 			temp_selected_columns: [], // Temporary array for column selection
 			available_columns: [], // All available columns
 			show_column_selector: false, // Column selector dialog visibility
-			invoiceHeight: null,
 		};
 	},
 
@@ -422,15 +438,18 @@ export default {
 	},
 	computed: {
 		...invoiceComputed,
-		isDarkTheme() {
-			return this.$theme.current === "dark";
-		},
 	},
 
 	methods: {
 		...shortcutMethods,
 		...offerMethods,
 		...invoiceItemMethods,
+		
+		handleItemGroupUpdate(newGroup) {
+			console.log('[Invoice] Item group updated:', newGroup);
+			this.item_group = newGroup;
+		},
+
 		initializeItemsHeaders() {
 			// Define all available columns
 			this.available_columns = [
@@ -467,52 +486,48 @@ export default {
 		},
 
 		apply_additional_discount() {
-			const totalBeforeDiscount = this.items.reduce((sum, item) => sum + (item.amount || 0), 0);
+			console.log('[Invoice] apply_additional_discount called');
 
+			// Get subtotal from computed property (already calculated)
+			const totalBeforeDiscount = this.subtotal;
 			let discountAmount = 0;
 
-			if (this.additional_discount_percentage > 0) {
-				discountAmount = (totalBeforeDiscount * this.additional_discount_percentage) / 100;
-			} else if (this.additional_discount > 0) {
-				discountAmount = this.additional_discount;
+			// Calculate discount based on percentage or fixed amount
+			if (this.flt(this.additional_discount_percentage) > 0) {
+				discountAmount = this.flt(
+					(totalBeforeDiscount * this.flt(this.additional_discount_percentage)) / 100
+				);
+			} else if (this.flt(this.additional_discount) > 0) {
+				discountAmount = this.flt(this.additional_discount);
 			}
 
-			this.discount_amount = discountAmount;
-			this.grand_total = this.roundAmount(totalBeforeDiscount - discountAmount);
+			// Update discount_amount (this triggers grand_total recalculation)
+			this.discount_amount = this.flt(discountAmount);
 
+			console.log('[Invoice] Discount calculated:', {
+				subtotal: totalBeforeDiscount,
+				discount_percentage: this.additional_discount_percentage,
+				discount_amount: this.additional_discount,
+				calculated_discount: discountAmount,
+				grand_total: this.grand_total,
+				rounded_total: this.rounded_total
+			});
+
+			// Sync to invoice_doc
 			if (this.invoice_doc) {
 				this.invoice_doc.discount_amount = this.discount_amount;
-				this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
 				this.invoice_doc.additional_discount = this.additional_discount;
+				this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
+				this.invoice_doc.net_total = this.subtotal;
 				this.invoice_doc.grand_total = this.grand_total;
+				this.invoice_doc.rounded_total = this.rounded_total;
 			}
 
-			this.$forceUpdate();
+			// Force UI update to reflect changes
+			this.$nextTick(() => {
+				this.$forceUpdate();
+			});
 		},
-
-		// // Handle item added from ItemSelector
-		// handleAddToPOS(event) {
-		// 	const item = event.detail;
-		// 	// Check if item already exists
-		// 	const existing = this.items.find((i) => i.item_code === item.item_code);
-
-		// 	if (existing) {
-		// 		// If exists, increase quantity
-		// 		existing.qty += item.qty || 1;
-		// 		existing.rate = item.rate || existing.rate;
-		// 	} else {
-		// 		// Add as new item
-		// 		this.items.push({
-		// 			item_code: item.item_code,
-		// 			item_name: item.item_name,
-		// 			qty: item.qty || 1,
-		// 			rate: item.rate || 0,
-		// 		});
-		// 	}
-
-		// 	// Recalculate totals
-		// 	this.update_totals();
-		// },
 
 		// Recalculate subtotal and total qty
 		update_totals() {
@@ -534,6 +549,42 @@ export default {
 			});
 		},
 
+		handleShowOffers() {
+			console.log('[Invoice] handleShowOffers called');
+			this.eventBus.emit('show_offers', 'true');
+		},
+
+		handleShowCoupons() {
+			console.log('[Invoice] handleShowCoupons called');
+			this.eventBus.emit('show_coupons', 'true');
+		},
+
+		get_draft_invoices() {
+			this.eventBus.emit('open_drafts_modal');
+		},
+
+		get_draft_orders() {
+			this.eventBus.emit('select_order');
+		},
+
+		open_returns() {
+			this.eventBus.emit('open_returns');
+		},
+
+		show_payment() {
+			console.log('[Invoice] show_payment called');
+			const invoice = this.prepareForPayment();
+			if (invoice && invoice.items && invoice.items.length > 0) {
+				this.eventBus.emit('payment_ready', invoice);
+				this.eventBus.emit('show_payment', 'true');
+			} else {
+				frappe.show_alert({
+					message: this.__('Please add items before proceeding to payment'),
+					indicator: 'warning'
+				});
+			}
+		},
+
 		// Show visual feedback when item is being dragged over drop zone
 		showDropFeedback(isDragging) {
 			// Add visual feedback class to the items table
@@ -546,10 +597,12 @@ export default {
 				}
 			}
 		},
+
 		openPackedItems(bundle_id) {
 			this.packed_dialog_items = this.packed_items.filter((it) => it.bundle_id === bundle_id);
 			this.show_packed_dialog = true;
 		},
+
 		toggleColumnSelection() {
 			// Create a copy of selected columns for temporary editing
 			this.temp_selected_columns = [...this.selected_columns];
@@ -610,34 +663,6 @@ export default {
 			}
 		},
 
-		saveInvoiceHeight() {
-			if (this.$refs.invoiceCard) {
-				this.invoiceHeight = this.$refs.invoiceCard.clientHeight + "px";
-				try {
-					localStorage.setItem("posawesome_invoice_height", this.invoiceHeight);
-				} catch (e) {
-					console.error("Failed to save invoice height:", e);
-				}
-			}
-		},
-
-		loadInvoiceHeight() {
-			try {
-				const saved = localStorage.getItem("posawesome_invoice_height");
-				if (saved) {
-					this.invoiceHeight = saved;
-				} else {
-					this.invoiceHeight =
-						getComputedStyle(document.documentElement).getPropertyValue("--container-height") ||
-						"68vh";
-				}
-			} catch (e) {
-				console.error("Failed to load invoice height:", e);
-				this.invoiceHeight =
-					getComputedStyle(document.documentElement).getPropertyValue("--container-height") ||
-					"68vh";
-			}
-		},
 		makeid(length) {
 			let result = "";
 			const characters = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -671,6 +696,7 @@ export default {
 				},
 			]);
 		},
+
 		async set_delivery_charges() {
 			var vm = this;
 			if (!this.pos_profile || !this.customer || !this.pos_profile.posa_use_delivery_charges) {
@@ -698,6 +724,7 @@ export default {
 				console.error("Failed to fetch delivery charges", error);
 			}
 		},
+
 		deliveryChargesFilter(itemText, queryText, itemRow) {
 			const item = itemRow.raw;
 			console.log("dl charges", item);
@@ -705,6 +732,7 @@ export default {
 			const searchText = queryText.toLowerCase();
 			return textOne.indexOf(searchText) > -1;
 		},
+
 		update_delivery_charges() {
 			if (this.selected_delivery_charge) {
 				this.delivery_charges_rate = this.selected_delivery_charge.rate;
@@ -712,11 +740,13 @@ export default {
 				this.delivery_charges_rate = 0;
 			}
 		},
+
 		updatePostingDate(date) {
 			if (!date) return;
 			this.posting_date = date;
 			this.$forceUpdate();
 		},
+
 		// Override setFormatedFloat for qty field to handle stock limits and return mode
 		setFormatedQty(item, field_name, precision, no_negative, value) {
 			// Parse and set the value using the mixin's formatter
@@ -762,6 +792,7 @@ export default {
 			}
 			return parsedValue;
 		},
+
 		async fetch_available_currencies() {
 			try {
 				console.log("Fetching available currencies...");
@@ -1076,6 +1107,127 @@ export default {
 			}
 		},
 
+		get_invoice_doc() {
+			console.log('[Invoice] get_invoice_doc() called');
+
+			if (!this.invoice_doc) {
+				this.invoice_doc = {
+					doctype: 'Sales Invoice',
+					items: [],
+					payments: []
+				};
+			}
+
+			// CRITICAL: Sync ALL values
+			this.invoice_doc.items = this.items || [];
+			this.invoice_doc.customer = this.customer || '';
+			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
+			this.invoice_doc.currency = this.selected_currency || (this.pos_profile?.currency) || 'USD';
+
+			// SYNC TOTALS - THIS IS THE KEY PART
+			this.invoice_doc.net_total = this.flt(this.subtotal || 0);
+			this.invoice_doc.total_taxes_and_charges = this.flt(this.total_tax || 0);
+			this.invoice_doc.discount_amount = this.flt(this.discount_amount || 0);
+			this.invoice_doc.additional_discount = this.flt(this.additional_discount || 0);
+			this.invoice_doc.additional_discount_percentage = this.flt(this.additional_discount_percentage || 0);
+			this.invoice_doc.grand_total = this.flt(this.grand_total || 0);
+			this.invoice_doc.rounded_total = this.flt(this.rounded_total || this.grand_total || 0);
+
+			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
+			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
+			this.invoice_doc.pos_profile = this.pos_profile?.name || '';
+			this.invoice_doc.company = this.pos_profile?.company || '';
+
+			console.log('[Invoice] get_invoice_doc returning:', {
+				items: (this.invoice_doc.items || []).length,
+				net_total: this.invoice_doc.net_total,
+				discount: this.invoice_doc.discount_amount,
+				grand_total: this.invoice_doc.grand_total,
+				rounded_total: this.invoice_doc.rounded_total
+			});
+
+			return this.invoice_doc;
+		},
+		// Alternative method name for compatibility
+		getInvoiceDoc() {
+			return this.get_invoice_doc();
+		},
+
+		// Broadcast invoice updates to parent/sibling components
+		broadcastInvoiceUpdate() {
+			if (this.invoice_doc && this.eventBus) {
+				console.log('[Invoice] Broadcasting invoice update');
+				this.eventBus.emit('invoice_updated', this.invoice_doc);
+			}
+		},
+
+		// Get full invoice with all calculated values
+		getFullInvoiceData() {
+			console.log('[Invoice] getFullInvoiceData() called');
+
+			const invoiceData = {
+				// Basic info
+				name: this.invoice_doc?.name || '',
+				doctype: 'Sales Invoice',
+				customer: this.customer || '',
+				posting_date: this.posting_date || frappe.datetime.nowdate(),
+
+				// Items
+				items: this.items || [],
+
+				// Amounts
+				net_total: this.net_total || 0,
+				total_taxes_and_charges: this.total_tax || 0,
+				total: this.subtotal || 0,
+				discount_amount: this.discount_amount || 0,
+				grand_total: this.grand_total || 0,
+				rounded_total: this.rounded_total || this.grand_total || 0,
+
+				// Additional discounts
+				additional_discount: this.additional_discount || 0,
+				additional_discount_percentage: this.additional_discount_percentage || 0,
+
+				// Currency
+				currency: this.selected_currency || this.pos_profile.currency,
+				conversion_rate: this.conversion_rate || 1,
+				plc_conversion_rate: this.exchange_rate || 1,
+
+				// Payments
+				payments: this.invoice_doc?.payments || [],
+
+				// POS specific
+				pos_profile: this.pos_profile?.name || '',
+				company: this.pos_profile?.company || '',
+				is_return: this.invoice_doc?.is_return || 0,
+
+				// Other fields
+				...this.invoice_doc
+			};
+
+			console.log('[Invoice] Full invoice data:', invoiceData);
+			return invoiceData;
+		},
+
+		// Ensure invoice_doc is updated before payment
+		prepareForPayment() {
+			console.log('[Invoice] prepareForPayment() called');
+
+			// Call get_invoice_doc to ensure sync
+			const invoiceData = this.get_invoice_doc();
+
+			console.log('[Invoice] prepareForPayment result:', {
+				items_count: (invoiceData.items || []).length,
+				subtotal: invoiceData.net_total,
+				tax: invoiceData.total_taxes_and_charges,
+				discount: invoiceData.discount_amount,
+				grand_total: invoiceData.grand_total,
+				rounded_total: invoiceData.rounded_total,
+				currency: invoiceData.currency
+			});
+
+			return invoiceData;
+		},
+
 		async update_exchange_rate_on_server() {
 			if (this.conversion_rate) {
 				if (!this.items.length) {
@@ -1172,10 +1324,17 @@ export default {
 				}
 				item.qty = proposed;
 			}
+
 			if (item.qty == 0) {
 				this.remove_item(item);
+				return;
 			}
+
+			// Recalculate stock and amount
 			this.calc_stock_qty(item, item.qty);
+			item.amount = this.flt(item.qty * item.rate, this.currency_precision);
+
+			// Update packed items if bundle
 			if (item.is_bundle) {
 				this.packed_items
 					.filter((it) => it.bundle_id === item.bundle_id)
@@ -1184,9 +1343,19 @@ export default {
 						this.calc_stock_qty(ch, ch.qty);
 					});
 			}
-			this.$forceUpdate();
-		},
 
+			// Use Vue.set to ensure reactivity
+			const index = this.items.findIndex(i => i.posa_row_id === item.posa_row_id);
+			if (index !== -1) {
+				// Create new object to trigger reactivity
+				this.$set(this.items, index, { ...item });
+			}
+
+			// Trigger recalculation
+			this.$nextTick(() => {
+				this.apply_additional_discount();
+			});
+		},
 		// Decrease quantity of an item (handles return logic)
 		subtract_one(item) {
 			if (this.isReturnInvoice) {
@@ -1195,10 +1364,17 @@ export default {
 			} else {
 				item.qty--;
 			}
+
 			if (item.qty == 0) {
 				this.remove_item(item);
+				return;
 			}
+
+			// Recalculate stock and amount
 			this.calc_stock_qty(item, item.qty);
+			item.amount = this.flt(item.qty * item.rate, this.currency_precision);
+
+			// Update packed items if bundle
 			if (item.is_bundle) {
 				this.packed_items
 					.filter((it) => it.bundle_id === item.bundle_id)
@@ -1207,7 +1383,147 @@ export default {
 						this.calc_stock_qty(ch, ch.qty);
 					});
 			}
-			this.$forceUpdate();
+
+			// Use Vue.set to ensure reactivity
+			const index = this.items.findIndex(i => i.posa_row_id === item.posa_row_id);
+			if (index !== -1) {
+				// Create new object to trigger reactivity
+				this.$set(this.items, index, { ...item });
+			}
+
+			// Trigger recalculation
+			this.$nextTick(() => {
+				this.apply_additional_discount();
+			});
+		},
+
+		async save_and_clear_invoice() {
+			console.log('[Invoice] save_and_clear_invoice() called');
+
+			// Ensure invoice_doc exists
+			if (!this.invoice_doc) {
+				console.warn('[Invoice] Creating new invoice_doc');
+				this.invoice_doc = {};
+			}
+
+			// Validate invoice has items
+			if (!this.items || this.items.length === 0) {
+				frappe.show_alert({
+					message: this.__('Please add items to invoice before saving'),
+					indicator: 'warning'
+				});
+				return null;
+			}
+
+			// Validate customer
+			if (!this.customer || String(this.customer).trim().length === 0) {
+				frappe.show_alert({
+					message: this.__('Please select a customer before saving'),
+					indicator: 'warning'
+				});
+				return null;
+			}
+
+			// Sync all current values to invoice_doc
+			this.invoice_doc.doctype = 'Sales Invoice';
+			this.invoice_doc.items = this.items;
+			this.invoice_doc.customer = this.customer;
+			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
+			this.invoice_doc.currency = this.selected_currency || this.pos_profile.currency;
+			this.invoice_doc.net_total = this.subtotal;
+			this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
+			this.invoice_doc.discount_amount = this.discount_amount || 0;
+			this.invoice_doc.additional_discount = this.additional_discount || 0;
+			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
+			this.invoice_doc.grand_total = this.grand_total;
+			this.invoice_doc.rounded_total = this.rounded_total;
+			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
+			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
+			this.invoice_doc.pos_profile = this.pos_profile.name;
+			this.invoice_doc.company = this.pos_profile.company;
+
+			console.log('[Invoice] Invoice ready to save:', {
+				customer: this.invoice_doc.customer,
+				items_count: this.invoice_doc.items.length,
+				grand_total: this.invoice_doc.grand_total,
+				currency: this.invoice_doc.currency
+			});
+
+			try {
+				// Call save via frappe method
+				const response = await frappe.call({
+					method: 'frappe.client.insert',
+					args: {
+						doc: this.invoice_doc
+					}
+				});
+
+				if (response.message) {
+					const saved_doc = response.message;
+					console.log('[Invoice] Invoice saved successfully:', saved_doc.name);
+
+					frappe.show_alert({
+						message: this.__('Invoice saved as draft: {0}', [saved_doc.name]),
+						indicator: 'green'
+					});
+
+					// Store the saved doc name
+					const saved_name = saved_doc.name;
+
+					// Clear the invoice
+					this.clear_invoice();
+
+					// Emit event
+					this.eventBus.emit('invoice_saved_successfully', { name: saved_name });
+
+					return saved_doc;
+				}
+			} catch (error) {
+				console.error('[Invoice] Error saving invoice:', error);
+				frappe.show_alert({
+					message: this.__('Error saving invoice: ') + (error.message || error),
+					indicator: 'red'
+				});
+				return null;
+			}
+		},
+
+		async save_invoice() {
+			console.log('[Invoice] save_invoice() called');
+
+			let invoice = this.get_invoice_doc();
+
+			if (!invoice) {
+				throw new Error('Invoice document not found');
+			}
+
+			return new Promise((resolve, reject) => {
+				invoice.save('Save', function () {
+					console.log('[Invoice] Invoice saved via frappe.db.save');
+					resolve(invoice);
+				}).catch(error => {
+					console.error('[Invoice] Error in save:', error);
+					reject(error);
+				});
+			});
+		},
+
+		clear_invoice() {
+			console.log('[Invoice] Clearing invoice');
+
+			// Reset all data
+			this.invoice_doc = null;
+			this.customer = "";
+			this.items = [];
+			this.additional_discount = 0;
+			this.additional_discount_percentage = 0;
+			this.discount_amount = 0;
+			this.total_tax = 0;
+
+			// Emit event
+			this.eventBus.emit('invoice_cleared');
+
+			console.log('[Invoice] Invoice cleared successfully');
 		},
 
 		// Handle item reordering from drag and drop
@@ -1242,12 +1558,43 @@ export default {
 	},
 
 	mounted() {
+		// ADD THESE NEW EVENT LISTENERS
+		this.eventBus.on('get_current_invoice_from_component', () => {
+			console.log('[Invoice] get_current_invoice_from_component event received');
+			const invoiceData = this.prepareForPayment();
+			if (invoiceData) {
+				this.eventBus.emit('current_invoice_data', invoiceData);
+			}
+		});
+
+		this.eventBus.on('prepare_invoice_for_payment', () => {
+			console.log('[Invoice] prepare_invoice_for_payment event received');
+			const invoice = this.prepareForPayment();
+			this.eventBus.emit('invoice_prepared', invoice);
+		});
+
+		this.eventBus.on('show_payment_modal', () => {
+			console.log('[Invoice] show_payment_modal event received');
+			this.show_payment();
+		});
+		this.eventBus.on('update_offers_counters', (data) => {
+			console.log('[Invoice] Offers counter updated:', data);
+			this.offersCount = data.offersCount || 0;
+		});
+
+		this.eventBus.on('update_coupons_counters', (data) => {
+			console.log('[Invoice] Coupons counter updated:', data);
+			this.couponsCount = data.couponsCount || 0;
+		});
+
+		// FIXED: Listen for item groups registration
+		this.eventBus.on('register_item_groups', (groups) => {
+			console.log('[Invoice] Item groups registered:', groups);
+			this.items_group = ['ALL', ...groups];
+		});
+
 		// Load saved column preferences
 		this.loadColumnPreferences();
-		// Restore saved invoice height
-		this.loadInvoiceHeight();
-		// // Listen for items added from ItemSelector.vue
-		// window.addEventListener("add-item-to-pos", this.handleAddToPOS);
 
 		// Register event listeners for POS profile, items, customer, offers, etc.
 		this.eventBus.on("register_pos_profile", (data) => {
@@ -1285,6 +1632,7 @@ export default {
 			this.fetch_price_lists();
 			this.update_price_list();
 		});
+
 		this.eventBus.on("add_item", (item) => {
 			this.add_item(item);
 		});
@@ -1302,7 +1650,6 @@ export default {
 		});
 		this.eventBus.on("load_order", (data) => {
 			this.new_order(data);
-			// this.eventBus.emit("set_pos_coupons", data.posa_coupons);
 		});
 		this.eventBus.on("set_offers", (data) => {
 			this.posOffers = data;
@@ -1321,7 +1668,6 @@ export default {
 			});
 		});
 		this.eventBus.on("load_return_invoice", (data) => {
-			// Handle loading of return invoice and set all related fields
 			console.log("Invoice component received load_return_invoice event with data:", data);
 			this.load_invoice(data.invoice_doc);
 			// Explicitly mark as return invoice
@@ -1357,30 +1703,56 @@ export default {
 				customer: this.customer,
 			});
 		});
+
+		// Listener to get current invoice on demand
+		this.eventBus.on('get_current_invoice_from_component', () => {
+			console.log('[Invoice] get_current_invoice_from_component event received');
+			const invoiceData = this.prepareForPayment();
+			if (invoiceData) {
+				this.eventBus.emit('current_invoice_data', invoiceData);
+			}
+		});
+
+		// Listener to prepare invoice for payment
+		this.eventBus.on('prepare_invoice_for_payment', () => {
+			console.log('[Invoice] prepare_invoice_for_payment event received');
+			this.prepareForPayment();
+			this.eventBus.emit('invoice_prepared', this.invoice_doc);
+		});
+
 		this.eventBus.on("set_new_line", (data) => {
 			this.new_line = data;
 		});
+
 		if (this.pos_profile.posa_allow_multi_currency) {
 			this.fetch_available_currencies();
 		}
+
 		// Listen for reset_posting_date to reset posting date after invoice submission
 		this.eventBus.on("reset_posting_date", () => {
 			this.posting_date = frappe.datetime.nowdate();
 		});
+
 		this.eventBus.on("calc_uom", this.calc_uom);
+
 		this.eventBus.on("item-drag-start", () => {
 			this.showDropFeedback(true);
 		});
+
 		this.eventBus.on("item-drag-end", () => {
 			this.showDropFeedback(false);
 		});
 	},
+
 	beforeDestroy() {
-		// window.removeEventListener("add-item-to-pos", this.handleAddToPOS);
+		// Cleanup if needed
 	},
 
 	// Cleanup event listeners before component is destroyed
 	beforeUnmount() {
+		this.eventBus.off('update_offers_counters');
+		this.eventBus.off('update_coupons_counters');
+		this.eventBus.off('register_item_groups');
 		// Existing cleanup
 		this.eventBus.off("register_pos_profile");
 		this.eventBus.off("add_item");
@@ -1389,7 +1761,11 @@ export default {
 		this.eventBus.off("clear_invoice");
 		// Cleanup reset_posting_date listener
 		this.eventBus.off("reset_posting_date");
+
+		this.eventBus.off('get_current_invoice_from_component');
+		this.eventBus.off('prepare_invoice_for_payment');
 	},
+
 	// Register global keyboard shortcuts when component is created
 	created() {
 		document.addEventListener("keydown", this.shortOpenPayment.bind(this));
@@ -1397,6 +1773,7 @@ export default {
 		document.addEventListener("keydown", this.shortOpenFirstItem.bind(this));
 		document.addEventListener("keydown", this.shortSelectDiscount.bind(this));
 	},
+
 	// Remove global keyboard shortcuts when component is unmounted
 	unmounted() {
 		document.removeEventListener("keydown", this.shortOpenPayment);
@@ -1404,14 +1781,125 @@ export default {
 		document.removeEventListener("keydown", this.shortOpenFirstItem);
 		document.removeEventListener("keydown", this.shortSelectDiscount);
 	},
-	watch: invoiceWatchers,
+
+	watch: {
+		...invoiceWatchers,
+		// Watch invoice_doc changes and broadcast them
+		invoice_doc: {
+			handler(newVal) {
+				if (newVal) {
+					console.log('[Invoice] invoice_doc changed, broadcasting update');
+					this.broadcastInvoiceUpdate();
+				}
+			},
+			deep: true
+		},
+
+		// Watch items changes and update invoice_doc
+		items: {
+			handler(newVal, oldVal) {
+				console.log('[Invoice] Items changed:', {
+					count: newVal.length,
+					oldCount: oldVal ? oldVal.length : 0
+				});
+
+				// Update invoice_doc items
+				if (this.invoice_doc) {
+					this.invoice_doc.items = newVal;
+				}
+
+				// Force Vue to recalculate computed properties
+				this.$nextTick(() => {
+					// Sync all computed totals to invoice_doc
+					if (this.invoice_doc) {
+						this.invoice_doc.net_total = this.subtotal;
+						this.invoice_doc.grand_total = this.grand_total;
+						this.invoice_doc.rounded_total = this.rounded_total;
+						this.invoice_doc.total_qty = this.total_qty;
+					}
+
+					// Force UI update
+					this.$forceUpdate();
+
+					// Recalculate discounts
+					this.apply_additional_discount();
+				});
+			},
+			deep: true,
+			immediate: false
+		},
+
+		// Watch totals and sync to invoice_doc
+		grand_total(newVal) {
+			console.log('[Invoice] grand_total changed:', newVal);
+			if (this.invoice_doc) {
+				this.invoice_doc.grand_total = newVal;
+				this.invoice_doc.rounded_total = this.rounded_total;
+			}
+		},
+
+		total_qty(newVal) {
+			console.log('[Invoice] total_qty computed changed:', newVal);
+		},
+
+		subtotal(newVal) {
+			console.log('[Invoice] subtotal computed changed:', newVal);
+			if (this.invoice_doc) {
+				this.invoice_doc.net_total = newVal;
+			}
+		},
+
+		// WATCH DISCOUNT
+		discount_amount(newVal) {
+			console.log('[Invoice] discount_amount changed:', newVal);
+			if (this.invoice_doc) {
+				this.invoice_doc.discount_amount = newVal;
+			}
+		},
+
+		customer(newVal) {
+			console.log('[Invoice] customer changed:', newVal);
+			if (this.invoice_doc) {
+				this.invoice_doc.customer = newVal;
+			}
+		},
+
+		item_group(newVal) {
+			console.log('[Invoice] Item group changed to:', newVal);
+			this.eventBus.emit('update_item_group', newVal);
+		},
+
+		items_view(newVal) {
+			console.log('[Invoice] Items view changed to:', newVal);
+			this.eventBus.emit('update_items_view', newVal);
+		},
+	},
 };
 </script>
 
 <style scoped>
+/* Invoice Container - Flex layout for fixed footer */
+.invoice-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	width: 100%;
+	background: white;
+}
+
+/* Scrollable Content Area */
+.invoice-content {
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 10px;
+	background-color: #fafafa;
+}
+
 /* Card background adjustments */
 .cards {
 	background-color: var(--surface-secondary) !important;
+	margin: 0 !important;
 }
 
 /* Style for selected checkbox button */
@@ -1447,9 +1935,6 @@ export default {
 }
 
 /* Red border and label for return mode card */
-
-/* Red border and label for return mode card */
-
 .return-mode {
 	border: 2px solid rgb(var(--v-theme-error)) !important;
 	position: relative;
@@ -1548,5 +2033,36 @@ export default {
 :deep(.column-switch .v-label) {
 	opacity: 0.9;
 	font-size: 0.95rem;
+}
+
+/* Fixed Controls Footer */
+.invoice-controls {
+	flex-shrink: 0;
+	background: white;
+	border-top: 2px solid #e0e0e0;
+	padding: 12px;
+	z-index: 100;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+/* Scrollbar Styling */
+.invoice-content::-webkit-scrollbar {
+	width: 6px;
+}
+
+.invoice-content::-webkit-scrollbar-track {
+	background: #f1f1f1;
+	border-radius: 3px;
+}
+
+.invoice-content::-webkit-scrollbar-thumb {
+	background: #999;
+	border-radius: 3px;
+}
+
+.invoice-content::-webkit-scrollbar-thumb:hover {
+	background: #666;
 }
 </style>

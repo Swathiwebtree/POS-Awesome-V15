@@ -33,7 +33,6 @@
 }
 
 /* 4) Keep same border on hover/focus (no color change) */
-.v-input .v-field:hover,
 .v-input .v-field:focus-within,
 .v-field.v-field--focused {
 	border-color: rgba(0, 0, 0, 0.25) !important;
@@ -100,5 +99,13 @@
 }
 
 .v-card::-webkit-scrollbar-track {
-	background: rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.05);
 }
+
+.customer-vehicle-row .customer-autocomplete{
+    height: 58px;
+}
+
+.v-btn.v-btn--density-default.summary-outline-btn{ height: 42px!important;margin-bottom: 15px;}
+
+.v-btn.v-btn--density-default.summary-btn{ height: 42px!important;}

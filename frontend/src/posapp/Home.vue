@@ -2,6 +2,7 @@
 	<v-app class="container1" :class="rtlClasses">
 		<AppLoadingOverlay :visible="globalLoading" />
 		<v-main class="main-content">
+		<div id="app" :class="{ 'fullscreen-active': isFullscreen }">
 			<Navbar
 				:pos-profile="posProfile"
 				:pending-invoices="pendingInvoices"
@@ -31,6 +32,13 @@
 				@refresh-cache-usage="handleRefreshCacheUsage"
 				@update-after-delete="handleUpdateAfterDelete"
 			/>
+
+			<!-- Main POS Content -->
+			<POS
+			:pos-profile="posProfile"
+			@toggle-fullscreen="handleFullscreenToggle"
+		   />
+	    </div>
 			<div class="page-content">
 				<component v-bind:is="page" class="mx-4 md-4"></component>
 			</div>
@@ -94,6 +102,7 @@ export default {
 			posProfile: {},
 			pendingInvoices: 0,
 			lastInvoiceId: "",
+			isFullscreen: false,
 
 			// Network status
 			networkOnline: navigator.onLine || false,
@@ -174,6 +183,16 @@ export default {
 			this.page = page;
 		},
 
+		handleFullscreenToggle(fullscreen) {
+			this.isFullscreen = fullscreen;
+			
+			// Update body styles
+			if (fullscreen) {
+				document.body.classList.add('pos-fullscreen');
+			} else {
+				document.body.classList.remove('pos-fullscreen');
+			}
+		},
 		async initializeData() {
 			await initPromise;
 			await memoryInitPromise;
@@ -512,5 +531,31 @@ export default {
 	flex-direction: column;
 	min-height: 100%;
 	height: 100%;
+}
+/* Global app styles */
+#app {
+	width: 100%;
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+/* Fullscreen mode adjustments */
+#app.fullscreen-active {
+	padding-top: 0 !important;
+}
+
+/* Body fullscreen class */
+body.pos-fullscreen {
+	overflow: hidden !important;
+	padding-top: 0 !important;
+	margin: 0 !important;
+}
+
+/* Remove any default padding/margin that might interfere */
+body.pos-fullscreen #app {
+	padding-top: 0 !important;
+	margin-top: 0 !important;
 }
 </style>

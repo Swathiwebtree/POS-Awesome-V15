@@ -1,5 +1,5 @@
 <template>
-	<nav :class="rtlClasses">
+	<nav :class="[rtlClasses, { 'navbar-hidden': isFullscreen }]">
 		<!-- Use the modular NavbarAppBar component -->
 		<NavbarAppBar
 			:pos-profile="posProfile"
@@ -192,6 +192,10 @@ export default {
 			type: String,
 			default: "Loading app data...",
 		},
+		isFullscreen: {
+			type: Boolean,
+			default: false,
+		},
 	},
 	data() {
 		return {
@@ -380,6 +384,17 @@ export default {
 nav {
 	position: relative;
 	z-index: 1000;
+	transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+	            opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	transform-origin: top;
+}
+
+/* Hidden state for fullscreen mode */
+nav.navbar-hidden {
+	transform: translateY(-100%);
+	opacity: 0;
+	pointer-events: none;
+	visibility: hidden;
 }
 
 /* Snackbar positioning */

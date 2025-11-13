@@ -1,45 +1,88 @@
 <template>
-	<div class="customer-vehicle-row" style="display: flex; gap: 12px; align-items: flex-start">
-		<div style="flex: 1 1 0">
-			<Skeleton v-if="loadingCustomers" height="48" class="w-100" />
-			<v-autocomplete
-				v-else
-				ref="customerDropdown"
-				class="customer-autocomplete sleek-field"
-				density="compact"
-				clearable
-				variant="solo"
-				color="#4169E1"
-				:label="frappe._('Customer')"
-				v-model="internalCustomer"
-				:items="filteredCustomers"
-				item-title="customer_name"
-				item-value="name"
+	<div class="customer-vehicle-row" style="display:flex; gap:12px; align-items:flex-start;">
+		<div style="flex: 1 1 0;">
+			<Skeleton v-if="loadingVehicles" height="58" class="w-100" />
+			
+			<v-autocomplete v-else-if="vehicles.length > 1" ref="vehicleDropdown"
+				class="vehicle-autocomplete sleek-field" density="compact" clearable variant="solo"
+				:label="frappe._('Vehicle No')" v-model="selectedVehicle" :items="vehicles" item-title="vehicle_no"
+				item-value="name" hide-details :disabled="loadingVehicles" @update:modelValue="onVehicleSelect"
+				@update:search="onVehicleSearch" :virtual-scroll="true" :virtual-scroll-item-height="58">
+				<template #prepend-inner>
+					<v-tooltip text="Edit vehicle">
+						<template #activator="{ props }">
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_vehicle">mdi-car-edit</v-icon>
+						</template>
+					</v-tooltip>
+				</template>
+				<template #append-inner>
+					<v-tooltip text="Add vehicle">
+						<template #activator="{ props }">
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
+						</template>
+					</v-tooltip>
+				</template>
+				<template #item="{ props, item }">
+					<v-list-item v-bind="props">
+						<v-list-item-title>{{ item.raw.vehicle_no }}</v-list-item-title>
+						<v-list-item-subtitle v-if="item.raw.model">Model: {{ item.raw.model }}</v-list-item-subtitle>
+						<v-list-item-subtitle v-if="item.raw.customer_name">Customer: {{ item.raw.customer_name }}</v-list-item-subtitle>
+						<v-list-item-subtitle v-if="item.raw.mobile_no">Mobile: {{ item.raw.mobile_no }}</v-list-item-subtitle>
+					</v-list-item>
+				</template>
+			</v-autocomplete>
+			
+			<v-text-field v-else-if="vehicles.length === 1 && vehicles[0].name" readonly dense variant="solo"
+				:label="frappe._('Vehicle No')" v-model="vehicle_no">
+				<template #prepend-inner>
+					<v-tooltip text="Edit vehicle">
+						<template #activator="{ props }">
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_vehicle">mdi-car-edit</v-icon>
+						</template>
+					</v-tooltip>
+				</template>
+				<template #append-inner>
+					<v-tooltip text="Add vehicle">
+						<template #activator="{ props }">
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
+						</template>
+					</v-tooltip>
+				</template>
+			</v-text-field>
+
+			<v-text-field v-else v-model="vehicle_no" dense variant="solo" :label="frappe._('Vehicle No')"
+				placeholder="Enter vehicle no and press Enter" @keydown.enter.prevent="onVehicleNoEnter" hide-details>
+				<template #append-inner>
+					<v-tooltip text="Add vehicle">
+						<template #activator="{ props }">
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
+						</template>
+					</v-tooltip>
+				</template>
+			</v-text-field>
+		</div>
+
+		<div style="flex: 1 1 0;">
+			<Skeleton v-if="loadingCustomers" height="58" class="w-100" />
+			<v-autocomplete v-else ref="customerDropdown" class="customer-autocomplete sleek-field" density="compact"
+				clearable variant="solo" color="#4169E1" :label="frappe._('Customer')" v-model="internalCustomer"
+				:items="filteredCustomers" item-title="customer_name" item-value="name"
 				:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-				:no-data-text="
-					isCustomerBackgroundLoading ? __('Loading customer data...') : __('Customers not found')
-				"
-				hide-details
-				:customFilter="() => true"
-				:disabled="effectiveReadonly || loadingCustomers"
-				:menu-props="{ closeOnContentClick: false }"
-				@update:menu="onCustomerMenuToggle"
-				@update:modelValue="onCustomerChange"
-				@update:search="onCustomerSearch"
-				@keydown.enter="handleEnter"
-				:virtual-scroll="true"
-				:virtual-scroll-item-height="48"
-			>
+				:no-data-text="isCustomerBackgroundLoading ? __('Loading customer data...') : __('Customers not found')"
+				hide-details :customFilter="() => true" :disabled="effectiveReadonly || loadingCustomers"
+				:menu-props="{ closeOnContentClick: false }" @update:menu="onCustomerMenuToggle"
+				@update:modelValue="onCustomerChange" @update:search="onCustomerSearch" @keydown.enter="handleEnter"
+				:virtual-scroll="true" :virtual-scroll-item-height="58">
 				<template #prepend-inner>
 					<v-tooltip text="Edit customer">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_customer"
-								>mdi-account-edit</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_customer">mdi-account-edit</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -47,13 +90,8 @@
 				<template #append-inner>
 					<v-tooltip text="Add new customer">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_customer"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_customer">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -64,14 +102,14 @@
 						<v-list-item-subtitle v-if="item.raw.customer_name !== item.raw.name">
 							<div>ID: {{ item.raw.name }}</div>
 						</v-list-item-subtitle>
+						<v-list-item-subtitle v-if="item.raw.mobile_no">
+							<div>Mobile: {{ item.raw.mobile_no }}</div>
+						</v-list-item-subtitle>
 						<v-list-item-subtitle v-if="item.raw.tax_id">
 							<div>TAX ID: {{ item.raw.tax_id }}</div>
 						</v-list-item-subtitle>
 						<v-list-item-subtitle v-if="item.raw.email_id">
 							<div>Email: {{ item.raw.email_id }}</div>
-						</v-list-item-subtitle>
-						<v-list-item-subtitle v-if="item.raw.mobile_no">
-							<div>Mobile No: {{ item.raw.mobile_no }}</div>
 						</v-list-item-subtitle>
 						<v-list-item-subtitle v-if="item.raw.primary_address">
 							<div>Primary Address: {{ item.raw.primary_address }}</div>
@@ -81,98 +119,22 @@
 			</v-autocomplete>
 		</div>
 
-		<div style="width: 280px; min-width: 220px">
-			<v-autocomplete
-				v-if="vehicles && vehicles.length > 1"
-				ref="vehicleDropdown"
-				class="vehicle-autocomplete sleek-field"
-				density="compact"
-				clearable
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				v-model="selectedVehicle"
-				:items="vehicles"
-				item-title="vehicle_no"
-				item-value="name"
-				hide-details
-				:disabled="loadingVehicles"
-				@update:modelValue="onVehicleSelect"
-				@update:search="onVehicleSearch"
-				:virtual-scroll="true"
-				:virtual-scroll-item-height="48"
-			>
-				<template #prepend-inner>
-					<v-tooltip text="Edit vehicle">
-						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_vehicle"
-								>mdi-car-edit</v-icon
-							>
-						</template>
-					</v-tooltip>
-				</template>
-				<template #append-inner>
-					<v-tooltip text="Add vehicle">
-						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
-						</template>
-					</v-tooltip>
-				</template>
-				<template #item="{ props, item }">
-					<v-list-item v-bind="props">
-						<v-list-item-title>{{ item.vehicle_no }}</v-list-item-title>
-						<v-list-item-subtitle v-if="item.model">Model: {{ item.model }}</v-list-item-subtitle>
-					</v-list-item>
-				</template>
-			</v-autocomplete>
-
-			<v-text-field
-				v-else-if="vehicles && vehicles.length === 1"
-				readonly
-				dense
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				:value="vehicles[0].vehicle_no"
-				hide-details
-			/>
-
-			<v-text-field
-				v-else
-				v-model="vehicle_no"
-				dense
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				placeholder="Enter vehicle no and press Enter"
-				@keydown.enter.prevent="onVehicleNoEnter"
-				hide-details
-			/>
+		<div class="mt-4">
+			<UpdateCustomer />
+			<UpdateVehicle />
 		</div>
 	</div>
 </template>
 
 <style scoped>
-.customer-input-wrapper {
-	width: 100%;
-	max-width: 100%;
-	padding-right: 1.5rem;
-	/* Elegant space at the right edge */
-	box-sizing: border-box;
-	display: flex;
-	flex-direction: column;
-	position: relative;
+.customer-vehicle-row {
+	align-items: flex-start;
 }
 
-.customer-autocomplete {
-	width: 100%;
+.customer-autocomplete,
+.vehicle-autocomplete,
+.v-text-field {
+	height: 58px;
 	box-sizing: border-box;
 	border-radius: 12px;
 	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
@@ -180,39 +142,29 @@
 	background-color: #fff;
 }
 
-.customer-autocomplete:hover {
+.customer-autocomplete:hover,
+.vehicle-autocomplete:hover,
+.v-text-field:hover {
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
-/* Dark mode styling */
+/* Dark mode styling for all inputs */
 :deep([data-theme="dark"]) .customer-autocomplete,
 :deep(.v-theme--dark) .customer-autocomplete,
-::v-deep([data-theme="dark"]) .customer-autocomplete,
-::v-deep(.v-theme--dark) .customer-autocomplete {
-	/* Use surface color for dark mode */
+:deep([data-theme="dark"]) .vehicle-autocomplete,
+:deep(.v-theme--dark) .vehicle-autocomplete,
+:deep([data-theme="dark"]) .v-text-field,
+:deep(.v-theme--dark) .v-text-field {
 	background-color: #1e1e1e !important;
 }
 
-:deep([data-theme="dark"]) .customer-autocomplete :deep(.v-field__input),
-:deep(.v-theme--dark) .customer-autocomplete :deep(.v-field__input),
-:deep([data-theme="dark"]) .customer-autocomplete :deep(input),
-:deep(.v-theme--dark) .customer-autocomplete :deep(input),
-:deep([data-theme="dark"]) .customer-autocomplete :deep(.v-label),
-:deep(.v-theme--dark) .customer-autocomplete :deep(.v-label),
-::v-deep([data-theme="dark"]) .customer-autocomplete .v-field__input,
-::v-deep(.v-theme--dark) .customer-autocomplete .v-field__input,
-::v-deep([data-theme="dark"]) .customer-autocomplete input,
-::v-deep(.v-theme--dark) .customer-autocomplete input,
-::v-deep([data-theme="dark"]) .customer-autocomplete .v-label,
-::v-deep(.v-theme--dark) .customer-autocomplete .v-label {
+:deep([data-theme="dark"]) .v-field__input,
+:deep(.v-theme--dark) .v-field__input,
+:deep([data-theme="dark"]) input,
+:deep(.v-theme--dark) input,
+:deep([data-theme="dark"]) .v-label,
+:deep(.v-theme--dark) .v-label {
 	color: #fff !important;
-}
-
-:deep([data-theme="dark"]) .customer-autocomplete :deep(.v-field__overlay),
-:deep(.v-theme--dark) .customer-autocomplete :deep(.v-field__overlay),
-::v-deep([data-theme="dark"]) .customer-autocomplete .v-field__overlay,
-::v-deep(.v-theme--dark) .customer-autocomplete .v-field__overlay {
-	background-color: #1e1e1e !important;
 }
 
 .icon-button {
@@ -231,6 +183,7 @@
 <script>
 /* global frappe __ */
 import UpdateCustomer from "./UpdateCustomer.vue";
+import UpdateVehicle from './UpdateVehicle.vue';
 import Skeleton from "../ui/Skeleton.vue";
 import {
 	db,
@@ -268,12 +221,12 @@ export default {
 		hasMore: true,
 		nextCustomerStart: null,
 		searchDebounce: null,
-		// Track background loading state and pending searches
 		isCustomerBackgroundLoading: false,
 		pendingCustomerSearch: null,
 		loadProgress: 0,
 		totalCustomerCount: 0,
 		loadedCustomerCount: 0,
+		// Vehicle data
 		vehicles: [],
 		selectedVehicle: null,
 		vehicle_no: "",
@@ -282,6 +235,7 @@ export default {
 
 	components: {
 		UpdateCustomer,
+		UpdateVehicle,
 		Skeleton,
 	},
 
@@ -307,13 +261,11 @@ export default {
 	},
 
 	methods: {
-		// Called when dropdown opens or closes
+		// --- Customer Methods ---
 		onCustomerMenuToggle(isOpen) {
 			this.isMenuOpen = isOpen;
-
 			if (isOpen) {
 				this.internalCustomer = null;
-
 				this.$nextTick(() => {
 					setTimeout(() => {
 						const dropdown = this.$refs.customerDropdown?.$el?.querySelector(
@@ -339,7 +291,6 @@ export default {
 				} else if (this.customer) {
 					this.internalCustomer = this.customer;
 				}
-
 				this.tempSelectedCustomer = null;
 			}
 		},
@@ -351,11 +302,8 @@ export default {
 			}
 		},
 
-		// Called when a customer is selected
 		onCustomerChange(val) {
-			// if user selects the same customer again, show a meaningful error
 			if (val && val === this.customer) {
-				// keep the current selection and notify the user
 				this.internalCustomer = this.customer;
 				this.eventBus.emit("show_message", {
 					title: __("Customer already selected"),
@@ -369,14 +317,11 @@ export default {
 			if (!this.isMenuOpen && val) {
 				this.customer = val;
 				this.eventBus.emit("update_customer", val);
-				// **NEW LOGIC: Fetch vehicles when customer changes**
 				this.fetchVehiclesForCustomer(val);
-				this.selectedVehicle = null; // Clear old vehicle selection
-				// ----------------------------------------------------
+				this.selectedVehicle = null;
 			}
 
 			if (!val) {
-				// Customer cleared
 				this.customer = null;
 				this.internalCustomer = null;
 				this.vehicles = [];
@@ -395,14 +340,13 @@ export default {
 			this.searchDebounce(val);
 		},
 
-		// Pressing Enter in input
 		handleEnter(event) {
 			const inputText = event.target.value?.toLowerCase() || "";
-
 			const matched = this.customers.find((cust) => {
 				return (
 					cust.customer_name?.toLowerCase().includes(inputText) ||
-					cust.name?.toLowerCase().includes(inputText)
+					cust.name?.toLowerCase().includes(inputText) ||
+					cust.mobile_no?.toLowerCase().includes(inputText)
 				);
 			});
 
@@ -411,12 +355,9 @@ export default {
 				this.internalCustomer = matched.name;
 				this.customer = matched.name;
 				this.eventBus.emit("update_customer", matched.name);
-				// **NEW LOGIC: Fetch vehicles when customer set by Enter**
 				this.fetchVehiclesForCustomer(matched.name);
-				this.selectedVehicle = null; // Clear old vehicle selection
-				// ----------------------------------------------------
+				this.selectedVehicle = null;
 				this.isMenuOpen = false;
-
 				event.target.blur();
 			}
 		},
@@ -517,7 +458,6 @@ export default {
 			if (isOffline()) return;
 			try {
 				const localCount = await getCustomerStorageCount();
-				// FIX: Ensure pos_profile is passed to the API call
 				const res = await frappe.call({
 					method: "posawesome.posawesome.api.customers.get_customers_count",
 					args: { pos_profile: this.pos_profile.pos_profile },
@@ -600,9 +540,7 @@ export default {
 			this.eventBus.emit("data-load-progress", { name: "customers", progress: 0 });
 			this.loadingCustomers = true;
 			try {
-				// Fetch total customer count for accurate progress
 				try {
-					// FIX: Ensure pos_profile is passed to the API call
 					const countRes = await frappe.call({
 						method: "posawesome.posawesome.api.customers.get_customers_count",
 						args: { pos_profile: this.pos_profile.pos_profile },
@@ -628,7 +566,6 @@ export default {
 				this.nextCustomerStart =
 					rows.length === this.pageSize ? rows[rows.length - 1]?.name || null : null;
 				if (this.nextCustomerStart) {
-					// Load remaining customers in the background
 					this.backgroundLoadCustomers(this.nextCustomerStart, syncSince);
 				} else {
 					setCustomersLastSync(new Date().toISOString());
@@ -636,26 +573,38 @@ export default {
 					this.eventBus.emit("data-load-progress", { name: "customers", progress: 100 });
 					this.eventBus.emit("data-loaded", "customers");
 				}
-				await this.searchCustomers(this.searchTerm);
+				this.customers_loaded = true;
 			} catch (err) {
-				console.error("Failed to fetch customer names:", err);
-				frappe.show_alert({ message: __("Failed to load customer names"), indicator: "red" });
+				console.error("Failed to fetch customers:", err);
 			} finally {
 				this.loadingCustomers = false;
-				this.customers_loaded = true;
+				await this.searchCustomers(this.searchTerm);
 			}
 		},
 
-		// New Vehicle-related methods added to script for completeness
+		new_customer() {
+			// Ensure UpdateCustomer is ready to handle vehicle data passed back
+			this.eventBus.emit("open_update_customer", { withVehicle: true });
+		},
+
+		edit_customer() {
+			this.eventBus.emit("open_update_customer", this.customer_info);
+		},
+
+		// --- Vehicle Methods ---
 		async fetchVehiclesForCustomer(customerName) {
-			this.vehicles = [];
-			this.selectedVehicle = null;
-			this.vehicle_no = "";
-			if (!customerName) return;
+			if (!customerName) {
+				this.vehicles = [];
+				this.selectedVehicle = null;
+				this.vehicle_no = "";
+				this.eventBus.emit("vehicle_selected", null);
+				return;
+			}
 
 			this.loadingVehicles = true;
 			try {
 				let fetchedVehicles = [];
+				this.vehicle_no = "";
 
 				// 1. Offline lookup
 				try {
@@ -663,12 +612,14 @@ export default {
 					if (!db.isOpen()) await db.open();
 					const local = await db.table("vehicles").where("customer").equals(customerName).toArray();
 					if (local && local.length) {
-						fetchedVehicles = local.map((r) => ({
+						fetchedVehicles = local.map(r => ({
 							name: r.name || r.id,
 							vehicle_no: r.vehicle_no,
 							model: r.model,
 							make: r.make,
 							mobile_no: r.mobile_no,
+							customer_name: r.customer_name,
+							customer: r.customer,
 						}));
 					}
 				} catch (e) {
@@ -679,12 +630,12 @@ export default {
 				if (!fetchedVehicles.length || navigator.onLine) {
 					const res = await frappe.call({
 						method: "posawesome.posawesome.api.vehicles.get_vehicles_by_customer",
-						args: { customer_name: customerName, limit: 200 },
+						args: { customer_name: customerName },
 					});
 					const serverVehicles = res?.message || [];
 
 					// Merge/Deduplicate server results with local results
-					const localNames = new Set(fetchedVehicles.map((v) => v.name));
+					const localNames = new Set(fetchedVehicles.map(v => v.name));
 					for (const v of serverVehicles) {
 						if (!localNames.has(v.name)) {
 							fetchedVehicles.push({
@@ -693,50 +644,62 @@ export default {
 								model: v.model,
 								make: v.make,
 								mobile_no: v.mobile_no,
+								customer_name: v.customer_name,
+								customer: v.customer,
 							});
 						}
 					}
 				}
 
 				this.vehicles = fetchedVehicles;
+				this.selectedVehicle = null;
 
 				if (this.vehicles.length === 1) {
+					// Automatically select the single vehicle
 					this.selectedVehicle = this.vehicles[0].name;
+					this.eventBus.emit("vehicle_selected", this.selectedVehicle);
 					this.vehicle_no = this.vehicles[0].vehicle_no;
-					this.eventBus.emit("vehicle_selected", this.vehicles[0].name);
+				} else if (this.vehicles.length > 1) {
+					// Add placeholder only if multiple vehicles exist
+					this.vehicles.unshift({ name: null, vehicle_no: frappe._("Select Vehicle...") });
+				} else {
+					// No vehicles, clear selection
+					this.eventBus.emit("vehicle_selected", null);
 				}
 			} catch (err) {
-				console.error("Failed to fetch vehicles for customer:", err);
+				console.error("Failed to fetch vehicles:", err);
+				this.vehicles = [];
 			} finally {
 				this.loadingVehicles = false;
 			}
 		},
 
-		async onVehicleSelect(vehicleDocName) {
-			if (!vehicleDocName) {
+		onVehicleSelect(val) {
+			if (!val) {
 				this.selectedVehicle = null;
 				this.vehicle_no = "";
 				this.eventBus.emit("vehicle_selected", null);
 				return;
 			}
 
-			const vehicle = (this.vehicles || []).find((v) => v.name === vehicleDocName);
+			const vehicle = (this.vehicles || []).find(v => v.name === val);
 			if (vehicle) {
-				this.selectedVehicle = vehicleDocName;
+				this.selectedVehicle = val;
 				this.vehicle_no = vehicle.vehicle_no || "";
 				this.eventBus.emit("vehicle_selected", vehicle.name);
 
-				// If a vehicle is selected, set the customer if it's currently empty
-				// or if the vehicle is linked to a different customer.
-				// This logic is typically handled by the vehicle change event.
+				// Set customer if not already set
 				if (!this.customer && vehicle.customer) {
-					// Assuming 'vehicle' object contains 'customer' property if retrieved from offline/server.
 					this.customer = vehicle.customer;
 					this.internalCustomer = vehicle.customer;
 					this.eventBus.emit("update_customer", vehicle.customer);
 				}
 			}
 		},
+
+		onVehicleSearch: _.debounce(function (val) {
+			// Search logic here if needed
+		}, 300),
 
 		async onVehicleNoEnter() {
 			const vehicleNo = (this.vehicle_no || "").trim();
@@ -763,7 +726,7 @@ export default {
 				// 2. Server Lookup if no local match or online
 				if (!customerName && navigator.onLine) {
 					const res = await frappe.call({
-						method: "posawesome.posawesome.api.customers.get_customer_by_vehicle",
+						method: "posawesome.posawesome.api.vehicles.get_customer_by_vehicle",
 						args: { vehicle_no: vehicleNo },
 					});
 					const payload = res?.message || {};
@@ -784,26 +747,24 @@ export default {
 					if (vehicleName) {
 						this.selectedVehicle = vehicleName;
 						this.eventBus.emit("vehicle_selected", vehicleName);
-						// Also fetch the full list of vehicles for the newly set customer
 						this.fetchVehiclesForCustomer(customerName);
 					} else {
 						this.selectedVehicle = null;
 						this.eventBus.emit("vehicle_selected", null);
 					}
 
-					// Attempt to find the full vehicle object to fill the dropdown if needed
+					// Add vehicle to list if not present
 					if (vehicleName) {
-						// Ensure vehicle is added to the vehicles list for selection
-						const existingVehicle = this.vehicles.find((v) => v.name === vehicleName);
+						const existingVehicle = this.vehicles.find(v => v.name === vehicleName);
 						if (!existingVehicle) {
-							// Assuming we only have vehicle_no here, we can fetch vehicle details if necessary,
-							// but for now, we rely on the `fetchVehiclesForCustomer` call.
-							// For immediate display, we can temporarily add it
-							this.vehicles.push({
-								name: vehicleName,
-								vehicle_no: vehicleNo,
-								model: "",
-								make: "",
+							this.vehicles.push({ 
+								name: vehicleName, 
+								vehicle_no: vehicleNo, 
+								model: '', 
+								make: '',
+								customer_name: this.internalCustomer,
+								customer: customerName,
+								mobile_no: ''
 							});
 						}
 					}
@@ -820,46 +781,97 @@ export default {
 			}
 		},
 
-		async onVehicleSearch(searchText) {
-			/* optional: implement server search if vehicles not loaded */
-		},
-
-		// CRUD functions for completeness
-		new_customer() {
-			this.eventBus.emit("open_update_customer", null);
-		},
-		edit_customer() {
-			this.eventBus.emit("open_update_customer", this.customer_info);
-		},
-		new_vehicle() {
-			this.eventBus.emit("open_vehicle_modal", this.customer ? { customer: this.customer } : null);
-		}, // Pass current customer
 		edit_vehicle() {
-			this.eventBus.emit("open_vehicle_modal", { vehicle: this.selectedVehicle });
+			const vehicle_to_edit = this.vehicles.find(v => v.name === this.selectedVehicle) ||
+				(this.vehicles.length === 1 && this.vehicles[0].name ? this.vehicles[0] : null);
+
+			if (vehicle_to_edit) {
+				this.eventBus.emit("open_update_vehicle", vehicle_to_edit);
+			} else {
+				frappe.msgprint(__("Please select a vehicle or add one first."), __("Error"));
+			}
 		},
 
-		// Event Bus registration for completeness
-		registerEventBus() {
+		new_vehicle() {
+            // FIX: Always emit the event to open the dialog. 
+            // The UpdateVehicle dialog should handle the case of a missing customer.
+            // If the user is on the text-input field, we can pass the vehicle_no they typed.
+            const payload = {
+                customer: this.customer,
+                vehicle_no: this.vehicles.length === 0 ? this.vehicle_no : null,
+            };
+            
+            // This emits the event to open the vehicle creation form
+            this.eventBus.emit("open_update_vehicle", payload); 
+		},
+	},
+
+	created() {
+		memoryInitPromise.then(async () => {
+			await this.searchCustomers("");
+			this.effectiveReadonly = this.readonly && navigator.onLine;
+		});
+
+		this.searchDebounce = _.debounce(async (val) => {
+			this.searchTerm = val || "";
+			this.page = 0;
+			this.customers = [];
+			this.hasMore = true;
+			await this.searchCustomers(this.searchTerm);
+
+			// FETCH VEHICLES DIRECTLY WHEN CUSTOMER SEARCH CHANGES
+			if (val) {
+				const matched = this.customers.find((cust) => {
+					return (
+						cust.customer_name?.toLowerCase().includes(val.toLowerCase()) ||
+						cust.name?.toLowerCase().includes(val.toLowerCase()) ||
+						cust.mobile_no?.toLowerCase().includes(val.toLowerCase())
+					);
+				});
+
+				if (matched) {
+					this.customer = matched.name;
+					this.internalCustomer = matched.name;
+					this.eventBus.emit("update_customer", matched.name);
+					await this.fetchVehiclesForCustomer(matched.name);
+					this.selectedVehicle = null;
+				}
+			}
+		}, 500);
+
+		this.effectiveReadonly = this.readonly && navigator.onLine;
+
+		this.$nextTick(() => {
 			this.eventBus.on("register_pos_profile", async (pos_profile) => {
+				await memoryInitPromise;
 				this.pos_profile = pos_profile;
 				await this.get_customer_names();
 				if (this.customer) {
 					this.fetchVehiclesForCustomer(this.customer);
 				}
 			});
+
 			this.eventBus.on("payments_register_pos_profile", async (pos_profile) => {
+				await memoryInitPromise;
 				this.pos_profile = pos_profile;
 				await this.get_customer_names();
 				if (this.customer) {
 					this.fetchVehiclesForCustomer(this.customer);
 				}
 			});
+
 			this.eventBus.on("set_customer", (customer) => {
 				this.customer = customer;
 				this.internalCustomer = customer;
-				this.fetchVehiclesForCustomer(customer); // Call fetch vehicles
+				this.fetchVehiclesForCustomer(customer);
 			});
-			this.eventBus.on("add_customer_to_list", async (customer) => {
+
+			// MODIFIED: Handle both customer and vehicle data from UpdateCustomer.vue
+			this.eventBus.on("add_customer_to_list", async (data) => {
+				// Assume data can be a customer object OR { customer: {...}, vehicle: {...} }
+				const customer = data.customer || data;
+				const vehicle = data.vehicle || null;
+
 				const index = this.customers.findIndex((c) => c.name === customer.name);
 				if (index !== -1) {
 					this.customers.splice(index, 1, customer);
@@ -870,17 +882,62 @@ export default {
 				this.customer = customer.name;
 				this.internalCustomer = customer.name;
 				this.eventBus.emit("update_customer", customer.name);
-				this.fetchVehiclesForCustomer(customer.name); // Call fetch vehicles
+
+				if (vehicle && vehicle.vehicle_no) {
+					// If a vehicle was created, update the vehicle list directly
+					this.eventBus.emit("add_vehicle_to_list", vehicle);
+					this.selectedVehicle = vehicle.name;
+					this.eventBus.emit("vehicle_selected", vehicle.name);
+				} else {
+					// Otherwise, fetch existing vehicles
+					this.fetchVehiclesForCustomer(customer.name);
+				}
 			});
+
 			this.eventBus.on("set_customer_readonly", (value) => {
 				this.readonly = value;
 			});
+
 			this.eventBus.on("set_customer_info_to_edit", (data) => {
 				this.customer_info = data;
 			});
+
 			this.eventBus.on("fetch_customer_details", async () => {
 				await this.get_customer_names();
 			});
+
+			this.eventBus.on("add_vehicle_to_list", (vehicle) => {
+				if (vehicle.customer === this.customer) {
+					// Remove placeholder and old entry if updating
+					this.vehicles = this.vehicles.filter(v => v.name && v.name !== vehicle.name);
+					this.vehicles.push({
+						name: vehicle.name,
+						vehicle_no: vehicle.vehicle_no,
+						model: vehicle.model || '',
+						make: vehicle.make || '',
+						mobile_no: vehicle.mobile_no || '',
+						customer_name: vehicle.customer_name,
+						customer: vehicle.customer,
+					});
+
+					if (this.vehicles.length === 1) {
+						// Case: New vehicle is the only vehicle
+						this.selectedVehicle = vehicle.name;
+						this.eventBus.emit("vehicle_selected", vehicle.name);
+					} else {
+						// Case: Vehicle added to a list with other vehicles (re-add placeholder)
+						this.vehicles.unshift({ name: null, vehicle_no: frappe._("Select Vehicle...") });
+						this.selectedVehicle = vehicle.name;
+						this.eventBus.emit("vehicle_selected", vehicle.name);
+					}
+				}
+			});
+
+			this.eventBus.on("set_vehicle", (vehicle_name) => {
+				this.selectedVehicle = vehicle_name;
+				this.onVehicleSelect(vehicle_name);
+			});
+
 			this.eventBus.on("set_customer_from_vehicle", (customer) => {
 				if (customer && customer.name) {
 					this.customer = customer.name;
@@ -889,40 +946,9 @@ export default {
 					this.fetchVehiclesForCustomer(customer.name);
 				}
 			});
-			this.eventBus.on("set_vehicle", (vehicleName) => {
-				if (vehicleName) {
-					this.selectedVehicle = vehicleName;
-					this.onVehicleSelect(vehicleName);
-				}
-			});
-		},
-	},
+		});
 
-	created() {
-		this.searchDebounce = _.debounce(async (val) => {
-			this.searchTerm = val || "";
-			this.page = 0;
-			this.customers = [];
-			this.hasMore = true;
-			await this.searchCustomers(this.searchTerm);
-		}, 300);
-
-		this.effectiveReadonly = this.readonly && navigator.onLine;
-
-		// Use a global promise (assuming `memoryInitPromise` is available globally as in the original code)
-		if (typeof memoryInitPromise !== "undefined") {
-			memoryInitPromise.then(async () => {
-				await this.get_customer_names(); // Use get_customer_names instead of direct search
-				this.effectiveReadonly = this.readonly && navigator.onLine;
-			});
-		} else {
-			// Fallback if memoryInitPromise is not defined
-			this.get_customer_names();
-		}
-
-		this.registerEventBus();
-
-		// **Initial Vehicle Load:** If customer is already set, load vehicles on initial load
+		// Initial Vehicle Load
 		if (this.customer) {
 			this.fetchVehiclesForCustomer(this.customer);
 		}

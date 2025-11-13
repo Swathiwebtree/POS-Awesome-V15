@@ -4,55 +4,103 @@ export default {
 		this.close_payments();
 		let qty = 0;
 		this.items.forEach((item) => {
-			qty += flt(item.qty);
+			qty += this.flt(item.qty || 0);
 		});
-		return this.flt(qty, this.float_precision);
+		const result = this.flt(qty, this.float_precision);
+		console.log('[invoiceComputed] total_qty:', result);
+		return result;
 	},
-	// Calculate total amount for all items (handles returns)
+
+	// Calculate total amount for all items (before discounts)
 	Total() {
 		let sum = 0;
 		this.items.forEach((item) => {
 			// For returns, use absolute value for correct calculation
-			const qty = this.isReturnInvoice ? Math.abs(flt(item.qty)) : flt(item.qty);
-			const rate = flt(item.rate);
+			const qty = this.isReturnInvoice ? Math.abs(this.flt(item.qty)) : this.flt(item.qty);
+			const rate = this.flt(item.rate);
 			sum += qty * rate;
 		});
-		return this.flt(sum, this.currency_precision);
+		const result = this.flt(sum, this.currency_precision);
+		console.log('[invoiceComputed] Total:', result);
+		return result;
 	},
-	// Calculate subtotal after discounts and delivery charges
+
+	// Calculate subtotal (base total without taxes/discounts)
 	subtotal() {
 		this.close_payments();
 		let sum = 0;
 		this.items.forEach((item) => {
-			// For returns, use absolute value for correct calculation
-			const qty = this.isReturnInvoice ? Math.abs(flt(item.qty)) : flt(item.qty);
-			const rate = flt(item.rate);
+			// Calculate item amount from qty * rate
+			const qty = this.isReturnInvoice ? Math.abs(this.flt(item.qty)) : this.flt(item.qty);
+			const rate = this.flt(item.rate);
 			sum += qty * rate;
 		});
 
-		// Subtract additional discount
-		const additional_discount = this.flt(this.additional_discount);
-		sum -= additional_discount;
+		const result = this.flt(sum, this.currency_precision);
+		console.log('[invoiceComputed] subtotal:', result);
+		return result;
+	},
+
+	// Calculate net total (subtotal + delivery - additional discount)
+	net_total() {
+		let total = this.subtotal;
 
 		// Add delivery charges
 		const delivery_charges = this.flt(this.delivery_charges_rate);
-		sum += delivery_charges;
+		total += delivery_charges;
 
-		return this.flt(sum, this.currency_precision);
+		// Subtract additional discount
+		const additional_discount = this.flt(this.additional_discount);
+		total -= additional_discount;
+
+		const result = this.flt(total, this.currency_precision);
+		console.log('[invoiceComputed] net_total:', result);
+		return result;
 	},
+
+	// Calculate grand total (net_total + taxes - discount_amount)
+	grand_total() {
+		const subtotal = this.flt(this.subtotal || 0);
+		const tax = this.flt(this.total_tax || 0);
+		const discount = this.flt(this.discount_amount || 0);
+		const delivery = this.flt(this.delivery_charges_rate || 0);
+		
+		const total = this.flt(subtotal + tax - discount + delivery);
+
+		console.log('[invoiceComputed] grand_total:', {
+			subtotal, 
+			tax, 
+			discount,
+			delivery,
+			result: total
+		});
+
+		return total;
+	},
+
+	// Calculate rounded total
+	rounded_total() {
+		const rounded = this.roundAmount(this.grand_total);
+		console.log('[invoiceComputed] rounded_total:', rounded);
+		return rounded;
+	},
+
 	// Calculate total discount amount for all items
 	total_items_discount_amount() {
 		let sum = 0;
 		this.items.forEach((item) => {
 			// For returns, use absolute value for correct calculation
 			if (this.isReturnInvoice) {
-				sum += Math.abs(flt(item.qty)) * flt(item.discount_amount);
+				sum += Math.abs(this.flt(item.qty)) * this.flt(item.discount_amount);
 			} else {
-				sum += flt(item.qty) * flt(item.discount_amount);
+				sum += this.flt(item.qty) * this.flt(item.discount_amount);
 			}
 		});
-		return this.flt(sum, this.float_precision);
+		const result = this.flt(sum, this.float_precision);
+		console.log('[invoiceComputed] total_items_discount_amount:', result);
+		return result;
 	},
+
 	// Format posting_date for display as DD-MM-YYYY
 	formatted_posting_date: {
 		get() {
@@ -72,21 +120,25 @@ export default {
 			}
 		},
 	},
+
 	// Get currency symbol for display
 	currencySymbol() {
 		return (currency) => {
 			return get_currency_symbol(currency || this.selected_currency || this.pos_profile.currency);
 		};
 	},
+
 	// Get display currency
 	displayCurrency() {
-		return this.selected_currency || this.pos_profile.currency;
+		return this.selected_currency || this.pos_profile?.currency || 'USD';
 	},
+
 	// Determine if current invoice is a return
 	isReturnInvoice() {
 		return this.invoiceType === "Return" || (this.invoice_doc && this.invoice_doc.is_return);
 	},
-	// Table headers for item table (for another table if needed)
+
+	// Table headers for item table
 	itemTableHeaders() {
 		return [
 			{

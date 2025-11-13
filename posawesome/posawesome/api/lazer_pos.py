@@ -1116,6 +1116,8 @@ def get_bills_listing_work_order(filters=None):
         from_date, to_date, work_order_no
     """
     filters = frappe.parse_json(filters) if filters else {}
+    filters.setdefault("from_date", "1900-01-01")
+    filters.setdefault("to_date", frappe.utils.nowdate())
 
     query = """
         SELECT

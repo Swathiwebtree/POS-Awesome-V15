@@ -305,4 +305,43 @@ fixtures = [
             ]
         ],
     },
+    {
+        "doctype": "DocType",
+        "filters": [
+            ["name", "in", [
+                "Bills Listing - Vehicle",
+                "Bills Listing Vehicle",
+                "Bills Listing Work Order",
+                "Cash Counting",
+                "Cash Counting_2",
+                "Cashier",
+                "Cashier Out",
+                "Day End Closing",
+                "Day End Closing_2",
+                "Division",
+                "GRN Expense",
+                "GRN Item",
+                "Item Check",
+                "Item Inquiry",
+                "Loyalty Card",
+                "Payment Summary",
+                "Petty Cash",
+                "Petty Cash Account Entry",
+                "Physical Count",
+                "POS Terminal",
+                "Receipt Voucher",
+                "Redeemed Coupon Points",
+                "Sales by Payment",
+                "Stock In Hand",
+                "Stock Points",
+                "Stock Sales",
+                "System Settings_2",
+                "Transfer In",
+                "Vehicle History",
+                "Vehicle Master",
+                "Vehicle Model",
+                "Vehicle Service Work Order"
+            ]]
+        ]
+    }
 ]

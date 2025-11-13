@@ -68,10 +68,9 @@ import ExitModule from "./modules/ExitModule.vue";
    Transactions Submodules
 =========================== */
 const transactionSubmodulesMap = {
-	"Vehicle Service": "VehicleService",
 	"Vehicles Master": "VehiclesMaster",
 	"Service Issue Note": "ServiceIssueNote",
-	Quotation: "Quotation",
+	"Quotation": "Quotation",
 	"Petty Cash": "PettyCash",
 	"Receipt Voucher": "ReceiptVoucher",
 	"Item Inquiry": "ItemInquiry",
@@ -151,7 +150,7 @@ const modulesMap = {
    Reactive State
 =========================== */
 const currentModule = ref("Transactions");
-const currentSubmodule = ref("Vehicle Service");
+const currentSubmodule = ref("Vehicle Master");
 const currentModuleComponent = ref("TransactionsModule");
 
 /* ===========================
