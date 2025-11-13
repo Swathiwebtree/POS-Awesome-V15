@@ -1,90 +1,59 @@
 import frappe
+import json
+import os
 
 WORKSPACE_NAME = "POS Awesome"
-DOCTYPE_NAME = "Scale Barcode Settings"
-PROFILE_CARD_LABEL = "Profile"
 
 
 def execute():
-    # 1. Ensure the workspace and doctype exist
+    # 1. Ensure the workspace exists
     if not frappe.db.exists("Workspace", WORKSPACE_NAME):
         frappe.log_message(
             f"Workspace '{WORKSPACE_NAME}' not found. Skipping patch.", "POSAwesome Patch"
         )
         return
 
-    if not frappe.db.exists("DocType", DOCTYPE_NAME):
-        frappe.log_message(
-            f"DocType '{DOCTYPE_NAME}' not found. Skipping patch.", "POSAwesome Patch"
-        )
+    # 2. Construct the absolute path to the workspace JSON file
+    app_path = frappe.get_app_path("posawesome")
+    json_path = os.path.join(
+        app_path, "posawesome", "workspace", "pos_awesome", "pos_awesome.json"
+    )
+
+    if not os.path.exists(json_path):
+        frappe.log_error(f"Workspace JSON not found at {json_path}", "POSAwesome Patch")
         return
 
+    # 3. Read the workspace definition from the JSON file
+    with open(json_path, "r") as f:
+        workspace_json = json.load(f)
+
+    # 4. Get the workspace document from the database
     workspace = frappe.get_doc("Workspace", WORKSPACE_NAME)
-    links = workspace.links
-    existing_link = None
 
-    # 2. Check if the link already exists
-    for link in links:
-        if link.link_to == DOCTYPE_NAME:
-            existing_link = link
-            break
+    # 5. Overwrite the links in the document with the ones from the JSON file
+    workspace.links = []
+    for link_data in workspace_json.get("links", []):
+        workspace.append("links", link_data)
 
-    if existing_link:
-        # 3. If link exists, ensure it's visible
-        if existing_link.hidden:
-            existing_link.hidden = 0
-            frappe.log_message(
-                f"Unhiding existing link for '{DOCTYPE_NAME}' in '{WORKSPACE_NAME}'.",
-                "POSAwesome Patch",
-            )
-        else:
-            frappe.log_message(
-                f"Link for '{DOCTYPE_NAME}' already exists and is visible.",
-                "POSAwesome Patch",
-            )
-            # No changes needed if it's already visible
-            return
-    else:
-        # 4. If link does not exist, add it after the 'Profile' card
-        frappe.log_message(
-            f"Adding link for '{DOCTYPE_NAME}' to '{WORKSPACE_NAME}'.", "POSAwesome Patch"
-        )
-        profile_card_index = -1
-        for i, link in enumerate(links):
-            if link.type == "Card Break" and link.label == PROFILE_CARD_LABEL:
-                profile_card_index = i
-                break
-
-        new_link_data = {
-            "type": "Link",
-            "label": DOCTYPE_NAME,
-            "link_to": DOCTYPE_NAME,
-            "link_type": "DocType",
-            "hidden": 0,
-        }
-
-        if profile_card_index != -1:
-            # Insert after the profile card for better organization
-            links.insert(profile_card_index + 1, new_link_data)
-        else:
-            # Fallback to appending at the end
-            links.append(new_link_data)
-
-    # Re-index all links to maintain order
-    for idx, link in enumerate(links, start=1):
-        link.idx = idx
+    # 6. Crucially, reset the 'custom' flag to allow updates
+    workspace.custom = 0
+    workspace.flags.ignore_validate = True  # Avoid validation errors on save
 
     try:
+        # 7. Save the workspace, forcing the overwrite
         workspace.save(ignore_permissions=True)
-        # 5. Clear cache to ensure changes are reflected immediately
+        frappe.db.commit()
+
+        # 8. Clear cache to ensure changes are reflected immediately
         frappe.clear_cache()
         frappe.clear_website_cache()
+
         frappe.log_message(
-            f"Successfully updated workspace '{WORKSPACE_NAME}' and cleared cache.",
+            f"Force synced workspace '{WORKSPACE_NAME}' from JSON and cleared cache.",
             "POSAwesome Patch",
         )
-        frappe.db.commit()
     except Exception as e:
         frappe.log_error(
-            f"Failed to save workspace '{WORKSPACE_NAME}': {e}", "POSAwesome Patch Error"
+            f"Failed to force sync workspace '{WORKSPACE_NAME}': {e}",
+            "POSAwesome Patch Error",
         )
