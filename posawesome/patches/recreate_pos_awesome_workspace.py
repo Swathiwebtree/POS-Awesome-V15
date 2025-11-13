@@ -6,16 +6,16 @@ WORKSPACE_NAME = "POS Awesome"
 
 
 def execute():
-    frappe.log_message(f"--- Starting Delete and Recreate patch for {WORKSPACE_NAME} ---", "POSAwesome Patch")
+    print(f"--- Starting Delete and Recreate patch for {WORKSPACE_NAME} ---")
 
     # 1. Delete the existing workspace document, if it exists
     if frappe.db.exists("Workspace", WORKSPACE_NAME):
         try:
             frappe.delete_doc("Workspace", WORKSPACE_NAME, force=1, ignore_permissions=True)
             frappe.db.commit()
-            frappe.log_message(f"Successfully deleted workspace '{WORKSPACE_NAME}'.", "POSAwesome Patch")
+            print(f"Successfully deleted workspace '{WORKSPACE_NAME}'.")
         except Exception as e:
-            frappe.log_error(f"Failed to delete workspace '{WORKSPACE_NAME}': {e}", "POSAwesome Patch Error")
+            print(f"Failed to delete workspace '{WORKSPACE_NAME}': {e}")
             # If deletion fails, we cannot proceed
             return
 
@@ -26,7 +26,7 @@ def execute():
     )
 
     if not os.path.exists(json_path):
-        frappe.log_error(f"Workspace JSON not found at {json_path}. Cannot recreate.", "POSAwesome Patch")
+        print(f"Workspace JSON not found at {json_path}. Cannot recreate.")
         return
 
     # 3. Read the workspace definition from the JSON file
@@ -38,12 +38,12 @@ def execute():
         new_workspace = frappe.get_doc(workspace_json)
         new_workspace.insert(ignore_permissions=True)
         frappe.db.commit()
-        frappe.log_message(f"Successfully recreated workspace '{WORKSPACE_NAME}' from JSON.", "POSAwesome Patch")
+        print(f"Successfully recreated workspace '{WORKSPACE_NAME}' from JSON.")
     except Exception as e:
-        frappe.log_error(f"Failed to recreate workspace '{WORKSPACE_NAME}': {e}", "POSAwesome Patch Error")
+        print(f"Failed to recreate workspace '{WORKSPACE_NAME}': {e}")
         return
 
     # 5. Clear cache to ensure changes are reflected
     frappe.clear_cache()
     frappe.clear_website_cache()
-    frappe.log_message("--- Finished Delete and Recreate patch successfully. ---", "POSAwesome Patch")
+    print("--- Finished Delete and Recreate patch successfully. ---")
