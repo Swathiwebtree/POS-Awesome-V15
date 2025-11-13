@@ -19,5 +19,4 @@ def execute():
 
     # Clear the cache to ensure the recreated workspace is displayed correctly.
     frappe.clear_cache()
-    frappe.clear_website_cache()
     print(f"--- Finished patch to reset the {WORKSPACE_NAME} workspace. ---")
