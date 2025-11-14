@@ -2969,12 +2969,9 @@ export default {
                         }
 
                         if (scaleResponse && scaleResponse.settings) {
-                                const prefixIncluded = Boolean(
-                                        Number(scaleResponse.settings.prefix_included_or_not || 0),
-                                );
-                                const configuredPrefix = prefixIncluded
-                                        ? String(scaleResponse.settings.prefix || "").trim()
-                                        : "";
+                                const configuredPrefix = String(
+                                        scaleResponse.settings.prefix || "",
+                                ).trim();
 
                                 if (
                                         configuredPrefix &&

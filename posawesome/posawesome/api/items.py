@@ -980,13 +980,13 @@ def _parse_scale_barcode_data(barcode: str) -> Optional[Dict[str, Any]]:
 
     prefix_included = cint(settings.prefix_included_or_not)
     prefix_length = cint(settings.no_of_prefix_characters) if prefix_included else 0
-    prefix_value = cstr(settings.prefix or "")
+    prefix_value = cstr(settings.prefix or "").strip()
 
-    if prefix_included:
-        if prefix_value and not barcode_value.startswith(prefix_value):
-            return None
-        if prefix_length and len(barcode_value) < prefix_length:
-            return None
+    if prefix_value and not barcode_value.startswith(prefix_value):
+        return None
+
+    if prefix_included and prefix_length and len(barcode_value) < prefix_length:
+        return None
 
     item_start = cint(settings.item_code_starting_digit)
     item_digits = cint(settings.item_code_total_digits)
@@ -1032,7 +1032,7 @@ def parse_scale_barcode(barcode: str):
 
     if settings:
         metadata = {
-            "prefix": cstr(getattr(settings, "prefix", "") or ""),
+            "prefix": cstr(getattr(settings, "prefix", "") or "").strip(),
             "prefix_included_or_not": cint(
                 getattr(settings, "prefix_included_or_not", 0)
             ),
