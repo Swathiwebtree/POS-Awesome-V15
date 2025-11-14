@@ -19,13 +19,145 @@
 
 				<v-divider class="header-divider"></v-divider>
 
-				<v-card-text class="pa-0 white-background">
-					<v-container class="pa-6">
-						<v-row>
-							<v-col cols="12" class="pa-1">
-								<div class="table-header mb-4">
-									<h4 class="text-h6 text-grey-darken-2 mb-1">
-										{{ __("Payment Reconciliation") }}
+                                <v-card-text class="pa-0 white-background">
+                                        <v-container class="pa-6">
+                                                <v-row class="mb-6">
+                                                        <v-col cols="12" class="pa-1">
+                                                                <div class="table-header mb-4">
+                                                                        <h4 class="text-h6 text-grey-darken-2 mb-1">
+                                                                                {{ __("Shift Overview") }}
+                                                                        </h4>
+                                                                        <p class="text-body-2 text-grey">
+                                                                                {{ __("Review shift totals before submitting the closing entry") }}
+                                                                        </p>
+                                                                </div>
+
+                                                                <div class="overview-wrapper" v-if="overviewLoading">
+                                                                        <v-progress-circular
+                                                                                color="primary"
+                                                                                indeterminate
+                                                                                size="32"
+                                                                        ></v-progress-circular>
+                                                                </div>
+
+                                                                <div v-else class="overview-wrapper">
+                                                                        <v-row class="overview-summary" dense>
+                                                                                <v-col cols="12" md="6">
+                                                                                        <div class="overview-card">
+                                                                                                <div class="overview-label">
+                                                                                                        {{ __("Total Invoices") }}
+                                                                                                </div>
+                                                                                                <div class="overview-value">
+                                                                                                        {{ overview?.total_invoices || 0 }}
+                                                                                                </div>
+                                                                                        </div>
+                                                                                </v-col>
+                                                                                <v-col cols="12" md="6">
+                                                                                        <div class="overview-card">
+                                                                                                <div class="overview-label">
+                                                                                                        {{ __("Total in Company Currency") }}
+                                                                                                </div>
+                                                                                                <div class="overview-value">
+                                                                                                        <span class="overview-amount">
+                                                                                                                {{ currencySymbol(overviewCompanyCurrency) }}
+                                                                                                                {{ formatCurrency(overview?.company_currency_total || 0) }}
+                                                                                                        </span>
+                                                                                                </div>
+                                                                                                <div class="overview-subtle">
+                                                                                                        {{ overviewCompanyCurrency }}
+                                                                                                </div>
+                                                                                        </div>
+                                                                                </v-col>
+                                                                        </v-row>
+
+                                                                        <div class="table-header mt-6 mb-2">
+                                                                                <h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
+                                                                                        {{ __("Totals by Invoice Currency") }}
+                                                                                </h5>
+                                                                                <p class="text-body-2 text-grey">
+                                                                                        {{ __("Shows the distribution of invoices per currency") }}
+                                                                                </p>
+                                                                        </div>
+
+                                                                        <div v-if="multiCurrencyTotals.length" class="overview-table-wrapper">
+                                                                                <table class="overview-table">
+                                                                                        <thead>
+                                                                                                <tr>
+                                                                                                        <th>{{ __("Currency") }}</th>
+                                                                                                        <th class="text-end">
+                                                                                                                {{ __("Total") }}
+                                                                                                        </th>
+                                                                                                        <th class="text-end">
+                                                                                                                {{ __("Invoices") }}
+                                                                                                        </th>
+                                                                                                </tr>
+                                                                                        </thead>
+                                                                                        <tbody>
+                                                                                                <tr v-for="row in multiCurrencyTotals" :key="row.currency">
+                                                                                                        <td>{{ row.currency }}</td>
+                                                                                                        <td class="text-end">
+                                                                                                                <span class="overview-amount">
+                                                                                                                        {{ currencySymbol(row.currency || overviewCompanyCurrency) }}
+                                                                                                                        {{ formatCurrency(row.total || 0) }}
+                                                                                                                </span>
+                                                                                                        </td>
+                                                                                                        <td class="text-end">{{ row.invoice_count || 0 }}</td>
+                                                                                                </tr>
+                                                                                        </tbody>
+                                                                                </table>
+                                                                        </div>
+                                                                        <div v-else class="overview-empty text-body-2">
+                                                                                {{ __("No invoices recorded for this shift.") }}
+                                                                        </div>
+
+                                                                        <div class="table-header mt-6 mb-2">
+                                                                                <h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
+                                                                                        {{ __("Payments by Mode of Payment") }}
+                                                                                </h5>
+                                                                                <p class="text-body-2 text-grey">
+                                                                                        {{ __("Grouped totals for each payment method and currency") }}
+                                                                                </p>
+                                                                        </div>
+
+                                                                        <div v-if="paymentsByMode.length" class="overview-table-wrapper">
+                                                                                <table class="overview-table">
+                                                                                        <thead>
+                                                                                                <tr>
+                                                                                                        <th>{{ __("Mode of Payment") }}</th>
+                                                                                                        <th>{{ __("Currency") }}</th>
+                                                                                                        <th class="text-end">
+                                                                                                                {{ __("Amount") }}
+                                                                                                        </th>
+                                                                                                </tr>
+                                                                                        </thead>
+                                                                                        <tbody>
+                                                                                                <tr
+                                                                                                        v-for="row in paymentsByMode"
+                                                                                                        :key="`${row.mode_of_payment}-${row.currency}`"
+                                                                                                >
+                                                                                                        <td>{{ row.mode_of_payment }}</td>
+                                                                                                        <td>{{ row.currency }}</td>
+                                                                                                        <td class="text-end">
+                                                                                                                <span class="overview-amount">
+                                                                                                                        {{ currencySymbol(row.currency || overviewCompanyCurrency) }}
+                                                                                                                        {{ formatCurrency(row.total || 0) }}
+                                                                                                                </span>
+                                                                                                        </td>
+                                                                                                </tr>
+                                                                                        </tbody>
+                                                                                </table>
+                                                                        </div>
+                                                                        <div v-else class="overview-empty text-body-2">
+                                                                                {{ __("No payments registered for this shift.") }}
+                                                                        </div>
+                                                                </div>
+                                                        </v-col>
+                                                </v-row>
+                                                <v-row>
+                                                        <v-col cols="12" class="pa-1">
+                                                                <div class="table-header mb-4">
+                                                                        <h4 class="text-h6 text-grey-darken-2 mb-1">
+                                                                                {{ __("Payment Reconciliation") }}
 									</h4>
 									<p class="text-body-2 text-grey">
 										{{ __("Verify closing amounts for each payment method") }}
@@ -112,12 +244,14 @@
 import format from "../../format";
 export default {
 	mixins: [format],
-	data: () => ({
-		closingDialog: false,
-		itemsPerPage: 20,
-		dialog_data: {},
-		pos_profile: "",
-		headers: [
+        data: () => ({
+                closingDialog: false,
+                itemsPerPage: 20,
+                dialog_data: {},
+                pos_profile: "",
+                overview: null,
+                overviewLoading: false,
+                headers: [
 			{
 				title: __("Mode of Payment"),
 				value: "mode_of_payment",
@@ -161,35 +295,96 @@ export default {
 
 			return true;
 		},
-		pagination: {},
-	}),
-	watch: {},
+                pagination: {},
+        }),
+        watch: {},
 
-	methods: {
-		close_dialog() {
-			this.closingDialog = false;
-		},
-		submit_dialog() {
-			const invalid = (this.dialog_data.payments || []).some((p) =>
-				isNaN(parseFloat(p.closing_amount)),
-			);
+        methods: {
+                close_dialog() {
+                        this.closingDialog = false;
+                        this.overview = null;
+                        this.overviewLoading = false;
+                },
+                submit_dialog() {
+                        const invalid = (this.dialog_data.payments || []).some((p) =>
+                                isNaN(parseFloat(p.closing_amount)),
+                        );
 			if (invalid) {
 				alert(this.__("Invalid closing amount"));
 				return;
-			}
-			this.eventBus.emit("submit_closing_pos", this.dialog_data);
-			this.closingDialog = false;
-		},
-	},
+                        }
+                        this.eventBus.emit("submit_closing_pos", this.dialog_data);
+                        this.closingDialog = false;
+                },
+                fetchOverview(openingShift) {
+                        this.overviewLoading = true;
+                        this.overview = null;
+                        if (!openingShift) {
+                                this.overviewLoading = false;
+                                return;
+                        }
 
-	computed: {},
+                        const normalize = (payload = {}) => ({
+                                total_invoices: payload.total_invoices || 0,
+                                company_currency:
+                                        payload.company_currency || this.pos_profile?.currency || "",
+                                company_currency_total: payload.company_currency_total || 0,
+                                multi_currency_totals: Array.isArray(payload.multi_currency_totals)
+                                        ? payload.multi_currency_totals
+                                        : [],
+                                payments_by_mode: Array.isArray(payload.payments_by_mode)
+                                        ? payload.payments_by_mode
+                                        : [],
+                        });
 
-	created: function () {
-		this.eventBus.on("open_ClosingDialog", (data) => {
-			this.closingDialog = true;
-			this.dialog_data = data;
-		});
-		this.eventBus.on("register_pos_profile", (data) => {
+                        frappe
+                                .call(
+                                        "posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.get_closing_shift_overview",
+                                        {
+                                                pos_opening_shift: openingShift,
+                                        },
+                                )
+                                .then((r) => {
+                                        this.overview = normalize(r.message || {});
+                                })
+                                .catch((err) => {
+                                        console.error("Failed to load shift overview", err);
+                                        this.overview = normalize();
+                                })
+                                .finally(() => {
+                                        this.overviewLoading = false;
+                                });
+                },
+        },
+
+        computed: {
+                multiCurrencyTotals() {
+                        return Array.isArray(this.overview?.multi_currency_totals)
+                                ? this.overview.multi_currency_totals
+                                : [];
+                },
+                paymentsByMode() {
+                        return Array.isArray(this.overview?.payments_by_mode)
+                                ? this.overview.payments_by_mode
+                                : [];
+                },
+                overviewCompanyCurrency() {
+                        return (
+                                this.overview?.company_currency ||
+                                this.pos_profile?.currency ||
+                                this.dialog_data?.currency ||
+                                ""
+                        );
+                },
+        },
+
+        created: function () {
+                this.eventBus.on("open_ClosingDialog", (data) => {
+                        this.closingDialog = true;
+                        this.dialog_data = data;
+                        this.fetchOverview(data.pos_opening_shift);
+                });
+                this.eventBus.on("register_pos_profile", (data) => {
 			this.pos_profile = data.pos_profile;
 			if (!this.pos_profile.hide_expected_amount) {
 				this.headers.push({
@@ -206,11 +401,11 @@ export default {
 				});
 			}
 		});
-	},
-	beforeUnmount() {
-		this.eventBus.off("open_ClosingDialog");
-		this.eventBus.off("register_pos_profile");
-	},
+        },
+        beforeUnmount() {
+                this.eventBus.off("open_ClosingDialog");
+                this.eventBus.off("register_pos_profile");
+        },
 };
 </script>
 
@@ -276,14 +471,105 @@ export default {
 }
 
 .white-table {
-	background-color: white;
-	border: 1px solid #e0e0e0;
+        background-color: white;
+        border: 1px solid #e0e0e0;
+}
+
+.overview-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+}
+
+.overview-summary {
+        gap: 16px;
+}
+
+.overview-card {
+        background: var(--pos-card-bg);
+        border: 1px solid var(--pos-border);
+        border-radius: 12px;
+        padding: 16px;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 8px;
+}
+
+.overview-label {
+        font-size: 0.9rem;
+        color: var(--pos-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+}
+
+.overview-value {
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: var(--pos-text-primary);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: baseline;
+}
+
+.overview-subtle {
+        font-size: 0.85rem;
+        color: var(--pos-text-secondary);
+}
+
+.overview-amount {
+        font-family: "Inter", "Roboto", sans-serif;
+        font-weight: 600;
+}
+
+.overview-table-wrapper {
+        border: 1px solid var(--pos-border);
+        border-radius: 12px;
+        overflow: hidden;
+}
+
+.overview-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--pos-card-bg);
+}
+
+.overview-table th,
+.overview-table td {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--pos-border);
+        color: var(--pos-text-primary);
+}
+
+.overview-table th {
+        font-weight: 600;
+        background: var(--pos-table-header-bg, rgba(0, 0, 0, 0.04));
+        color: var(--pos-text-secondary);
+}
+
+.overview-table tr:last-child td {
+        border-bottom: none;
+}
+
+.overview-table .text-end {
+        text-align: right;
+}
+
+.overview-empty {
+        padding: 12px 4px;
+        color: var(--pos-text-secondary);
+}
+
+.overview-wrapper .v-progress-circular {
+        align-self: center;
 }
 
 /* Action Buttons */
 .dialog-actions-container {
-	background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-	border-top: 1px solid #e0e0e0;
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        border-top: 1px solid #e0e0e0;
 	padding: 16px 24px;
 	gap: 12px;
 }
@@ -356,13 +642,17 @@ export default {
 
 /* And the responsive section: */
 @media (max-width: 768px) {
-	.dialog-actions-container {
-		flex-direction: column;
-		gap: 12px;
-	}
+        .dialog-actions-container {
+                flex-direction: column;
+                gap: 12px;
+        }
 
-	.pos-action-btn {
-		width: 100%;
-	}
+        .pos-action-btn {
+                width: 100%;
+        }
+
+        .overview-summary {
+                flex-direction: column;
+        }
 }
 </style>

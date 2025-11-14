@@ -433,12 +433,146 @@ def get_payments_entries(pos_opening_shift):
             "mode_of_payment",
             "paid_amount",
             "base_paid_amount",
+            "paid_from_account_currency",
+            "paid_to_account_currency",
             "target_exchange_rate",
             "reference_no",
             "posting_date",
             "party",
         ],
     )
+
+
+@frappe.whitelist()
+def get_closing_shift_overview(pos_opening_shift):
+    """Return invoice and payment totals for the provided POS Opening Shift."""
+
+    if not pos_opening_shift:
+        frappe.throw(_("POS Opening Shift is required to compute the overview."))
+
+    opening_shift_doc = None
+    opening_shift_name = None
+    payload = pos_opening_shift
+
+    if isinstance(payload, str):
+        try:
+            parsed = json.loads(payload)
+        except ValueError:
+            opening_shift_name = payload
+        else:
+            payload = parsed if isinstance(parsed, dict) else payload
+
+    if isinstance(payload, dict):
+        opening_shift_name = payload.get("name") or opening_shift_name
+    elif getattr(payload, "doctype", None) == "POS Opening Shift":
+        opening_shift_doc = payload
+        opening_shift_name = payload.name
+    elif opening_shift_name is None:
+        opening_shift_name = getattr(payload, "name", None)
+
+    if not opening_shift_doc:
+        if not opening_shift_name:
+            frappe.throw(_("Invalid POS Opening Shift data provided."))
+        opening_shift_doc = frappe.get_doc("POS Opening Shift", opening_shift_name)
+
+    if opening_shift_doc.doctype != "POS Opening Shift":
+        frappe.throw(_("Unable to resolve POS Opening Shift."))
+
+    pos_profile = opening_shift_doc.pos_profile
+    company = opening_shift_doc.company
+    company_currency = frappe.get_cached_value("Company", company, "default_currency")
+
+    use_pos_invoice = frappe.db.get_value(
+        "POS Profile",
+        pos_profile,
+        "create_pos_invoice_instead_of_sales_invoice",
+    )
+    doctype = "POS Invoice" if use_pos_invoice else "Sales Invoice"
+    invoices = get_pos_invoices(opening_shift_doc.name, doctype)
+
+    total_invoices = len(invoices)
+    company_currency_total = 0
+    multi_currency_totals = {}
+    payments_by_mode = {}
+
+    cash_mode_of_payment = frappe.db.get_value(
+        "POS Profile", pos_profile, "posa_cash_mode_of_payment"
+    )
+    if not cash_mode_of_payment:
+        cash_mode_of_payment = "Cash"
+
+    def accumulate_payment(mode, currency, amount):
+        if not mode:
+            return
+        currency = currency or company_currency
+        key = (mode, currency)
+        if key not in payments_by_mode:
+            payments_by_mode[key] = {
+                "mode_of_payment": mode,
+                "currency": currency,
+                "total": 0,
+            }
+        payments_by_mode[key]["total"] += flt(amount)
+
+    def resolve_payment_currency(payment_row, invoice_currency):
+        for fieldname in (
+            "currency",
+            "account_currency",
+            "payment_currency",
+        ):
+            value = payment_row.get(fieldname)
+            if value:
+                return value
+        return invoice_currency or company_currency
+
+    for invoice in invoices:
+        conversion_rate = invoice.get("conversion_rate")
+        company_currency_total += get_base_value(
+            invoice, "grand_total", "base_grand_total", conversion_rate
+        )
+        invoice_currency = invoice.get("currency") or company_currency
+        invoice_total = invoice.get("rounded_total") or invoice.get("grand_total") or 0
+        currency_entry = multi_currency_totals.setdefault(
+            invoice_currency,
+            {"currency": invoice_currency, "total": 0, "invoice_count": 0},
+        )
+        currency_entry["total"] += flt(invoice_total)
+        currency_entry["invoice_count"] += 1
+
+        change_remaining = flt(invoice.get("change_amount") or 0)
+
+        for payment in invoice.get("payments", []):
+            mode = payment.get("mode_of_payment")
+            payment_currency = resolve_payment_currency(payment, invoice_currency)
+            amount = flt(payment.get("amount") or 0)
+            if cash_mode_of_payment and mode == cash_mode_of_payment and change_remaining:
+                deduction = min(change_remaining, amount)
+                amount -= deduction
+                change_remaining -= deduction
+            accumulate_payment(mode, payment_currency, amount)
+
+    payment_entries = get_payments_entries(opening_shift_doc.name)
+    for entry in payment_entries:
+        mode = entry.get("mode_of_payment")
+        payment_currency = (
+            entry.get("paid_to_account_currency")
+            or entry.get("paid_from_account_currency")
+            or company_currency
+        )
+        accumulate_payment(mode, payment_currency, flt(entry.get("paid_amount") or 0))
+
+    return {
+        "total_invoices": total_invoices,
+        "company_currency": company_currency,
+        "company_currency_total": flt(company_currency_total),
+        "multi_currency_totals": sorted(
+            multi_currency_totals.values(), key=lambda row: (row["currency"] or "")
+        ),
+        "payments_by_mode": sorted(
+            payments_by_mode.values(),
+            key=lambda row: (row["mode_of_payment"] or "", row["currency"] or ""),
+        ),
+    }
 
 
 @frappe.whitelist()
