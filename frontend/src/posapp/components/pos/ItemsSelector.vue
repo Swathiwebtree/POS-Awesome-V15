@@ -60,12 +60,14 @@
 								hint="Search by item code, serial number, batch no or barcode"
 								hide-details
 								v-model="search_input"
-								@keydown.esc="esc_event"
-								@keydown.enter="onEnter"
-								@click:clear="clearSearch"
-								prepend-inner-icon="mdi-magnify"
-								@focus="handleItemSearchFocus"
-								ref="debounce_search"
+                                                                @keydown.esc="esc_event"
+                                                                @keydown.enter="onEnter"
+                                                                @keydown="handleSearchKeydown"
+                                                                @click:clear="clearSearch"
+                                                                @input="handleSearchInput"
+                                                                prepend-inner-icon="mdi-magnify"
+                                                                @focus="handleItemSearchFocus"
+                                                                ref="debounce_search"
 							>
 								<template v-slot:append-inner>
 									<v-btn
@@ -632,11 +634,19 @@ export default {
 		scanAudioContext: null,
 		pendingScanCode: "",
 		awaitingScanResult: false,
-		scanDebounceId: null,
-		scanQueuedCode: "",
-		refreshInFlight: false,
-		clearingSearch: false,
-	}),
+                scanDebounceId: null,
+                scanQueuedCode: "",
+                refreshInFlight: false,
+                clearingSearch: false,
+                keyboardScanBuffer: "",
+                keyboardScanTimer: null,
+                keyboardScanLastTime: 0,
+                keyboardScanStartTime: 0,
+                keyboardScanPendingValue: "",
+                keyboardScanMinLength: 6,
+                keyboardScanMaxInterval: 65,
+                keyboardScanProcessingDelay: 100,
+        }),
 
 	watch: {
 		search_input(newValue) {
@@ -2712,10 +2722,11 @@ export default {
 
 			return combinations;
 		},
-		clearSearch() {
-			if (this.clearingSearch) {
-				return;
-			}
+                clearSearch() {
+                        this.resetKeyboardScanDetection();
+                        if (this.clearingSearch) {
+                                return;
+                        }
 
 			const hadQuery = Boolean(
 				(this.first_search && this.first_search.trim()) || (this.search && this.search.trim()),
@@ -2951,10 +2962,11 @@ export default {
 				this.$refs.cameraScanner.startScanning();
 			}
 		},
-		onBarcodeScanned(scannedCode) {
-			if (this.scannerLocked) {
-				this.playScanTone("error");
-				if (frappe?.show_alert) {
+                onBarcodeScanned(scannedCode) {
+                        this.resetKeyboardScanDetection();
+                        if (this.scannerLocked) {
+                                this.playScanTone("error");
+                                if (frappe?.show_alert) {
 					frappe.show_alert(
 						{
 							message: this.__("Acknowledge the error to resume scanning."),
@@ -3026,9 +3038,149 @@ export default {
 							this.handleScanPipelineError(error, code);
 						});
 					}
-				});
-			}, 12);
-		},
+                                });
+                        }, 12);
+                },
+                handleSearchInput(event) {
+                        const value =
+                                event && event.target && typeof event.target.value === "string"
+                                        ? event.target.value
+                                        : typeof event === "string"
+                                        ? event
+                                        : "";
+
+                        this.keyboardScanPendingValue = value;
+
+                        if (!value) {
+                                this.resetKeyboardScanDetection();
+                                return;
+                        }
+
+                        if (!/^\d+$/.test(value)) {
+                                this.resetKeyboardScanDetection();
+                                return;
+                        }
+
+                        if (
+                                this.keyboardScanBuffer &&
+                                value.length < this.keyboardScanBuffer.length
+                        ) {
+                                this.resetKeyboardScanDetection();
+                        }
+                },
+                handleSearchKeydown(event) {
+                        if (!event) {
+                                return;
+                        }
+
+                        const key = event.key || "";
+
+                        if (key === "Enter" || key === "Escape") {
+                                return;
+                        }
+
+                        if (event.metaKey || event.ctrlKey || event.altKey) {
+                                this.resetKeyboardScanDetection();
+                                return;
+                        }
+
+                        if (!/^\d$/.test(key)) {
+                                this.resetKeyboardScanDetection();
+                                return;
+                        }
+
+                        if (!this.isSearchFieldPrimedForScan()) {
+                                this.resetKeyboardScanDetection();
+                                return;
+                        }
+
+                        const now =
+                                typeof performance !== "undefined" && performance.now
+                                        ? performance.now()
+                                        : Date.now();
+
+                        if (
+                                this.keyboardScanLastTime &&
+                                now - this.keyboardScanLastTime > this.keyboardScanMaxInterval
+                        ) {
+                                this.keyboardScanBuffer = "";
+                                this.keyboardScanStartTime = now;
+                        }
+
+                        if (!this.keyboardScanBuffer) {
+                                this.keyboardScanStartTime = now;
+                        }
+
+                        this.keyboardScanBuffer += key;
+                        this.keyboardScanLastTime = now;
+
+                        if (this.keyboardScanTimer) {
+                                clearTimeout(this.keyboardScanTimer);
+                        }
+
+                        this.keyboardScanTimer = setTimeout(() => {
+                                this.evaluateKeyboardScan();
+                        }, this.keyboardScanProcessingDelay);
+                },
+                isSearchFieldPrimedForScan() {
+                        if (!this.search_input) {
+                                return true;
+                        }
+                        return /^\d*$/.test(this.search_input);
+                },
+                evaluateKeyboardScan() {
+                        if (this.keyboardScanTimer) {
+                                clearTimeout(this.keyboardScanTimer);
+                                this.keyboardScanTimer = null;
+                        }
+
+                        const code =
+                                (this.keyboardScanPendingValue || this.search_input || "").trim();
+
+                        const now =
+                                typeof performance !== "undefined" && performance.now
+                                        ? performance.now()
+                                        : Date.now();
+                        const duration = this.keyboardScanStartTime
+                                ? now - this.keyboardScanStartTime
+                                : 0;
+
+                        if (this.isLikelyKeyboardScan(code, duration)) {
+                                this.resetKeyboardScanDetection();
+                                if (code) {
+                                        this.onBarcodeScanned(code);
+                                }
+                                return;
+                        }
+
+                        this.resetKeyboardScanDetection();
+                },
+                isLikelyKeyboardScan(code, duration) {
+                        if (!code || !/^\d+$/.test(code)) {
+                                return false;
+                        }
+
+                        if (code.length < this.keyboardScanMinLength) {
+                                return false;
+                        }
+
+                        if (!duration || duration <= 0) {
+                                return true;
+                        }
+
+                        const averageInterval = duration / code.length;
+                        return averageInterval <= this.keyboardScanMaxInterval;
+                },
+                resetKeyboardScanDetection() {
+                        if (this.keyboardScanTimer) {
+                                clearTimeout(this.keyboardScanTimer);
+                                this.keyboardScanTimer = null;
+                        }
+                        this.keyboardScanBuffer = "";
+                        this.keyboardScanLastTime = 0;
+                        this.keyboardScanStartTime = 0;
+                        this.keyboardScanPendingValue = "";
+                },
                 async processScannedItem(scannedCode) {
                         const mark = perfMarkStart("pos:scan-process");
                         this.pendingScanCode = scannedCode;
@@ -4089,6 +4241,11 @@ export default {
                 // Clear interval when component is destroyed
                 if (this.refresh_interval) {
                         clearInterval(this.refresh_interval);
+                }
+
+                if (this.keyboardScanTimer) {
+                        clearTimeout(this.keyboardScanTimer);
+                        this.keyboardScanTimer = null;
                 }
 
                 if (typeof this.stockUnsubscribe === "function") {
