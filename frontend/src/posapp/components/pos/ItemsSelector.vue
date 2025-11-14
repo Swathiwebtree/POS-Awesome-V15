@@ -2968,6 +2968,25 @@ export default {
                                 console.error("Failed to parse scale barcode via API:", error);
                         }
 
+                        if (scaleResponse && scaleResponse.settings) {
+                                const prefixIncluded = Boolean(
+                                        Number(scaleResponse.settings.prefix_included_or_not || 0),
+                                );
+                                const configuredPrefix = prefixIncluded
+                                        ? String(scaleResponse.settings.prefix || "").trim()
+                                        : "";
+
+                                if (
+                                        configuredPrefix &&
+                                        !String(scannedCode || "").startsWith(configuredPrefix)
+                                ) {
+                                        scaleResponse = null;
+                                        searchCode = scannedCode;
+                                        qtyFromBarcode = null;
+                                        priceFromBarcode = null;
+                                }
+                        }
+
                         if (scaleResponse && scaleResponse.item_code) {
                                 searchCode = scaleResponse.item_code;
                                 const parsedQty = parseFloat(scaleResponse.qty);

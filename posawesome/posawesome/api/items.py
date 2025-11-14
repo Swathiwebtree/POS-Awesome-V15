@@ -1027,8 +1027,29 @@ def _parse_scale_barcode_data(barcode: str) -> Optional[Dict[str, Any]]:
 def parse_scale_barcode(barcode: str):
     """Public API to parse a scale barcode and return decoded data."""
 
+    settings = _get_scale_barcode_settings()
+    metadata: Optional[Dict[str, Any]] = None
+
+    if settings:
+        metadata = {
+            "prefix": cstr(getattr(settings, "prefix", "") or ""),
+            "prefix_included_or_not": cint(
+                getattr(settings, "prefix_included_or_not", 0)
+            ),
+            "no_of_prefix_characters": cint(
+                getattr(settings, "no_of_prefix_characters", 0)
+            ),
+        }
+
     data = _parse_scale_barcode_data(barcode)
-    return data or None
+
+    if not data:
+        return {"settings": metadata} if metadata else None
+
+    if metadata:
+        data["settings"] = metadata
+
+    return data
 
 
 @frappe.whitelist()
