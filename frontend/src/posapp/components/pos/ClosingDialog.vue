@@ -1,21 +1,30 @@
 <template>
 	<v-row justify="center">
-		<v-dialog v-model="closingDialog" max-width="900px" persistent>
-			<v-card elevation="8" class="closing-dialog-card">
-				<!-- Enhanced White Header -->
-				<v-card-title class="closing-header pa-6">
-					<div class="header-content">
-						<div class="header-icon-wrapper">
-							<v-icon class="header-icon" size="40">mdi-store-clock-outline</v-icon>
-						</div>
-						<div class="header-text">
-							<h3 class="header-title">{{ __("Closing POS Shift") }}</h3>
-							<p class="header-subtitle">
-								{{ __("Reconcile payment methods and close shift") }}
-							</p>
-						</div>
-					</div>
-				</v-card-title>
+                <v-dialog v-model="closingDialog" max-width="900px" persistent>
+                        <v-card elevation="8" class="closing-dialog-card">
+                                <!-- Enhanced White Header -->
+                                <v-card-title class="closing-header pa-6 d-flex align-center">
+                                        <div class="header-content">
+                                                <div class="header-icon-wrapper">
+                                                        <v-icon class="header-icon" size="40">mdi-store-clock-outline</v-icon>
+                                                </div>
+                                                <div class="header-text">
+                                                        <h3 class="header-title">{{ __("Closing POS Shift") }}</h3>
+                                                        <p class="header-subtitle">
+                                                                {{ __("Reconcile payment methods and close shift") }}
+                                                        </p>
+                                                </div>
+                                        </div>
+                                        <v-spacer></v-spacer>
+                                        <v-btn
+                                                icon="mdi-close"
+                                                variant="text"
+                                                density="comfortable"
+                                                class="header-close-btn"
+                                                :title="__('Close')"
+                                                @click="close_dialog"
+                                        ></v-btn>
+                                </v-card-title>
 
 				<v-divider class="header-divider"></v-divider>
 
@@ -1166,10 +1175,19 @@ export default {
 }
 
 .header-content {
-	display: flex;
-	align-items: center;
-	gap: 20px;
-	width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        width: 100%;
+}
+
+.header-close-btn {
+        color: #5f6368 !important;
+        margin-left: 12px;
+}
+
+.header-close-btn:hover {
+        color: #1f2937 !important;
 }
 
 .header-icon-wrapper {
