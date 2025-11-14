@@ -497,6 +497,13 @@ def get_closing_shift_overview(pos_opening_shift):
     credit_company_currency_total = 0
     credit_invoices_count = 0
     credit_totals_by_currency = {}
+    gross_company_currency_total = 0
+    sale_invoices_count = 0
+    returns_company_currency_total = 0
+    returns_count = 0
+    returns_totals_by_currency = {}
+    change_company_currency_total = 0
+    change_totals_by_currency = {}
 
     cash_mode_of_payment = frappe.db.get_value(
         "POS Profile", pos_profile, "posa_cash_mode_of_payment"
@@ -530,9 +537,16 @@ def get_closing_shift_overview(pos_opening_shift):
 
     for invoice in invoices:
         conversion_rate = invoice.get("conversion_rate")
-        company_currency_total += get_base_value(
+        base_grand_total = get_base_value(
             invoice, "grand_total", "base_grand_total", conversion_rate
         )
+        company_currency_total += base_grand_total
+        if base_grand_total >= 0:
+            gross_company_currency_total += base_grand_total
+            sale_invoices_count += 1
+        else:
+            returns_company_currency_total += abs(base_grand_total)
+            returns_count += 1
         invoice_currency = invoice.get("currency") or company_currency
         invoice_total = invoice.get("rounded_total") or invoice.get("grand_total") or 0
         currency_entry = multi_currency_totals.setdefault(
@@ -543,6 +557,14 @@ def get_closing_shift_overview(pos_opening_shift):
         currency_entry["invoice_count"] += 1
 
         change_remaining = flt(invoice.get("change_amount") or 0)
+        if change_remaining:
+            change_totals_by_currency.setdefault(
+                invoice_currency,
+                {"currency": invoice_currency, "total": 0},
+            )["total"] += flt(change_remaining)
+            change_company_currency_total += get_base_value(
+                invoice, "change_amount", "base_change_amount", conversion_rate
+            )
 
         outstanding_company_currency = invoice.get("base_outstanding_amount")
         if outstanding_company_currency in (None, ""):
@@ -574,6 +596,17 @@ def get_closing_shift_overview(pos_opening_shift):
             credit_entry["total"] += flt(outstanding_invoice_currency)
             credit_entry["invoice_count"] += 1
 
+        is_return = bool(invoice.get("is_return"))
+        if not is_return and flt(invoice_total) < 0:
+            is_return = True
+
+        if is_return:
+            returns_totals_by_currency.setdefault(
+                invoice_currency,
+                {"currency": invoice_currency, "total": 0, "invoice_count": 0},
+            )["total"] += abs(flt(invoice_total))
+            returns_totals_by_currency[invoice_currency]["invoice_count"] += 1
+
         for payment in invoice.get("payments", []):
             mode = payment.get("mode_of_payment")
             payment_currency = resolve_payment_currency(payment, invoice_currency)
@@ -594,6 +627,18 @@ def get_closing_shift_overview(pos_opening_shift):
         )
         accumulate_payment(mode, payment_currency, flt(entry.get("paid_amount") or 0))
 
+    cash_expected_totals = []
+    if cash_mode_of_payment:
+        for row in payments_by_mode.values():
+            if row["mode_of_payment"] == cash_mode_of_payment:
+                cash_expected_totals.append(
+                    {"currency": row["currency"], "total": flt(row["total"])},
+                )
+
+    average_invoice_value = 0
+    if sale_invoices_count:
+        average_invoice_value = gross_company_currency_total / sale_invoices_count
+
     return {
         "total_invoices": total_invoices,
         "company_currency": company_currency,
@@ -610,6 +655,41 @@ def get_closing_shift_overview(pos_opening_shift):
             "company_currency_total": flt(credit_company_currency_total),
             "by_currency": sorted(
                 credit_totals_by_currency.values(),
+                key=lambda row: (row["currency"] or ""),
+            ),
+        },
+        "sales_summary": {
+            "gross_company_currency_total": flt(gross_company_currency_total),
+            "net_company_currency_total": flt(company_currency_total),
+            "average_invoice_value": flt(average_invoice_value),
+            "sale_invoices_count": sale_invoices_count,
+        },
+        "returns": {
+            "count": returns_count,
+            "company_currency_total": flt(returns_company_currency_total),
+            "by_currency": sorted(
+                returns_totals_by_currency.values(),
+                key=lambda row: (row["currency"] or ""),
+            ),
+        },
+        "change_returned": {
+            "company_currency_total": flt(change_company_currency_total),
+            "by_currency": sorted(
+                change_totals_by_currency.values(),
+                key=lambda row: (row["currency"] or ""),
+            ),
+        },
+        "cash_expected": {
+            "mode_of_payment": cash_mode_of_payment,
+            "company_currency_total": flt(
+                sum(
+                    row["total"]
+                    for row in cash_expected_totals
+                    if row["currency"] == company_currency
+                )
+            ),
+            "by_currency": sorted(
+                cash_expected_totals,
                 key=lambda row: (row["currency"] or ""),
             ),
         },
