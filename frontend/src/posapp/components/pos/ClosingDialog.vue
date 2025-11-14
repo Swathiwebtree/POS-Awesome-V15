@@ -337,23 +337,39 @@ export default {
                                         : [],
                         });
 
-                        frappe
-                                .call(
-                                        "posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.get_closing_shift_overview",
-                                        {
-                                                pos_opening_shift: openingShift,
-                                        },
-                                )
-                                .then((r) => {
-                                        this.overview = normalize(r.message || {});
-                                })
-                                .catch((err) => {
-                                        console.error("Failed to load shift overview", err);
-                                        this.overview = normalize();
-                                })
-                                .finally(() => {
-                                        this.overviewLoading = false;
-                                });
+                        const request = frappe.call(
+                                "posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.get_closing_shift_overview",
+                                {
+                                        pos_opening_shift: openingShift,
+                                },
+                        );
+
+                        const finalize = () => {
+                                this.overviewLoading = false;
+                        };
+
+                        const onSuccess = (r) => {
+                                this.overview = normalize(r && r.message ? r.message : {});
+                        };
+
+                        const onError = (err) => {
+                                console.error("Failed to load shift overview", err);
+                                this.overview = normalize();
+                        };
+
+                        if (request && typeof request.then === "function") {
+                                request.then(onSuccess, onError);
+
+                                if (typeof request.always === "function") {
+                                        request.always(finalize);
+                                } else if (typeof request.finally === "function") {
+                                        request.finally(finalize);
+                                } else {
+                                        request.then(finalize, finalize);
+                                }
+                        } else {
+                                finalize();
+                        }
                 },
         },
 
