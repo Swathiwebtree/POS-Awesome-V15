@@ -8,7 +8,7 @@ import frappe
 from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
     consolidate_pos_invoices,
 )
-from frappe import _
+from frappe import _, DoesNotExistError
 from frappe.model.document import Document
 from frappe.utils import flt
 
@@ -494,6 +494,7 @@ def get_closing_shift_overview(pos_opening_shift):
     company_currency_total = 0
     multi_currency_totals = {}
     payments_by_mode = {}
+    payments_outside_shift = {}
     credit_company_currency_total = 0
     credit_invoices_count = 0
     credit_totals_by_currency = {}
@@ -511,21 +512,21 @@ def get_closing_shift_overview(pos_opening_shift):
     if not cash_mode_of_payment:
         cash_mode_of_payment = "Cash"
 
-    def accumulate_payment(mode, currency, amount, base_amount=0, conversion_rate=None):
+    def accumulate_payment(container, mode, currency, amount, base_amount=0, conversion_rate=None):
         if not mode:
             return
         currency = currency or company_currency
         key = (mode, currency)
-        if key not in payments_by_mode:
-            payments_by_mode[key] = {
+        if key not in container:
+            container[key] = {
                 "mode_of_payment": mode,
                 "currency": currency,
                 "total": 0,
                 "company_currency_total": 0,
                 "exchange_rates": set(),
             }
-        payments_by_mode[key]["total"] += flt(amount)
-        payments_by_mode[key]["company_currency_total"] += flt(base_amount)
+        container[key]["total"] += flt(amount)
+        container[key]["company_currency_total"] += flt(base_amount)
 
         if currency != company_currency:
             rate = None
@@ -534,7 +535,7 @@ def get_closing_shift_overview(pos_opening_shift):
             if not rate and conversion_rate:
                 rate = flt(conversion_rate)
             if rate:
-                payments_by_mode[key]["exchange_rates"].add(rate)
+                container[key]["exchange_rates"].add(rate)
 
     def resolve_payment_currency(payment_row, invoice_currency):
         for fieldname in (
@@ -546,6 +547,60 @@ def get_closing_shift_overview(pos_opening_shift):
             if value:
                 return value
         return invoice_currency or company_currency
+
+    shift_invoice_names = {invoice.get("name") for invoice in invoices}
+    invoice_shift_link_field_cache = {}
+    invoice_membership_cache = {}
+
+    def resolve_shift_link_field(doctype_name):
+        if doctype_name in invoice_shift_link_field_cache:
+            return invoice_shift_link_field_cache[doctype_name]
+
+        link_field = None
+        try:
+            meta = frappe.get_meta(doctype_name)
+        except DoesNotExistError:
+            meta = None
+
+        if meta:
+            for df in meta.get("fields", []):
+                if df.fieldtype == "Link" and df.options == "POS Opening Shift":
+                    link_field = df.fieldname
+                    break
+
+        invoice_shift_link_field_cache[doctype_name] = link_field
+        return link_field
+
+    def reference_belongs_to_shift(doctype_name, docname):
+        key = (doctype_name, docname)
+        if key in invoice_membership_cache:
+            return invoice_membership_cache[key]
+
+        if doctype_name == doctype and docname in shift_invoice_names:
+            invoice_membership_cache[key] = True
+            return True
+
+        link_field = resolve_shift_link_field(doctype_name)
+        if not link_field:
+            invoice_membership_cache[key] = False
+            return False
+
+        value = frappe.db.get_value(doctype_name, docname, link_field)
+        invoice_membership_cache[key] = bool(value and value == opening_shift_doc.name)
+        return invoice_membership_cache[key]
+
+    def reference_base_amount(reference, fallback_rate=None):
+        for fieldname in (
+            "allocated_amount_in_company_currency",
+            "base_allocated_amount",
+        ):
+            value = reference.get(fieldname)
+            if value not in (None, ""):
+                return flt(value)
+
+        amount_value = flt(reference.get("allocated_amount") or 0)
+        rate_value = reference.get("exchange_rate") or fallback_rate or 1
+        return amount_value * flt(rate_value or 1)
 
     for invoice in invoices:
         conversion_rate = invoice.get("conversion_rate")
@@ -691,9 +746,46 @@ def get_closing_shift_overview(pos_opening_shift):
             base_amount = get_base_value(
                 payment, "amount", "base_amount", conversion_rate
             )
-            accumulate_payment(mode, payment_currency, amount, base_amount, conversion_rate)
+            accumulate_payment(
+                payments_by_mode,
+                mode,
+                payment_currency,
+                amount,
+                base_amount,
+                conversion_rate,
+            )
 
     payment_entries = get_payments_entries(opening_shift_doc.name)
+
+    payment_entry_names = [row.get("name") for row in payment_entries if row.get("name")]
+    references_by_entry = defaultdict(list)
+
+    if payment_entry_names:
+        reference_meta = frappe.get_meta("Payment Entry Reference")
+        reference_fieldnames = {df.fieldname for df in reference_meta.get("fields", [])}
+        reference_fields = [
+            "parent",
+            "reference_doctype",
+            "reference_name",
+            "allocated_amount",
+        ]
+
+        if "exchange_rate" in reference_fieldnames:
+            reference_fields.append("exchange_rate")
+        if "allocated_amount_in_company_currency" in reference_fieldnames:
+            reference_fields.append("allocated_amount_in_company_currency")
+        if "base_allocated_amount" in reference_fieldnames:
+            reference_fields.append("base_allocated_amount")
+
+        reference_rows = frappe.get_all(
+            "Payment Entry Reference",
+            filters={"parent": ["in", payment_entry_names]},
+            fields=reference_fields,
+        )
+
+        for reference in reference_rows:
+            references_by_entry[reference.get("parent")].append(reference)
+
     for entry in payment_entries:
         mode = entry.get("mode_of_payment")
         payment_currency = (
@@ -702,19 +794,93 @@ def get_closing_shift_overview(pos_opening_shift):
             or company_currency
         )
         amount = flt(entry.get("paid_amount") or 0)
+        entry_rate = (
+            entry.get("target_exchange_rate")
+            or entry.get("source_exchange_rate")
+            or entry.get("exchange_rate")
+        )
         base_amount = get_base_value(
             entry,
             "paid_amount",
             "base_paid_amount",
-            entry.get("target_exchange_rate"),
+            entry_rate,
         )
-        accumulate_payment(
-            mode,
-            payment_currency,
-            amount,
-            base_amount,
-            entry.get("target_exchange_rate") or entry.get("source_exchange_rate") or entry.get("exchange_rate"),
-        )
+
+        references = references_by_entry.get(entry.get("name")) or []
+        allocated_amount_sum = 0
+        allocated_base_sum = 0
+
+        if references:
+            for reference in references:
+                allocated_amount = flt(reference.get("allocated_amount") or 0)
+                if not allocated_amount:
+                    continue
+
+                allocated_base = reference_base_amount(reference, entry_rate)
+                allocated_amount_sum += allocated_amount
+                allocated_base_sum += allocated_base
+
+                reference_doctype = reference.get("reference_doctype")
+                reference_name = reference.get("reference_name")
+                belongs_to_shift = False
+                if reference_doctype and reference_name:
+                    belongs_to_shift = reference_belongs_to_shift(
+                        reference_doctype,
+                        reference_name,
+                    )
+
+                rate = reference.get("exchange_rate") or entry_rate
+
+                accumulate_payment(
+                    payments_by_mode,
+                    mode,
+                    payment_currency,
+                    allocated_amount,
+                    allocated_base,
+                    rate,
+                )
+
+                if not belongs_to_shift:
+                    accumulate_payment(
+                        payments_outside_shift,
+                        mode,
+                        payment_currency,
+                        allocated_amount,
+                        allocated_base,
+                        rate,
+                    )
+
+        residual_amount = amount - allocated_amount_sum
+        residual_base = base_amount - allocated_base_sum
+
+        unallocated_amount = entry.get("unallocated_amount")
+        if unallocated_amount not in (None, ""):
+            residual_amount = flt(unallocated_amount)
+            residual_base = get_base_value(
+                entry,
+                "unallocated_amount",
+                "base_unallocated_amount",
+                entry_rate,
+            )
+
+        if abs(residual_amount) > 0.0001 or abs(residual_base) > 0.0001:
+            accumulate_payment(
+                payments_by_mode,
+                mode,
+                payment_currency,
+                residual_amount,
+                residual_base,
+                entry_rate,
+            )
+
+            accumulate_payment(
+                payments_outside_shift,
+                mode,
+                payment_currency,
+                residual_amount,
+                residual_base,
+                entry_rate,
+            )
 
     if cash_mode_of_payment:
         for row in payments_by_mode.values():
@@ -781,37 +947,40 @@ def get_closing_shift_overview(pos_opening_shift):
             output.append(record)
         return sorted(output, key=lambda r: (r.get("currency") or ""))
 
-    payments_output = []
-    for row in payments_by_mode.values():
-        exchange_rates = row.get("exchange_rates") or []
-        if isinstance(exchange_rates, set):
-            exchange_rates = sorted({flt(rate) for rate in exchange_rates if flt(rate)})
-        else:
-            exchange_rates = [
-                flt(rate)
-                for rate in exchange_rates
-                if rate not in (None, "") and flt(rate)
-            ]
-            exchange_rates = sorted(set(exchange_rates))
+    def prepare_payment_rows(container):
+        output = []
+        for row in container.values():
+            exchange_rates = row.get("exchange_rates") or []
+            if isinstance(exchange_rates, set):
+                exchange_rates = sorted({flt(rate) for rate in exchange_rates if flt(rate)})
+            else:
+                exchange_rates = [
+                    flt(rate)
+                    for rate in exchange_rates
+                    if rate not in (None, "") and flt(rate)
+                ]
+                exchange_rates = sorted(set(exchange_rates))
 
-        payments_output.append(
-            {
-                "mode_of_payment": row.get("mode_of_payment"),
-                "currency": row.get("currency"),
-                "total": flt(row.get("total")),
-                "company_currency_total": flt(row.get("company_currency_total")),
-                "exchange_rates": exchange_rates,
-            }
-        )
+            output.append(
+                {
+                    "mode_of_payment": row.get("mode_of_payment"),
+                    "currency": row.get("currency"),
+                    "total": flt(row.get("total")),
+                    "company_currency_total": flt(row.get("company_currency_total")),
+                    "exchange_rates": exchange_rates,
+                }
+            )
 
-    payments_output.sort(key=lambda r: (r.get("mode_of_payment") or "", r.get("currency") or ""))
+        output.sort(key=lambda r: (r.get("mode_of_payment") or "", r.get("currency") or ""))
+        return output
 
     return {
         "total_invoices": total_invoices,
         "company_currency": company_currency,
         "company_currency_total": flt(company_currency_total),
         "multi_currency_totals": prepare_currency_rows(multi_currency_totals, include_count=True),
-        "payments_by_mode": payments_output,
+        "payments_by_mode": prepare_payment_rows(payments_by_mode),
+        "payments_outside_shift": prepare_payment_rows(payments_outside_shift),
         "credit_invoices": {
             "count": credit_invoices_count,
             "company_currency_total": flt(credit_company_currency_total),

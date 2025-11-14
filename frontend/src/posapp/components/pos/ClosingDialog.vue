@@ -434,9 +434,62 @@
                                                                                                 </tbody>
                                                                                         </table>
                                                                                 </div>
-                                                                                <div v-else class="overview-empty text-body-2">
-                                                                                        {{ __("No payments registered for this shift.") }}
+                                                                        <div v-else class="overview-empty text-body-2">
+                                                                                {{ __("No payments registered for this shift.") }}
+                                                                        </div>
+                                                                        <div v-if="paymentsOutsideShift.length" class="mt-4">
+                                                                                <div class="table-header mb-2">
+                                                                                        <h6 class="text-subtitle-2 text-grey-darken-2 mb-1">
+                                                                                                {{ __("Payments Applied to Other Shifts") }}
+                                                                                        </h6>
+                                                                                        <p class="text-body-2 text-grey">
+                                                                                                {{ __("Amounts received for documents linked to different shifts") }}
+                                                                                        </p>
                                                                                 </div>
+                                                                                <div class="overview-table-wrapper">
+                                                                                        <table class="overview-table">
+                                                                                        <thead>
+                                                                                                <tr>
+                                                                                                        <th>{{ __("Mode of Payment") }}</th>
+                                                                                                        <th>{{ __("Currency") }}</th>
+                                                                                                        <th class="text-end">
+                                                                                                                {{ __("Amount") }}
+                                                                                                        </th>
+                                                                                                </tr>
+                                                                                        </thead>
+                                                                                        <tbody>
+                                                                                                <tr
+                                                                                                        v-for="row in paymentsOutsideShift"
+                                                                                                        :key="`outside-${row.mode_of_payment}-${row.currency}`"
+                                                                                                >
+                                                                                                        <td>{{ row.mode_of_payment }}</td>
+                                                                                                        <td>{{ row.currency }}</td>
+                                                                                                        <td class="text-end">
+                                                                                                                <div class="amount-with-base">
+                                                                                                                        <div class="amount-primary">
+                                                                                                                                <span class="overview-amount">
+                                                                                                                                        {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
+                                                                                                                                </span>
+                                                                                                                                <span
+                                                                                                                                        v-if="shouldShowCompanyEquivalent(row, row.currency)"
+                                                                                                                                        class="company-equivalent"
+                                                                                                                                >
+                                                                                                                                        ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
+                                                                                                                                </span>
+                                                                                                                        </div>
+                                                                                                                        <div
+                                                                                                                                v-if="showExchangeRates(row, row.currency)"
+                                                                                                                                class="exchange-note"
+                                                                                                                        >
+                                                                                                                                {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
+                                                                                                                        </div>
+                                                                                                                </div>
+                                                                                                        </td>
+                                                                                                </tr>
+                                                                                        </tbody>
+                                                                                        </table>
+                                                                                </div>
+                                                                        </div>
                                                                         </div>
                                                                 </div>
                                                         </v-col>
@@ -716,6 +769,9 @@ export default {
                                         { includeCount: true, includeExchangeRates: true },
                                 ),
                                 payments_by_mode: normalizePayments(payload.payments_by_mode),
+                                payments_outside_shift: normalizePayments(
+                                        payload.payments_outside_shift,
+                                ),
                                 credit_invoices: normalizeCredit(payload.credit_invoices),
                                 sales_summary: {
                                         gross_company_currency_total: toNumber(
@@ -907,6 +963,11 @@ export default {
                 paymentsByMode() {
                         return Array.isArray(this.overview?.payments_by_mode)
                                 ? this.overview.payments_by_mode
+                                : [];
+                },
+                paymentsOutsideShift() {
+                        return Array.isArray(this.overview?.payments_outside_shift)
+                                ? this.overview.payments_outside_shift
                                 : [];
                 },
                 creditInvoices() {
