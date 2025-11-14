@@ -406,44 +406,8 @@
                                                                         </template>
                                                                 </v-data-table>
 
-                                                                <div v-if="paymentCurrencyBreakdown.length" class="currency-breakdown mt-4">
-                                                                        <div class="table-header mb-2">
-                                                                                <h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
-                                                                                        {{ __("Invoice Totals by Currency") }}
-                                                                                </h5>
-                                                                                <p class="text-body-2 text-grey">
-                                                                                        {{ __("Reference totals for all invoice currencies in this shift") }}
-                                                                                </p>
-                                                                        </div>
-                                                                        <div class="overview-table-wrapper">
-                                                                                <table class="overview-table">
-                                                                                        <thead>
-                                                                                                <tr>
-                                                                                                        <th>{{ __("Currency") }}</th>
-                                                                                                        <th class="text-end">{{ __("Total In Currency") }}</th>
-                                                                                                        <th class="text-end">{{ __("Invoices") }}</th>
-                                                                                                </tr>
-                                                                                        </thead>
-                                                                                        <tbody>
-                                                                                                <tr
-                                                                                                        v-for="row in paymentCurrencyBreakdown"
-                                                                                                        :key="`payment-currency-${row.currency}`"
-                                                                                                >
-                                                                                                        <td>{{ row.currency }}</td>
-                                                                                                        <td class="text-end">
-                                                                                                                <span class="overview-amount">
-                                                                                                                        {{ row.symbol }}
-                                                                                                                        {{ formatCurrency(row.total || 0) }}
-                                                                                                                </span>
-                                                                                                        </td>
-                                                                                                        <td class="text-end">{{ row.invoice_count || 0 }}</td>
-                                                                                                </tr>
-                                                                                        </tbody>
-                                                                                </table>
-                                                                        </div>
-                                                                </div>
-							</v-col>
-						</v-row>
+                                                        </v-col>
+                                                </v-row>
 					</v-container>
 				</v-card-text>
 
@@ -735,12 +699,6 @@ export default {
                         return Array.isArray(this.overview?.payments_by_mode)
                                 ? this.overview.payments_by_mode
                                 : [];
-                },
-                paymentCurrencyBreakdown() {
-                        return this.multiCurrencyTotals.map((row) => ({
-                                ...row,
-                                symbol: this.currencySymbol(row.currency || this.overviewCompanyCurrency || ""),
-                        }));
                 },
                 creditInvoices() {
                         return this.overview?.credit_invoices || { count: 0, company_currency_total: 0, by_currency: [] };
