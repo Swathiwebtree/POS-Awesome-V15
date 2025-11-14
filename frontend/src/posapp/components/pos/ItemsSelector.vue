@@ -65,10 +65,11 @@
                                                                 @keydown="handleSearchKeydown"
                                                                 @click:clear="clearSearch"
                                                                 @input="handleSearchInput"
+                                                                @paste="handleSearchPaste"
                                                                 prepend-inner-icon="mdi-magnify"
                                                                 @focus="handleItemSearchFocus"
                                                                 ref="debounce_search"
-							>
+                                                        >
 								<template v-slot:append-inner>
 									<v-btn
 										v-if="pos_profile.posa_enable_camera_scanning"
@@ -3037,9 +3038,38 @@ export default {
 						maybePromise.catch((error) => {
 							this.handleScanPipelineError(error, code);
 						});
-					}
+                                        }
                                 });
                         }, 12);
+                },
+                handleSearchPaste(event) {
+                        if (!event || !event.clipboardData) {
+                                return;
+                        }
+
+                        const pastedText = event.clipboardData.getData("text");
+                        if (!pastedText) {
+                                return;
+                        }
+
+                        const sanitized = pastedText.replace(/\s+/g, "").trim();
+
+                        if (!sanitized) {
+                                event.preventDefault();
+                                return;
+                        }
+
+                        if (!/^\d+$/.test(sanitized) || sanitized.length < this.keyboardScanMinLength) {
+                                return;
+                        }
+
+                        event.preventDefault();
+
+                        this.search_input = sanitized;
+
+                        this.$nextTick(() => {
+                                this.onBarcodeScanned(sanitized);
+                        });
                 },
                 handleSearchInput(event) {
                         const value =
