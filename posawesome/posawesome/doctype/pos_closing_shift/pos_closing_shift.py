@@ -494,7 +494,6 @@ def get_closing_shift_overview(pos_opening_shift):
     company_currency_total = 0
     multi_currency_totals = {}
     payments_by_mode = {}
-    payments_outside_shift = {}
     credit_company_currency_total = 0
     credit_invoices_count = 0
     credit_totals_by_currency = {}
@@ -840,16 +839,6 @@ def get_closing_shift_overview(pos_opening_shift):
                     rate,
                 )
 
-                if not belongs_to_shift:
-                    accumulate_payment(
-                        payments_outside_shift,
-                        mode,
-                        payment_currency,
-                        allocated_amount,
-                        allocated_base,
-                        rate,
-                    )
-
         residual_amount = amount - allocated_amount_sum
         residual_base = base_amount - allocated_base_sum
 
@@ -866,15 +855,6 @@ def get_closing_shift_overview(pos_opening_shift):
         if abs(residual_amount) > 0.0001 or abs(residual_base) > 0.0001:
             accumulate_payment(
                 payments_by_mode,
-                mode,
-                payment_currency,
-                residual_amount,
-                residual_base,
-                entry_rate,
-            )
-
-            accumulate_payment(
-                payments_outside_shift,
                 mode,
                 payment_currency,
                 residual_amount,
@@ -980,7 +960,6 @@ def get_closing_shift_overview(pos_opening_shift):
         "company_currency_total": flt(company_currency_total),
         "multi_currency_totals": prepare_currency_rows(multi_currency_totals, include_count=True),
         "payments_by_mode": prepare_payment_rows(payments_by_mode),
-        "payments_outside_shift": prepare_payment_rows(payments_outside_shift),
         "credit_invoices": {
             "count": credit_invoices_count,
             "company_currency_total": flt(credit_company_currency_total),
