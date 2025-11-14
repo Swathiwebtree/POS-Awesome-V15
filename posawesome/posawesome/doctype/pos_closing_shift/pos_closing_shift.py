@@ -511,7 +511,7 @@ def get_closing_shift_overview(pos_opening_shift):
     if not cash_mode_of_payment:
         cash_mode_of_payment = "Cash"
 
-    def accumulate_payment(mode, currency, amount):
+    def accumulate_payment(mode, currency, amount, base_amount=0):
         if not mode:
             return
         currency = currency or company_currency
@@ -521,8 +521,10 @@ def get_closing_shift_overview(pos_opening_shift):
                 "mode_of_payment": mode,
                 "currency": currency,
                 "total": 0,
+                "company_currency_total": 0,
             }
         payments_by_mode[key]["total"] += flt(amount)
+        payments_by_mode[key]["company_currency_total"] += flt(base_amount)
 
     def resolve_payment_currency(payment_row, invoice_currency):
         for fieldname in (
@@ -556,15 +558,21 @@ def get_closing_shift_overview(pos_opening_shift):
         currency_entry["total"] += flt(invoice_total)
         currency_entry["invoice_count"] += 1
 
-        change_remaining = flt(invoice.get("change_amount") or 0)
-        if change_remaining:
-            change_totals_by_currency.setdefault(
+        change_amount = flt(invoice.get("change_amount") or 0)
+        if change_amount:
+            change_entry = change_totals_by_currency.setdefault(
                 invoice_currency,
-                {"currency": invoice_currency, "total": 0},
-            )["total"] += flt(change_remaining)
-            change_company_currency_total += get_base_value(
-                invoice, "change_amount", "base_change_amount", conversion_rate
+                {"currency": invoice_currency, "total": 0, "company_currency_total": 0},
             )
+            change_entry["total"] += change_amount
+
+            change_base_amount = flt(
+                get_base_value(
+                    invoice, "change_amount", "base_change_amount", conversion_rate
+                )
+            )
+            change_company_currency_total += change_base_amount
+            change_entry["company_currency_total"] += change_base_amount
 
         outstanding_company_currency = invoice.get("base_outstanding_amount")
         if outstanding_company_currency in (None, ""):
@@ -611,11 +619,10 @@ def get_closing_shift_overview(pos_opening_shift):
             mode = payment.get("mode_of_payment")
             payment_currency = resolve_payment_currency(payment, invoice_currency)
             amount = flt(payment.get("amount") or 0)
-            if cash_mode_of_payment and mode == cash_mode_of_payment and change_remaining:
-                deduction = min(change_remaining, amount)
-                amount -= deduction
-                change_remaining -= deduction
-            accumulate_payment(mode, payment_currency, amount)
+            base_amount = get_base_value(
+                payment, "amount", "base_amount", conversion_rate
+            )
+            accumulate_payment(mode, payment_currency, amount, base_amount)
 
     payment_entries = get_payments_entries(opening_shift_doc.name)
     for entry in payment_entries:
@@ -625,14 +632,42 @@ def get_closing_shift_overview(pos_opening_shift):
             or entry.get("paid_from_account_currency")
             or company_currency
         )
-        accumulate_payment(mode, payment_currency, flt(entry.get("paid_amount") or 0))
+        amount = flt(entry.get("paid_amount") or 0)
+        base_amount = get_base_value(
+            entry,
+            "paid_amount",
+            "base_paid_amount",
+            entry.get("target_exchange_rate"),
+        )
+        accumulate_payment(mode, payment_currency, amount, base_amount)
+
+    if cash_mode_of_payment:
+        for row in payments_by_mode.values():
+            if row["mode_of_payment"] != cash_mode_of_payment:
+                continue
+
+            change_row = change_totals_by_currency.get(row["currency"])
+            if change_row:
+                row["total"] -= flt(change_row.get("total"))
+
+                base_change = change_row.get("company_currency_total")
+                if base_change:
+                    row["company_currency_total"] -= flt(base_change)
 
     cash_expected_totals = []
+    cash_expected_company_currency_total = 0
     if cash_mode_of_payment:
         for row in payments_by_mode.values():
             if row["mode_of_payment"] == cash_mode_of_payment:
                 cash_expected_totals.append(
-                    {"currency": row["currency"], "total": flt(row["total"])},
+                    {
+                        "currency": row["currency"],
+                        "total": flt(row["total"]),
+                        "company_currency_total": flt(row["company_currency_total"]),
+                    },
+                )
+                cash_expected_company_currency_total += flt(
+                    row["company_currency_total"]
                 )
 
     average_invoice_value = 0
@@ -681,13 +716,7 @@ def get_closing_shift_overview(pos_opening_shift):
         },
         "cash_expected": {
             "mode_of_payment": cash_mode_of_payment,
-            "company_currency_total": flt(
-                sum(
-                    row["total"]
-                    for row in cash_expected_totals
-                    if row["currency"] == company_currency
-                )
-            ),
+            "company_currency_total": flt(cash_expected_company_currency_total),
             "by_currency": sorted(
                 cash_expected_totals,
                 key=lambda row: (row["currency"] or ""),
