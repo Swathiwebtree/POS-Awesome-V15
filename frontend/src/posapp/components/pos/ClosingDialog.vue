@@ -42,7 +42,7 @@
 
                                                                 <div v-else class="overview-wrapper">
                                                                         <v-row class="overview-summary" dense>
-                                                                                <v-col cols="12" md="6">
+                                                                                <v-col cols="12" sm="4">
                                                                                         <div class="overview-card">
                                                                                                 <div class="overview-label">
                                                                                                         {{ __("Total Invoices") }}
@@ -50,9 +50,12 @@
                                                                                                 <div class="overview-value">
                                                                                                         {{ overview?.total_invoices || 0 }}
                                                                                                 </div>
+                                                                                                <div class="overview-subtle">
+                                                                                                        {{ __("Invoices counted for this shift") }}
+                                                                                                </div>
                                                                                         </div>
                                                                                 </v-col>
-                                                                                <v-col cols="12" md="6">
+                                                                                <v-col cols="12" sm="4">
                                                                                         <div class="overview-card">
                                                                                                 <div class="overview-label">
                                                                                                         {{ __("Total in Company Currency") }}
@@ -65,6 +68,23 @@
                                                                                                 </div>
                                                                                                 <div class="overview-subtle">
                                                                                                         {{ overviewCompanyCurrency }}
+                                                                                                </div>
+                                                                                        </div>
+                                                                                </v-col>
+                                                                                <v-col cols="12" sm="4">
+                                                                                        <div class="overview-card">
+                                                                                                <div class="overview-label">
+                                                                                                        {{ __("Credit Invoices") }}
+                                                                                                </div>
+                                                                                                <div class="overview-value">
+                                                                                                        <span class="overview-amount">
+                                                                                                                {{ currencySymbol(overviewCompanyCurrency) }}
+                                                                                                                {{ formatCurrency(creditInvoices.company_currency_total || 0) }}
+                                                                                                        </span>
+                                                                                                </div>
+                                                                                                <div class="overview-subtle">
+                                                                                                        {{ __("Open invoices:") }}
+                                                                                                        {{ creditInvoices.count || 0 }}
                                                                                                 </div>
                                                                                         </div>
                                                                                 </v-col>
@@ -108,6 +128,56 @@
                                                                         </div>
                                                                         <div v-else class="overview-empty text-body-2">
                                                                                 {{ __("No invoices recorded for this shift.") }}
+                                                                        </div>
+
+                                                                        <div class="table-header mt-6 mb-2" v-if="creditInvoicesByCurrency.length">
+                                                                                <h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
+                                                                                        {{ __("Outstanding Credit by Currency") }}
+                                                                                </h5>
+                                                                                <p class="text-body-2 text-grey">
+                                                                                        {{ __("Credit sales remaining to be collected") }}
+                                                                                </p>
+                                                                        </div>
+
+                                                                        <div
+                                                                                v-if="creditInvoicesByCurrency.length"
+                                                                                class="overview-table-wrapper"
+                                                                        >
+                                                                                <table class="overview-table">
+                                                                                        <thead>
+                                                                                                <tr>
+                                                                                                        <th>{{ __("Currency") }}</th>
+                                                                                                        <th class="text-end">
+                                                                                                                {{ __("Outstanding") }}
+                                                                                                        </th>
+                                                                                                        <th class="text-end">
+                                                                                                                {{ __("Invoices") }}
+                                                                                                        </th>
+                                                                                                </tr>
+                                                                                        </thead>
+                                                                                        <tbody>
+                                                                                                <tr
+                                                                                                        v-for="row in creditInvoicesByCurrency"
+                                                                                                        :key="`credit-${row.currency}`"
+                                                                                                >
+                                                                                                        <td>{{ row.currency }}</td>
+                                                                                                        <td class="text-end">
+                                                                                                                <span class="overview-amount">
+                                                                                                                        {{ currencySymbol(row.currency || overviewCompanyCurrency) }}
+                                                                                                                        {{ formatCurrency(row.total || 0) }}
+                                                                                                                </span>
+                                                                                                        </td>
+                                                                                                        <td class="text-end">{{ row.invoice_count || 0 }}</td>
+                                                                                                </tr>
+                                                                                        </tbody>
+                                                                                </table>
+                                                                        </div>
+
+                                                                        <div
+                                                                                v-else
+                                                                                class="overview-empty text-body-2"
+                                                                        >
+                                                                                {{ __("No outstanding credit invoices for this shift.") }}
                                                                         </div>
 
                                                                         <div class="table-header mt-6 mb-2">
@@ -324,6 +394,14 @@ export default {
                                 return;
                         }
 
+                        const normalizeCredit = (credit = {}) => ({
+                                count: credit?.count || 0,
+                                company_currency_total: credit?.company_currency_total || 0,
+                                by_currency: Array.isArray(credit?.by_currency)
+                                        ? credit.by_currency
+                                        : [],
+                        });
+
                         const normalize = (payload = {}) => ({
                                 total_invoices: payload.total_invoices || 0,
                                 company_currency:
@@ -335,6 +413,7 @@ export default {
                                 payments_by_mode: Array.isArray(payload.payments_by_mode)
                                         ? payload.payments_by_mode
                                         : [],
+                                credit_invoices: normalizeCredit(payload.credit_invoices),
                         });
 
                         const request = frappe.call(
@@ -383,6 +462,12 @@ export default {
                         return Array.isArray(this.overview?.payments_by_mode)
                                 ? this.overview.payments_by_mode
                                 : [];
+                },
+                creditInvoices() {
+                        return this.overview?.credit_invoices || { count: 0, company_currency_total: 0, by_currency: [] };
+                },
+                creditInvoicesByCurrency() {
+                        return Array.isArray(this.creditInvoices.by_currency) ? this.creditInvoices.by_currency : [];
                 },
                 overviewCompanyCurrency() {
                         return (
@@ -505,23 +590,23 @@ export default {
         background: var(--pos-card-bg);
         border: 1px solid var(--pos-border);
         border-radius: 12px;
-        padding: 16px;
-        min-height: 120px;
+        padding: 12px 14px;
+        min-height: 96px;
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        gap: 8px;
+        justify-content: space-between;
+        gap: 6px;
 }
 
 .overview-label {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         color: var(--pos-text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.05em;
 }
 
 .overview-value {
-        font-size: 1.6rem;
+        font-size: 1.35rem;
         font-weight: 600;
         color: var(--pos-text-primary);
         display: flex;
@@ -531,7 +616,7 @@ export default {
 }
 
 .overview-subtle {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         color: var(--pos-text-secondary);
 }
 

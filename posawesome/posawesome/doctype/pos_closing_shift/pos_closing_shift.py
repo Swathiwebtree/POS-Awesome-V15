@@ -494,6 +494,9 @@ def get_closing_shift_overview(pos_opening_shift):
     company_currency_total = 0
     multi_currency_totals = {}
     payments_by_mode = {}
+    credit_company_currency_total = 0
+    credit_invoices_count = 0
+    credit_totals_by_currency = {}
 
     cash_mode_of_payment = frappe.db.get_value(
         "POS Profile", pos_profile, "posa_cash_mode_of_payment"
@@ -541,6 +544,36 @@ def get_closing_shift_overview(pos_opening_shift):
 
         change_remaining = flt(invoice.get("change_amount") or 0)
 
+        outstanding_company_currency = invoice.get("base_outstanding_amount")
+        if outstanding_company_currency in (None, ""):
+            outstanding_company_currency = invoice.get("outstanding_amount")
+        if outstanding_company_currency in (None, ""):
+            outstanding_company_currency = get_base_value(
+                invoice,
+                "outstanding_amount",
+                "base_outstanding_amount",
+                conversion_rate,
+            )
+        outstanding_company_currency = flt(outstanding_company_currency or 0)
+
+        if outstanding_company_currency > 0:
+            credit_invoices_count += 1
+            credit_company_currency_total += outstanding_company_currency
+            outstanding_invoice_currency = invoice.get("outstanding_amount")
+            if outstanding_invoice_currency in (None, ""):
+                base_divisor = flt(conversion_rate) or 0
+                if base_divisor:
+                    outstanding_invoice_currency = outstanding_company_currency / base_divisor
+                else:
+                    outstanding_invoice_currency = outstanding_company_currency
+            outstanding_invoice_currency = flt(outstanding_invoice_currency or 0)
+            credit_entry = credit_totals_by_currency.setdefault(
+                invoice_currency,
+                {"currency": invoice_currency, "total": 0, "invoice_count": 0},
+            )
+            credit_entry["total"] += flt(outstanding_invoice_currency)
+            credit_entry["invoice_count"] += 1
+
         for payment in invoice.get("payments", []):
             mode = payment.get("mode_of_payment")
             payment_currency = resolve_payment_currency(payment, invoice_currency)
@@ -572,6 +605,14 @@ def get_closing_shift_overview(pos_opening_shift):
             payments_by_mode.values(),
             key=lambda row: (row["mode_of_payment"] or "", row["currency"] or ""),
         ),
+        "credit_invoices": {
+            "count": credit_invoices_count,
+            "company_currency_total": flt(credit_company_currency_total),
+            "by_currency": sorted(
+                credit_totals_by_currency.values(),
+                key=lambda row: (row["currency"] or ""),
+            ),
+        },
     }
 
 
