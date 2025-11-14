@@ -113,10 +113,25 @@
                                                                                                         <tr v-for="row in multiCurrencyTotals" :key="row.currency">
                                                                                                                 <td>{{ row.currency }}</td>
                                                                                                                 <td class="text-end">
-                                                                                                                        <span class="overview-amount">
-                                                                                                                                {{ currencySymbol(row.currency || overviewCompanyCurrency) }}
-                                                                                                                                {{ formatCurrency(row.total || 0) }}
-                                                                                                                        </span>
+                                                                                                                        <div class="amount-with-base">
+                                                                                                                                <div class="amount-primary">
+                                                                                                                                        <span class="overview-amount">
+                                                                                                                                                {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
+                                                                                                                                        </span>
+                                                                                                                                        <span
+                                                                                                                                                v-if="shouldShowCompanyEquivalent(row, row.currency)"
+                                                                                                                                                class="company-equivalent"
+                                                                                                                                        >
+                                                                                                                                                ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
+                                                                                                                                        </span>
+                                                                                                                                </div>
+                                                                                                                                <div
+                                                                                                                                        v-if="showExchangeRates(row, row.currency)"
+                                                                                                                                        class="exchange-note"
+                                                                                                                                >
+                                                                                                                                        {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
+                                                                                                                                </div>
+                                                                                                                        </div>
                                                                                                                 </td>
                                                                                                                 <td class="text-end">{{ row.invoice_count || 0 }}</td>
                                                                                                         </tr>
@@ -159,10 +174,25 @@
                                                                                                                         >
                                                                                                                                 <td>{{ row.currency }}</td>
                                                                                                                                 <td class="text-end">
-                                                                                                                                        <span class="overview-amount">
-                                                                                                                                                {{ currencySymbol(row.currency || overviewCompanyCurrency) }}
-                                                                                                                                                {{ formatCurrency(row.total || 0) }}
-                                                                                                                                        </span>
+                                                                                                                                        <div class="amount-with-base">
+                                                                                                                                                <div class="amount-primary">
+                                                                                                                                                        <span class="overview-amount">
+                                                                                                                                                                {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
+                                                                                                                                                        </span>
+                                                                                                                                                        <span
+                                                                                                                                                                v-if="shouldShowCompanyEquivalent(row, row.currency)"
+                                                                                                                                                                class="company-equivalent"
+                                                                                                                                                        >
+                                                                                                                                                                ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
+                                                                                                                                                        </span>
+                                                                                                                                                </div>
+                                                                                                                                                <div
+                                                                                                                                                        v-if="showExchangeRates(row, row.currency)"
+                                                                                                                                                        class="exchange-note"
+                                                                                                                                                >
+                                                                                                                                                        {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
+                                                                                                                                                </div>
+                                                                                                                                        </div>
                                                                                                                                 </td>
                                                                                                                                 <td class="text-end">{{ row.invoice_count || 0 }}</td>
                                                                                                                         </tr>
@@ -204,10 +234,25 @@
                                                                                                                         >
                                                                                                                                 <td>{{ row.currency }}</td>
                                                                                                                                 <td class="text-end">
-                                                                                                                                        <span class="overview-amount">
-                                                                                                                                                {{ currencySymbol(row.currency || overviewCompanyCurrency) }}
-                                                                                                                                                {{ formatCurrency(row.total || 0) }}
-                                                                                                                                        </span>
+                                                                                                                                        <div class="amount-with-base">
+                                                                                                                                                <div class="amount-primary">
+                                                                                                                                                        <span class="overview-amount">
+                                                                                                                                                                {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
+                                                                                                                                                        </span>
+                                                                                                                                                        <span
+                                                                                                                                                                v-if="shouldShowCompanyEquivalent(row, row.currency)"
+                                                                                                                                                                class="company-equivalent"
+                                                                                                                                                        >
+                                                                                                                                                                ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
+                                                                                                                                                        </span>
+                                                                                                                                                </div>
+                                                                                                                                                <div
+                                                                                                                                                        v-if="showExchangeRates(row, row.currency)"
+                                                                                                                                                        class="exchange-note"
+                                                                                                                                                >
+                                                                                                                                                        {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
+                                                                                                                                                </div>
+                                                                                                                                        </div>
                                                                                                                                 </td>
                                                                                                                                 <td class="text-end">{{ row.invoice_count || 0 }}</td>
                                                                                                                         </tr>
@@ -249,10 +294,25 @@
                                                                                                                         >
                                                                                                                                 <td>{{ row.currency }}</td>
                                                                                                                                 <td class="text-end">
-                                                                                                                                        <span class="overview-amount">
-                                                                                                                                                {{ currencySymbol(row.currency || overviewCompanyCurrency) }}
-                                                                                                                                                {{ formatCurrency(row.total || 0) }}
-                                                                                                                                        </span>
+                                                                                                                                        <div class="amount-with-base">
+                                                                                                                                                <div class="amount-primary">
+                                                                                                                                                        <span class="overview-amount">
+                                                                                                                                                                {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
+                                                                                                                                                        </span>
+                                                                                                                                                        <span
+                                                                                                                                                                v-if="shouldShowCompanyEquivalent(row, row.currency)"
+                                                                                                                                                                class="company-equivalent"
+                                                                                                                                                        >
+                                                                                                                                                                ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
+                                                                                                                                                        </span>
+                                                                                                                                                </div>
+                                                                                                                                                <div
+                                                                                                                                                        v-if="showExchangeRates(row, row.currency)"
+                                                                                                                                                        class="exchange-note"
+                                                                                                                                                >
+                                                                                                                                                        {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
+                                                                                                                                                </div>
+                                                                                                                                        </div>
                                                                                                                                 </td>
                                                                                                                         </tr>
                                                                                                                 </tbody>
@@ -290,10 +350,25 @@
                                                                                                                         >
                                                                                                                                 <td>{{ row.currency }}</td>
                                                                                                                                 <td class="text-end">
-                                                                                                                                        <span class="overview-amount">
-                                                                                                                                                {{ currencySymbol(row.currency || overviewCompanyCurrency) }}
-                                                                                                                                                {{ formatCurrency(row.total || 0) }}
-                                                                                                                                        </span>
+                                                                                                                                        <div class="amount-with-base">
+                                                                                                                                                <div class="amount-primary">
+                                                                                                                                                        <span class="overview-amount">
+                                                                                                                                                                {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
+                                                                                                                                                        </span>
+                                                                                                                                                        <span
+                                                                                                                                                                v-if="shouldShowCompanyEquivalent(row, row.currency)"
+                                                                                                                                                                class="company-equivalent"
+                                                                                                                                                        >
+                                                                                                                                                                ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
+                                                                                                                                                        </span>
+                                                                                                                                                </div>
+                                                                                                                                                <div
+                                                                                                                                                        v-if="showExchangeRates(row, row.currency)"
+                                                                                                                                                        class="exchange-note"
+                                                                                                                                                >
+                                                                                                                                                        {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
+                                                                                                                                                </div>
+                                                                                                                                        </div>
                                                                                                                                 </td>
                                                                                                                         </tr>
                                                                                                                 </tbody>
@@ -335,10 +410,25 @@
                                                                                                                 <td>{{ row.mode_of_payment }}</td>
                                                                                                                 <td>{{ row.currency }}</td>
                                                                                                                 <td class="text-end">
-                                                                                                                        <span class="overview-amount">
-                                                                                                                                {{ currencySymbol(row.currency || overviewCompanyCurrency) }}
-                                                                                                                                {{ formatCurrency(row.total || 0) }}
-                                                                                                                        </span>
+                                                                                                                        <div class="amount-with-base">
+                                                                                                                                <div class="amount-primary">
+                                                                                                                                        <span class="overview-amount">
+                                                                                                                                                {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
+                                                                                                                                        </span>
+                                                                                                                                        <span
+                                                                                                                                                v-if="shouldShowCompanyEquivalent(row, row.currency)"
+                                                                                                                                                class="company-equivalent"
+                                                                                                                                        >
+                                                                                                                                                ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
+                                                                                                                                        </span>
+                                                                                                                                </div>
+                                                                                                                                <div
+                                                                                                                                        v-if="showExchangeRates(row, row.currency)"
+                                                                                                                                        class="exchange-note"
+                                                                                                                                >
+                                                                                                                                        {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
+                                                                                                                                </div>
+                                                                                                                        </div>
                                                                                                                 </td>
                                                                                                         </tr>
                                                                                                 </tbody>
@@ -550,13 +640,70 @@ export default {
                                 return Number.isFinite(number) ? number : 0;
                         };
 
-                        const normalizeDistribution = (value) =>
-                                Array.isArray(value) ? value : [];
+                        const normalizeRates = (rates) => {
+                                if (Array.isArray(rates)) {
+                                        return rates
+                                                .map((rate) => Number(rate))
+                                                .filter((rate) => Number.isFinite(rate) && rate > 0);
+                                }
+                                if (rates === null || rates === undefined || rates === "") {
+                                        return [];
+                                }
+                                const numeric = Number(rates);
+                                return Number.isFinite(numeric) && numeric > 0 ? [numeric] : [];
+                        };
+
+                        const normalizeCurrencyRows = (value, options = {}) => {
+                                if (!Array.isArray(value)) {
+                                        return [];
+                                }
+
+                                const {
+                                        includeCount = false,
+                                        includeExchangeRates = false,
+                                } = options;
+
+                                return value.map((row) => {
+                                        const record = {
+                                                currency: row?.currency || "",
+                                                total: toNumber(row?.total),
+                                                company_currency_total: toNumber(
+                                                        row?.company_currency_total,
+                                                ),
+                                                exchange_rates: includeExchangeRates
+                                                        ? normalizeRates(row?.exchange_rates)
+                                                        : [],
+                                        };
+
+                                        if (includeCount) {
+                                                record.invoice_count = toNumber(row?.invoice_count);
+                                        }
+
+                                        return record;
+                                });
+                        };
+
+                        const normalizePayments = (value) => {
+                                if (!Array.isArray(value)) {
+                                        return [];
+                                }
+
+                                return value.map((row) => ({
+                                        mode_of_payment: row?.mode_of_payment || "",
+                                        currency: row?.currency || "",
+                                        total: toNumber(row?.total),
+                                        company_currency_total: toNumber(row?.company_currency_total),
+                                        exchange_rates: normalizeRates(row?.exchange_rates),
+                                }));
+                        };
 
                         const normalizeCredit = (credit = {}) => ({
                                 count: toNumber(credit?.count),
                                 company_currency_total: toNumber(credit?.company_currency_total),
-                                by_currency: normalizeDistribution(credit?.by_currency),
+                                by_currency: normalizeCurrencyRows(credit?.by_currency, {
+                                        includeCount: true,
+                                        includeExchangeRates: true,
+                                }),
                         });
 
                         const normalize = (payload = {}) => ({
@@ -564,8 +711,11 @@ export default {
                                 company_currency:
                                         payload.company_currency || this.pos_profile?.currency || "",
                                 company_currency_total: toNumber(payload.company_currency_total),
-                                multi_currency_totals: normalizeDistribution(payload.multi_currency_totals),
-                                payments_by_mode: normalizeDistribution(payload.payments_by_mode),
+                                multi_currency_totals: normalizeCurrencyRows(
+                                        payload.multi_currency_totals,
+                                        { includeCount: true, includeExchangeRates: true },
+                                ),
+                                payments_by_mode: normalizePayments(payload.payments_by_mode),
                                 credit_invoices: normalizeCredit(payload.credit_invoices),
                                 sales_summary: {
                                         gross_company_currency_total: toNumber(
@@ -587,14 +737,18 @@ export default {
                                         company_currency_total: toNumber(
                                                 payload.returns?.company_currency_total,
                                         ),
-                                        by_currency: normalizeDistribution(payload.returns?.by_currency),
+                                        by_currency: normalizeCurrencyRows(payload.returns?.by_currency, {
+                                                includeCount: true,
+                                                includeExchangeRates: true,
+                                        }),
                                 },
                                 change_returned: {
                                         company_currency_total: toNumber(
                                                 payload.change_returned?.company_currency_total,
                                         ),
-                                        by_currency: normalizeDistribution(
+                                        by_currency: normalizeCurrencyRows(
                                                 payload.change_returned?.by_currency,
+                                                { includeExchangeRates: true },
                                         ),
                                 },
                                 cash_expected: {
@@ -602,7 +756,10 @@ export default {
                                         company_currency_total: toNumber(
                                                 payload.cash_expected?.company_currency_total,
                                         ),
-                                        by_currency: normalizeDistribution(payload.cash_expected?.by_currency),
+                                        by_currency: normalizeCurrencyRows(
+                                                payload.cash_expected?.by_currency,
+                                                { includeExchangeRates: true },
+                                        ),
                                 },
                         });
 
@@ -651,6 +808,58 @@ export default {
                                 return `${symbol} ${formatted}`;
                         }
                         return `${resolvedCurrency} ${formatted}`.trim();
+                },
+                shouldShowCompanyEquivalent(row, currency) {
+                        const resolvedCurrency = currency || row?.currency || "";
+                        if (!resolvedCurrency) {
+                                return false;
+                        }
+
+                        if (resolvedCurrency !== this.overviewCompanyCurrency) {
+                                return true;
+                        }
+
+                        const companyTotal = Number(row?.company_currency_total);
+                        if (!Number.isFinite(companyTotal)) {
+                                return false;
+                        }
+
+                        const amount = Number(row?.total);
+                        if (Number.isFinite(amount) && Math.abs(amount - companyTotal) < 0.005) {
+                                return false;
+                        }
+
+                        return Math.abs(companyTotal) > 0.0001;
+                },
+                showExchangeRates(row, currency) {
+                        const resolvedCurrency = currency || row?.currency || "";
+                        if (!resolvedCurrency || resolvedCurrency === this.overviewCompanyCurrency) {
+                                return false;
+                        }
+                        return Array.isArray(row?.exchange_rates) && row.exchange_rates.length > 0;
+                },
+                formatExchangeRates(rates, sourceCurrency, targetCurrency) {
+                        if (!sourceCurrency || !targetCurrency) {
+                                return "";
+                        }
+
+                        const validRates = Array.isArray(rates)
+                                ? rates
+                                          .map((rate) => Number(rate))
+                                          .filter((rate) => Number.isFinite(rate) && rate > 0)
+                                : [];
+
+                        if (!validRates.length) {
+                                return "";
+                        }
+
+                        const targetSymbol = this.currencySymbol(targetCurrency) || targetCurrency;
+                        const formattedRates = validRates.map((rate) => {
+                                const formattedRate = this.formatCurrency(rate, 4);
+                                return `1 ${sourceCurrency} = ${targetSymbol} ${formattedRate}`;
+                        });
+
+                        return `${this.__("Exchange Rate")}: ${formattedRates.join(" • ")}`;
                 },
                 calculateDifference(item) {
                         const closing = Number(item?.closing_amount) || 0;
@@ -1093,6 +1302,31 @@ export default {
 
 .overview-table .text-end {
         text-align: right;
+}
+
+.amount-with-base {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+}
+
+.amount-primary {
+        display: flex;
+        align-items: baseline;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: wrap;
+}
+
+.company-equivalent {
+        color: var(--pos-text-secondary);
+        font-size: 0.85rem;
+}
+
+.exchange-note {
+        color: var(--pos-text-secondary);
+        font-size: 0.75rem;
 }
 
 .overview-empty {
