@@ -544,31 +544,40 @@ export async function clearAllCache() {
 	memory.pos_last_sync_totals = { pending: 0, synced: 0, drafted: 0 };
 	memory.uom_cache = {};
 	memory.offers_cache = [];
-	memory.coupons_cache = {};
-	memory.customer_balance_cache = {};
-	memory.local_stock_cache = {};
-	memory.stock_cache_ready = false;
-	memory.customer_storage = [];
-	memory.items_last_sync = null;
-	memory.customers_last_sync = null;
-	memory.pos_opening_storage = null;
-	memory.opening_dialog_storage = null;
-	memory.sales_persons_storage = [];
-	memory.item_details_cache = {};
-	memory.tax_template_cache = {};
-	memory.item_groups_cache = [];
-	memory.cache_version = CACHE_VERSION;
-	memory.tax_inclusive = false;
-	memory.manual_offline = false;
+        memory.coupons_cache = {};
+        memory.customer_balance_cache = {};
+        memory.local_stock_cache = {};
+        memory.stock_cache_ready = false;
+        memory.customer_storage = [];
+        memory.items_last_sync = null;
+        memory.customers_last_sync = null;
+        memory.pos_opening_storage = null;
+        memory.opening_dialog_storage = null;
+        memory.sales_persons_storage = [];
+        memory.item_details_cache = {};
+        memory.tax_template_cache = {};
+        memory.item_groups_cache = [];
+        memory.translation_cache = {};
+        memory.pricing_rules_snapshot = [];
+        memory.pricing_rules_context = null;
+        memory.pricing_rules_last_sync = null;
+        memory.pricing_rules_stale_at = null;
+        memory.print_template = "";
+        memory.terms_and_conditions = "";
+        memory.cache_version = CACHE_VERSION;
+        memory.tax_inclusive = false;
+        memory.manual_offline = false;
+        memory.cache_ready = false;
 
-	await clearPriceListCache();
+        await clearPriceListCache();
 
-	persist("cache_version", CACHE_VERSION);
+        persist("cache_version", CACHE_VERSION);
+        persist("cache_ready", false);
 }
 
 // Faster cache clearing without reopening the database
 export async function forceClearAllCache() {
-	terminatePersistWorker();
+        terminatePersistWorker();
 	if (typeof localStorage !== "undefined") {
 		Object.keys(localStorage).forEach((key) => {
 			if (key.startsWith("posa_")) {
@@ -592,30 +601,39 @@ export async function forceClearAllCache() {
 	memory.customers_last_sync = null;
 	memory.pos_opening_storage = null;
 	memory.opening_dialog_storage = null;
-	memory.sales_persons_storage = [];
-	memory.item_details_cache = {};
-	memory.tax_template_cache = {};
-	memory.item_groups_cache = [];
-	memory.cache_version = CACHE_VERSION;
-	memory.tax_inclusive = false;
-	memory.manual_offline = false;
+        memory.sales_persons_storage = [];
+        memory.item_details_cache = {};
+        memory.tax_template_cache = {};
+        memory.item_groups_cache = [];
+        memory.translation_cache = {};
+        memory.pricing_rules_snapshot = [];
+        memory.pricing_rules_context = null;
+        memory.pricing_rules_last_sync = null;
+        memory.pricing_rules_stale_at = null;
+        memory.print_template = "";
+        memory.terms_and_conditions = "";
+        memory.cache_version = CACHE_VERSION;
+        memory.tax_inclusive = false;
+        memory.manual_offline = false;
+        memory.cache_ready = false;
 
-	if (typeof localStorage !== "undefined") {
-		localStorage.setItem("posa_cache_version", CACHE_VERSION);
-	}
+        if (typeof localStorage !== "undefined") {
+                localStorage.setItem("posa_cache_version", CACHE_VERSION);
+        }
 
-	await clearPriceListCache();
+        await clearPriceListCache();
 
-	// Delete the IndexedDB database in the background
-	try {
-		await Dexie.delete("posawesome_offline");
-		await db.open();
-		initPersistWorker();
-	} catch (e) {
-		console.error("Failed to clear IndexedDB cache", e);
-	}
+        // Delete the IndexedDB database in the background
+        try {
+                await Dexie.delete("posawesome_offline");
+                await db.open();
+                initPersistWorker();
+        } catch (e) {
+                console.error("Failed to clear IndexedDB cache", e);
+        }
 
-	persist("cache_version", CACHE_VERSION);
+        persist("cache_version", CACHE_VERSION);
+        persist("cache_ready", false);
 }
 
 /**
