@@ -590,17 +590,21 @@ def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_acc
             )
         )
 
-    cash_mode_of_payment = None
-    for payment in invoice_doc.payments:
-        if payment.get("type") == "Cash" and payment.get("mode_of_payment"):
-            cash_mode_of_payment = payment.get("mode_of_payment")
-            break
-
-    if not cash_mode_of_payment and pos_profile:
-        cash_mode_of_payment = (
-            frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment")
-            or "Cash"
+    configured_cash_mode_of_payment = None
+    if pos_profile:
+        configured_cash_mode_of_payment = frappe.db.get_value(
+            "POS Profile", pos_profile, "posa_cash_mode_of_payment"
         )
+
+    cash_mode_of_payment = configured_cash_mode_of_payment
+    if not cash_mode_of_payment:
+        for payment in invoice_doc.payments:
+            if payment.get("type") == "Cash" and payment.get("mode_of_payment"):
+                cash_mode_of_payment = payment.get("mode_of_payment")
+                break
+
+    if not cash_mode_of_payment:
+        cash_mode_of_payment = "Cash"
 
     resolved_cash_account = cash_account
     if not resolved_cash_account and cash_mode_of_payment:
@@ -666,7 +670,9 @@ def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_acc
     if credit_change_amount > 0:
         advance_payment_entry = frappe.new_doc("Payment Entry")
         advance_payment_entry.payment_type = "Receive"
-        advance_payment_entry.mode_of_payment = cash_mode_of_payment or "Cash"
+        advance_payment_entry.mode_of_payment = (
+            configured_cash_mode_of_payment or cash_mode_of_payment or "Cash"
+        )
         advance_payment_entry.party_type = "Customer"
         advance_payment_entry.party = invoice_doc.get("customer")
         advance_payment_entry.company = invoice_doc.get("company")
@@ -706,7 +712,9 @@ def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_acc
     if paid_change_amount > 0:
         change_payment_entry = frappe.new_doc("Payment Entry")
         change_payment_entry.payment_type = "Pay"
-        change_payment_entry.mode_of_payment = cash_mode_of_payment or "Cash"
+        change_payment_entry.mode_of_payment = (
+            configured_cash_mode_of_payment or cash_mode_of_payment or "Cash"
+        )
         change_payment_entry.party_type = "Customer"
         change_payment_entry.party = invoice_doc.get("customer")
         change_payment_entry.company = invoice_doc.get("company")
