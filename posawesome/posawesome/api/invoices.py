@@ -628,6 +628,28 @@ def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_acc
     posting_date = invoice_doc.get("posting_date") or nowdate()
     reference_no = invoice_doc.get("posa_pos_opening_shift")
 
+    def _using_only_configured_cash_mode():
+        """Return True if all paid payments use the configured cash mode of payment."""
+
+        if not cash_mode_of_payment:
+            return False
+
+        cash_mode_lower = cstr(cash_mode_of_payment).lower()
+        paid_rows = [row for row in invoice_doc.payments if flt(row.get("amount")) > 0]
+        if not paid_rows:
+            return False
+
+        return all(
+            cstr(row.get("mode_of_payment"))
+            and cstr(row.get("mode_of_payment")).lower() == cash_mode_lower
+            for row in paid_rows
+        )
+
+    # If every payment row uses the configured cash mode, skip overpayment handling
+    # and let the regular cash change flow apply.
+    if _using_only_configured_cash_mode():
+        return
+
     if credit_change_amount > 0:
         advance_payment_entry = frappe.new_doc("Payment Entry")
         advance_payment_entry.payment_type = "Receive"
