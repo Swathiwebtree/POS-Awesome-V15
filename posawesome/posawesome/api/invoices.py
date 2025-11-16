@@ -629,21 +629,29 @@ def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_acc
     reference_no = invoice_doc.get("posa_pos_opening_shift")
 
     def _using_only_configured_cash_mode():
-        """Return True if all paid payments use the configured cash mode of payment."""
+        """Return True when every paid row matches the configured cash mode of payment."""
 
         if not cash_mode_of_payment:
             return False
 
-        cash_mode_lower = cstr(cash_mode_of_payment).lower()
+        cash_mode_lower = cstr(cash_mode_of_payment).strip().lower()
         paid_rows = [row for row in invoice_doc.payments if flt(row.get("amount")) > 0]
         if not paid_rows:
             return False
 
-        return all(
-            cstr(row.get("mode_of_payment"))
-            and cstr(row.get("mode_of_payment")).lower() == cash_mode_lower
-            for row in paid_rows
-        )
+        saw_configured_cash_row = False
+
+        for row in paid_rows:
+            mode_lower = cstr(row.get("mode_of_payment") or "").strip().lower()
+
+            if mode_lower == cash_mode_lower:
+                saw_configured_cash_row = True
+                continue
+
+            # Any different paid mode means we should not skip overpayment handling
+            return False
+
+        return saw_configured_cash_row
 
     # If every payment row uses the configured cash mode, skip overpayment handling
     # and let the regular cash change flow apply.
