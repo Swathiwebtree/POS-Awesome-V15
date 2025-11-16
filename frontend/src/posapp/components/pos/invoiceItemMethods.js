@@ -235,6 +235,16 @@ export default {
 			items: this.items.length,
 			customer: this.customer,
 		});
+		if (data.customer) {
+			console.log("[Invoice] Emitting load_invoice_customer event:", data.customer);
+			// Emit event to Customer component to update customer and vehicle
+			this.eventBus.emit("load_invoice_customer", data.customer);
+		}
+
+		// Also ensure customer is synced to local state:
+		this.customer = data.customer || "";
+
+		console.log("[Invoice] load_invoice completed with customer:", data.customer);
 	},
 
 	// Save and clear the current invoice (draft logic)

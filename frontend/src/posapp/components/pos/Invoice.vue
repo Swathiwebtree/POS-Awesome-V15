@@ -1569,6 +1569,39 @@ export default {
 	},
 
 	mounted() {
+
+		this.eventBus.on("draft_selected", async (draftName) => {
+			console.log("[Invoice] Draft selected:", draftName);
+
+			try {
+				// Fetch the full draft invoice document
+				const response = await frappe.call({
+					method: "frappe.client.get",
+					args: {
+						doctype: "Sales Invoice",
+						name: draftName
+					}
+				});
+
+				if (response.message) {
+					console.log("[Invoice] Draft data received:", response.message);
+
+					// Load the complete draft invoice
+					this.load_invoice(response.message);
+
+					frappe.show_alert({
+						message: this.__("Draft invoice {0} loaded successfully", [draftName]),
+						indicator: "green"
+					});
+				}
+			} catch (error) {
+				console.error("[Invoice] Error loading draft:", error);
+				frappe.show_alert({
+					message: this.__("Error loading draft invoice: ") + (error.message || error),
+					indicator: "red"
+				});
+			}
+		});
 		// ADD THESE NEW EVENT LISTENERS
 		this.eventBus.on("get_current_invoice_from_component", () => {
 			console.log("[Invoice] get_current_invoice_from_component event received");
@@ -1648,7 +1681,18 @@ export default {
 			this.add_item(item);
 		});
 		this.eventBus.on("update_customer", (customer) => {
+			console.log("[Invoice] update_customer event received:", customer);
 			this.customer = customer;
+
+			// Sync to invoice_doc
+			if (this.invoice_doc) {
+				this.invoice_doc.customer = customer;
+			}
+
+			// Trigger any necessary updates
+			this.$nextTick(() => {
+				this.$forceUpdate();
+			});
 		});
 		this.eventBus.on("fetch_customer_details", () => {
 			this.fetch_customer_details();
@@ -1761,6 +1805,7 @@ export default {
 
 	// Cleanup event listeners before component is destroyed
 	beforeUnmount() {
+		this.eventBus.off("draft_selected");
 		this.eventBus.off("update_offers_counters");
 		this.eventBus.off("update_coupons_counters");
 		this.eventBus.off("register_item_groups");
@@ -1997,7 +2042,7 @@ export default {
 	}
 
 	.dynamic-padding .v-col {
-		padding: 1px 2px;
+		padding: 1px 2px; 
 	}
 }
 
