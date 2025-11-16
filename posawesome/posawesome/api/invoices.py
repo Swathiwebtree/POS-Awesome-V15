@@ -629,12 +629,13 @@ def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_acc
     reference_no = invoice_doc.get("posa_pos_opening_shift")
 
     def _using_only_configured_cash_mode():
-        """Return True when every paid row matches the configured cash mode of payment."""
+        """Return True when every paid row matches the configured cash mode and account."""
 
-        if not cash_mode_of_payment:
+        if not cash_mode_of_payment or not cash_account_name:
             return False
 
         cash_mode_lower = cstr(cash_mode_of_payment).strip().lower()
+        cash_account_lower = cstr(cash_account_name).strip().lower()
         paid_rows = [row for row in invoice_doc.payments if flt(row.get("amount")) > 0]
         if not paid_rows:
             return False
@@ -644,12 +645,16 @@ def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_acc
         for row in paid_rows:
             mode_lower = cstr(row.get("mode_of_payment") or "").strip().lower()
 
-            if mode_lower == cash_mode_lower:
-                saw_configured_cash_row = True
-                continue
+            if mode_lower != cash_mode_lower:
+                # Any different paid mode means we should not skip overpayment handling
+                return False
 
-            # Any different paid mode means we should not skip overpayment handling
-            return False
+            row_account_lower = cstr(row.get("account") or "").strip().lower()
+            if row_account_lower != cash_account_lower:
+                # Different account from the configured cash mode should trigger overpayment handling
+                return False
+
+            saw_configured_cash_row = True
 
         return saw_configured_cash_row
 
