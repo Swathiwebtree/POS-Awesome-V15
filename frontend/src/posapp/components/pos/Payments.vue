@@ -1066,7 +1066,8 @@ export default {
                                 const changeDue = -newVal;
 
                                 if (this.shouldAutoApplyCreditChange || lastEditWasCash === false) {
-                                        this.updateCreditChange(changeDue);
+                                        this.paid_change = this.flt(changeDue, this.currency_precision);
+                                        this.credit_change = 0;
                                 } else {
                                         this.paid_change = changeDue;
                                 }
@@ -2195,12 +2196,20 @@ export default {
                                 return false;
                         }
 
+                        const configuredCashMOP = String(
+                                this.pos_profile?.posa_cash_mode_of_payment || "",
+                        ).toLowerCase();
+
                         const type = String(payment.type || "").toLowerCase();
                         if (type === "cash") {
                                 return true;
                         }
 
                         const mode = String(payment.mode_of_payment || "").toLowerCase();
+                        if (configuredCashMOP && mode === configuredCashMOP) {
+                                return true;
+                        }
+
                         return mode.includes("cash");
                 },
                 updateCreditChange(rawValue) {
