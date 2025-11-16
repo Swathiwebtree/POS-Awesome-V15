@@ -1569,7 +1569,6 @@ export default {
 	},
 
 	mounted() {
-
 		this.eventBus.on("draft_selected", async (draftName) => {
 			console.log("[Invoice] Draft selected:", draftName);
 
@@ -1579,8 +1578,8 @@ export default {
 					method: "frappe.client.get",
 					args: {
 						doctype: "Sales Invoice",
-						name: draftName
-					}
+						name: draftName,
+					},
 				});
 
 				if (response.message) {
@@ -1591,14 +1590,14 @@ export default {
 
 					frappe.show_alert({
 						message: this.__("Draft invoice {0} loaded successfully", [draftName]),
-						indicator: "green"
+						indicator: "green",
 					});
 				}
 			} catch (error) {
 				console.error("[Invoice] Error loading draft:", error);
 				frappe.show_alert({
 					message: this.__("Error loading draft invoice: ") + (error.message || error),
-					indicator: "red"
+					indicator: "red",
 				});
 			}
 		});
@@ -2042,7 +2041,7 @@ export default {
 	}
 
 	.dynamic-padding .v-col {
-		padding: 1px 2px; 
+		padding: 1px 2px;
 	}
 }
 
