@@ -1066,7 +1066,8 @@ export default {
                                 const changeDue = -newVal;
 
                                 if (this.shouldAutoApplyCreditChange || lastEditWasCash === false) {
-                                        this.updateCreditChange(changeDue);
+                                        this.paid_change = this.flt(changeDue, this.currency_precision);
+                                        this.credit_change = 0;
                                 } else {
                                         this.paid_change = changeDue;
                                 }

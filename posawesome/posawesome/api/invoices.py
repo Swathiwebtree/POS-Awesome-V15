@@ -679,6 +679,70 @@ def submit_invoice(invoice, data):
         advance_payment_entry.save()
         advance_payment_entry.submit()
 
+    # record cash change paid back to customer even when overpayment was non-cash
+    paid_change_amount = flt(data.get("paid_change"))
+    if paid_change_amount:
+        cash_mode_of_payment = None
+        for payment in invoice_doc.payments:
+            if payment.get("type") == "Cash" and payment.get("mode_of_payment"):
+                cash_mode_of_payment = payment.get("mode_of_payment")
+                break
+
+        if not cash_mode_of_payment and pos_profile:
+            cash_mode_of_payment = (
+                frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment")
+                or "Cash"
+            )
+
+        cash_account = None
+        if cash_mode_of_payment:
+            cash_account = get_bank_cash_account(cash_mode_of_payment, invoice_doc.company)
+        if not cash_account:
+            cash_account = {
+                "account": frappe.get_value("Company", invoice_doc.company, "default_cash_account")
+            }
+
+        posting_date = invoice_doc.get("posting_date") or nowdate()
+        reference_no = invoice_doc.get("posa_pos_opening_shift")
+
+        cash_account_name = (
+            cash_account.get("account") if isinstance(cash_account, (dict, frappe._dict)) else cash_account
+        )
+        if not cash_account_name:
+            frappe.throw(_("Unable to determine cash account for cash change payment entry."))
+
+        party_account = invoice_doc.get("debit_to")
+        if not party_account and invoice_doc.get("customer"):
+            party_account = get_party_account("Customer", invoice_doc.get("customer"), invoice_doc.get("company"))
+        if not party_account:
+            frappe.throw(_("Unable to determine customer receivable account for cash change payment entry."))
+
+        change_payment_entry = frappe.new_doc("Payment Entry")
+        change_payment_entry.payment_type = "Pay"
+        change_payment_entry.mode_of_payment = cash_mode_of_payment or "Cash"
+        change_payment_entry.party_type = "Customer"
+        change_payment_entry.party = invoice_doc.get("customer")
+        change_payment_entry.company = invoice_doc.get("company")
+        change_payment_entry.posting_date = posting_date
+        change_payment_entry.paid_from = cash_account_name
+        change_payment_entry.paid_to = party_account
+        change_payment_entry.paid_amount = paid_change_amount
+        change_payment_entry.received_amount = paid_change_amount
+        change_payment_entry.difference_amount = 0
+
+        if reference_no:
+            change_payment_entry.reference_no = reference_no
+            change_payment_entry.reference_date = posting_date
+
+        change_payment_entry.setup_party_account_field()
+        change_payment_entry.set_missing_values()
+        change_payment_entry.set_amounts()
+
+        change_payment_entry.flags.ignore_permissions = True
+        frappe.flags.ignore_account_permission = True
+        change_payment_entry.save()
+        change_payment_entry.submit()
+
     # calculating cash
     total_cash = 0
     if data.get("redeemed_customer_credit"):
