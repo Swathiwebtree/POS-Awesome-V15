@@ -664,6 +664,15 @@ def submit_invoice(invoice, data):
         advance_payment_entry.reference_no = reference_no
         advance_payment_entry.reference_date = posting_date
 
+        advance_payment_entry.append(
+            "references",
+            {
+                "reference_doctype": invoice_doc.doctype,
+                "reference_name": invoice_doc.name,
+                "allocated_amount": amount,
+            },
+        )
+
         advance_payment_entry.setup_party_account_field()
         advance_payment_entry.set_missing_values()
         advance_payment_entry.set_amounts()
@@ -733,6 +742,15 @@ def submit_invoice(invoice, data):
         if reference_no:
             change_payment_entry.reference_no = reference_no
             change_payment_entry.reference_date = posting_date
+
+        change_payment_entry.append(
+            "references",
+            {
+                "reference_doctype": invoice_doc.doctype,
+                "reference_name": invoice_doc.name,
+                "allocated_amount": paid_change_amount,
+            },
+        )
 
         change_payment_entry.setup_party_account_field()
         change_payment_entry.set_missing_values()
