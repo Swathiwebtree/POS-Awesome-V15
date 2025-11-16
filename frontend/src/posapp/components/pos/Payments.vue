@@ -2196,12 +2196,20 @@ export default {
                                 return false;
                         }
 
+                        const configuredCashMOP = String(
+                                this.pos_profile?.posa_cash_mode_of_payment || "",
+                        ).toLowerCase();
+
                         const type = String(payment.type || "").toLowerCase();
                         if (type === "cash") {
                                 return true;
                         }
 
                         const mode = String(payment.mode_of_payment || "").toLowerCase();
+                        if (configuredCashMOP && mode === configuredCashMOP) {
+                                return true;
+                        }
+
                         return mode.includes("cash");
                 },
                 updateCreditChange(rawValue) {
