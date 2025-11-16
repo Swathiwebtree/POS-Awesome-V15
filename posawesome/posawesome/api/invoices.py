@@ -575,6 +575,11 @@ def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_acc
     credit_change_amount = flt(data.get("credit_change"))
     paid_change_amount = flt(data.get("paid_change"))
 
+    def _invert_sign(amount):
+        """Flip the sign of the provided amount (positive->negative and vice-versa)."""
+
+        return -1 * flt(amount)
+
     if credit_change_amount <= 0 and paid_change_amount <= 0:
         return
 
@@ -644,7 +649,7 @@ def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_acc
             {
                 "reference_doctype": invoice_doc.doctype,
                 "reference_name": invoice_doc.name,
-                "allocated_amount": credit_change_amount,
+                "allocated_amount": _invert_sign(credit_change_amount),
             },
         )
 
@@ -686,7 +691,7 @@ def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_acc
             {
                 "reference_doctype": invoice_doc.doctype,
                 "reference_name": invoice_doc.name,
-                "allocated_amount": paid_change_amount,
+                "allocated_amount": _invert_sign(paid_change_amount),
             },
         )
 
