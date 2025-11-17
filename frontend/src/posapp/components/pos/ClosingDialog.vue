@@ -457,7 +457,9 @@ v-for="row in overpaymentChangeReturnedByCurrency"
                                                                                                                 {{ __("No overpayment change recorded for this shift.") }}
                                                                                                         </div>
                                                                                                 </div>
-                        <div class="table-section">
+                                                                                                </div>
+                                                                                                <!-- End: Change Returned -->
+                                                                                        <div class="table-section">
                                                                                                 <div class="table-header mb-2">
                                                                                                         <h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
                                                                                                                 {{ __("Cash Drawer Snapshot") }}
