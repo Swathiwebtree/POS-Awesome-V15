@@ -506,6 +506,8 @@ def get_closing_shift_overview(pos_opening_shift):
     returns_totals_by_currency = {}
     change_company_currency_total = 0
     change_totals_by_currency = {}
+    overpayment_change_company_currency_total = 0
+    overpayment_change_totals_by_currency = {}
 
     cash_mode_of_payment = frappe.db.get_value(
         "POS Profile", pos_profile, "posa_cash_mode_of_payment"
@@ -807,6 +809,35 @@ def get_closing_shift_overview(pos_opening_shift):
             entry_rate,
         )
 
+        if entry.get("payment_type") == "Pay":
+            change_row = overpayment_change_totals_by_currency.setdefault(
+                payment_currency,
+                {
+                    "currency": payment_currency,
+                    "total": 0,
+                    "company_currency_total": 0,
+                    "exchange_rates": set(),
+                },
+            )
+            refund_amount = abs(amount)
+            refund_base_amount = abs(base_amount)
+            change_row["total"] += refund_amount
+            change_row["company_currency_total"] += refund_base_amount
+            overpayment_change_company_currency_total += refund_base_amount
+
+            if payment_currency != company_currency:
+                rate = None
+                if refund_amount:
+                    rate = (
+                        abs(refund_base_amount) / abs(refund_amount)
+                        if refund_base_amount
+                        else None
+                    )
+                if not rate and entry_rate:
+                    rate = flt(entry_rate)
+                if rate:
+                    change_row["exchange_rates"].add(rate)
+
         references = references_by_entry.get(entry.get("name")) or []
         allocated_amount_sum = 0
         allocated_base_sum = 0
@@ -979,8 +1010,23 @@ def get_closing_shift_overview(pos_opening_shift):
             "by_currency": prepare_currency_rows(returns_totals_by_currency, include_count=True),
         },
         "change_returned": {
-            "company_currency_total": flt(change_company_currency_total),
+            "company_currency_total": flt(
+                change_company_currency_total
+                + overpayment_change_company_currency_total
+            ),
             "by_currency": prepare_currency_rows(change_totals_by_currency),
+            "invoice_change": {
+                "company_currency_total": flt(change_company_currency_total),
+                "by_currency": prepare_currency_rows(change_totals_by_currency),
+            },
+            "overpayment_change": {
+                "company_currency_total": flt(
+                    overpayment_change_company_currency_total
+                ),
+                "by_currency": prepare_currency_rows(
+                    overpayment_change_totals_by_currency
+                ),
+            },
         },
         "cash_expected": {
             "mode_of_payment": cash_mode_of_payment,

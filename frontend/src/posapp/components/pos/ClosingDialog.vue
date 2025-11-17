@@ -286,54 +286,178 @@
                                                                                                                 {{ __("Track how much cash was handed back to customers") }}
                                                                                                         </p>
                                                                                                 </div>
-                                                                                                <div v-if="changeReturnedByCurrency.length" class="overview-table-wrapper">
-                                                                                                        <table class="overview-table">
-                                                                                                                <thead>
-                                                                                                                        <tr>
-                                                                                                                                <th>{{ __("Currency") }}</th>
-                                                                                                                                <th class="text-end">
-                                                                                                                                        {{ __("Total Change") }}
-                                                                                                                                </th>
-                                                                                                                        </tr>
-                                                                                                                </thead>
-                                                                                                                <tbody>
-                                                                                                                        <tr
-                                                                                                                                v-for="row in changeReturnedByCurrency"
-                                                                                                                                :key="`change-${row.currency}`"
-                                                                                                                        >
-                                                                                                                                <td>{{ row.currency }}</td>
-                                                                                                                                <td class="text-end">
-                                                                                                                                        <div class="amount-with-base">
-                                                                                                                                                <div class="amount-primary">
-                                                                                                                                                        <span class="overview-amount">
-                                                                                                                                                                {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
-                                                                                                                                                        </span>
-                                                                                                                                                        <span
-                                                                                                                                                                v-if="shouldShowCompanyEquivalent(row, row.currency)"
-                                                                                                                                                                class="company-equivalent"
-                                                                                                                                                        >
-                                                                                                                                                                ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
-                                                                                                                                                        </span>
-                                                                                                                                                </div>
-                                                                                                                                                <div
-                                                                                                                                                        v-if="showExchangeRates(row, row.currency)"
-                                                                                                                                                        class="exchange-note"
-                                                                                                                                                >
-                                                                                                                                                        {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
-                                                                                                                                                </div>
-                                                                                                                                        </div>
-                                                                                                                                </td>
-                                                                                                                        </tr>
-                                                                                                                </tbody>
-                                                                                                        </table>
+                                                                                                <div class="table-subsection">
+                                                                                                        <div class="table-header table-header--compact mb-2">
+                                                                                                                <h6 class="text-subtitle-2 text-grey-darken-1 mb-1">
+                                                                                                                        {{ __("Invoice Change") }}
+                                                                                                                </h6>
+                                                                                                                <p class="text-body-2 text-grey">
+                                                                                                                        {{ __("Change recorded on POS invoices") }}
+                                                                                                                </p>
+                                                                                                        </div>
+                                                                                                        <div
+                                                                                                                v-if="invoiceChangeReturnedByCurrency.length"
+                                                                                                                class="overview-table-wrapper"
+                                                                                                        >
+                                                                                                                <table class="overview-table">
+                                                                                                                        <thead>
+                                                                                                                                <tr>
+
+<th>{{ __("Currency") }}</th>
+
+<th class="text-end">
+
+        {{ __("Total Change") }}
+
+</th>
+                                                                                                                                </tr>
+                                                                                                                        </thead>
+                                                                                                                        <tbody>
+                                                                                                                                <tr
+
+v-for="row in invoiceChangeReturnedByCurrency"
+
+:key="`invoice-change-${row.currency}`"
+                                                                                                                                >
+
+<td>{{ row.currency }}</td>
+
+<td class="text-end">
+
+        <div class="amount-with-base">
+
+                <div class="amount-primary">
+
+                        <span class="overview-amount">
+
+                                {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
+
+                        </span>
+
+                        <span
+
+                                v-if="shouldShowCompanyEquivalent(row, row.currency)"
+
+                                class="company-equivalent"
+
+                        >
+
+                                ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
+
+                        </span>
+
+                </div>
+
+                <div
+
+                        v-if="showExchangeRates(row, row.currency)"
+
+                        class="exchange-note"
+
+                >
+
+                        {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
+
+                </div>
+
+        </div>
+
+</td>
+                                                                                                                                </tr>
+                                                                                                                        </tbody>
+                                                                                                                </table>
+                                                                                                        </div>
+                                                                                                        <div v-else class="overview-empty text-body-2">
+                                                                                                                {{ __("No invoice change recorded for this shift.") }}
+                                                                                                        </div>
                                                                                                 </div>
-                                                                                                <div v-else class="overview-empty text-body-2">
-                                                                                                        {{ __("No change recorded for this shift.") }}
+
+                                                                                                <div class="table-subsection mt-4">
+                                                                                                        <div class="table-header table-header--compact mb-2">
+                                                                                                                <h6 class="text-subtitle-2 text-grey-darken-1 mb-1">
+                                                                                                                        {{ __("Overpayment Change Return") }}
+                                                                                                                </h6>
+                                                                                                                <p class="text-body-2 text-grey">
+                                                                                                                        {{ __("Refund payouts captured via Payment Entries") }}
+                                                                                                                </p>
+                                                                                                        </div>
+                                                                                                        <div
+                                                                                                                v-if="overpaymentChangeReturnedByCurrency.length"
+                                                                                                                class="overview-table-wrapper"
+                                                                                                        >
+                                                                                                                <table class="overview-table">
+                                                                                                                        <thead>
+                                                                                                                                <tr>
+
+<th>{{ __("Currency") }}</th>
+
+<th class="text-end">
+
+        {{ __("Total Change") }}
+
+</th>
+                                                                                                                                </tr>
+                                                                                                                        </thead>
+                                                                                                                        <tbody>
+                                                                                                                                <tr
+
+v-for="row in overpaymentChangeReturnedByCurrency"
+
+:key="`overpayment-change-${row.currency}`"
+                                                                                                                                >
+
+<td>{{ row.currency }}</td>
+
+<td class="text-end">
+
+        <div class="amount-with-base">
+
+                <div class="amount-primary">
+
+                        <span class="overview-amount">
+
+                                {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
+
+                        </span>
+
+                        <span
+
+                                v-if="shouldShowCompanyEquivalent(row, row.currency)"
+
+                                class="company-equivalent"
+
+                        >
+
+                                ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
+
+                        </span>
+
+                </div>
+
+                <div
+
+                        v-if="showExchangeRates(row, row.currency)"
+
+                        class="exchange-note"
+
+                >
+
+                        {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
+
+                </div>
+
+        </div>
+
+</td>
+                                                                                                                                </tr>
+                                                                                                                        </tbody>
+                                                                                                                </table>
+                                                                                                        </div>
+                                                                                                        <div v-else class="overview-empty text-body-2">
+                                                                                                                {{ __("No overpayment change recorded for this shift.") }}
+                                                                                                        </div>
                                                                                                 </div>
-                                                                                        </div>
-                                                                                </v-col>
-                                                                                <v-col cols="12" md="6">
-                                                                                        <div class="table-section">
+                        <div class="table-section">
                                                                                                 <div class="table-header mb-2">
                                                                                                         <h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
                                                                                                                 {{ __("Cash Drawer Snapshot") }}
@@ -715,6 +839,44 @@ export default {
                                 }),
                         });
 
+                        const normalizeChangeReturned = (change = {}) => {
+                                const normalizeBranch = (branch = {}) => ({
+                                        company_currency_total: toNumber(branch?.company_currency_total),
+                                        by_currency: normalizeCurrencyRows(branch?.by_currency, {
+                                                includeExchangeRates: true,
+                                        }),
+                                });
+
+                                const invoiceChange = normalizeBranch(
+                                        change?.invoice_change || change || {},
+                                );
+                                const overpaymentChange = normalizeBranch(
+                                        change?.overpayment_change || {},
+                                );
+
+                                const primaryByCurrency = normalizeCurrencyRows(
+                                        change?.by_currency,
+                                        { includeExchangeRates: true },
+                                );
+
+                                const totalCompanyCurrency = toNumber(
+                                        change?.company_currency_total,
+                                );
+
+                                return {
+                                        company_currency_total:
+                                                totalCompanyCurrency ||
+                                                invoiceChange.company_currency_total +
+                                                        overpaymentChange.company_currency_total,
+                                        by_currency:
+                                                primaryByCurrency.length
+                                                        ? primaryByCurrency
+                                                        : invoiceChange.by_currency,
+                                        invoice_change: invoiceChange,
+                                        overpayment_change: overpaymentChange,
+                                };
+                        };
+
                         const normalize = (payload = {}) => ({
                                 total_invoices: toNumber(payload.total_invoices),
                                 company_currency:
@@ -751,15 +913,9 @@ export default {
                                                 includeExchangeRates: true,
                                         }),
                                 },
-                                change_returned: {
-                                        company_currency_total: toNumber(
-                                                payload.change_returned?.company_currency_total,
-                                        ),
-                                        by_currency: normalizeCurrencyRows(
-                                                payload.change_returned?.by_currency,
-                                                { includeExchangeRates: true },
-                                        ),
-                                },
+                                change_returned: normalizeChangeReturned(
+                                        payload.change_returned,
+                                ),
                                 cash_expected: {
                                         mode_of_payment: payload.cash_expected?.mode_of_payment || "",
                                         company_currency_total: toNumber(
@@ -931,11 +1087,40 @@ export default {
                         return Array.isArray(this.returnsSummary.by_currency) ? this.returnsSummary.by_currency : [];
                 },
                 changeReturnedSummary() {
-                        return this.overview?.change_returned || { company_currency_total: 0, by_currency: [] };
+                        return (
+                                this.overview?.change_returned || {
+                                        company_currency_total: 0,
+                                        by_currency: [],
+                                        invoice_change: { company_currency_total: 0, by_currency: [] },
+                                        overpayment_change: { company_currency_total: 0, by_currency: [] },
+                                }
+                        );
+                },
+                invoiceChangeReturnedSummary() {
+                        return this.changeReturnedSummary?.invoice_change || {
+                                company_currency_total: 0,
+                                by_currency: [],
+                        };
                 },
                 changeReturnedByCurrency() {
                         return Array.isArray(this.changeReturnedSummary.by_currency)
                                 ? this.changeReturnedSummary.by_currency
+                                : [];
+                },
+                invoiceChangeReturnedByCurrency() {
+                        return Array.isArray(this.invoiceChangeReturnedSummary.by_currency)
+                                ? this.invoiceChangeReturnedSummary.by_currency
+                                : [];
+                },
+                overpaymentChangeReturnedSummary() {
+                        return this.changeReturnedSummary?.overpayment_change || {
+                                company_currency_total: 0,
+                                by_currency: [],
+                        };
+                },
+                overpaymentChangeReturnedByCurrency() {
+                        return Array.isArray(this.overpaymentChangeReturnedSummary.by_currency)
+                                ? this.overpaymentChangeReturnedSummary.by_currency
                                 : [];
                 },
                 cashExpectedSummary() {
