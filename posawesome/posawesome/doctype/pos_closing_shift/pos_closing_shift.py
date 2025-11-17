@@ -294,6 +294,7 @@ class POSClosingShift(Document):
                 continue
 
             payment_doc = frappe.get_cached_doc("Payment Entry", payment_entry)
+            multiplier = -1 if payment_doc.get("payment_type") == "Pay" else 1
             currency = (
                 payment_doc.get("paid_from_account_currency")
                 or payment_doc.get("paid_to_account_currency")
@@ -301,8 +302,8 @@ class POSClosingShift(Document):
                 or payment_doc.get("currency")
                 or company_currency
             )
-            base_amount = flt(payment_doc.get("base_paid_amount") or 0)
-            paid_amount = flt(payment_doc.get("paid_amount") or 0)
+            base_amount = multiplier * flt(payment_doc.get("base_paid_amount") or 0)
+            paid_amount = multiplier * flt(payment_doc.get("paid_amount") or 0)
             mode_of_payment = row.get("mode_of_payment") or payment_doc.get("mode_of_payment")
 
             update_payment_breakdown(mode_of_payment, base_amount, currency, paid_amount)
@@ -426,7 +427,7 @@ def get_payments_entries(pos_opening_shift):
         filters={
             "docstatus": 1,
             "reference_no": pos_opening_shift,
-            "payment_type": "Receive",
+            "payment_type": ["in", ["Receive", "Pay"]],
         },
         fields=[
             "name",
@@ -439,6 +440,7 @@ def get_payments_entries(pos_opening_shift):
             "reference_no",
             "posting_date",
             "party",
+            "payment_type",
         ],
     )
 
@@ -1118,15 +1120,19 @@ def make_closing_shift_from_opening(opening_shift):
             )
         )
         existing_pay = [pay for pay in payments if pay.mode_of_payment == py.mode_of_payment]
+        multiplier = -1 if py.payment_type == "Pay" else 1
         if existing_pay:
-            existing_pay[0].expected_amount += get_base_value(py, "paid_amount", "base_paid_amount")
+            existing_pay[0].expected_amount += multiplier * get_base_value(
+                py, "paid_amount", "base_paid_amount"
+            )
         else:
             payments.append(
                 frappe._dict(
                     {
                         "mode_of_payment": py.mode_of_payment,
                         "opening_amount": 0,
-                        "expected_amount": get_base_value(py, "paid_amount", "base_paid_amount"),
+                        "expected_amount": multiplier
+                        * get_base_value(py, "paid_amount", "base_paid_amount"),
                     }
                 )
             )
