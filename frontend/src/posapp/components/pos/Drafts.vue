@@ -231,20 +231,35 @@ export default {
 	},
 	methods: {
 		// Submit selection for inline view
-		submit_selection() {
-			if (this.selected.length > 0) {
-				const draftName = this.selected[0].name;
-				console.log("[Drafts] Loading draft:", draftName);
-				this.eventBus.emit("draft_selected", draftName);
-				this.selected = [];
-			} else {
-				this.eventBus.emit("show_message", {
-					title: __("Select an invoice to load"),
-					color: "error",
-				});
-			}
-		},
+        submit_selection() {
+            if (this.selected.length > 0) {
+                const draftName = this.selected[0].name;
+                console.log("[Drafts] Loading draft:", draftName);
 
+                // ========== ENSURE DRAFT HAS PAYMENTS ==========
+                const selectedDraft = this.selected[0];
+                if (!selectedDraft.payments || selectedDraft.payments.length === 0) {
+                    console.log("[Drafts] Draft has no payments, adding default");
+                    selectedDraft.payments = [{
+                        mode_of_payment: "Cash",
+                        account: "",
+                        amount: 0,
+                        base_amount: 0,
+                        type: "Cash",
+                        idx: 1,
+                        default: 1
+                    }];
+                }
+
+                this.eventBus.emit("draft_selected", draftName);
+                this.selected = [];
+            } else {
+                this.eventBus.emit("show_message", {
+                    title: __("Select an invoice to load"),
+                    color: "error",
+                });
+            }
+        },
 		// Close and submit for dialog view
 		close_dialog() {
 			this.draftsDialog = false;
@@ -252,19 +267,35 @@ export default {
 			this.eventBus.emit("close_drafts");
 		},
 
-		submit_dialog() {
-			if (this.selected.length > 0) {
-				const draftName = this.selected[0].name;
-				console.log("[Drafts] Loading draft from dialog:", draftName);
-				this.eventBus.emit("draft_selected", draftName);
-				this.close_dialog();
-			} else {
-				this.eventBus.emit("show_message", {
-					title: `Select an invoice to load`,
-					color: "error",
-				});
-			}
-		},
+        submit_dialog() {
+            if (this.selected.length > 0) {
+                const draftName = this.selected[0].name;
+                console.log("[Drafts] Loading draft from dialog:", draftName);
+
+                // ========== ENSURE DRAFT HAS PAYMENTS ==========
+                const selectedDraft = this.selected[0];
+                if (!selectedDraft.payments || selectedDraft.payments.length === 0) {
+                    console.log("[Drafts] Draft has no payments, adding default");
+                    selectedDraft.payments = [{
+                        mode_of_payment: "Cash",
+                        account: "",
+                        amount: 0,
+                        base_amount: 0,
+                        type: "Cash",
+                        idx: 1,
+                        default: 1
+                    }];
+                }
+
+                this.eventBus.emit("draft_selected", draftName);
+                this.close_dialog();
+            } else {
+                this.eventBus.emit("show_message", {
+                    title: `Select an invoice to load`,
+                    color: "error",
+                });
+            }
+        },
 	},
 	created: function () {
 		this.eventBus.on("open_drafts", (data) => {

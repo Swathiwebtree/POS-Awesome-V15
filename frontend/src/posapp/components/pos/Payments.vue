@@ -1135,11 +1135,24 @@ export default {
 			if (this.invoice_doc.is_return) {
 				this.ensureReturnPaymentsAreNegative();
 			}
-			// Validate total payments only if not credit sale and invoice total is not zero
+
+			// ========== FIXED: Better payment validation ==========
+			// Check if at least one payment has an amount entered
+			let hasPaymentAmount = false;
+			if (this.invoice_doc && this.invoice_doc.payments && this.invoice_doc.payments.length > 0) {
+				for (let payment of this.invoice_doc.payments) {
+					if (parseFloat(payment.amount) > 0) {
+						hasPaymentAmount = true;
+						break;
+					}
+				}
+			}
+
+			// If not credit sale and invoice total > 0, need payment
 			if (
 				!this.is_credit_sale &&
 				!this.invoice_doc.is_return &&
-				this.total_payments <= 0 &&
+				!hasPaymentAmount &&
 				(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
 			) {
 				this.eventBus.emit("show_message", {
@@ -1149,6 +1162,8 @@ export default {
 				frappe.utils.play_sound("error");
 				return;
 			}
+			// ========== END FIX ==========
+
 			// Validate cash payments when credit sale is off
 			if (!this.is_credit_sale && !this.invoice_doc.is_return) {
 				let has_cash_payment = false;
@@ -1239,7 +1254,7 @@ export default {
 			if (
 				!this.invoice_doc.is_return &&
 				this.redeemed_customer_credit >
-					(this.invoice_doc.rounded_total || this.invoice_doc.grand_total)
+				(this.invoice_doc.rounded_total || this.invoice_doc.grand_total)
 			) {
 				this.eventBus.emit("show_message", {
 					title: `Cannot redeem customer credit more than invoice total`,
@@ -1306,6 +1321,8 @@ export default {
 					row.credit_to_redeem = this.flt(row.credit_to_redeem);
 				});
 			}
+
+			// ===== IMPORTANT: Include due_date in the data object =====
 			let data = {
 				total_change: !this.invoice_doc.is_return ? -this.diff_payment : 0,
 				paid_change: !this.invoice_doc.is_return ? this.paid_change : 0,
@@ -1313,7 +1330,10 @@ export default {
 				redeemed_customer_credit: this.redeemed_customer_credit,
 				customer_credit_dict: this.customer_credit_dict,
 				is_cashback: this.is_cashback,
+				due_date: this.invoice_doc.due_date, // ADD THIS LINE
 			};
+			// ========================================================
+
 			const vm = this;
 
 			if (isOffline()) {
@@ -1341,6 +1361,7 @@ export default {
 					return;
 				}
 			}
+
 			frappe.call({
 				method:
 					this.invoiceType === "Order" && this.pos_profile.posa_create_only_sales_order
@@ -1959,6 +1980,25 @@ export default {
 
 		this.eventBus.on("current_invoice_data", (invoiceData) => {
 			console.log("[Payment] Received invoice data:", invoiceData);
+			// Ensure payments array exists
+			if (!invoiceData.payments) {
+				invoiceData.payments = [];
+			}
+
+			// If empty, add default Cash payment
+			if (invoiceData.payments.length === 0) {
+				console.log("[Payment] Adding default Cash payment");
+				invoiceData.payments = [{
+					name: "",
+					mode_of_payment: "Cash",
+					account: "",
+					amount: 0,
+					base_amount: 0,
+					type: "Cash",
+					idx: 1,
+					default: 1
+				}];
+			}
 			this.invoice_doc = invoiceData;
 			this.grand_total = invoiceData.grand_total || 0;
 			this.rounded_total = invoiceData.rounded_total || invoiceData.grand_total || 0;
@@ -1977,7 +2017,33 @@ export default {
 		this.$nextTick(() => {
 			// Listen to various event bus events for POS actions
 			this.eventBus.on("send_invoice_doc_payment", (invoice_doc) => {
+				console.log("[Payment] send_invoice_doc_payment received, initializing...");
 				this.invoice_doc = invoice_doc;
+
+				// Ensure payments array exists
+				if (!this.invoice_doc.payments) {
+					this.invoice_doc.payments = [];
+					console.log("[Payment] Created new payments array");
+				}
+
+				// If payments array is empty, add default Cash payment
+				if (this.invoice_doc.payments.length === 0) {
+					console.log("[Payment] Payments empty, adding default Cash payment");
+					this.invoice_doc.payments = [{
+						name: "",
+						mode_of_payment: "Cash",
+						account: "",
+						amount: 0,
+						base_amount: 0,
+						type: "Cash",
+						idx: 1,
+						default: 1
+					}];
+				}
+
+				console.log("[Payment] Payments initialized:", this.invoice_doc.payments);
+				// ========== END FIX ==========
+
 				const default_payment = this.invoice_doc.payments.find((payment) => payment.default === 1);
 				this.is_credit_sale = false;
 				this.is_write_off_change = false;
@@ -2012,6 +2078,7 @@ export default {
 					this.get_addresses();
 				}
 				this.get_sales_person_names();
+				console.log("[Payment] Initialization complete");
 			});
 			this.eventBus.on("register_pos_profile", (data) => {
 				this.pos_profile = data.pos_profile;
