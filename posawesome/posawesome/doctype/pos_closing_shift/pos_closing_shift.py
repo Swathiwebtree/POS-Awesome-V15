@@ -302,8 +302,8 @@ class POSClosingShift(Document):
                 or payment_doc.get("currency")
                 or company_currency
             )
-            base_amount = multiplier * flt(payment_doc.get("base_paid_amount") or 0)
-            paid_amount = multiplier * flt(payment_doc.get("paid_amount") or 0)
+            base_amount = multiplier * abs(flt(payment_doc.get("base_paid_amount") or 0))
+            paid_amount = multiplier * abs(flt(payment_doc.get("paid_amount") or 0))
             mode_of_payment = row.get("mode_of_payment") or payment_doc.get("mode_of_payment")
 
             update_payment_breakdown(mode_of_payment, base_amount, currency, paid_amount)
@@ -1121,18 +1121,16 @@ def make_closing_shift_from_opening(opening_shift):
         )
         existing_pay = [pay for pay in payments if pay.mode_of_payment == py.mode_of_payment]
         multiplier = -1 if py.payment_type == "Pay" else 1
+        signed_amount = multiplier * abs(get_base_value(py, "paid_amount", "base_paid_amount"))
         if existing_pay:
-            existing_pay[0].expected_amount += multiplier * get_base_value(
-                py, "paid_amount", "base_paid_amount"
-            )
+            existing_pay[0].expected_amount += signed_amount
         else:
             payments.append(
                 frappe._dict(
                     {
                         "mode_of_payment": py.mode_of_payment,
                         "opening_amount": 0,
-                        "expected_amount": multiplier
-                        * get_base_value(py, "paid_amount", "base_paid_amount"),
+                        "expected_amount": signed_amount,
                     }
                 )
             )

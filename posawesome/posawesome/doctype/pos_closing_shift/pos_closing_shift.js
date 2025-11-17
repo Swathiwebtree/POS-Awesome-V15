@@ -165,7 +165,7 @@ async function add_to_payments(d, frm, conversion_rate) {
 function add_pos_payment_to_payments(p, frm) {
         const payment = frm.doc.payment_reconciliation.find((pay) => pay.mode_of_payment === p.mode_of_payment);
         if (payment) {
-                let amount = get_base_value(p, "paid_amount", "base_paid_amount");
+                let amount = Math.abs(get_base_value(p, "paid_amount", "base_paid_amount"));
                 const multiplier = p.payment_type === "Pay" ? -1 : 1;
                 payment.expected_amount += flt(multiplier * amount);
         } else {
@@ -173,7 +173,7 @@ function add_pos_payment_to_payments(p, frm) {
                         mode_of_payment: p.mode_of_payment,
                         opening_amount: 0,
                         expected_amount:
-                                get_base_value(p, "paid_amount", "base_paid_amount") *
+                                Math.abs(get_base_value(p, "paid_amount", "base_paid_amount")) *
                                 (p.payment_type === "Pay" ? -1 : 1),
                 });
         }
