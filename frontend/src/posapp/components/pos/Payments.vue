@@ -1254,7 +1254,7 @@ export default {
 			if (
 				!this.invoice_doc.is_return &&
 				this.redeemed_customer_credit >
-				(this.invoice_doc.rounded_total || this.invoice_doc.grand_total)
+					(this.invoice_doc.rounded_total || this.invoice_doc.grand_total)
 			) {
 				this.eventBus.emit("show_message", {
 					title: `Cannot redeem customer credit more than invoice total`,
@@ -1988,16 +1988,18 @@ export default {
 			// If empty, add default Cash payment
 			if (invoiceData.payments.length === 0) {
 				console.log("[Payment] Adding default Cash payment");
-				invoiceData.payments = [{
-					name: "",
-					mode_of_payment: "Cash",
-					account: "",
-					amount: 0,
-					base_amount: 0,
-					type: "Cash",
-					idx: 1,
-					default: 1
-				}];
+				invoiceData.payments = [
+					{
+						name: "",
+						mode_of_payment: "Cash",
+						account: "",
+						amount: 0,
+						base_amount: 0,
+						type: "Cash",
+						idx: 1,
+						default: 1,
+					},
+				];
 			}
 			this.invoice_doc = invoiceData;
 			this.grand_total = invoiceData.grand_total || 0;
@@ -2029,16 +2031,18 @@ export default {
 				// If payments array is empty, add default Cash payment
 				if (this.invoice_doc.payments.length === 0) {
 					console.log("[Payment] Payments empty, adding default Cash payment");
-					this.invoice_doc.payments = [{
-						name: "",
-						mode_of_payment: "Cash",
-						account: "",
-						amount: 0,
-						base_amount: 0,
-						type: "Cash",
-						idx: 1,
-						default: 1
-					}];
+					this.invoice_doc.payments = [
+						{
+							name: "",
+							mode_of_payment: "Cash",
+							account: "",
+							amount: 0,
+							base_amount: 0,
+							type: "Cash",
+							idx: 1,
+							default: 1,
+						},
+					];
 				}
 
 				console.log("[Payment] Payments initialized:", this.invoice_doc.payments);

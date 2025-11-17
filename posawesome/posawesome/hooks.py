@@ -1,10 +1,6 @@
 doc_events = {
-     "Sales Invoice": {
-        "validate": "posawesome.posawesome.api.hooks_sales_invoice.validate_sales_invoice"
-    },
-    "POS Invoice": {
-        "validate": "posawesome.posawesome.api.hooks_sales_invoice.validate_sales_invoice"
-    },
+    "Sales Invoice": {"validate": "posawesome.posawesome.api.hooks_sales_invoice.validate_sales_invoice"},
+    "POS Invoice": {"validate": "posawesome.posawesome.api.hooks_sales_invoice.validate_sales_invoice"},
     "Customer": {
         "validate": "posawesome.posawesome.api.customers.set_customer_info",
     },

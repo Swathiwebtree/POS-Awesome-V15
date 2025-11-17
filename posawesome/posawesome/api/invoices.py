@@ -427,19 +427,21 @@ def update_invoice(data):
 def submit_invoice(invoice, data):
     data = json.loads(data)
     invoice = json.loads(invoice)
-    
+
     # Fix: Ensure payments array is never empty
     if not invoice.get("payments") or len(invoice.get("payments", [])) == 0:
         default_cash_account = frappe.get_value("Company", invoice.get("company"), "default_cash_account")
         if default_cash_account:
-            invoice["payments"] = [{
-                "mode_of_payment": "Cash",
-                "account": default_cash_account,
-                "amount": 0,
-                "base_amount": 0,
-                "type": "Cash"
-            }]
-    
+            invoice["payments"] = [
+                {
+                    "mode_of_payment": "Cash",
+                    "account": default_cash_account,
+                    "amount": 0,
+                    "base_amount": 0,
+                    "type": "Cash",
+                }
+            ]
+
     pos_profile = invoice.get("pos_profile")
     doctype = "Sales Invoice"
     if pos_profile and frappe.db.get_value(
@@ -459,7 +461,7 @@ def submit_invoice(invoice, data):
     _apply_item_name_overrides(invoice_doc)
     if invoice.get("posa_delivery_date"):
         invoice_doc.update_stock = 0
-    
+
     mop_cash_list = [
         i.mode_of_payment
         for i in invoice_doc.payments
@@ -539,9 +541,9 @@ def submit_invoice(invoice, data):
     # ============================================================
     # FIX: Force due_date to be >= posting_date BEFORE any operation
     # ============================================================
-    
+
     posting_date = getdate(invoice_doc.posting_date) if invoice_doc.posting_date else getdate(nowdate())
-    
+
     # Get the due_date from data first, then fall back to invoice_doc
     due_date_from_data = data.get("due_date")
     if due_date_from_data:
@@ -554,16 +556,16 @@ def submit_invoice(invoice, data):
             due_date = getdate(invoice_doc.due_date) if invoice_doc.due_date else posting_date
         except:
             due_date = posting_date
-    
+
     # Ensure due_date is >= posting_date
     if due_date < posting_date:
         due_date = posting_date
-    
+
     # Set it directly on the document AND in the database
     invoice_doc.due_date = due_date
-    
+
     frappe.logger().info(f"Invoice {invoice_doc.name}: posting_date={posting_date}, due_date={due_date}")
-    
+
     # Directly update in database BEFORE save/submit
     frappe.db.set_value(
         invoice_doc.doctype,
@@ -573,15 +575,15 @@ def submit_invoice(invoice, data):
         update_modified=False,
     )
     frappe.db.commit()
-    
+
     # Reload to get fresh document
     invoice_doc = frappe.get_doc(invoice_doc.doctype, invoice_doc.name)
     invoice_doc.flags.ignore_permissions = True
     frappe.flags.ignore_account_permission = True
-    
+
     # Set the POS-specific flags to skip validation
     invoice_doc.flags.posa_skip_due_date_validation = True
-    
+
     # ============================================================
 
     if frappe.get_value(
@@ -634,7 +636,7 @@ def submit_invoice(invoice, data):
                 invoice_doc = frappe.get_doc(invoice_doc.doctype, invoice_doc.name)
             else:
                 raise
-        
+
         redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
 
     return {"name": invoice_doc.name, "status": invoice_doc.docstatus}
