@@ -20,7 +20,7 @@
 					<div class="column-card drafts-card">
 						<div class="column-header">
 							<v-icon left color="primary">mdi-file-document</v-icon>
-							<span>{{ __("Drafts") }}</span>
+							<span>{{ __("Job orders") }}</span>
 							<v-spacer></v-spacer>
 							<v-btn
 								icon
@@ -675,21 +675,21 @@ export default {
 }
 
 .drafts-column {
-	width: min-content;
+	flex: 0 0 25%;
 	padding-left: 1px;
 	padding-right: 2px;
 	flex-shrink: 0;
 }
 
 .invoice-column {
-	width: 40%;
+    flex: 0 0 50%;
 	padding-left: 3px;
 	padding-right: 3px;
 	flex-shrink: 0;
 }
 
 .items-column {
-	width: 24%;
+	flex: 0 0 25%;
 	padding-left: 2px;
 	padding-right: 1px;
 	flex-shrink: 0;
@@ -786,7 +786,14 @@ export default {
 	background-color: #fafafa;
 	min-height: 0;
 }
-
+.pos-main-container > .v-row:nth-child(1),
+.pos-main-container > .v-row:nth-child(2),
+.pos-main-container > .v-row:nth-child(3),
+.pos-main-container > .v-row:nth-child(4),
+.pos-main-container > .v-row:nth-child(5),
+.pos-main-container > .v-row:nth-child(6){
+    display:none !important;
+}
 .items-scroll {
 	padding: 6px;
 	margin-bottom: 120px; /* Space for footer filters */

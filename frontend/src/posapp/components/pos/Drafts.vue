@@ -71,7 +71,7 @@
 				:disabled="selected.length === 0"
 				class="load-draft-btn"
 			>
-				{{ __("LOAD SELECTED DRAFT") }}
+				{{ __("LOAD JOB ORDERS") }}
 			</v-btn>
 		</div>
 	</div>

@@ -958,3 +958,32 @@ def get_price_list_currency(price_list: str) -> str:
     if not price_list:
         return None
     return frappe.db.get_value("Price List", price_list, "currency")
+    
+
+@frappe.whitelist()
+def get_vehicles_by_customer(doctype, txt, searchfield, start, page_len, filters):
+    customer = (filters or {}).get("customer")
+    if not customer:
+        return []
+
+    start = int(start or 0)
+    page_len = int(page_len or 20)
+
+    vehicles = frappe.get_all(
+        "Vehicle Master",
+        filters={"customer": customer},
+        fields=["name", "vehicle_no", "model"],
+        order_by="name asc",
+        limit_start=start,
+        limit_page_length=page_len,
+    )
+
+    results = []
+    for v in vehicles:
+        name = v.get("name")
+        label = (v.get("vehicle_no") or name)
+        if v.get("model"):
+            label = f"{label} — {v.get('model')}"
+        results.append([name, label])
+
+    return results

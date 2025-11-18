@@ -479,105 +479,171 @@ def get_customer_by_vehicle(vehicle_no):
 @frappe.whitelist()
 def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
     """
-    Creates a Customer and optionally a linked Vehicle in a single call.
-    customer and vehicle are JSON strings of their respective arguments.
+    Create or update a customer and optionally create a linked vehicle.
     """
     try:
-        customer_args = json.loads(customer)
-        vehicle_args = json.loads(vehicle)
-
-        # 1. Validate mandatory customer fields
-        if not customer_args.get("customer_name"):
-            frappe.throw(_("Customer Name is required."))
-        if not customer_args.get("customer_group"):
-            frappe.throw(_("Customer Group is required."))
-        if not customer_args.get("territory"):
-            frappe.throw(_("Territory is required."))
-
-        # Determine method
-        cust_method = customer_args.get("method", "create")
-
-        # 2. Call the existing create_customer logic
-        customer_doc = create_customer(
-            customer_name=customer_args.get("customer_name"),
-            company=company,
-            pos_profile_doc=pos_profile_doc,
-            customer_id=customer_args.get("customer_id"),
-            tax_id=customer_args.get("tax_id"),
-            mobile_no=customer_args.get("mobile_no"),
-            email_id=customer_args.get("email_id"),
-            referral_code=customer_args.get("referral_code"),
-            birthday=customer_args.get("birthday"),
-            customer_group=customer_args.get("customer_group"),
-            territory=customer_args.get("territory"),
-            customer_type=customer_args.get("customer_type"),
-            gender=customer_args.get("gender"),
-            method=cust_method,
-            address_line1=customer_args.get("address_line1"),
-            city=customer_args.get("city"),
-            country=customer_args.get("country"),
-        )
-
-        if not customer_doc:
-            frappe.throw(_("Failed to create or update customer."))
-
-        # 3. Create Vehicle if data is provided and this is a NEW customer creation
+        customer_data = json.loads(customer) if isinstance(customer, str) else customer
+        vehicle_data = json.loads(vehicle) if isinstance(vehicle, str) else vehicle
+        pos_profile = json.loads(pos_profile_doc) if isinstance(pos_profile_doc, str) else pos_profile_doc
+        
+        method = customer_data.pop("method", "create")
+        customer_id = customer_data.get("customer_id")
+        
+        # Handle Customer
+        if method == "update" and customer_id:
+            # Update existing customer
+            customer_doc = frappe.get_doc("Customer", customer_id)
+            
+            # Update fields
+            customer_doc.customer_name = customer_data.get("customer_name", customer_doc.customer_name)
+            customer_doc.tax_id = customer_data.get("tax_id", customer_doc.tax_id)
+            customer_doc.mobile_no = customer_data.get("mobile_no", customer_doc.mobile_no)
+            customer_doc.email_id = customer_data.get("email_id", customer_doc.email_id)
+            customer_doc.customer_group = customer_data.get("customer_group", customer_doc.customer_group)
+            customer_doc.territory = customer_data.get("territory", customer_doc.territory)
+            customer_doc.customer_type = customer_data.get("customer_type", customer_doc.customer_type)
+            customer_doc.gender = customer_data.get("gender", customer_doc.gender)
+            customer_doc.referral_code = customer_data.get("referral_code", customer_doc.referral_code)
+            
+            # Update vehicle_no if provided
+            if customer_data.get("vehicle_no"):
+                customer_doc.vehicle_no = customer_data.get("vehicle_no")
+            
+            if customer_data.get("birthday"):
+                customer_doc.posa_birthday = customer_data.get("birthday")
+            
+            customer_doc.save(ignore_permissions=True)
+            frappe.db.commit()
+            
+        else:
+            # Create new customer
+            customer_doc = frappe.new_doc("Customer")
+            customer_doc.customer_name = customer_data.get("customer_name")
+            customer_doc.customer_type = customer_data.get("customer_type", "Individual")
+            customer_doc.customer_group = customer_data.get("customer_group")
+            customer_doc.territory = customer_data.get("territory")
+            
+            # Optional fields
+            if customer_data.get("tax_id"):
+                customer_doc.tax_id = customer_data.get("tax_id")
+            if customer_data.get("mobile_no"):
+                customer_doc.mobile_no = customer_data.get("mobile_no")
+            if customer_data.get("email_id"):
+                customer_doc.email_id = customer_data.get("email_id")
+            if customer_data.get("gender"):
+                customer_doc.gender = customer_data.get("gender")
+            if customer_data.get("referral_code"):
+                customer_doc.posa_referral_code = customer_data.get("referral_code")
+            if customer_data.get("birthday"):
+                customer_doc.posa_birthday = customer_data.get("birthday")
+            
+            # Add vehicle_no to customer if provided
+            if vehicle_data.get("vehicle_no"):
+                customer_doc.vehicle_no = vehicle_data.get("vehicle_no")
+            
+            customer_doc.insert(ignore_permissions=True)
+            frappe.db.commit()
+            
+            # Create address if provided
+            if customer_data.get("address_line1"):
+                create_customer_address(
+                    customer_doc.name,
+                    customer_data.get("address_line1"),
+                    customer_data.get("city"),
+                    customer_data.get("country", "Pakistan")
+                )
+        
+        # Handle Vehicle creation (only for new customers)
         vehicle_doc = None
-        if vehicle_args.get("vehicle_no") and cust_method == "create":
-            if not customer_args.get("mobile_no"):
-                frappe.throw(_("Mobile No. is required to link the vehicle."))
-
+        if vehicle_data.get("vehicle_no") and method == "create":
             try:
-                vehicle_doc = create_vehicle(
-                    method="create",
-                    vehicle_no=vehicle_args.get("vehicle_no"),
-                    customer=customer_doc.name,
-                    model=vehicle_args.get("model"),
-                    make=vehicle_args.get("make"),
-                    mobile_no=customer_args.get("mobile_no"),
-                    chasis_no=None,
-                    color=None,
-                    registration_number=None,
-                    vehicle_id=None,
-                )
-            except Exception as ve:
-                frappe.log_error(
-                    f"Failed to create vehicle for {customer_doc.name}: {str(ve)}\n{frappe.get_traceback()}",
-                    "Customer-Vehicle Creation Error",
-                )
-                # Don't throw - customer was created successfully
-                frappe.msgprint(
-                    _("Customer created successfully, but failed to create Vehicle: {0}").format(str(ve)),
-                    title=_("Warning"),
-                    indicator="orange",
-                )
-
-        # 4. Return the documents
-        return {
-            "customer": customer_doc.as_dict(),
-            "vehicle": (
-                {
-                    "name": vehicle_doc.get("name") if vehicle_doc else None,
-                    "vehicle_no": vehicle_doc.get("vehicle_no") if vehicle_doc else None,
-                    "make": vehicle_doc.get("make") if vehicle_doc else None,
-                    "model": vehicle_doc.get("model") if vehicle_doc else None,
-                    "customer": customer_doc.name,
-                    "customer_name": customer_doc.customer_name,
-                    "mobile_no": customer_args.get("mobile_no"),
-                }
-                if vehicle_doc
-                else None
-            ),
+                vehicle_doc = frappe.new_doc("Vehicle")
+                vehicle_doc.vehicle_no = vehicle_data.get("vehicle_no")
+                vehicle_doc.customer = customer_doc.name
+                vehicle_doc.customer_name = customer_doc.customer_name
+                
+                if vehicle_data.get("make"):
+                    vehicle_doc.make = vehicle_data.get("make")
+                if vehicle_data.get("model"):
+                    vehicle_doc.model = vehicle_data.get("model")
+                if vehicle_data.get("mobile_no"):
+                    vehicle_doc.mobile_no = vehicle_data.get("mobile_no")
+                
+                vehicle_doc.insert(ignore_permissions=True)
+                frappe.db.commit()
+                
+            except Exception as vehicle_error:
+                frappe.log_error(f"Vehicle creation failed: {str(vehicle_error)}", "Vehicle Creation Error")
+                vehicle_doc = None
+        
+        # Return customer data with vehicle_no included
+        customer_response = {
+            "name": customer_doc.name,
+            "customer_name": customer_doc.customer_name,
+            "mobile_no": customer_doc.mobile_no,
+            "email_id": customer_doc.email_id,
+            "tax_id": customer_doc.tax_id,
+            "customer_group": customer_doc.customer_group,
+            "territory": customer_doc.territory,
+            "gender": customer_doc.gender,
+            "birthday": customer_doc.posa_birthday if hasattr(customer_doc, 'posa_birthday') else None,
+            "referral_code": customer_doc.posa_referral_code if hasattr(customer_doc, 'posa_referral_code') else None,
+            "vehicle_no": customer_doc.vehicle_no if hasattr(customer_doc, 'vehicle_no') else None,
+            "loyalty_program": customer_doc.loyalty_program if hasattr(customer_doc, 'loyalty_program') else None,
+            "loyalty_points": customer_doc.loyalty_points if hasattr(customer_doc, 'loyalty_points') else None,
         }
-
-    # CRITICAL: Re-raise ValidationError without modification to avoid BrokenPipeError
+        
+        vehicle_response = None
+        if vehicle_doc:
+            vehicle_response = {
+                "name": vehicle_doc.name,
+                "vehicle_no": vehicle_doc.vehicle_no,
+                "make": vehicle_doc.make if hasattr(vehicle_doc, 'make') else None,
+                "model": vehicle_doc.model if hasattr(vehicle_doc, 'model') else None,
+                "mobile_no": vehicle_doc.mobile_no if hasattr(vehicle_doc, 'mobile_no') else None,
+                "customer": vehicle_doc.customer,
+                "customer_name": vehicle_doc.customer_name
+            }
+        
+        return {
+            "customer": customer_response,
+            "vehicle": vehicle_response
+        }
+        
     except ValidationError:
         raise
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Create Customer with Vehicle Error")
+        frappe.log_error(frappe.get_traceback(), "Customer/Vehicle Creation Error")
+        frappe.throw(_("Failed to create/update customer: {0}").format(str(e)))
         raise
 
+    # # CRITICAL: Re-raise ValidationError without modification to avoid BrokenPipeError
+    # except ValidationError:
+    #     raise
+    # except Exception as e:
+    #     frappe.log_error(frappe.get_traceback(), "Create Customer with Vehicle Error")
+    #     raise
 
+def create_customer_address(customer, address_line1, city, country):
+    """Create a primary address for the customer."""
+    try:
+        address = frappe.new_doc("Address")
+        address.address_line1 = address_line1
+        address.city = city
+        address.country = country
+        address.append("links", {
+            "link_doctype": "Customer",
+            "link_name": customer
+        })
+        address.insert(ignore_permissions=True)
+        frappe.db.commit()
+        
+        frappe.db.set_value("Customer", customer, "customer_primary_address", address.name)
+        frappe.db.commit()
+        
+    except Exception as e:
+        frappe.log_error(f"Address creation failed: {str(e)}", "Address Creation Error")
+        
 @frappe.whitelist()
 def create_customer(
     customer_name,

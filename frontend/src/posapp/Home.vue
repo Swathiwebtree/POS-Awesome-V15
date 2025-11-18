@@ -514,6 +514,7 @@ export default {
 	height: 100%;
 	display: flex;
 	flex-direction: column;
+	padding-top: 60px !important;
 }
 
 .page-content {

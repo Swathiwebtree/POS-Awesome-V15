@@ -617,6 +617,7 @@ export default {
 				customer_type: this.customer_type,
 				gender: this.gender,
 				method: this.customer_id ? "update" : "create", // Add method here
+				vehicle_no: this.vehicle_no || "",
 			};
 
 			// Arguments for Vehicle (only when creating a new customer)

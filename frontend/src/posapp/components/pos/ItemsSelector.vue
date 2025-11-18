@@ -105,7 +105,7 @@
 							</v-btn>
 							<v-spacer></v-spacer>
 							<div class="d-flex align-center">
-								<v-btn-group density="compact" variant="outlined">
+								<!-- <v-btn-group density="compact" variant="outlined">
 									<v-btn
 										size="small"
 										:color="items_view === 'list' ? 'primary' : ''"
@@ -122,8 +122,8 @@
 									>
 										<v-icon>mdi-view-grid</v-icon>
 									</v-btn>
-								</v-btn-group>
-								<v-btn
+								</v-btn-group> -->
+								<!-- <v-btn
 									icon
 									size="small"
 									color="primary"
@@ -135,7 +135,7 @@
 									<v-icon>{{
 										isFullscreen ? "mdi-arrow-collapse" : "mdi-arrow-expand"
 									}}</v-icon>
-								</v-btn>
+								</v-btn> -->
 							</div>
 
 							<v-dialog v-model="show_item_settings" max-width="400px">
@@ -3169,6 +3169,10 @@ export default {
 </script>
 
 <style scoped>
+.settings-btn {
+    display: none !important;
+}
+
 /* "dynamic-card" no longer composes from pos-card; the pos-card class is added directly in the template */
 .dynamic-padding {
 	/* Equal spacing on all sides for consistent alignment */

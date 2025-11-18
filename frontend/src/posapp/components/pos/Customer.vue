@@ -3,123 +3,79 @@
 		<div style="flex: 1 1 0">
 			<Skeleton v-if="loadingVehicles" height="58" class="w-100" />
 
-			<v-autocomplete
-				v-else-if="vehicles.length > 1"
-				ref="vehicleDropdown"
-				class="vehicle-autocomplete sleek-field"
-				density="compact"
-				clearable
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				v-model="selectedVehicle"
-				:items="vehicles"
-				item-title="vehicle_no"
-				item-value="name"
-				hide-details
-				:disabled="loadingVehicles"
-				@update:modelValue="onVehicleSelect"
-				@update:search="onVehicleSearch"
-				:virtual-scroll="true"
-				:virtual-scroll-item-height="58"
-			>
+			<v-autocomplete v-else-if="vehicles.length > 1" ref="vehicleDropdown"
+				class="vehicle-autocomplete sleek-field" density="compact" clearable variant="solo"
+				:label="frappe._('Vehicle No')" v-model="selectedVehicle" :items="vehicles" item-title="vehicle_no"
+				item-value="name" hide-details :disabled="loadingVehicles" @update:modelValue="onVehicleSelect"
+				@update:search="onVehicleSearch" :virtual-scroll="true" :virtual-scroll-item-height="58">
 				<template #prepend-inner>
 					<v-tooltip text="Edit vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_vehicle"
-								>mdi-car-edit</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_vehicle">mdi-car-edit</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
 				<template #item="{ props, item }">
 					<v-list-item v-bind="props">
-						<v-list-item-title>{{ item.raw.vehicle_no }}</v-list-item-title>
-						<v-list-item-subtitle v-if="item.raw.model"
-							>Model: {{ item.raw.model }}</v-list-item-subtitle
-						>
-						<v-list-item-subtitle v-if="item.raw.customer_name"
-							>Customer: {{ item.raw.customer_name }}</v-list-item-subtitle
-						>
-						<v-list-item-subtitle v-if="item.raw.mobile_no"
-							>Mobile: {{ item.raw.mobile_no }}</v-list-item-subtitle
-						>
+						<v-list-item-title>{{ item.raw.customer_name }}</v-list-item-title>
+						<v-list-item-subtitle v-if="item.raw.customer_name !== item.raw.name">
+							<div>ID: {{ item.raw.name }}</div>
+						</v-list-item-subtitle>
+						<v-list-item-subtitle v-if="item.raw.mobile_no">
+							<div>Mobile: {{ item.raw.mobile_no }}</div>
+						</v-list-item-subtitle>
+						<v-list-item-subtitle v-if="item.raw.vehicle_no">
+							<div>Vehicle: {{ item.raw.vehicle_no }}</div>
+						</v-list-item-subtitle>
+						<v-list-item-subtitle v-if="item.raw.tax_id">
+							<div>TAX ID: {{ item.raw.tax_id }}</div>
+						</v-list-item-subtitle>
+						<v-list-item-subtitle v-if="item.raw.email_id">
+							<div>Email: {{ item.raw.email_id }}</div>
+						</v-list-item-subtitle>
+						<v-list-item-subtitle v-if="item.raw.primary_address">
+							<div>Primary Address: {{ item.raw.primary_address }}</div>
+						</v-list-item-subtitle>
 					</v-list-item>
 				</template>
 			</v-autocomplete>
 
-			<v-text-field
-				v-else-if="vehicles.length === 1 && vehicles[0].name"
-				readonly
-				dense
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				v-model="vehicle_no"
-			>
+			<v-text-field v-else-if="vehicles.length === 1 && vehicles[0].name" readonly dense variant="solo"
+				:label="frappe._('Vehicle No')" v-model="vehicle_no">
 				<template #prepend-inner>
 					<v-tooltip text="Edit vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_vehicle"
-								>mdi-car-edit</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_vehicle">mdi-car-edit</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
 			</v-text-field>
 
-			<v-text-field
-				v-else
-				v-model="vehicle_no"
-				dense
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				placeholder="Enter vehicle no and press Enter"
-				@keydown.enter.prevent="onVehicleNoEnter"
-				hide-details
-			>
+			<v-text-field v-else v-model="vehicle_no" dense variant="solo" :label="frappe._('Vehicle No')"
+				placeholder="Enter vehicle no and press Enter" @keydown.enter.prevent="onVehicleNoEnter" hide-details>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -128,44 +84,20 @@
 
 		<div style="flex: 1 1 0">
 			<Skeleton v-if="loadingCustomers" height="58" class="w-100" />
-			<v-autocomplete
-				v-else
-				ref="customerDropdown"
-				class="customer-autocomplete sleek-field"
-				density="compact"
-				clearable
-				variant="solo"
-				color="#4169E1"
-				:label="frappe._('Customer')"
-				v-model="internalCustomer"
-				:items="filteredCustomers"
-				item-title="customer_name"
-				item-value="name"
-				:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-				:no-data-text="
+			<v-autocomplete v-else ref="customerDropdown" class="customer-autocomplete sleek-field" density="compact"
+				clearable variant="solo" color="#4169E1" :label="frappe._('Customer')" v-model="internalCustomer"
+				:items="filteredCustomers" item-title="customer_name" item-value="name"
+				:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" :no-data-text="
 					isCustomerBackgroundLoading ? __('Loading customer data...') : __('Customers not found')
-				"
-				hide-details
-				:customFilter="() => true"
-				:disabled="effectiveReadonly || loadingCustomers"
-				:menu-props="{ closeOnContentClick: false }"
-				@update:menu="onCustomerMenuToggle"
-				@update:modelValue="onCustomerChange"
-				@update:search="onCustomerSearch"
-				@keydown.enter="handleEnter"
-				:virtual-scroll="true"
-				:virtual-scroll-item-height="58"
-			>
+				" hide-details :customFilter="() => true" :disabled="effectiveReadonly || loadingCustomers"
+				:menu-props="{ closeOnContentClick: false }" @update:menu="onCustomerMenuToggle"
+				@update:modelValue="onCustomerChange" @update:search="onCustomerSearch" @keydown.enter="handleEnter"
+				:virtual-scroll="true" :virtual-scroll-item-height="58">
 				<template #prepend-inner>
 					<v-tooltip text="Edit customer">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_customer"
-								>mdi-account-edit</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_customer">mdi-account-edit</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -173,13 +105,8 @@
 				<template #append-inner>
 					<v-tooltip text="Add new customer">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_customer"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_customer">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -465,6 +392,8 @@ export default {
 						.or("email_id")
 						.startsWithIgnoreCase(term)
 						.or("tax_id")
+						.startsWithIgnoreCase(term)
+						.or("vehicle_no")
 						.startsWithIgnoreCase(term)
 						.or("name")
 						.startsWithIgnoreCase(term);
