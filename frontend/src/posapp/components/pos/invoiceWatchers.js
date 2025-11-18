@@ -82,7 +82,11 @@ const diffSnapshots = (previous, current) => {
 
 export default {
 	// Watch for customer change and update related data
-        customer() {
+        customer(newValue, oldValue) {
+                if (newValue === oldValue) {
+                        return;
+                }
+                console.log('Customer watcher triggered:', { newValue, oldValue });
                 this.close_payments();
                 const customersStore = useCustomersStore();
                 customersStore.setSelectedCustomer(this.customer || null);

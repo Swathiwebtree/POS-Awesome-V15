@@ -128,6 +128,109 @@ def _merge_duplicate_taxes(invoice_doc):
         invoice_doc.calculate_taxes_and_totals()
 
 
+def _deduplicate_free_items(invoice_doc):
+    """Merge duplicate free lines created by overlapping pricing rules."""
+
+    items = invoice_doc.get("items", [])
+    if not items:
+        return
+
+    unique = []
+    seen = {}
+
+    def _normalise_qty(row):
+        qty = flt(row.get("qty"))
+        if not qty:
+            return 0
+        return qty
+
+    def _normalise_stock_qty(row):
+        stock_qty = flt(row.get("stock_qty"))
+        if stock_qty:
+            return stock_qty
+        qty = flt(row.get("qty"))
+        if not qty:
+            return 0
+        conversion_factor = flt(row.get("conversion_factor") or 1) or 1
+        return qty * conversion_factor
+
+    for item in items:
+        if cint(item.get("is_free_item")):
+            key = (
+                cstr(
+                    item.get("source_rule")
+                    or item.get("pricing_rule")
+                    or item.get("pricing_rules")
+                    or ""
+                ),
+                cstr(item.get("item_code") or ""),
+                cstr(item.get("warehouse") or ""),
+                cstr(item.get("uom") or ""),
+            )
+
+            existing = seen.get(key)
+            if existing:
+                existing.qty = _normalise_qty(existing) + _normalise_qty(item)
+                existing.stock_qty = _normalise_stock_qty(existing) + _normalise_stock_qty(item)
+                # Ensure monetary fields remain zeroed for freebies
+                for field in (
+                    "rate",
+                    "base_rate",
+                    "amount",
+                    "base_amount",
+                    "net_rate",
+                    "net_amount",
+                    "base_net_rate",
+                    "base_net_amount",
+                    "discount_amount",
+                    "base_discount_amount",
+                ):
+                    if field in existing and flt(existing.get(field)):
+                        existing.set(field, 0)
+                continue
+
+            seen[key] = item
+            unique.append(item)
+            continue
+
+        unique.append(item)
+
+    if len(unique) != len(items):
+        invoice_doc.set("items", unique)
+
+
+def _strip_client_freebies_from_payload(payload):
+    """Remove auto-applied POS freebies from inbound payloads before saving."""
+
+    if not payload or not isinstance(payload, dict):
+        return
+
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return
+
+    cleaned = []
+    modified = False
+
+    for row in items:
+        if not isinstance(row, dict):
+            cleaned.append(row)
+            continue
+
+        auto_marker = row.get("auto_free_source")
+        is_free = cint(row.get("is_free_item"))
+        has_name = bool(row.get("name"))
+
+        if auto_marker:
+            modified = True
+            continue
+
+        cleaned.append(row)
+
+    if modified:
+        payload["items"] = cleaned
+
+
 def _should_block(pos_profile):
     allow_negative = cint(frappe.db.get_single_value("Stock Settings", "allow_negative_stock") or 0)
     if allow_negative:
@@ -274,6 +377,7 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 @frappe.whitelist()
 def update_invoice(data):
     data = json.loads(data)
+    _strip_client_freebies_from_payload(data)
     # Determine doctype based on POS Profile setting
     pos_profile = data.get("pos_profile")
     doctype = "Sales Invoice"
@@ -342,6 +446,8 @@ def update_invoice(data):
 
     invoice_doc.ignore_pricing_rule = 1
     invoice_doc.flags.ignore_pricing_rule = True
+
+    _deduplicate_free_items(invoice_doc)
 
     # Set missing values first
     invoice_doc.set_missing_values()
@@ -463,10 +569,190 @@ def update_invoice(data):
     return response
 
 
+def _create_change_payment_entries(invoice_doc, data, pos_profile=None, cash_account=None):
+    """Create change-related Payment Entries after the invoice is submitted."""
+
+    credit_change_amount = flt(data.get("credit_change"))
+    paid_change_amount = flt(data.get("paid_change"))
+
+    def _invert_sign(amount):
+        """Flip the sign of the provided amount (positive->negative and vice-versa)."""
+
+        return -1 * flt(amount)
+
+    if credit_change_amount <= 0 and paid_change_amount <= 0:
+        return
+
+    if invoice_doc.docstatus != 1:
+        frappe.throw(
+            _("{0} {1} must be submitted before creating change payment entries.").format(
+                invoice_doc.doctype, invoice_doc.name
+            )
+        )
+
+    configured_cash_mode_of_payment = None
+    if pos_profile:
+        configured_cash_mode_of_payment = frappe.db.get_value(
+            "POS Profile", pos_profile, "posa_cash_mode_of_payment"
+        )
+
+    cash_mode_of_payment = configured_cash_mode_of_payment
+    if not cash_mode_of_payment:
+        for payment in invoice_doc.payments:
+            if payment.get("type") == "Cash" and payment.get("mode_of_payment"):
+                cash_mode_of_payment = payment.get("mode_of_payment")
+                break
+
+    if not cash_mode_of_payment:
+        cash_mode_of_payment = "Cash"
+
+    resolved_cash_account = cash_account
+    if not resolved_cash_account and cash_mode_of_payment:
+        resolved_cash_account = get_bank_cash_account(cash_mode_of_payment, invoice_doc.company)
+
+    if not resolved_cash_account:
+        resolved_cash_account = {
+            "account": frappe.get_value("Company", invoice_doc.company, "default_cash_account")
+        }
+
+    cash_account_name = (
+        resolved_cash_account.get("account")
+        if isinstance(resolved_cash_account, (dict, frappe._dict))
+        else resolved_cash_account
+    )
+    if not cash_account_name:
+        frappe.throw(_("Unable to determine cash account for change payment entry."))
+
+    party_account = invoice_doc.get("debit_to")
+    if not party_account and invoice_doc.get("customer"):
+        party_account = get_party_account("Customer", invoice_doc.get("customer"), invoice_doc.get("company"))
+    if not party_account:
+        frappe.throw(_("Unable to determine customer receivable account for change payment entry."))
+
+    posting_date = invoice_doc.get("posting_date") or nowdate()
+    reference_no = invoice_doc.get("posa_pos_opening_shift")
+
+    def _using_only_configured_cash_mode():
+        """Return True when every paid row matches the configured cash mode and account."""
+
+        if not cash_mode_of_payment or not cash_account_name:
+            return False
+
+        cash_mode_lower = cstr(cash_mode_of_payment).strip().lower()
+        cash_account_lower = cstr(cash_account_name).strip().lower()
+        paid_rows = [row for row in invoice_doc.payments if flt(row.get("amount")) > 0]
+        if not paid_rows:
+            return False
+
+        saw_configured_cash_row = False
+
+        for row in paid_rows:
+            mode_lower = cstr(row.get("mode_of_payment") or "").strip().lower()
+
+            if mode_lower != cash_mode_lower:
+                # Any different paid mode means we should not skip overpayment handling
+                return False
+
+            row_account_lower = cstr(row.get("account") or "").strip().lower()
+            if row_account_lower != cash_account_lower:
+                # Different account from the configured cash mode should trigger overpayment handling
+                return False
+
+            saw_configured_cash_row = True
+
+        return saw_configured_cash_row
+
+    # If every payment row uses the configured cash mode, skip overpayment handling
+    # and let the regular cash change flow apply.
+    if _using_only_configured_cash_mode():
+        return
+
+    if credit_change_amount > 0:
+        advance_payment_entry = frappe.new_doc("Payment Entry")
+        advance_payment_entry.payment_type = "Receive"
+        advance_payment_entry.mode_of_payment = (
+            configured_cash_mode_of_payment or cash_mode_of_payment or "Cash"
+        )
+        advance_payment_entry.party_type = "Customer"
+        advance_payment_entry.party = invoice_doc.get("customer")
+        advance_payment_entry.company = invoice_doc.get("company")
+        advance_payment_entry.posting_date = posting_date
+        advance_payment_entry.paid_from = cash_account_name
+        advance_payment_entry.paid_to = party_account
+        advance_payment_entry.paid_amount = credit_change_amount
+        advance_payment_entry.received_amount = credit_change_amount
+        advance_payment_entry.difference_amount = 0
+        advance_payment_entry.reference_no = reference_no
+        advance_payment_entry.reference_date = posting_date
+
+        advance_payment_entry.append(
+            "references",
+            {
+                "reference_doctype": invoice_doc.doctype,
+                "reference_name": invoice_doc.name,
+                "allocated_amount": _invert_sign(credit_change_amount),
+            },
+        )
+
+        advance_payment_entry.setup_party_account_field()
+        advance_payment_entry.set_missing_values()
+        advance_payment_entry.set_amounts()
+        advance_payment_entry.paid_amount = credit_change_amount
+        advance_payment_entry.received_amount = credit_change_amount
+
+        if reference_no:
+            advance_payment_entry.reference_no = reference_no
+            advance_payment_entry.reference_date = posting_date
+
+        advance_payment_entry.flags.ignore_permissions = True
+        frappe.flags.ignore_account_permission = True
+        advance_payment_entry.save()
+        advance_payment_entry.submit()
+
+    if paid_change_amount > 0:
+        change_payment_entry = frappe.new_doc("Payment Entry")
+        change_payment_entry.payment_type = "Pay"
+        change_payment_entry.mode_of_payment = (
+            configured_cash_mode_of_payment or cash_mode_of_payment or "Cash"
+        )
+        change_payment_entry.party_type = "Customer"
+        change_payment_entry.party = invoice_doc.get("customer")
+        change_payment_entry.company = invoice_doc.get("company")
+        change_payment_entry.posting_date = posting_date
+        change_payment_entry.paid_from = cash_account_name
+        change_payment_entry.paid_to = party_account
+        change_payment_entry.paid_amount = paid_change_amount
+        change_payment_entry.received_amount = paid_change_amount
+        change_payment_entry.difference_amount = 0
+
+        if reference_no:
+            change_payment_entry.reference_no = reference_no
+            change_payment_entry.reference_date = posting_date
+
+        change_payment_entry.append(
+            "references",
+            {
+                "reference_doctype": invoice_doc.doctype,
+                "reference_name": invoice_doc.name,
+                "allocated_amount": _invert_sign(paid_change_amount),
+            },
+        )
+
+        change_payment_entry.setup_party_account_field()
+        change_payment_entry.set_missing_values()
+        change_payment_entry.set_amounts()
+
+        change_payment_entry.flags.ignore_permissions = True
+        frappe.flags.ignore_account_permission = True
+        change_payment_entry.save()
+        change_payment_entry.submit()
+
+
 @frappe.whitelist()
 def submit_invoice(invoice, data):
     data = json.loads(data)
     invoice = json.loads(invoice)
+    _strip_client_freebies_from_payload(invoice)
     pos_profile = invoice.get("pos_profile")
     doctype = "Sales Invoice"
     if pos_profile and frappe.db.get_value(
@@ -482,6 +768,8 @@ def submit_invoice(invoice, data):
     else:
         invoice_doc = frappe.get_doc(doctype, invoice_name)
         invoice_doc.update(invoice)
+
+    _deduplicate_free_items(invoice_doc)
 
     # Ensure item name overrides are respected on submit
     _apply_item_name_overrides(invoice_doc)
@@ -509,66 +797,6 @@ def submit_invoice(invoice, data):
     items.append(grand_total)
 
     invoice_doc.remarks = "\n".join(items)
-
-    # creating advance payment
-    if data.get("credit_change"):
-        cash_mode_of_payment = None
-        for payment in invoice_doc.payments:
-            if payment.get("type") == "Cash" and payment.get("mode_of_payment"):
-                cash_mode_of_payment = payment.get("mode_of_payment")
-                break
-
-        if not cash_mode_of_payment and pos_profile:
-            cash_mode_of_payment = (
-                frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment")
-                or "Cash"
-            )
-
-        posting_date = invoice_doc.get("posting_date") or nowdate()
-        reference_no = invoice_doc.get("posa_pos_opening_shift")
-
-        cash_account_name = (
-            cash_account.get("account") if isinstance(cash_account, (dict, frappe._dict)) else cash_account
-        )
-        if not cash_account_name:
-            frappe.throw(_("Unable to determine cash account for change payment entry."))
-
-        party_account = invoice_doc.get("debit_to")
-        if not party_account and invoice_doc.get("customer"):
-            party_account = get_party_account("Customer", invoice_doc.get("customer"), invoice_doc.get("company"))
-        if not party_account:
-            frappe.throw(_("Unable to determine customer receivable account for change payment entry."))
-
-        advance_payment_entry = frappe.new_doc("Payment Entry")
-        advance_payment_entry.payment_type = "Pay"
-        advance_payment_entry.mode_of_payment = cash_mode_of_payment or "Cash"
-        advance_payment_entry.party_type = "Customer"
-        advance_payment_entry.party = invoice_doc.get("customer")
-        advance_payment_entry.company = invoice_doc.get("company")
-        advance_payment_entry.posting_date = posting_date
-        advance_payment_entry.paid_from = cash_account_name
-        advance_payment_entry.paid_to = party_account
-        amount = flt(invoice_doc.get("credit_change"))
-        advance_payment_entry.paid_amount = amount
-        advance_payment_entry.received_amount = amount
-        advance_payment_entry.difference_amount = 0
-        advance_payment_entry.reference_no = reference_no
-        advance_payment_entry.reference_date = posting_date
-
-        advance_payment_entry.setup_party_account_field()
-        advance_payment_entry.set_missing_values()
-        advance_payment_entry.set_amounts()
-        advance_payment_entry.paid_amount = amount
-        advance_payment_entry.received_amount = amount
-
-        if reference_no:
-            advance_payment_entry.reference_no = reference_no
-            advance_payment_entry.reference_date = posting_date
-
-        advance_payment_entry.flags.ignore_permissions = True
-        frappe.flags.ignore_account_permission = True
-        advance_payment_entry.save()
-        advance_payment_entry.submit()
 
     # calculating cash
     total_cash = 0
@@ -654,6 +882,7 @@ def submit_invoice(invoice, data):
             )
     else:
         invoice_doc.submit()
+        _create_change_payment_entries(invoice_doc, data, pos_profile, cash_account)
         redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
 
     return {"name": invoice_doc.name, "status": invoice_doc.docstatus}
@@ -685,6 +914,7 @@ def submit_in_background_job(kwargs):
     invoice_doc.save()
 
     invoice_doc.submit()
+    _create_change_payment_entries(invoice_doc, data, invoice_doc.pos_profile, cash_account)
     redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
 
 
@@ -937,8 +1167,10 @@ def get_sales_invoice_child_table(sales_invoice, sales_invoice_item):
 @frappe.whitelist()
 def update_invoice_from_order(data):
     data = json.loads(data)
+    _strip_client_freebies_from_payload(data)
     invoice_doc = frappe.get_doc("Sales Invoice", data.get("name"))
     invoice_doc.update(data)
+    _deduplicate_free_items(invoice_doc)
     invoice_doc.save()
     return invoice_doc
 

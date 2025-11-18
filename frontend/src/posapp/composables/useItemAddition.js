@@ -122,6 +122,32 @@ export function useItemAddition() {
 
 	// Add item to invoice
 	const addItem = withPerf("pos:add-item", async function addItemMeasured(item, context) {
+		const blockSale = context.pos_profile?.posa_block_sale_beyond_available_qty;
+
+		if (blockSale && item.is_stock_item && item.actual_qty <= 0) {
+			context.eventBus.emit("show_message", {
+				title: __("Item is out of stock"),
+				text: __("Cannot add an item with zero or negative quantity."),
+				color: "error",
+			});
+			return;
+		}
+
+		if (blockSale) {
+			const existingItem = context.items.find((i) => i.item_code === item.item_code && i.uom === item.uom);
+			const currentQty = existingItem ? existingItem.qty : 0;
+			const requestedQty = (item.qty || 1);
+			const maxQty = item._base_actual_qty / (item.conversion_factor || 1);
+
+			if (currentQty + requestedQty > maxQty) {
+				context.eventBus.emit("show_message", {
+					title: __("Quantity exceeds available stock"),
+					color: "warning",
+				});
+				return;
+			}
+		}
+
 		if (!item.uom) {
 			item.uom = item.stock_uom;
 		}

@@ -90,21 +90,18 @@ export default {
 		const storeValue = store?.discountTotal?.value ?? store?.discountTotal;
 		let sum;
 
-		if (typeof storeValue === "number" && !Number.isNaN(storeValue)) {
-			sum = this.isReturnInvoice ? Math.abs(storeValue) : storeValue;
-		} else {
-			sum = 0;
-			this.items.forEach((item) => {
-				// For returns, use absolute value for correct calculation
-				if (this.isReturnInvoice) {
-					sum += Math.abs(flt(item.qty)) * flt(item.discount_amount);
-				} else {
-					sum += flt(item.qty) * flt(item.discount_amount);
-				}
-			});
-		}
+                if (typeof storeValue === "number" && !Number.isNaN(storeValue)) {
+                        sum = Math.abs(storeValue);
+                } else {
+                        sum = 0;
+                        this.items.forEach((item) => {
+                                const qty = flt(item.qty);
+                                const discount = flt(item.discount_amount);
+                                sum += Math.abs(qty * discount);
+                        });
+                }
 
-		const result = this.flt(sum, this.float_precision);
+                const result = this.flt(sum, this.float_precision);
 		perfMarkEnd("pos:totals-discount", mark);
 		return result;
 	},

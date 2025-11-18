@@ -1,4 +1,5 @@
 /* global __, frappe, flt */
+import { debounce } from "lodash";
 import {
 	isOffline,
 	saveCustomerBalance,
@@ -16,6 +17,9 @@ import { useDiscounts } from "../../composables/useDiscounts.js";
 import { useItemAddition } from "../../composables/useItemAddition.js";
 import { useStockUtils } from "../../composables/useStockUtils.js";
 import stockCoordinator from "../../utils/stockCoordinator.js";
+import { useItemsStore } from "../../stores/itemsStore.js";
+import { usePricingRulesStore } from "../../stores/pricingRulesStore.js";
+import { applyLocalPricingRules, computeFreeItems } from "../../../lib/pricingEngine.js";
 
 const ITEM_DETAIL_CACHE_TTL = 5000;
 const STOCK_CACHE_TTL = 5000;
@@ -45,28 +49,1174 @@ export default {
 		const bucket = this._itemTaskCache.get(rowId);
 		return bucket ? bucket[taskName] || null : null;
 	},
-	_setItemTaskPromise(rowId, taskName, promise) {
-		if (!rowId || !promise) {
-			return promise;
-		}
-		const bucket = this._ensureTaskBucket(rowId);
-		const trackedPromise = Promise.resolve(promise).finally(() => {
-			const activeBucket = this._itemTaskCache ? this._itemTaskCache.get(rowId) : null;
-			if (activeBucket) {
-				delete activeBucket[taskName];
-				if (!Object.keys(activeBucket).length) {
-					this._itemTaskCache.delete(rowId);
-				}
-			}
-		});
-		bucket[taskName] = trackedPromise;
-		return trackedPromise;
-	},
-	resetItemTaskCache(rowId, taskName = null) {
-		if (!this._itemTaskCache) {
-			return;
-		}
-		if (!rowId) {
+        _setItemTaskPromise(rowId, taskName, promise) {
+                if (!rowId || !promise) {
+                        return promise;
+                }
+                const bucket = this._ensureTaskBucket(rowId);
+                const trackedPromise = Promise.resolve(promise).finally(() => {
+                        const activeBucket = this._itemTaskCache ? this._itemTaskCache.get(rowId) : null;
+                        if (activeBucket) {
+                                delete activeBucket[taskName];
+                                if (!Object.keys(activeBucket).length) {
+                                        this._itemTaskCache.delete(rowId);
+                                }
+                        }
+                });
+                bucket[taskName] = trackedPromise;
+                return trackedPromise;
+        },
+        _getPricingRulesStore() {
+                if (!this._pricingRulesStore) {
+                        this._pricingRulesStore = usePricingRulesStore();
+                }
+                return this._pricingRulesStore;
+        },
+        _getItemsStore() {
+                if (!this._itemsStore) {
+                        this._itemsStore = useItemsStore();
+                }
+                return this._itemsStore;
+        },
+        _getPricingContext() {
+                const priceList = this.get_price_list ? this.get_price_list() : this.selected_price_list;
+                const selectedCurrency = this.selected_currency || this.price_list_currency || this.pos_profile?.currency;
+                const doc = typeof this.get_invoice_doc === "function" ? this.get_invoice_doc() : this.invoice_doc || {};
+                const customerInfo = this.customer_info || {};
+
+                return {
+                        company: this.pos_profile?.company || doc.company || null,
+                        price_list: priceList || this.pos_profile?.selling_price_list || null,
+                        currency: selectedCurrency || this.pos_profile?.currency || null,
+                        date:
+                                this.posting_date ||
+                                this.posting_date_display ||
+                                doc.posting_date ||
+                                new Date().toISOString().slice(0, 10),
+                        customer: this.customer || doc.customer || customerInfo.customer || null,
+                        customer_group: doc.customer_group || customerInfo.customer_group || null,
+                        territory: doc.territory || customerInfo.territory || null,
+                };
+        },
+        async _ensurePricingRules(force = false) {
+                const store = this._getPricingRulesStore();
+                const ctx = this._getPricingContext();
+                if (!ctx.company || !ctx.price_list || !ctx.currency) {
+                        return { store, ctx };
+                }
+                await store.ensureActiveRules(ctx, { force });
+                return { store, ctx };
+        },
+        _toBaseCurrency(value) {
+                const rate = Number.parseFloat(this.exchange_rate || 1) || 1;
+                if (!rate || rate === 0) {
+                        return Number.parseFloat(value || 0) || 0;
+                }
+                return Number.parseFloat(value || 0) / rate;
+        },
+        _fromBaseCurrency(value) {
+                const rate = Number.parseFloat(this.exchange_rate || 1) || 1;
+                const numeric = Number.parseFloat(value || 0) || 0;
+                return rate ? numeric * rate : numeric;
+        },
+        _isFreeLine(item) {
+                if (!item) {
+                        return false;
+                }
+                const coerce = (value) => value === true || value === 1 || value === "1";
+                if (coerce(item.is_free_item)) {
+                        return true;
+                }
+                if (coerce(item.same_item)) {
+                        return true;
+                }
+                if (typeof item.auto_free_source === "string" && item.auto_free_source) {
+                        return true;
+                }
+                if (typeof item.free_item_source === "string" && item.free_item_source) {
+                        return true;
+                }
+                return false;
+        },
+        _resolveBaseRate(item) {
+                if (!item) {
+                        return 0;
+                }
+                const candidates = [
+                        item.base_price_list_rate,
+                        item.price_list_rate,
+                        item.base_rate,
+                        item.rate,
+                ];
+                for (const candidate of candidates) {
+                        const numeric = Number.parseFloat(candidate);
+                        if (Number.isFinite(numeric) && !Number.isNaN(numeric)) {
+                                return numeric;
+                        }
+                }
+                return 0;
+        },
+        _resolvePricingQty(item) {
+                if (!item) {
+                        return 0;
+                }
+
+                const parse = (value) => {
+                        const numeric = Number.parseFloat(value);
+                        return Number.isFinite(numeric) ? numeric : null;
+                };
+
+                const direct = [
+                        item.stock_qty,
+                        item.base_qty,
+                        item.base_quantity,
+                        item.transfer_qty,
+                ].map(parse).find((value) => value !== null);
+
+                if (direct !== undefined && direct !== null) {
+                        return direct;
+                }
+
+                const qty = parse(item.qty);
+                if (qty === null) {
+                        return 0;
+                }
+
+                const factor = [
+                        item.conversion_factor,
+                        item.uom_conversion_factor,
+                ].map(parse).find((value) => value !== null && value !== 0 && value !== 1);
+
+                if (factor !== undefined && factor !== null) {
+                        return qty * factor;
+                }
+
+                return qty;
+        },
+        _updatePricingBadge(item, applied = []) {
+                if (!item) {
+                        return;
+                }
+                if (!Array.isArray(applied) || !applied.length) {
+                        delete item.pricing_rule_badge;
+                        item.pricing_rule_details = [];
+                        item.pricing_rules = null;
+                        return;
+                }
+
+                const names = applied.map((detail) => detail.name).filter(Boolean);
+                const first = names[0];
+                const extraCount = names.length > 1 ? names.length - 1 : 0;
+                const label = extraCount
+                        ? `${__("Pricing Rule")}: ${first} (+${extraCount})`
+                        : `${__("Pricing Rule")}: ${first}`;
+                const tooltip = applied
+                        .map((detail) => {
+                                const typeLabel = detail.type ? ` (${detail.type})` : "";
+                                return `${detail.name}${typeLabel}`;
+                        })
+                        .join("\n");
+
+                item.pricing_rule_badge = {
+                        label,
+                        tooltip,
+                        names,
+                };
+                item.pricing_rule_details = applied;
+                item.pricing_rules = JSON.stringify(names);
+        },
+        _applyPricingToLine(item, ctx, indexes, freebiesMap) {
+                if (!item) {
+                        return;
+                }
+
+                const allowRateUpdate = !item.locked_price && !item.posa_offer_applied && !item._manual_rate_set;
+                const rawDocQty = Number.parseFloat(item.qty || 0);
+                const signedDocQty = Number.isFinite(rawDocQty) ? rawDocQty : 0;
+                const docQty = Math.abs(signedDocQty);
+                const rawPricingQty = this._resolvePricingQty(item);
+                const pricingQty = Number.isFinite(rawPricingQty) ? rawPricingQty : signedDocQty;
+                const qty = Math.abs(pricingQty);
+
+                if (docQty === 0 && qty === 0) {
+                        return;
+                }
+
+                const baseRate = this._resolveBaseRate(item);
+                const pricing = applyLocalPricingRules({ item, qty, docQty, baseRate, ctx, indexes });
+
+                this._updatePricingBadge(item, pricing.applied);
+
+                if (allowRateUpdate) {
+                        const proposedRate = Number.isFinite(pricing.rate) ? pricing.rate : baseRate;
+                        const proposedDiscount = Number.isFinite(pricing.discountPerUnit)
+                                ? pricing.discountPerUnit
+                                : baseRate - proposedRate;
+
+                        let baseDiscountPerUnit = Math.abs(Number.parseFloat(proposedDiscount || 0));
+                        if (!Number.isFinite(baseDiscountPerUnit)) {
+                                baseDiscountPerUnit = 0;
+                        }
+                        const maxDiscount = Math.max(baseRate, 0);
+                        if (baseDiscountPerUnit > maxDiscount) {
+                                baseDiscountPerUnit = maxDiscount;
+                        }
+                        const discountedRate = Math.max(baseRate - baseDiscountPerUnit, 0);
+                        let effectiveBaseRate = Math.min(proposedRate, baseRate);
+
+                        if (discountedRate < effectiveBaseRate) {
+                                effectiveBaseRate = discountedRate;
+                        }
+
+                        const baseAmount = effectiveBaseRate * signedDocQty;
+                        const convertedRate = this._fromBaseCurrency(effectiveBaseRate);
+                        const convertedDiscount = this._fromBaseCurrency(baseDiscountPerUnit);
+                        const normalizedBaseDiscount = Math.abs(baseDiscountPerUnit);
+                        const normalizedDiscount = Math.abs(convertedDiscount);
+
+                        item.base_price_list_rate = baseRate;
+                        item.base_rate = effectiveBaseRate;
+                        item.base_discount_amount = normalizedBaseDiscount;
+                        item.price_list_rate = this.flt
+                                ? this.flt(this._fromBaseCurrency(baseRate), this.currency_precision)
+                                : this._fromBaseCurrency(baseRate);
+                        item.rate = this.flt ? this.flt(convertedRate, this.currency_precision) : convertedRate;
+                        item.discount_amount = this.flt
+                                ? this.flt(normalizedDiscount, this.currency_precision)
+                                : normalizedDiscount;
+                        const rawDiscountPercentage = baseRate ? (normalizedBaseDiscount / baseRate) * 100 : 0;
+                        item.discount_percentage = baseRate
+                                ? this.flt(Math.abs(rawDiscountPercentage), this.float_precision)
+                                : 0;
+                        item.amount = this.flt ? this.flt(item.rate * item.qty, this.currency_precision) : item.rate * item.qty;
+                        item.base_amount = this.flt
+                                ? this.flt(baseAmount, this.currency_precision)
+                                : baseAmount;
+                }
+
+                const freebies = computeFreeItems({ item, qty, docQty, ctx, indexes });
+                if (Array.isArray(freebies)) {
+                        freebies.forEach((entry) => {
+                                const key = `${entry.rule}::${entry.item_code}::${item.posa_row_id}`;
+                                const existing = freebiesMap.get(key) || { qty: 0 };
+                                const parsedEntryQty = Number.parseFloat(entry.qty || 0) || 0;
+                                const parsedExistingQty = Number.parseFloat(existing.qty || 0) || 0;
+                                const parsedEntryStock = Number.parseFloat(entry.stock_qty || entry.qty || 0) || 0;
+                                const parsedExistingStock = Number.parseFloat(existing.stock_qty || existing.qty || 0) || 0;
+                                freebiesMap.set(key, {
+                                        ...existing,
+                                        ...entry,
+                                        qty: parsedEntryQty + parsedExistingQty,
+                                        stock_qty: parsedEntryStock + parsedExistingStock,
+                                        parentRowId: item.posa_row_id,
+                                });
+                        });
+                }
+        },
+        _syncAutoFreeLines(freebiesMap = new Map()) {
+                const expectedKeys = new Set(freebiesMap.keys());
+                const existing = new Map();
+                const legacyFreeLines = [];
+
+                const resolveRuleName = (line) => {
+                        if (!line) {
+                                return "";
+                        }
+
+                        const preferString = (value) => {
+                                if (!value) {
+                                        return "";
+                                }
+                                if (typeof value === "string") {
+                                        return value;
+                                }
+                                if (Array.isArray(value)) {
+                                        for (const entry of value) {
+                                                const resolved = preferString(entry);
+                                                if (resolved) {
+                                                        return resolved;
+                                                }
+                                        }
+                                        return "";
+                                }
+                                if (typeof value === "object") {
+                                        return (
+                                                value.name ||
+                                                value.rule ||
+                                                value.pricing_rule ||
+                                                value.pricingRule ||
+                                                ""
+                                        );
+                                }
+                                return "";
+                        };
+
+                        if (line.source_rule) {
+                                return String(line.source_rule);
+                        }
+
+                        if (line.pricing_rule) {
+                                return preferString(line.pricing_rule);
+                        }
+
+                        const raw = line.pricing_rules;
+                        if (typeof raw === "string") {
+                                const trimmed = raw.trim();
+                                if (!trimmed) {
+                                        return "";
+                                }
+                                if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+                                        try {
+                                                const parsed = JSON.parse(trimmed);
+                                                return preferString(parsed);
+                                        } catch (error) {
+                                                console.warn("Failed to parse pricing_rules JSON", error);
+                                                return trimmed;
+                                        }
+                                }
+                                return trimmed;
+                        }
+
+                        return preferString(raw);
+                };
+
+                this.items.forEach((line, index) => {
+                        if (line && line.auto_free_source) {
+                                existing.set(line.auto_free_source, { line, index });
+                        } else if (line && line.is_free_item) {
+                                const ruleName = resolveRuleName(line);
+                                if (ruleName) {
+                                        legacyFreeLines.push({
+                                                line,
+                                                index,
+                                                rule: ruleName,
+                                                used: false,
+                                        });
+                                }
+                        }
+                });
+
+                const itemsStore = this._getItemsStore();
+
+                const parseFinite = (value) => {
+                        const numeric = Number.parseFloat(value);
+                        return Number.isFinite(numeric) ? numeric : null;
+                };
+
+                const currencyPrecision = Number.isFinite(this.currency_precision)
+                        ? this.currency_precision
+                        : 2;
+                const floatPrecision = Number.isFinite(this.float_precision) ? this.float_precision : 2;
+
+                const formatCurrency = (value) => {
+                        if (!Number.isFinite(value)) {
+                                return 0;
+                        }
+                        return this.flt ? this.flt(value, currencyPrecision) : value;
+                };
+
+                const formatPercentage = (value) => {
+                        if (!Number.isFinite(value)) {
+                                return 0;
+                        }
+                        return this.flt ? this.flt(value, floatPrecision) : value;
+                };
+
+                const convertFromBase = (value) => {
+                        const numeric = parseFinite(value);
+                        if (numeric === null) {
+                                return null;
+                        }
+                        if (typeof this._fromBaseCurrency === "function") {
+                                try {
+                                        const converted = this._fromBaseCurrency(numeric);
+                                        if (Number.isFinite(converted)) {
+                                                return formatCurrency(converted);
+                                        }
+                                } catch (error) {
+                                        console.warn("Failed to convert from base currency", error);
+                                }
+                        }
+                        return formatCurrency(numeric);
+                };
+
+                const applyFreeLinePricing = (line, data, qty) => {
+                        const baseRate = parseFinite(data?.base_rate ?? data?.rate);
+                        const basePriceListRate = parseFinite(
+                                data?.base_price_list_rate ?? data?.price_list_rate ?? (baseRate !== null ? baseRate : null),
+                        );
+                        let baseDiscount = parseFinite(data?.base_discount_amount ?? data?.discount_amount);
+                        if (baseDiscount === null && basePriceListRate !== null && baseRate !== null) {
+                                baseDiscount = Math.max(basePriceListRate - baseRate, 0);
+                        }
+
+                        const resolvedBaseRate = baseRate !== null ? baseRate : 0;
+                        const resolvedBasePriceListRate =
+                                basePriceListRate !== null ? basePriceListRate : resolvedBaseRate;
+                        const resolvedBaseDiscount =
+                                baseDiscount !== null ? Math.max(baseDiscount, 0) : Math.max(resolvedBasePriceListRate - resolvedBaseRate, 0);
+
+                        const discountPercentageRaw = parseFinite(data?.discount_percentage);
+                        const resolvedDiscountPercentage =
+                                discountPercentageRaw !== null
+                                        ? Math.max(discountPercentageRaw, 0)
+                                        : resolvedBasePriceListRate
+                                                ? Math.max((resolvedBaseDiscount / resolvedBasePriceListRate) * 100, 0)
+                                                : 0;
+
+                        const baseAmount = resolvedBaseRate * qty;
+                        const convertedRate = convertFromBase(resolvedBaseRate);
+                        const convertedPriceListRate = convertFromBase(resolvedBasePriceListRate);
+                        const convertedDiscount = convertFromBase(resolvedBaseDiscount);
+                        const convertedAmount = convertFromBase(baseAmount);
+
+                        line.base_rate = resolvedBaseRate;
+                        line.base_price_list_rate = resolvedBasePriceListRate;
+                        line.base_discount_amount = resolvedBaseDiscount;
+                        line.base_amount = baseAmount;
+
+                        line.rate = convertedRate !== null ? convertedRate : formatCurrency(resolvedBaseRate);
+                        line.price_list_rate =
+                                convertedPriceListRate !== null
+                                        ? convertedPriceListRate
+                                        : formatCurrency(resolvedBasePriceListRate);
+                        line.discount_amount =
+                                convertedDiscount !== null
+                                        ? Math.max(convertedDiscount, 0)
+                                        : formatCurrency(Math.max(resolvedBaseDiscount, 0));
+                        line.amount =
+                                convertedAmount !== null
+                                        ? convertedAmount
+                                        : formatCurrency(resolvedBaseRate * qty);
+                        line.discount_percentage = formatPercentage(resolvedDiscountPercentage);
+                };
+
+                const buildFreeBadgeMeta = (data) => {
+                        const ruleLabel = data?.rule || "";
+                        const label = `${__("Free")} (${__("Rule")}: ${ruleLabel})`;
+
+                        const parsedFreeQty = Number.parseFloat(data?.qty ?? 0);
+                        const freeQty = Number.isFinite(parsedFreeQty) ? parsedFreeQty : 0;
+
+                        const parsedThreshold = Number.parseFloat(
+                                data?.threshold_qty ?? data?.min_qty ?? data?.minimum ?? 0,
+                        );
+                        const thresholdQty = Number.isFinite(parsedThreshold) ? parsedThreshold : 0;
+
+                        const parsedPerThreshold = Number.parseFloat(data?.free_qty_per_threshold ?? data?.free_qty ?? 0);
+                        const perThreshold = Number.isFinite(parsedPerThreshold) ? parsedPerThreshold : null;
+
+                        const parsedMultiplier = Number.parseFloat(data?.multiplier ?? 0);
+                        const multiplier = Number.isFinite(parsedMultiplier) ? parsedMultiplier : null;
+
+                        const parts = [];
+                        if (data?.apply_per_threshold && thresholdQty > 0 && perThreshold !== null) {
+                                const perThresholdValue = perThreshold !== null ? perThreshold : freeQty;
+                                parts.push(`${__("Every")} ${thresholdQty} → ${perThresholdValue} ${__("Free")}`);
+                                if (multiplier !== null && multiplier >= 0) {
+                                        parts.push(`${__("Qualified")}: ${multiplier}`);
+                                }
+                        } else if (thresholdQty > 0) {
+                                parts.push(`${__("Minimum Qty")}: ${thresholdQty}`);
+                        }
+                        parts.push(`${__("Free Qty")}: ${freeQty}`);
+
+                        return {
+                                label,
+                                tooltip: parts.join("; "),
+                        };
+                };
+
+                const applyFreeLineState = (line, data) => {
+                        const qty = this.flt ? this.flt(data.qty, this.float_precision) : data.qty;
+                        const hasUom = data.uom && line.uom !== data.uom;
+                        if (hasUom) {
+                                line.uom = data.uom;
+                        }
+
+                        const hasConversion = data.conversion_factor !== undefined && data.conversion_factor !== null;
+                        if (hasConversion) {
+                                const parsed = Number.parseFloat(data.conversion_factor);
+                                if (Number.isFinite(parsed) && parsed > 0) {
+                                        line.conversion_factor = parsed;
+                                }
+                        }
+
+                        const requiresQtyUpdate = Number.parseFloat(line.qty || 0) !== qty || hasUom || hasConversion;
+                        const parsedStockQty = Number.parseFloat(data.stock_qty);
+                        const hasStockQty = Number.isFinite(parsedStockQty);
+
+                        if (requiresQtyUpdate) {
+                                line.qty = qty;
+                                if (hasStockQty) {
+                                        line.stock_qty = parsedStockQty;
+                                }
+                                if (this.calc_stock_qty) {
+                                        this.calc_stock_qty(line, line.qty);
+                                }
+                        } else if (hasStockQty) {
+                                line.stock_qty = parsedStockQty;
+                        }
+                        line.is_free_item = 1;
+                        line.locked_price = true;
+                        applyFreeLinePricing(line, data, qty);
+                        line.source_rule = data.rule;
+                        line.pricing_rule_badge = buildFreeBadgeMeta(data);
+                };
+
+                for (const [key, data] of freebiesMap.entries()) {
+                        const match = existing.get(key);
+                        if (match) {
+                                applyFreeLineState(match.line, data);
+                                continue;
+                        }
+
+                        const normalizedRule = data.rule || "";
+                        const legacyMatchIndex = legacyFreeLines.findIndex(
+                                (entry) =>
+                                        !entry.used &&
+                                        entry.line &&
+                                        entry.line.item_code === data.item_code &&
+                                        (!normalizedRule || entry.rule === normalizedRule),
+                        );
+
+                        if (legacyMatchIndex >= 0) {
+                                const legacyEntry = legacyFreeLines[legacyMatchIndex];
+                                legacyEntry.used = true;
+                                legacyEntry.line.auto_free_source = key;
+                                legacyEntry.line.parent_row_id = data.parentRowId;
+                                applyFreeLineState(legacyEntry.line, data);
+                                existing.set(key, { line: legacyEntry.line, index: legacyEntry.index });
+                                continue;
+                        }
+
+                        const catalogItem = itemsStore?.getItemByCode?.(data.item_code) || null;
+                        const parentLine = data.parentRowId
+                                ? this.items.find((line) => line && line.posa_row_id === data.parentRowId)
+                                : null;
+                        const resolvedUom = data.uom || catalogItem?.uom || parentLine?.uom || catalogItem?.stock_uom || parentLine?.stock_uom || null;
+                        const parsedConversion = Number.parseFloat(data.conversion_factor);
+                        const resolvedConversion = Number.isFinite(parsedConversion) && parsedConversion > 0
+                                ? parsedConversion
+                                : resolvedUom && parentLine && parentLine.uom === resolvedUom
+                                        ? parentLine.conversion_factor
+                                        : resolvedUom && catalogItem && catalogItem.uom === resolvedUom
+                                                ? catalogItem.conversion_factor
+                                                : resolvedUom && resolvedUom === (catalogItem?.stock_uom || parentLine?.stock_uom)
+                                                        ? 1
+                                                        : null;
+                        const quantity = this.flt ? this.flt(data.qty, this.float_precision) : data.qty;
+
+                        const template = {
+                                ...(catalogItem || {}),
+                                item_code: data.item_code,
+                                item_name: catalogItem?.item_name || data.item_code,
+                                qty: quantity,
+                                rate: 0,
+                                price_list_rate: 0,
+                                uom: resolvedUom || (catalogItem ? catalogItem.uom : undefined),
+                        };
+                        const freeLine = this.get_new_item(template);
+                        freeLine.qty = quantity;
+                        if (resolvedUom) {
+                                freeLine.uom = resolvedUom;
+                        }
+                        if (resolvedConversion !== null && resolvedConversion !== undefined) {
+                                freeLine.conversion_factor = resolvedConversion;
+                        }
+                        const parsedStockQty = Number.parseFloat(data.stock_qty);
+                        if (Number.isFinite(parsedStockQty)) {
+                                freeLine.stock_qty = parsedStockQty;
+                        }
+                        freeLine.is_free_item = 1;
+                        freeLine.locked_price = true;
+                        freeLine._manual_rate_set = true;
+                        freeLine.source_rule = data.rule;
+                        freeLine.auto_free_source = key;
+                        freeLine.parent_row_id = data.parentRowId;
+                        freeLine.pricing_rule_badge = buildFreeBadgeMeta(data);
+
+                        applyFreeLinePricing(freeLine, data, quantity);
+
+                        const parentIndex = this.items.findIndex((line) => line.posa_row_id === data.parentRowId);
+                        const insertAt = parentIndex >= 0 ? parentIndex + 1 : this.items.length;
+                        this.items.splice(insertAt, 0, freeLine);
+                        if (this.calc_stock_qty) {
+                                this.calc_stock_qty(freeLine, freeLine.qty);
+                        }
+                }
+
+                const removable = [];
+                this.items.forEach((line, index) => {
+                        if (line && line.auto_free_source && !expectedKeys.has(line.auto_free_source)) {
+                                removable.push(index);
+                        }
+                });
+
+                removable.reverse().forEach((idx) => {
+                        const [line] = this.items.splice(idx, 1);
+                        if (line && line.bundle_id) {
+                                this.packed_items = this.packed_items.filter((packed) => packed.bundle_id !== line.bundle_id);
+                        }
+                });
+        },
+        async applyPricingRulesForCart(force = false) {
+                if (this.isReturnInvoice) {
+                        return;
+                }
+                if (this._applyingPricingRules) {
+                        this._pendingPricingRules = true;
+                        return;
+                }
+
+                const ctx = this._getPricingContext ? this._getPricingContext() : {};
+                const hasServerContext =
+                        ctx && ctx.company && ctx.price_list && ctx.currency && !isOffline();
+
+                this._applyingPricingRules = true;
+                try {
+                        await this._applyLocalPricingRules(force);
+                        if (hasServerContext) {
+                                await this._applyServerPricingRules(ctx);
+                        }
+                } catch (error) {
+                        console.error("Failed to apply pricing rules via server", error);
+                        await this._applyLocalPricingRules(force);
+                } finally {
+                        this._applyingPricingRules = false;
+                        if (this._pendingPricingRules) {
+                                this._pendingPricingRules = false;
+                                this.applyPricingRulesForCart(force);
+                        }
+                }
+        },
+        async _applyLocalPricingRules(force = false) {
+                try {
+                        const { store, ctx } = await this._ensurePricingRules(force);
+                        if (!store) {
+                                return;
+                        }
+                        const indexes = store.getIndexes ? store.getIndexes() : {};
+                        const freebiesMap = new Map();
+
+                        for (const item of this.items) {
+                                if (!item || item.is_free_item) {
+                                        continue;
+                                }
+                                this._applyPricingToLine(item, ctx, indexes, freebiesMap);
+                        }
+
+                        this._syncAutoFreeLines(freebiesMap);
+                        if (typeof this.$forceUpdate === "function") {
+                                this.$forceUpdate();
+                        }
+                } catch (error) {
+                        console.error("Failed to apply pricing rules locally", error);
+                }
+        },
+        async _applyServerPricingRules(ctx = {}) {
+                if (!ctx || !ctx.company || !ctx.price_list || !ctx.currency) {
+                        return;
+                }
+
+                const freebiesMap = new Map();
+                const precision = this.currency_precision || 2;
+                const toBase = (value, fallback = 0) => {
+                        const numeric = Number.parseFloat(value ?? fallback ?? 0);
+                        if (!Number.isFinite(numeric)) {
+                                return 0;
+                        }
+                        if (this._toBaseCurrency) {
+                                return this._toBaseCurrency(numeric);
+                        }
+                        return numeric;
+                };
+                const fromBase = (value) => {
+                        const numeric = Number.parseFloat(value ?? 0) || 0;
+                        if (this._fromBaseCurrency) {
+                                return this._fromBaseCurrency(numeric);
+                        }
+                        return numeric;
+                };
+
+                const parseServerFloat = (value) => {
+                        const numeric = Number.parseFloat(value);
+                        return Number.isFinite(numeric) ? numeric : null;
+                };
+
+                const asServerBool = (value) => value === true || value === 1 || value === "1";
+
+                const sameItemFreeParents = new Map();
+                const sameItemFreeCodes = new Set();
+
+                const existingFreebieSnapshots = new Map();
+
+                const registerExistingFreebie = (key, line) => {
+                        if (!key || !line) {
+                                return;
+                        }
+
+                        const segments = key.split("::");
+                        const parentSegment = segments.length > 2 ? segments.slice(2).join("::") : null;
+
+                        const sameItemFlag =
+                                asServerBool(line.same_item) ||
+                                line.same_item === 1 ||
+                                line.same_item === "1";
+
+                        const snapshot = {
+                                parentRowId: line.parent_row_id || parentSegment || null,
+                                qty: parseServerFloat(line.qty),
+                                stock_qty: parseServerFloat(line.stock_qty),
+                                base_rate: parseServerFloat(line.base_rate ?? line.rate),
+                                rate: parseServerFloat(line.rate),
+                                base_price_list_rate: parseServerFloat(
+                                        line.base_price_list_rate ?? line.price_list_rate,
+                                ),
+                                price_list_rate: parseServerFloat(line.price_list_rate),
+                                base_discount_amount: parseServerFloat(
+                                        line.base_discount_amount ?? line.discount_amount,
+                                ),
+                                discount_amount: parseServerFloat(line.discount_amount),
+                                discount_percentage: parseServerFloat(line.discount_percentage),
+                                uom: line.uom,
+                                conversion_factor: parseServerFloat(line.conversion_factor),
+                                same_item: sameItemFlag ? 1 : 0,
+                        };
+
+                        existingFreebieSnapshots.set(key, snapshot);
+
+                        if (segments.length >= 2) {
+                                const baseKey = `${segments[0]}::${segments[1]}`;
+                                if (baseKey && !existingFreebieSnapshots.has(baseKey)) {
+                                        existingFreebieSnapshots.set(baseKey, { ...snapshot });
+                                }
+                        }
+                };
+
+                this.items.forEach((line) => {
+                        if (line && line.auto_free_source) {
+                                registerExistingFreebie(line.auto_free_source, line);
+                        }
+                });
+
+                const resolveWithFallback = (primary, fallback, treatZeroAsMissing = false) => {
+                        const fallbackFinite = Number.isFinite(fallback) ? fallback : null;
+                        if (!Number.isFinite(primary)) {
+                                return fallbackFinite;
+                        }
+                        if (
+                                treatZeroAsMissing &&
+                                primary <= 0 &&
+                                Number.isFinite(fallback) &&
+                                fallback > 0
+                        ) {
+                                return fallback;
+                        }
+                        return primary;
+                };
+
+                const paidLines = this.items
+                        .filter((item) => item && !item.is_free_item && !item.auto_free_source)
+                        .map((item) => {
+                                const baseRate = Number.isFinite(Number.parseFloat(item.base_rate))
+                                        ? Number.parseFloat(item.base_rate)
+                                        : toBase(item.rate);
+                                const basePriceListRateRaw = Number.parseFloat(item.base_price_list_rate);
+                                const basePriceListRate = Number.isFinite(basePriceListRateRaw)
+                                        ? basePriceListRateRaw
+                                        : toBase(item.price_list_rate);
+                                const baseDiscountRaw = Number.parseFloat(item.base_discount_amount);
+                                const baseDiscount = Number.isFinite(baseDiscountRaw)
+                                        ? baseDiscountRaw
+                                        : toBase(item.discount_amount);
+                                const stockQty = this._resolvePricingQty(item);
+                                const conversionFactor = Number.parseFloat(item.conversion_factor || 1);
+
+                                return {
+                                        posa_row_id: item.posa_row_id,
+                                        item_code: item.item_code,
+                                        qty: item.qty,
+                                        stock_qty: Number.isFinite(stockQty) ? stockQty : undefined,
+                                        base_qty: Number.isFinite(stockQty) ? stockQty : undefined,
+                                        conversion_factor: Number.isFinite(conversionFactor) && conversionFactor > 0
+                                                ? conversionFactor
+                                                : undefined,
+                                        rate: baseRate || 0,
+                                        price_list_rate: basePriceListRate || 0,
+                                        discount_amount: baseDiscount || 0,
+                                        discount_percentage: Number.parseFloat(item.discount_percentage || 0) || 0,
+                                        warehouse: item.warehouse,
+                                        uom: item.uom,
+                                        item_group: item.item_group,
+                                        brand: item.brand,
+                                        pricing_rules: item.pricing_rules || null,
+                                };
+                        });
+
+                if (!paidLines.length) {
+                        this._syncAutoFreeLines(freebiesMap);
+                        if (typeof this.$forceUpdate === "function") {
+                                this.$forceUpdate();
+                        }
+                        return;
+                }
+
+                const freeLines = this.items
+                        .filter((item) => item && item.auto_free_source)
+                        .map((item) => ({
+                                item_code: item.item_code,
+                                qty: item.qty,
+                                source_rule: item.source_rule || null,
+                                posa_row_id: item.posa_row_id,
+                                uom: item.uom,
+                                stock_qty: Number.isFinite(Number.parseFloat(item.stock_qty))
+                                        ? Number.parseFloat(item.stock_qty)
+                                        : undefined,
+                                conversion_factor: Number.isFinite(Number.parseFloat(item.conversion_factor || 1))
+                                        ? Number.parseFloat(item.conversion_factor || 1)
+                                        : undefined,
+                        }));
+
+                const response = await frappe.call({
+                        method: "posawesome.posawesome.api.pricing_rules.reconcile_line_prices",
+                        args: {
+                                cart_payload: JSON.stringify({
+                                        context: ctx,
+                                        lines: paidLines,
+                                        free_lines: freeLines,
+                                }),
+                        },
+                });
+
+                const message = response?.message || {};
+                const updates = Array.isArray(message.updates) ? message.updates : [];
+                const serverFree = Array.isArray(message.free_lines) ? message.free_lines : [];
+
+                serverFree.forEach((entry) => {
+                        if (!entry || !entry.item_code) {
+                                return;
+                        }
+                        const ruleName = entry.pricing_rules || entry.source_rule || "";
+                        const parentRowId =
+                                entry.parent_row_id ||
+                                entry.parent_detail_docname ||
+                                entry.parent_row ||
+                                entry.parent_docname ||
+                                null;
+                        const keyBase = `${ruleName || ""}::${entry.item_code}`;
+
+                        const fallbackSnapshot =
+                                existingFreebieSnapshots.get(
+                                        parentRowId ? `${keyBase}::${parentRowId}` : keyBase,
+                                ) || existingFreebieSnapshots.get(keyBase) || null;
+
+                        const normalizedParentRowId = parentRowId || fallbackSnapshot?.parentRowId || null;
+                        const key = normalizedParentRowId ? `${keyBase}::${normalizedParentRowId}` : keyBase;
+
+                        const qtyRaw = parseServerFloat(entry.qty);
+                        const qty = resolveWithFallback(qtyRaw, fallbackSnapshot?.qty, false) ?? 0;
+
+                        const stockQtyRaw = parseServerFloat(entry.stock_qty ?? entry.base_qty ?? entry.qty);
+                        const stockQty =
+                                resolveWithFallback(
+                                        stockQtyRaw,
+                                        fallbackSnapshot?.stock_qty ?? fallbackSnapshot?.qty,
+                                        false,
+                                ) ?? qty;
+
+                        const conversionFactorRaw = parseServerFloat(entry.conversion_factor ?? entry.cf);
+                        const conversionFactor = resolveWithFallback(
+                                conversionFactorRaw,
+                                fallbackSnapshot?.conversion_factor,
+                                false,
+                        );
+
+                        let baseRate = resolveWithFallback(
+                                parseServerFloat(entry.base_rate ?? entry.rate),
+                                fallbackSnapshot?.base_rate ?? fallbackSnapshot?.rate,
+                                true,
+                        );
+                        let displayRate = resolveWithFallback(
+                                parseServerFloat(entry.rate),
+                                fallbackSnapshot?.rate,
+                                true,
+                        );
+
+                        let basePriceListRate = resolveWithFallback(
+                                parseServerFloat(entry.base_price_list_rate ?? entry.price_list_rate),
+                                fallbackSnapshot?.base_price_list_rate ?? fallbackSnapshot?.price_list_rate,
+                                true,
+                        );
+                        let displayPriceListRate = resolveWithFallback(
+                                parseServerFloat(entry.price_list_rate),
+                                fallbackSnapshot?.price_list_rate,
+                                true,
+                        );
+
+                        let baseDiscount = resolveWithFallback(
+                                parseServerFloat(entry.base_discount_amount ?? entry.discount_amount),
+                                fallbackSnapshot?.base_discount_amount ?? fallbackSnapshot?.discount_amount,
+                                true,
+                        );
+                        let discountAmount = resolveWithFallback(
+                                parseServerFloat(entry.discount_amount),
+                                fallbackSnapshot?.discount_amount,
+                                true,
+                        );
+                        let discountPercentage = resolveWithFallback(
+                                parseServerFloat(entry.discount_percentage),
+                                fallbackSnapshot?.discount_percentage,
+                                true,
+                        );
+
+                        if (!Number.isFinite(baseRate) && Number.isFinite(displayRate)) {
+                                baseRate = displayRate;
+                        }
+                        if (!Number.isFinite(displayRate) && Number.isFinite(baseRate)) {
+                                displayRate = baseRate;
+                        }
+
+                        if (!Number.isFinite(basePriceListRate) && Number.isFinite(displayPriceListRate)) {
+                                basePriceListRate = displayPriceListRate;
+                        }
+                        if (!Number.isFinite(displayPriceListRate) && Number.isFinite(basePriceListRate)) {
+                                displayPriceListRate = basePriceListRate;
+                        }
+
+                        if (!Number.isFinite(baseDiscount) && Number.isFinite(discountAmount)) {
+                                baseDiscount = discountAmount;
+                        }
+                        if (!Number.isFinite(discountAmount) && Number.isFinite(baseDiscount)) {
+                                discountAmount = baseDiscount;
+                        }
+
+                        if (!Number.isFinite(discountPercentage) && Number.isFinite(baseDiscount) && Number.isFinite(basePriceListRate) && basePriceListRate) {
+                                discountPercentage = Math.max((baseDiscount / basePriceListRate) * 100, 0);
+                        }
+
+                        const sameItem =
+                                asServerBool(entry.same_item) ||
+                                (!!fallbackSnapshot && (fallbackSnapshot.same_item === 1 || fallbackSnapshot.same_item === true));
+
+                        const uom = entry.uom || fallbackSnapshot?.uom;
+
+                        freebiesMap.set(key, {
+                                rule: ruleName,
+                                item_code: entry.item_code,
+                                qty,
+                                parentRowId: normalizedParentRowId,
+                                uom,
+                                stock_qty: stockQty,
+                                conversion_factor: Number.isFinite(conversionFactor)
+                                        ? conversionFactor
+                                        : undefined,
+                                ...(sameItem ? { same_item: 1 } : {}),
+                                ...(Number.isFinite(baseRate) ? { base_rate: baseRate } : {}),
+                                ...(Number.isFinite(displayRate) ? { rate: displayRate } : {}),
+                                ...(Number.isFinite(basePriceListRate)
+                                        ? { base_price_list_rate: basePriceListRate }
+                                        : {}),
+                                ...(Number.isFinite(displayPriceListRate)
+                                        ? { price_list_rate: displayPriceListRate }
+                                        : {}),
+                                ...(Number.isFinite(baseDiscount)
+                                        ? { base_discount_amount: baseDiscount }
+                                        : {}),
+                                ...(Number.isFinite(discountAmount)
+                                        ? { discount_amount: discountAmount }
+                                        : {}),
+                                ...(Number.isFinite(discountPercentage)
+                                        ? { discount_percentage: discountPercentage }
+                                        : {}),
+                        });
+
+                        if (sameItem) {
+                                if (normalizedParentRowId) {
+                                        const bucket = sameItemFreeParents.get(normalizedParentRowId) || new Set();
+                                        bucket.add(entry.item_code);
+                                        sameItemFreeParents.set(normalizedParentRowId, bucket);
+                                } else {
+                                        sameItemFreeCodes.add(entry.item_code);
+                                }
+                        }
+                });
+
+                updates.forEach((update) => {
+                        const targetId = update.row_id;
+                        const item = this.items.find(
+                                (line) =>
+                                        line &&
+                                        !line.is_free_item &&
+                                        (line.posa_row_id === targetId ||
+                                                line.name === targetId ||
+                                                (line.item_code === targetId && !line.auto_free_source)),
+                        );
+                        if (!item) {
+                                return;
+                        }
+
+                        const baseRate = Number.parseFloat(update.rate ?? item.base_rate ?? 0) || 0;
+                        const basePriceListRate =
+                                Number.parseFloat(update.price_list_rate ?? item.base_price_list_rate ?? 0) || 0;
+                        const baseDiscount =
+                                Number.parseFloat(update.discount_amount ?? item.base_discount_amount ?? 0) || 0;
+                        const discountPercentage =
+                                Number.parseFloat(update.discount_percentage ?? item.discount_percentage ?? 0) || 0;
+
+                        const manualOverride = item._manual_rate_set === true;
+                        const priceLocked = item.locked_price === true;
+                        const offerApplied =
+                                item.posa_offer_applied === true ||
+                                item.posa_offer_applied === 1 ||
+                                item.posa_offer_applied === "1";
+
+                        let allowServerRateUpdate = !manualOverride && !priceLocked && !offerApplied;
+
+                        if (allowServerRateUpdate) {
+                                const parentKey = item.posa_row_id || item.name || targetId || null;
+                                const sameItemCodes =
+                                        parentKey && sameItemFreeParents.has(parentKey)
+                                                ? sameItemFreeParents.get(parentKey)
+                                                : null;
+                                let hasSameItemFree =
+                                        sameItemCodes instanceof Set && sameItemCodes.has(item.item_code);
+                                if (!hasSameItemFree && sameItemFreeCodes.has(item.item_code)) {
+                                        hasSameItemFree = true;
+                                }
+                                const originalBaseRate = Number.isFinite(Number.parseFloat(item.base_rate))
+                                        ? Number.parseFloat(item.base_rate)
+                                        : toBase(item.rate);
+                                const originalBasePriceList = Number.isFinite(
+                                        Number.parseFloat(item.base_price_list_rate),
+                                )
+                                        ? Number.parseFloat(item.base_price_list_rate)
+                                        : toBase(item.price_list_rate);
+                                const originalBaseDiscount = Number.isFinite(
+                                        Number.parseFloat(item.base_discount_amount),
+                                )
+                                        ? Number.parseFloat(item.base_discount_amount)
+                                        : toBase(item.discount_amount);
+                                const epsilon = 1e-6;
+                                const zeroRateFromServer = basePriceListRate > 0 && baseRate <= 0;
+                                const zeroPriceListFromServer =
+                                        !Number.isFinite(basePriceListRate) || basePriceListRate <= 0;
+                                const serverRemovedPriceList =
+                                        zeroPriceListFromServer && Number.isFinite(originalBasePriceList)
+                                                ? originalBasePriceList > 0
+                                                : false;
+                                const serverRemovedDiscount =
+                                        (!Number.isFinite(baseDiscount) || baseDiscount <= 0) &&
+                                        Number.isFinite(originalBaseDiscount)
+                                                ? originalBaseDiscount > 0
+                                                : false;
+                                const serverRemovedPercentage =
+                                        (!Number.isFinite(discountPercentage) || discountPercentage <= 0) &&
+                                        Number.isFinite(originalBaseDiscount) &&
+                                        Number.isFinite(originalBasePriceList) &&
+                                        originalBasePriceList > 0
+                                                ? originalBaseDiscount >= originalBasePriceList - epsilon
+                                                : false;
+                                const serverFullDiscount =
+                                        discountPercentage >= 99.99 ||
+                                        (Number.isFinite(basePriceListRate) &&
+                                                basePriceListRate > 0 &&
+                                                Number.isFinite(baseDiscount) &&
+                                                baseDiscount >= basePriceListRate - epsilon);
+                                const fallbackFullDiscount =
+                                        Number.isFinite(originalBasePriceList) &&
+                                        originalBasePriceList > 0 &&
+                                        Number.isFinite(originalBaseDiscount)
+                                                ? originalBaseDiscount >= originalBasePriceList - epsilon
+                                                : false;
+
+                                const serverZeroedValues =
+                                        zeroRateFromServer ||
+                                        serverRemovedPriceList ||
+                                        serverRemovedDiscount ||
+                                        serverRemovedPercentage;
+
+                                if (
+                                        hasSameItemFree &&
+                                        originalBaseRate > 0 &&
+                                        (serverZeroedValues || serverFullDiscount || fallbackFullDiscount)
+                                ) {
+                                        allowServerRateUpdate = false;
+                                }
+                        }
+
+                        if (allowServerRateUpdate) {
+                                const convertedRate = fromBase(baseRate);
+                                const convertedPriceListRate = fromBase(basePriceListRate);
+                                const convertedDiscount = fromBase(baseDiscount);
+
+                                item.base_rate = baseRate;
+                                item.base_price_list_rate = basePriceListRate;
+                                item.base_discount_amount = baseDiscount;
+                                item.discount_percentage = discountPercentage;
+                                item.rate = this.flt ? this.flt(convertedRate, precision) : convertedRate;
+                                item.price_list_rate = this.flt
+                                        ? this.flt(convertedPriceListRate, precision)
+                                        : convertedPriceListRate;
+                                item.discount_amount = this.flt
+                                        ? this.flt(convertedDiscount, precision)
+                                        : convertedDiscount;
+                                item.amount = this.flt
+                                        ? this.flt(item.rate * item.qty, precision)
+                                        : item.rate * item.qty;
+                                item.base_amount = this.flt
+                                        ? this.flt(baseRate * item.qty, precision)
+                                        : baseRate * item.qty;
+                        }
+
+                        const rulesProvided = Object.prototype.hasOwnProperty.call(update, "pricing_rules");
+                        const detailsProvided = Object.prototype.hasOwnProperty.call(update, "pricing_rule_details");
+
+                        const appliedRules = rulesProvided
+                                ? Array.isArray(update.pricing_rules)
+                                        ? update.pricing_rules.filter((name) => !!name)
+                                        : []
+                                : Array.isArray(item.pricing_rules)
+                                        ? item.pricing_rules.filter((name) => !!name)
+                                        : [];
+
+                        let detailed;
+                        if (detailsProvided && Array.isArray(update.pricing_rule_details)) {
+                                detailed = update.pricing_rule_details
+                                        .map((detail) => {
+                                                if (!detail) {
+                                                        return null;
+                                                }
+                                                if (typeof detail === "string") {
+                                                        return { name: detail };
+                                                }
+                                                const name = detail.name || detail.pricing_rule || detail.rule || null;
+                                                if (!name) {
+                                                        return null;
+                                                }
+                                                const type = detail.type || detail.discount_type || null;
+                                                return type ? { name, type } : { name };
+                                        })
+                                        .filter((detail) => !!detail);
+                        } else if (!rulesProvided && Array.isArray(item.pricing_rule_details)) {
+                                detailed = item.pricing_rule_details.map((detail) => ({ ...detail }));
+                        } else {
+                                detailed = appliedRules.map((name) => ({ name }));
+                        }
+
+                        this._updatePricingBadge(item, detailed);
+                });
+
+                this._syncAutoFreeLines(freebiesMap);
+                if (typeof this.$forceUpdate === "function") {
+                        this.$forceUpdate();
+                }
+        },
+        resetItemTaskCache(rowId, taskName = null) {
+                if (!this._itemTaskCache) {
+                        return;
+                }
+                if (!rowId) {
 			this._itemTaskCache = new Map();
 			return;
 		}
@@ -183,15 +1333,18 @@ export default {
 	clearItemStockCache() {
 		this.item_stock_cache = {};
 	},
-	remove_item(item) {
-		return removeItem(item, this);
-	},
+        remove_item(item) {
+                const result = removeItem(item, this);
+                this.schedulePricingRuleApplication();
+                return result;
+        },
 
-	async add_item(item, options = {}) {
-		const res = await addItem(item, this);
+        async add_item(item, options = {}) {
+                const res = await addItem(item, this);
+                this.schedulePricingRuleApplication();
 
-		const shouldNotify =
-			options?.notifyOnSuccess === true && !options?.skipNotification && this.eventBus?.emit;
+                const shouldNotify =
+                        options?.notifyOnSuccess === true && !options?.skipNotification && this.eventBus?.emit;
 
 		if (shouldNotify) {
 			const rawQty = typeof item?.qty === "number" ? item.qty : parseFloat(item?.qty);
@@ -370,6 +1523,7 @@ export default {
                 }
 
                 this.invoice_doc = data;
+                this.posa_offers = data.posa_offers || [];
                 this.items = data.items || [];
 		this.packed_items = data.packed_items || [];
 		console.log("Items set:", this.items.length, "items");
@@ -398,13 +1552,11 @@ export default {
 
 			const manualSnapshots = this._snapshotManualValuesFromDocItems(this.items);
 
-			await this.update_items_details(this.items);
+			// await this.update_items_details(this.items);
 
 			if (manualSnapshots.length) {
 				this._restoreManualSnapshots(this.items, manualSnapshots);
 			}
-
-			this.posa_offers = data.posa_offers || [];
 		} else {
 			console.log("Warning: No items in return invoice");
 		}
@@ -419,7 +1571,15 @@ export default {
 		}
 
 		this.customer = data.customer;
+		await this.set_delivery_charges();
+
 		this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
+		if (data.posa_delivery_charges) {
+			this.selected_delivery_charge = this.delivery_charges.find(
+				(charge) => charge.name === data.posa_delivery_charges,
+			);
+			this.delivery_charges_rate = data.posa_delivery_charges_rate;
+		}
                 const docDiscountAmount = flt(data.discount_amount);
                 const docDiscountPercentage =
                         data.additional_discount_percentage !== undefined &&
@@ -528,16 +1688,16 @@ export default {
 			});
 		}
 
-		if (data.is_return) {
-			this.return_doc = data;
-		} else {
-			this.eventBus.emit("set_pos_coupons", data.posa_coupons);
-		}
+                if (data.is_return) {
+                        this.return_doc = data;
+                } else {
+                        this.eventBus.emit("set_pos_coupons", data.posa_coupons);
+                }
 
-		console.log("load_invoice completed, invoice state:", {
-			invoiceType: this.invoiceType,
-			is_return: this.invoice_doc.is_return,
-			items: this.items.length,
+                console.log("load_invoice completed, invoice state:", {
+                        invoiceType: this.invoiceType,
+                        is_return: this.invoice_doc.is_return,
+                        items: this.items.length,
 			customer: this.customer,
 		});
 	},
@@ -606,9 +1766,9 @@ export default {
 				this.invoiceTypes = ["Return"];
 			}
 			this.invoice_doc = data;
-			this.items = data.items;
-			this.update_items_details(this.items);
 			this.posa_offers = data.posa_offers || [];
+			this.items = data.items;
+			// this.update_items_details(this.items);
 			this.items.forEach((item) => {
 				if (!item.posa_row_id) {
 					item.posa_row_id = this.makeid(20);
@@ -663,7 +1823,7 @@ export default {
                         doc.doctype = "Sales Invoice";
                 }
                 doc.is_pos = 1;
-                doc.ignore_pricing_rule = 1;
+                doc.ignore_pricing_rule = 0;
                 doc.company = doc.company || this.pos_profile.company;
                 doc.pos_profile = doc.pos_profile || this.pos_profile.name;
                 doc.posa_show_custom_name_marker_on_print = this.pos_profile.posa_show_custom_name_marker_on_print;
@@ -863,10 +2023,12 @@ export default {
 		doc.posa_coupons = this.posa_coupons;
 		doc.posa_delivery_charges = this.selected_delivery_charge?.name || null;
 		doc.posa_delivery_charges_rate = this.delivery_charges_rate || 0;
+		doc.posa_notes = sourceDoc.posa_notes ?? null;
+		doc.posa_authorization_code = sourceDoc.posa_authorization_code ?? null;
 		doc.posting_date = this.formatDateForBackend(this.posting_date_display);
 
 		// Add flags to ensure proper rate handling
-		doc.ignore_pricing_rule = 1;
+                doc.ignore_pricing_rule = 0;
 
 		// Preserve the real price list currency
 		doc.price_list_currency = this.price_list_currency || doc.currency;
@@ -985,16 +2147,20 @@ export default {
 	},
 
 	// Prepare items array for invoice doc
-	get_invoice_items() {
-		const items_list = [];
-		const isReturn = this.isReturnInvoice;
-		const usesPosInvoice = this.pos_profile.create_pos_invoice_instead_of_sales_invoice;
+        get_invoice_items() {
+                const items_list = [];
+                const isReturn = this.isReturnInvoice;
+                const usesPosInvoice = this.pos_profile.create_pos_invoice_instead_of_sales_invoice;
+                const omitFreebies = !isOffline();
 
-		this.items.forEach((item) => {
-			const new_item = {
-				item_code: item.item_code,
-				// Retain the item name for offline invoices
-				// Fallback to item_code if item_name is not available
+                this.items.forEach((item) => {
+                        if (omitFreebies && item && item.auto_free_source) {
+                                return;
+                        }
+                        const new_item = {
+                                item_code: item.item_code,
+                                // Retain the item name for offline invoices
+                                // Fallback to item_code if item_name is not available
 				item_name: item.item_name || item.item_code,
 				name_overridden: item.name_overridden ? 1 : 0,
 				posa_row_id: item.posa_row_id,
@@ -1489,52 +2655,144 @@ export default {
                         return [];
                 }
 
-		return items
-			.filter((item) => item && item._manual_rate_set)
-			.map((item) => ({
-				keys: {
-					name: item.name || null,
-					posa_row_id: item.posa_row_id || null,
-					item_code: item.item_code || null,
-					idx: item.idx !== undefined && item.idx !== null ? Number(item.idx) : null,
-					batch_no: item.batch_no || null,
-					serial_no: item.serial_no || null,
-				},
-				values: {
-					rate: item.rate,
-					base_rate: item.base_rate,
-					price_list_rate: item.price_list_rate,
-					base_price_list_rate: item.base_price_list_rate,
-					discount_amount: item.discount_amount,
-					base_discount_amount: item.base_discount_amount,
-					discount_percentage: item.discount_percentage,
-					amount: item.amount,
-					base_amount: item.base_amount,
-					conversion_factor: item.conversion_factor,
-					uom: item.uom,
-				},
-			}));
-	},
+                return items
+                        .filter((item) => item && item._manual_rate_set)
+                        .map((item) => {
+                                const keys = {
+                                        name: item.name || null,
+                                        posa_row_id: item.posa_row_id || null,
+                                        item_code: item.item_code || null,
+                                        idx: item.idx !== undefined && item.idx !== null ? Number(item.idx) : null,
+                                        batch_no: item.batch_no || null,
+                                        serial_no: item.serial_no || null,
+                                };
 
-	_doesManualOverrideMatchItem(override, item) {
-		if (!override?.keys || !item) {
-			return false;
-		}
+                                const determineFreeLine = () => {
+                                        if (typeof this._isFreeLine === "function") {
+                                                return this._isFreeLine(item);
+                                        }
+                                        const coerce = (value) => value === true || value === 1 || value === "1";
+                                        return (
+                                                coerce(item?.is_free_item) ||
+                                                coerce(item?.same_item) ||
+                                                (typeof item?.auto_free_source === "string" && item.auto_free_source) ||
+                                                (typeof item?.free_item_source === "string" && item.free_item_source)
+                                        );
+                                };
 
-		const { name, posa_row_id, item_code, idx, batch_no, serial_no } = override.keys;
+                                if (determineFreeLine()) {
+                                        keys.is_free_item = 1;
+                                        if (item.auto_free_source) {
+                                                keys.auto_free_source = item.auto_free_source;
+                                        }
+                                        if (item.parent_row_id) {
+                                                keys.parent_row_id = item.parent_row_id;
+                                        }
+                                        const rawRule = Array.isArray(item.pricing_rules)
+                                                ? item.pricing_rules.find((rule) => !!rule)
+                                                : item.pricing_rules;
+                                        const normalizedRule = rawRule || item.source_rule || item.pricing_rule || null;
+                                        if (normalizedRule) {
+                                                keys.source_rule = normalizedRule;
+                                        }
+                                }
 
-		if (name && item.name && name === item.name) {
-			return true;
-		}
+                                return {
+                                        keys,
+                                        values: {
+                                                rate: item.rate,
+                                                base_rate: item.base_rate,
+                                                price_list_rate: item.price_list_rate,
+                                                base_price_list_rate: item.base_price_list_rate,
+                                                discount_amount: item.discount_amount,
+                                                base_discount_amount: item.base_discount_amount,
+                                                discount_percentage: item.discount_percentage,
+                                                amount: item.amount,
+                                                base_amount: item.base_amount,
+                                                conversion_factor: item.conversion_factor,
+                                                uom: item.uom,
+                                        },
+                                };
+                        });
+        },
 
-		if (posa_row_id && item.posa_row_id && posa_row_id === item.posa_row_id) {
-			return true;
-		}
+        _doesManualOverrideMatchItem(override, item) {
+                if (!override?.keys || !item) {
+                        return false;
+                }
 
-		if (item_code && item.item_code === item_code) {
-			if (idx !== null && idx !== undefined) {
-				const itemIdx = item.idx !== undefined && item.idx !== null ? Number(item.idx) : null;
-				if (itemIdx !== null && itemIdx === idx) {
+                const {
+                        name,
+                        posa_row_id,
+                        item_code,
+                        idx,
+                        batch_no,
+                        serial_no,
+                        auto_free_source,
+                        parent_row_id,
+                        source_rule,
+                        is_free_item,
+                } = override.keys;
+
+                if (name && item.name && name === item.name) {
+                        return true;
+                }
+
+                if (posa_row_id && item.posa_row_id && posa_row_id === item.posa_row_id) {
+                        return true;
+                }
+
+                const coerce = (value) => value === true || value === 1 || value === "1";
+
+                if (is_free_item !== undefined && is_free_item !== null) {
+                        const expectsFree = coerce(is_free_item);
+                        const itemIsFree =
+                                (typeof this._isFreeLine === "function" && this._isFreeLine(item)) ||
+                                coerce(item.is_free_item) ||
+                                coerce(item.same_item) ||
+                                Boolean(
+                                        (typeof item.auto_free_source === "string" && item.auto_free_source) ||
+                                                (typeof item.free_item_source === "string" && item.free_item_source),
+                                );
+
+                        if (expectsFree !== itemIsFree) {
+                                return false;
+                        }
+                }
+
+                if (auto_free_source) {
+                        const itemSource =
+                                typeof item.auto_free_source === "string" && item.auto_free_source
+                                        ? item.auto_free_source
+                                        : typeof item.free_item_source === "string" && item.free_item_source
+                                                ? item.free_item_source
+                                                : null;
+                        if (itemSource && itemSource !== auto_free_source) {
+                                return false;
+                        }
+                }
+
+                if (parent_row_id) {
+                        const itemParent = item.parent_row_id || null;
+                        if (itemParent && itemParent !== parent_row_id) {
+                                return false;
+                        }
+                }
+
+                if (source_rule) {
+                        const rawRule = Array.isArray(item.pricing_rules)
+                                ? item.pricing_rules.find((rule) => !!rule)
+                                : item.pricing_rules;
+                        const itemRule = rawRule || item.source_rule || item.pricing_rule || null;
+                        if (itemRule && itemRule !== source_rule) {
+                                return false;
+                        }
+                }
+
+                if (item_code && item.item_code === item_code) {
+                        if (idx !== null && idx !== undefined) {
+                                const itemIdx = item.idx !== undefined && item.idx !== null ? Number(item.idx) : null;
+                                if (itemIdx !== null && itemIdx === idx) {
 					return true;
 				}
 			}
@@ -1904,6 +3162,11 @@ export default {
 				});
 				console.log("Ensured negative payment amounts for return:", invoice_doc.payments);
 			}
+
+			// Defer showing payment dialog until next DOM update cycle
+			// This prevents a race condition where the dialog opens before
+			// the invoice UI has finished re-rendering with updated totals
+			await this.$nextTick();
 
 			console.log("Showing payment dialog with currency:", invoice_doc.currency);
 			if (typeof this.paymentVisible !== "undefined") {
@@ -2447,12 +3710,12 @@ export default {
 			this.set_batch_qty(item, null, false);
 		}
 
-		if (!item.locked_price) {
-			if (forceUpdate || !item.base_rate) {
-				if (data.price_list_rate !== 0 || !item.base_price_list_rate) {
-					item.base_price_list_rate = data.price_list_rate;
-					if (!item.posa_offer_applied) {
-						item.base_rate = data.price_list_rate;
+                if (!item.locked_price) {
+                        if (forceUpdate || !item.base_rate) {
+                                if (data.price_list_rate !== 0 || !item.base_price_list_rate) {
+                                        item.base_price_list_rate = data.price_list_rate;
+                                        if (!item.posa_offer_applied) {
+                                                item.base_rate = data.price_list_rate;
 					}
 				}
 			}
@@ -2497,15 +3760,61 @@ export default {
 						this.currency_precision,
 					);
 				} else {
-					item.price_list_rate = item.base_rate;
-				}
-			}
+                                        item.price_list_rate = item.base_rate;
+                                }
+                        }
 
-			if (
-				!item.posa_offer_applied &&
-				this.pos_profile.posa_apply_customer_discount &&
-				this.customer_info.posa_discount > 0 &&
-				this.customer_info.posa_discount <= 100 &&
+                        const serverDiscountPercentage = Number.parseFloat(data.discount_percentage);
+                        const hasServerPercentage =
+                                Number.isFinite(serverDiscountPercentage) && serverDiscountPercentage !== 0;
+                        if (hasServerPercentage && !item.posa_offer_applied && !item._manual_rate_set) {
+                                const existingDiscount = Number(item.discount_amount) || 0;
+                                const EPSILON = 0.000001;
+                                if (Math.abs(existingDiscount) < EPSILON) {
+                                        const resolvedPercentage = this.flt(
+                                                serverDiscountPercentage,
+                                                this.float_precision,
+                                        );
+
+                                        const priceListRateCandidate =
+                                                item.price_list_rate ?? data.price_list_rate ?? item.rate ?? 0;
+                                        const priceListRate = Number(priceListRateCandidate) || 0;
+
+                                        const basePriceListRateCandidate =
+                                                item.base_price_list_rate ?? data.price_list_rate ?? priceListRate;
+                                        const basePriceListRate = Number(basePriceListRateCandidate) || 0;
+
+                                        const hasRate =
+                                                Math.abs(priceListRate) > EPSILON ||
+                                                Math.abs(basePriceListRate) > EPSILON;
+
+                                        if (hasRate) {
+                                                const discountAmount = this.flt(
+                                                        (priceListRate * resolvedPercentage) / 100,
+                                                        this.currency_precision,
+                                                );
+                                                const baseDiscountAmount = this.flt(
+                                                        (basePriceListRate * resolvedPercentage) / 100,
+                                                        this.currency_precision,
+                                                );
+
+                                                const newRate = Math.max(priceListRate - discountAmount, 0);
+                                                const newBaseRate = Math.max(basePriceListRate - baseDiscountAmount, 0);
+
+                                                item.discount_percentage = resolvedPercentage;
+                                                item.discount_amount = discountAmount;
+                                                item.base_discount_amount = baseDiscountAmount;
+                                                item.rate = this.flt(newRate, this.currency_precision);
+                                                item.base_rate = this.flt(newBaseRate, this.currency_precision);
+                                        }
+                                }
+                        }
+
+                        if (
+                                !item.posa_offer_applied &&
+                                this.pos_profile.posa_apply_customer_discount &&
+                                this.customer_info.posa_discount > 0 &&
+                                this.customer_info.posa_discount <= 100 &&
 				item.posa_is_offer == 0 &&
 				!item.posa_is_replace
 			) {
@@ -2646,6 +3955,7 @@ export default {
                         this.selected_price_list = price_list;
                 }
                 this.eventBus.emit("update_customer_price_list", price_list);
+                this.schedulePricingRuleApplication(true);
         },
 
         sync_invoice_customer_details(details = null) {
@@ -2953,14 +4263,18 @@ export default {
 	},
 
 	// Calculate prices and discounts for an item based on field change
-	calc_prices(item, value, $event) {
-		return calcPrices(item, value, $event, this);
-	},
+        calc_prices(item, value, $event) {
+                const outcome = calcPrices(item, value, $event, this);
+                this.schedulePricingRuleApplication();
+                return outcome;
+        },
 
-	// Calculate item price and discount fields
-	calc_item_price(item) {
-		return calcItemPrice(item, this);
-	},
+        // Calculate item price and discount fields
+        calc_item_price(item) {
+                const outcome = calcItemPrice(item, this);
+                this.schedulePricingRuleApplication();
+                return outcome;
+        },
 
 	// Update UOM (unit of measure) for an item and recalculate prices
 	calc_uom(item, value) {
@@ -2977,9 +4291,30 @@ export default {
 			this.update_qty_limits(item);
 		}
 
+		const blockSale = this.pos_profile?.posa_block_sale_beyond_available_qty || this.blockSaleBeyondAvailableQty;
+		let clamped = false;
+		if (blockSale && item.max_qty !== undefined && flt(item.qty) > item.max_qty) {
+			this.eventBus.emit("show_message", {
+				title: __("Quantity exceeds available stock"),
+				text: __("The quantity for {0} has been adjusted to the maximum available stock.", [
+					item.item_name,
+				]),
+				color: "warning",
+			});
+			item.qty = item.max_qty;
+			clamped = true;
+		}
+
 		if (flt(item.qty) === 0) {
 			this.remove_item(item);
 			this.$forceUpdate();
+			return;
+		}
+
+		if (clamped) {
+			this.calc_item_price(item);
+		} else if (!this._applyingPricingRules) {
+			this.schedulePricingRuleApplication();
 		}
 	},
 
@@ -2991,13 +4326,16 @@ export default {
                         return;
                 }
 
-                if (item && item.available_qty !== undefined) {
-                        item.max_qty = flt(item.available_qty / (item.conversion_factor || 1));
+                if (item && item._base_actual_qty !== undefined) {
+                        item.max_qty = flt(item._base_actual_qty / (item.conversion_factor || 1));
 
                         // Set increment disable flag based on stock limits
-                        item.disable_increment =
-                                (!this.stock_settings.allow_negative_stock || this.blockSaleBeyondAvailableQty) &&
-                                item.qty >= item.max_qty;
+                        const blockSale = this.pos_profile?.posa_block_sale_beyond_available_qty || this.blockSaleBeyondAvailableQty;
+                        if (blockSale) {
+                            item.disable_increment = item.qty >= item.max_qty;
+                        } else {
+                            item.disable_increment = !this.stock_settings.allow_negative_stock && item.qty >= item.max_qty;
+                        }
                 }
         },
 
@@ -3054,6 +4392,10 @@ export default {
 	set_batch_qty(item, value, update = true) {
 		return setBatchQty(item, value, update, this);
 	},
+
+	schedulePricingRuleApplication: debounce(function (force = false) {
+		this.applyPricingRulesForCart(force);
+	}, 150),
 
 	change_price_list_rate(item) {
 		const vm = this;

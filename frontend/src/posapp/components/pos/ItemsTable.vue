@@ -37,14 +37,27 @@
 					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">
 						{{ __("Bundle") }}
 					</v-chip>
-					<v-chip v-if="item.name_overridden" color="primary" size="x-small" class="ml-1">
-						{{ __("Edited") }}
-					</v-chip>
-					<v-icon
-						v-if="pos_profile.posa_allow_line_item_name_override && !item.posa_is_replace"
-						size="x-small"
-						class="ml-1"
-						@click.stop="openNameDialog(item)"
+                                        <v-chip v-if="item.name_overridden" color="primary" size="x-small" class="ml-1">
+                                                {{ __("Edited") }}
+                                        </v-chip>
+                                        <v-tooltip v-if="item.pricing_rule_badge" location="bottom">
+                                                <template #activator="{ props }">
+                                                        <v-chip
+                                                                v-bind="props"
+                                                                color="primary"
+                                                                size="x-small"
+                                                                class="ml-1"
+                                                        >
+                                                                {{ item.pricing_rule_badge.label }}
+                                                        </v-chip>
+                                                </template>
+                                                <span>{{ item.pricing_rule_badge.tooltip }}</span>
+                                        </v-tooltip>
+                                        <v-icon
+                                                v-if="pos_profile.posa_allow_line_item_name_override && !item.posa_is_replace"
+                                                size="x-small"
+                                                class="ml-1"
+                                                @click.stop="openNameDialog(item)"
 						>mdi-pencil</v-icon
 					>
 					<v-icon
@@ -61,7 +74,7 @@
 			<template v-slot:item.qty="{ item }">
 				<div class="pos-table__qty-counter" :class="{ 'rtl-layout': isRTL }" :title="`RTL: ${isRTL}`">
 					<v-btn
-						:disabled="!!item.posa_is_replace"
+						:disabled="!!item.posa_is_replace || (isReturnInvoice && (item.is_free_item || item.posa_is_offer || item.posa_is_replace))"
 						size="small"
 						variant="flat"
 						class="pos-table__qty-btn pos-table__qty-btn--minus minus-btn qty-control-btn"
@@ -70,6 +83,7 @@
 						<v-icon size="small">mdi-minus</v-icon>
 					</v-btn>
 					<div
+						v-if="editing_qty_row_id !== item.posa_row_id"
 						class="pos-table__qty-display amount-value number-field-rtl"
 						:class="{
 							'negative-number': isNegative(item.qty),
@@ -77,16 +91,27 @@
 						}"
 						:data-length="memoizedQtyLength(item.qty)"
 						:title="formatFloat(item.qty, hide_qty_decimals ? 0 : undefined)"
+						@click.stop="openQtyEdit(item)"
 					>
 						{{ formatFloat(item.qty, hide_qty_decimals ? 0 : undefined) }}
 					</div>
+					<v-text-field
+						v-else
+						:model-value="editing_qty_value"
+						@update:model-value="editing_qty_value = $event"
+						density="compact"
+						variant="outlined"
+						class="pos-table__qty-input"
+						@blur="closeQtyEdit(item)"
+						@keydown.enter.prevent="closeQtyEdit(item)"
+						@click.stop
+						ref="qtyInput"
+						:autofocus="true"
+						type="number"
+						:disabled="isReturnInvoice && (item.is_free_item || item.posa_is_offer || item.posa_is_replace)"
+					></v-text-field>
 					<v-btn
-						:disabled="
-							!!item.posa_is_replace ||
-							((!stock_settings.allow_negative_stock || blockSaleBeyondAvailableQty) &&
-								item.max_qty !== undefined &&
-								item.qty >= item.max_qty)
-						"
+						:disabled="!!item.posa_is_replace || item.disable_increment || (isReturnInvoice && (item.is_free_item || item.posa_is_offer || item.posa_is_replace))"
 						size="small"
 						variant="flat"
 						class="pos-table__qty-btn pos-table__qty-btn--plus plus-btn qty-control-btn"
@@ -120,32 +145,30 @@
 			</template>
 
 			<!-- Discount percentage column -->
-			<template v-slot:item.discount_value="{ item }">
-				<div class="currency-display right-aligned">
-					<span class="amount-value">
-						{{
-							formatFloat(
-								item.discount_percentage ||
-									(item.price_list_rate
-										? (item.discount_amount / item.price_list_rate) * 100
-										: 0),
-							)
-						}}%
-					</span>
-				</div>
-			</template>
+                        <template v-slot:item.discount_value="{ item }">
+                                <div class="currency-display right-aligned">
+                                        <span class="amount-value">
+                                                {{
+                                                        formatFloat(
+                                                                Math.abs(
+                                                                        item.discount_percentage ||
+                                                                                (item.price_list_rate
+                                                                                        ? (item.discount_amount / item.price_list_rate) * 100
+                                                                                        : 0),
+                                                                ),
+                                                        )
+                                                }}%
+                                        </span>
+                                </div>
+                        </template>
 
 			<!-- Discount amount column -->
 			<template v-slot:item.discount_amount="{ item }">
 				<div class="currency-display right-aligned">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
-					<span
-						class="amount-value"
-						:class="{ 'negative-number': isNegative(item.discount_amount || 0) }"
-						>{{ formatCurrency(item.discount_amount || 0) }}</span
-					>
-				</div>
-			</template>
+                                        <span class="amount-value">{{ formatCurrency(Math.abs(item.discount_amount || 0)) }}</span>
+                                </div>
+                        </template>
 
 			<!-- Price list rate column -->
 			<template v-slot:item.price_list_rate="{ item }">
@@ -235,7 +258,7 @@
 											{{
 												__("In stock: {0}", [
 													formatFloat(
-														item.max_qty,
+														item._base_actual_qty,
 														hide_qty_decimals ? 0 : undefined,
 													),
 												])
@@ -302,7 +325,7 @@
 											:label="frappe._('Discount %')"
 											class="pos-themed-input"
 											hide-details
-											:model-value="formatFloat(item.discount_percentage || 0)"
+                                                                                :model-value="formatFloat(Math.abs(item.discount_percentage || 0))"
 											@change="[
 												setFormatedCurrency(
 													item,
@@ -330,7 +353,7 @@
 											:label="frappe._('Discount Amount')"
 											class="pos-themed-input"
 											hide-details
-											:model-value="formatCurrency(item.discount_amount || 0)"
+                                                                                :model-value="formatCurrency(Math.abs(item.discount_amount || 0))"
 											@change="[
 												setFormatedCurrency(
 													item,
@@ -412,7 +435,7 @@
 											:label="frappe._('Available QTY')"
 											class="pos-themed-input"
 											hide-details
-											:model-value="formatFloat(item.actual_qty)"
+											:model-value="formatFloat(item._base_actual_qty)"
 											disabled
 											prepend-inner-icon="mdi-package-variant"
 										></v-text-field>
@@ -715,6 +738,8 @@ export default {
 			qtyLengthCache: new Map(),
 			expandedCache: new Map(),
 			lastUpdateTime: 0,
+			editing_qty_row_id: null,
+			editing_qty_value: null,
 		};
 	},
 	computed: {
@@ -1163,12 +1188,26 @@ export default {
 			}
 		},
 		handleMinusClick(item) {
-			if (item.qty <= 1) {
-				// Remove the item when quantity would become 0 or less
-				this.removeItem(item);
+			if (this.isReturnInvoice) {
+				// In returns, promotional items should be removed entirely, not decremented
+				if (item.is_free_item || item.posa_is_offer || item.posa_is_replace) {
+					this.removeItem(item);
+					return;
+				}
+				// For regular items in returns, increment towards 0
+				if (item.qty < 0) {
+					this.addOne(item);
+				} else {
+					this.removeItem(item);
+				}
 			} else {
-				// Use the existing subtractOne function
-				this.subtractOne(item);
+				if (item.qty <= 1) {
+					// Remove the item when quantity would become 0 or less
+					this.removeItem(item);
+				} else {
+					// Use the existing subtractOne function
+					this.subtractOne(item);
+				}
 			}
 		},
 
@@ -1181,6 +1220,29 @@ export default {
 		handleExpandedUpdate(val) {
 			const mappedValues = val.map((v) => (typeof v === "object" ? v.posa_row_id : v));
 			this.$emit("update:expanded", mappedValues);
+		},
+
+		openQtyEdit(item) {
+			if (this.editing_qty_row_id !== item.posa_row_id) {
+				this.editing_qty_row_id = item.posa_row_id;
+				this.editing_qty_value = item.qty;
+				this.$nextTick(() => {
+					this.$refs.qtyInput?.focus();
+				});
+			}
+		},
+
+		closeQtyEdit(item) {
+			if (this.editing_qty_row_id === item.posa_row_id) {
+				const newQty = parseFloat(this.editing_qty_value);
+				if (!newQty || newQty <= 0) {
+					this.setFormatedQty(item, "qty", null, false, 1);
+				} else {
+					this.setFormatedQty(item, "qty", null, false, newQty);
+				}
+				this.editing_qty_row_id = null;
+				this.editing_qty_value = null;
+			}
 		},
 	},
 
@@ -3242,5 +3304,31 @@ body[dir="rtl"] .number-field-rtl {
 
 .delete-action-btn:hover .v-icon {
 	animation: pulse 0.6s ease-in-out;
+}
+
+.pos-table__qty-input {
+	max-width: 80px;
+	margin: 0 auto;
+}
+.pos-table__qty-input :deep(input) {
+	text-align: center;
+	font-weight: 600;
+	-moz-appearance: textfield;
+}
+.pos-table__qty-input :deep(input::-webkit-outer-spin-button),
+.pos-table__qty-input :deep(input::-webkit-inner-spin-button) {
+	-webkit-appearance: none;
+	margin: 0;
+}
+.pos-table__qty-input :deep(.v-input__control) {
+	height: 32px;
+}
+.pos-table__qty-input :deep(.v-field__field) {
+	height: 32px;
+	padding: 0 8px;
+}
+.pos-table__qty-input :deep(.v-field__input) {
+	padding: 0;
+	min-height: 32px;
 }
 </style>
