@@ -508,6 +508,7 @@ def get_closing_shift_overview(pos_opening_shift):
     change_totals_by_currency = {}
     overpayment_change_company_currency_total = 0
     overpayment_change_totals_by_currency = {}
+    total_change_totals_by_currency = {}
 
     cash_mode_of_payment = frappe.db.get_value(
         "POS Profile", pos_profile, "posa_cash_mode_of_payment"
@@ -554,6 +555,7 @@ def get_closing_shift_overview(pos_opening_shift):
     shift_invoice_names = {invoice.get("name") for invoice in invoices}
     invoice_shift_link_field_cache = {}
     invoice_membership_cache = {}
+    overpayment_invoice_names = set()
 
     def resolve_shift_link_field(doctype_name):
         if doctype_name in invoice_shift_link_field_cache:
@@ -591,6 +593,57 @@ def get_closing_shift_overview(pos_opening_shift):
         value = frappe.db.get_value(doctype_name, docname, link_field)
         invoice_membership_cache[key] = bool(value and value == opening_shift_doc.name)
         return invoice_membership_cache[key]
+
+    payment_entries = get_payments_entries(opening_shift_doc.name)
+
+    payment_entry_names = [row.get("name") for row in payment_entries if row.get("name")]
+    references_by_entry = defaultdict(list)
+
+    if payment_entry_names:
+        reference_meta = frappe.get_meta("Payment Entry Reference")
+        reference_fieldnames = {df.fieldname for df in reference_meta.get("fields", [])}
+        reference_fields = [
+            "parent",
+            "reference_doctype",
+            "reference_name",
+            "allocated_amount",
+        ]
+
+        if "exchange_rate" in reference_fieldnames:
+            reference_fields.append("exchange_rate")
+        if "allocated_amount_in_company_currency" in reference_fieldnames:
+            reference_fields.append("allocated_amount_in_company_currency")
+        if "base_allocated_amount" in reference_fieldnames:
+            reference_fields.append("base_allocated_amount")
+
+        reference_rows = frappe.get_all(
+            "Payment Entry Reference",
+            filters={"parent": ["in", payment_entry_names]},
+            fields=reference_fields,
+        )
+
+        for reference in reference_rows:
+            references_by_entry[reference.get("parent")].append(reference)
+
+    for entry in payment_entries:
+        if entry.get("payment_type") != "Pay":
+            continue
+
+        references = references_by_entry.get(entry.get("name")) or []
+
+        for reference in references:
+            reference_doctype = reference.get("reference_doctype")
+            reference_name = reference.get("reference_name")
+            belongs_to_shift = False
+
+            if reference_doctype and reference_name:
+                belongs_to_shift = reference_belongs_to_shift(
+                    reference_doctype,
+                    reference_name,
+                )
+
+            if belongs_to_shift and reference_doctype == doctype:
+                overpayment_invoice_names.add(reference_name)
 
     def reference_base_amount(reference, fallback_rate=None):
         for fieldname in (
@@ -641,7 +694,9 @@ def get_closing_shift_overview(pos_opening_shift):
                 currency_entry["exchange_rates"].add(rate)
 
         change_amount = flt(invoice.get("change_amount") or 0)
-        if change_amount:
+        has_overpayment_entry = invoice.get("name") in overpayment_invoice_names
+
+        if change_amount and not has_overpayment_entry:
             change_entry = change_totals_by_currency.setdefault(
                 invoice_currency,
                 {
@@ -661,6 +716,18 @@ def get_closing_shift_overview(pos_opening_shift):
             change_company_currency_total += change_base_amount
             change_entry["company_currency_total"] += change_base_amount
 
+            total_change_entry = total_change_totals_by_currency.setdefault(
+                invoice_currency,
+                {
+                    "currency": invoice_currency,
+                    "total": 0,
+                    "company_currency_total": 0,
+                    "exchange_rates": set(),
+                },
+            )
+            total_change_entry["total"] += change_amount
+            total_change_entry["company_currency_total"] += change_base_amount
+
             if invoice_currency != company_currency:
                 rate = None
                 if change_amount:
@@ -669,6 +736,7 @@ def get_closing_shift_overview(pos_opening_shift):
                     rate = flt(conversion_rate)
                 if rate:
                     change_entry["exchange_rates"].add(rate)
+                    total_change_entry["exchange_rates"].add(rate)
 
         outstanding_company_currency = invoice.get("base_outstanding_amount")
         if outstanding_company_currency in (None, ""):
@@ -758,37 +826,6 @@ def get_closing_shift_overview(pos_opening_shift):
                 conversion_rate,
             )
 
-    payment_entries = get_payments_entries(opening_shift_doc.name)
-
-    payment_entry_names = [row.get("name") for row in payment_entries if row.get("name")]
-    references_by_entry = defaultdict(list)
-
-    if payment_entry_names:
-        reference_meta = frappe.get_meta("Payment Entry Reference")
-        reference_fieldnames = {df.fieldname for df in reference_meta.get("fields", [])}
-        reference_fields = [
-            "parent",
-            "reference_doctype",
-            "reference_name",
-            "allocated_amount",
-        ]
-
-        if "exchange_rate" in reference_fieldnames:
-            reference_fields.append("exchange_rate")
-        if "allocated_amount_in_company_currency" in reference_fieldnames:
-            reference_fields.append("allocated_amount_in_company_currency")
-        if "base_allocated_amount" in reference_fieldnames:
-            reference_fields.append("base_allocated_amount")
-
-        reference_rows = frappe.get_all(
-            "Payment Entry Reference",
-            filters={"parent": ["in", payment_entry_names]},
-            fields=reference_fields,
-        )
-
-        for reference in reference_rows:
-            references_by_entry[reference.get("parent")].append(reference)
-
     for entry in payment_entries:
         mode = entry.get("mode_of_payment")
         payment_currency = (
@@ -825,6 +862,18 @@ def get_closing_shift_overview(pos_opening_shift):
             change_row["company_currency_total"] += refund_base_amount
             overpayment_change_company_currency_total += refund_base_amount
 
+            total_change_entry = total_change_totals_by_currency.setdefault(
+                payment_currency,
+                {
+                    "currency": payment_currency,
+                    "total": 0,
+                    "company_currency_total": 0,
+                    "exchange_rates": set(),
+                },
+            )
+            total_change_entry["total"] += refund_amount
+            total_change_entry["company_currency_total"] += refund_base_amount
+
             if payment_currency != company_currency:
                 rate = None
                 if refund_amount:
@@ -837,6 +886,7 @@ def get_closing_shift_overview(pos_opening_shift):
                     rate = flt(entry_rate)
                 if rate:
                     change_row["exchange_rates"].add(rate)
+                    total_change_entry["exchange_rates"].add(rate)
 
         references = references_by_entry.get(entry.get("name")) or []
         allocated_amount_sum = 0
@@ -1024,9 +1074,9 @@ def get_closing_shift_overview(pos_opening_shift):
         "change_returned": {
             "company_currency_total": flt(
                 change_company_currency_total
-                - overpayment_change_company_currency_total
+                + overpayment_change_company_currency_total
             ),
-            "by_currency": prepare_currency_rows(change_totals_by_currency),
+            "by_currency": prepare_currency_rows(total_change_totals_by_currency),
             "invoice_change": {
                 "company_currency_total": flt(change_company_currency_total),
                 "by_currency": prepare_currency_rows(change_totals_by_currency),

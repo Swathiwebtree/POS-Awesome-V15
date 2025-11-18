@@ -807,17 +807,17 @@ export default {
                                         change?.overpayment_change || {},
                                 );
 
-                                const primaryByCurrency = normalizeCurrencyRows(
-                                        change?.by_currency,
-                                        { includeExchangeRates: true },
-                                );
+                        const primaryByCurrency = normalizeCurrencyRows(
+                                change?.by_currency,
+                                { includeExchangeRates: true },
+                        );
 
                         const totalCompanyCurrencyValue = change?.company_currency_total;
                         const totalCompanyCurrency = toNumber(
                                 totalCompanyCurrencyValue,
                         );
                         const derivedTotalCompanyCurrency =
-                                invoiceChange.company_currency_total -
+                                invoiceChange.company_currency_total +
                                 overpaymentChange.company_currency_total;
                         const hasTotalCompanyCurrency =
                                 totalCompanyCurrencyValue !== undefined &&
@@ -832,10 +832,10 @@ export default {
                                 by_currency:
                                         primaryByCurrency.length
                                                 ? primaryByCurrency
-                                                        : invoiceChange.by_currency,
-                                        invoice_change: invoiceChange,
-                                        overpayment_change: overpaymentChange,
-                                };
+                                                : invoiceChange.by_currency,
+                                invoice_change: invoiceChange,
+                                overpayment_change: overpaymentChange,
+                        };
                         };
 
                         const normalize = (payload = {}) => ({
@@ -1129,39 +1129,22 @@ export default {
 
                         const invoiceMap = buildCurrencyMap(this.invoiceChangeReturnedByCurrency);
                         const overpaymentMap = buildCurrencyMap(this.overpaymentChangeReturnedByCurrency);
-                        const combinedMap = buildCurrencyMap(this.changeReturnedByCurrency);
+                        const totalMap = buildCurrencyMap(this.changeReturnedByCurrency);
 
                         const currencies = new Set([
                                 ...invoiceMap.keys(),
                                 ...overpaymentMap.keys(),
-                                ...combinedMap.keys(),
+                                ...totalMap.keys(),
                         ]);
 
                         const rows = Array.from(currencies).map((currency) => {
                                 const invoiceEntry = invoiceMap.get(currency);
                                 const overpaymentEntry = overpaymentMap.get(currency);
-                                const combinedEntry = combinedMap.get(currency);
+                                const totalEntry = totalMap.get(currency);
 
-                                const hasInvoiceBreakdown = Boolean(
-                                        this.invoiceChangeReturnedByCurrency &&
-                                                this.invoiceChangeReturnedByCurrency.length,
-                                );
-
-                                let invoiceTotal = invoiceEntry?.total || 0;
-                                let invoiceCompanyTotal = invoiceEntry?.company_currency_total || 0;
-                                let invoiceExchangeRates = new Set(invoiceEntry?.exchange_rates || []);
-
-                                // If invoice breakdown is missing, derive it from combined totals minus overpayment
-                                if (!hasInvoiceBreakdown && combinedEntry) {
-                                        invoiceTotal = (combinedEntry.total || 0) - (overpaymentEntry?.total || 0);
-                                        invoiceCompanyTotal =
-                                                (combinedEntry.company_currency_total || 0) -
-                                                (overpaymentEntry?.company_currency_total || 0);
-
-                                        invoiceTotal = invoiceTotal < 0 ? 0 : invoiceTotal;
-                                        invoiceCompanyTotal = invoiceCompanyTotal < 0 ? 0 : invoiceCompanyTotal;
-                                        invoiceExchangeRates = new Set(combinedEntry.exchange_rates || []);
-                                }
+                                const invoiceTotal = invoiceEntry?.total || 0;
+                                const invoiceCompanyTotal = invoiceEntry?.company_currency_total || 0;
+                                const invoiceExchangeRates = new Set(invoiceEntry?.exchange_rates || []);
 
                                 const overpaymentTotal = overpaymentEntry?.total || 0;
                                 const overpaymentCompanyTotal =
@@ -1170,12 +1153,15 @@ export default {
                                 const exchangeRates = new Set([
                                         ...invoiceExchangeRates,
                                         ...(overpaymentEntry?.exchange_rates || []),
-                                        ...(combinedEntry?.exchange_rates || []),
+                                        ...(totalEntry?.exchange_rates || []),
                                 ]);
 
-                                const total = invoiceTotal - overpaymentTotal;
-                                const companyTotal =
-                                        invoiceCompanyTotal - overpaymentCompanyTotal;
+                                const total = totalEntry
+                                        ? totalEntry.total || 0
+                                        : invoiceTotal + overpaymentTotal;
+                                const companyTotal = totalEntry
+                                        ? totalEntry.company_currency_total || 0
+                                        : invoiceCompanyTotal + overpaymentCompanyTotal;
 
                                 return {
                                         currency,
