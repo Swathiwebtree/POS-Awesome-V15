@@ -833,18 +833,22 @@ def get_closing_shift_overview(pos_opening_shift):
             or entry.get("paid_from_account_currency")
             or company_currency
         )
-        amount = flt(entry.get("paid_amount") or 0)
+        raw_amount = flt(entry.get("paid_amount") or 0)
         entry_rate = (
             entry.get("target_exchange_rate")
             or entry.get("source_exchange_rate")
             or entry.get("exchange_rate")
         )
-        base_amount = get_base_value(
+        raw_base_amount = get_base_value(
             entry,
             "paid_amount",
             "base_paid_amount",
             entry_rate,
         )
+
+        multiplier = -1 if entry.get("payment_type") == "Pay" else 1
+        amount = multiplier * abs(raw_amount)
+        base_amount = multiplier * abs(raw_base_amount)
 
         if entry.get("payment_type") == "Pay":
             change_row = overpayment_change_totals_by_currency.setdefault(
@@ -856,8 +860,8 @@ def get_closing_shift_overview(pos_opening_shift):
                     "exchange_rates": set(),
                 },
             )
-            refund_amount = abs(amount)
-            refund_base_amount = abs(base_amount)
+            refund_amount = abs(raw_amount)
+            refund_base_amount = abs(raw_base_amount)
             change_row["total"] += refund_amount
             change_row["company_currency_total"] += refund_base_amount
             overpayment_change_company_currency_total += refund_base_amount
@@ -894,11 +898,15 @@ def get_closing_shift_overview(pos_opening_shift):
 
         if references:
             for reference in references:
-                allocated_amount = flt(reference.get("allocated_amount") or 0)
+                allocated_amount = multiplier * abs(
+                    flt(reference.get("allocated_amount") or 0)
+                )
                 if not allocated_amount:
                     continue
 
-                allocated_base = reference_base_amount(reference, entry_rate)
+                allocated_base = multiplier * abs(
+                    reference_base_amount(reference, entry_rate)
+                )
                 allocated_amount_sum += allocated_amount
                 allocated_base_sum += allocated_base
 
@@ -927,12 +935,14 @@ def get_closing_shift_overview(pos_opening_shift):
 
         unallocated_amount = entry.get("unallocated_amount")
         if unallocated_amount not in (None, ""):
-            residual_amount = flt(unallocated_amount)
-            residual_base = get_base_value(
+            residual_amount = multiplier * abs(flt(unallocated_amount))
+            residual_base = multiplier * abs(
+                get_base_value(
                 entry,
                 "unallocated_amount",
                 "base_unallocated_amount",
                 entry_rate,
+                )
             )
 
         if abs(residual_amount) > 0.0001 or abs(residual_base) > 0.0001:
