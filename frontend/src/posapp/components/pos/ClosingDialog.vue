@@ -419,29 +419,45 @@
                                                                                                                                 :key="`cash-${row.currency}`"
                                                                                                                         >
                                                                                                                                 <td>{{ row.currency }}</td>
-                                                                                                                                <td class="text-end">
-                                                                                                                                        <div class="amount-with-base">
-                                                                                                                                                <div class="amount-primary">
-                                                                                                                                                        <span class="overview-amount">
-                                                                                                                                                                {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
-                                                                                                                                                        </span>
-                                                                                                                                                        <span
-                                                                                                                                                                v-if="shouldShowCompanyEquivalent(row, row.currency)"
-                                                                                                                                                                class="company-equivalent"
-                                                                                                                                                        >
-                                                                                                                                                                ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
-                                                                                                                                                        </span>
-                                                                                                                                                </div>
-                                                                                                                                                <div
-                                                                                                                                                        v-if="showExchangeRates(row, row.currency)"
-                                                                                                                                                        class="exchange-note"
-                                                                                                                                                >
-                                                                                                                                                        {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
-                                                                                                                                                </div>
-                                                                                                                                        </div>
-                                                                                                                                </td>
-                                                                                                                        </tr>
-                                                                                                                </tbody>
+                                                                                                                <td class="text-end">
+<div class="amount-with-base">
+        <div class="amount-primary">
+                <span class="overview-amount">
+                        {{ formatCurrencyWithSymbol(row.total || 0, row.currency || overviewCompanyCurrency) }}
+                </span>
+                <span
+                        v-if="shouldShowCompanyEquivalent(row, row.currency)"
+                        class="company-equivalent"
+                >
+                        ({{ formatCurrencyWithSymbol(row.company_currency_total || 0, overviewCompanyCurrency) }})
+                </span>
+        </div>
+        <div
+                v-if="
+                        isCashMode(row.mode_of_payment) &&
+                        overpaymentDeductionForCurrency(row.currency)
+                "
+                class="exchange-note"
+        >
+                {{
+                        __("Overpayment change deducted: {0}", [
+                                formatCurrencyWithSymbol(
+                                        overpaymentDeductionForCurrency(row.currency),
+                                        row.currency || overviewCompanyCurrency,
+                                ),
+                        ])
+                }}
+        </div>
+        <div
+                v-if="showExchangeRates(row, row.currency)"
+                class="exchange-note"
+        >
+                {{ formatExchangeRates(row.exchange_rates, row.currency || overviewCompanyCurrency, overviewCompanyCurrency) }}
+        </div>
+</div>
+                                                                                                                </td>
+                                                                                                        </tr>
+                                                                                               </tbody>
                                                                                                         </table>
                                                                                                 </div>
                                                                                                 <div v-else class="overview-empty text-body-2">
@@ -796,18 +812,26 @@ export default {
                                         { includeExchangeRates: true },
                                 );
 
-                                const totalCompanyCurrency = toNumber(
-                                        change?.company_currency_total,
-                                );
+                        const totalCompanyCurrencyValue = change?.company_currency_total;
+                        const totalCompanyCurrency = toNumber(
+                                totalCompanyCurrencyValue,
+                        );
+                        const derivedTotalCompanyCurrency =
+                                invoiceChange.company_currency_total -
+                                overpaymentChange.company_currency_total;
+                        const hasTotalCompanyCurrency =
+                                totalCompanyCurrencyValue !== undefined &&
+                                totalCompanyCurrencyValue !== null &&
+                                totalCompanyCurrencyValue !== "";
 
-                                return {
-                                        company_currency_total:
-                                                totalCompanyCurrency ||
-                                                invoiceChange.company_currency_total +
-                                                        overpaymentChange.company_currency_total,
-                                        by_currency:
-                                                primaryByCurrency.length
-                                                        ? primaryByCurrency
+                        return {
+                                company_currency_total:
+                                        hasTotalCompanyCurrency
+                                                ? totalCompanyCurrency
+                                                : derivedTotalCompanyCurrency,
+                                by_currency:
+                                        primaryByCurrency.length
+                                                ? primaryByCurrency
                                                         : invoiceChange.by_currency,
                                         invoice_change: invoiceChange,
                                         overpayment_change: overpaymentChange,
@@ -963,6 +987,15 @@ export default {
 
                         return `${this.__("Exchange Rate")}: ${formattedRates.join(" • ")}`;
                 },
+                isCashMode(modeOfPayment) {
+                        const cashMode = this.cashExpectedSummary?.mode_of_payment || "";
+                        return Boolean(cashMode && modeOfPayment === cashMode);
+                },
+                overpaymentDeductionForCurrency(currency) {
+                        const key = currency || this.overviewCompanyCurrency || "";
+                        const entry = this.overpaymentChangeByCurrencyMap.get(key);
+                        return entry?.total || 0;
+                },
                 calculateDifference(item) {
                         const closing = Number(item?.closing_amount) || 0;
                         const expected = Number(item?.expected_amount) || 0;
@@ -1060,6 +1093,18 @@ export default {
                                 ? this.overpaymentChangeReturnedSummary.by_currency
                                 : [];
                 },
+                overpaymentChangeByCurrencyMap() {
+                        const map = new Map();
+                        (this.overpaymentChangeReturnedByCurrency || []).forEach((item) => {
+                                const currency = item.currency || this.overviewCompanyCurrency || "";
+                                map.set(currency, {
+                                        total: item.total || 0,
+                                        company_currency_total:
+                                                item.company_currency_total || 0,
+                                });
+                        });
+                        return map;
+                },
                 changeReturnedRows() {
                         const buildCurrencyMap = (items) => {
                                 const map = new Map();
@@ -1128,8 +1173,9 @@ export default {
                                         ...(combinedEntry?.exchange_rates || []),
                                 ]);
 
-                                const total = invoiceTotal + overpaymentTotal;
-                                const companyTotal = invoiceCompanyTotal + overpaymentCompanyTotal;
+                                const total = invoiceTotal - overpaymentTotal;
+                                const companyTotal =
+                                        invoiceCompanyTotal - overpaymentCompanyTotal;
 
                                 return {
                                         currency,

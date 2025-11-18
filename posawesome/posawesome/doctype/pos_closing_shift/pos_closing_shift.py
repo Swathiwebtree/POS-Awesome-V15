@@ -908,6 +908,18 @@ def get_closing_shift_overview(pos_opening_shift):
                 if base_change:
                     row["company_currency_total"] -= flt(base_change)
 
+            overpayment_change_row = overpayment_change_totals_by_currency.get(
+                row["currency"]
+            )
+            if overpayment_change_row:
+                row["total"] -= flt(overpayment_change_row.get("total"))
+
+                base_overpayment_change = overpayment_change_row.get(
+                    "company_currency_total"
+                )
+                if base_overpayment_change:
+                    row["company_currency_total"] -= flt(base_overpayment_change)
+
     cash_expected_totals = []
     cash_expected_company_currency_total = 0
     if cash_mode_of_payment:
@@ -1012,7 +1024,7 @@ def get_closing_shift_overview(pos_opening_shift):
         "change_returned": {
             "company_currency_total": flt(
                 change_company_currency_total
-                + overpayment_change_company_currency_total
+                - overpayment_change_company_currency_total
             ),
             "by_currency": prepare_currency_rows(change_totals_by_currency),
             "invoice_change": {
