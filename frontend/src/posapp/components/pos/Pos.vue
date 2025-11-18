@@ -682,7 +682,7 @@ export default {
 }
 
 .invoice-column {
-    flex: 0 0 50%;
+	flex: 0 0 50%;
 	padding-left: 3px;
 	padding-right: 3px;
 	flex-shrink: 0;
@@ -791,8 +791,8 @@ export default {
 .pos-main-container > .v-row:nth-child(3),
 .pos-main-container > .v-row:nth-child(4),
 .pos-main-container > .v-row:nth-child(5),
-.pos-main-container > .v-row:nth-child(6){
-    display:none !important;
+.pos-main-container > .v-row:nth-child(6) {
+	display: none !important;
 }
 .items-scroll {
 	padding: 6px;

@@ -3170,7 +3170,7 @@ export default {
 
 <style scoped>
 .settings-btn {
-    display: none !important;
+	display: none !important;
 }
 
 /* "dynamic-card" no longer composes from pos-card; the pos-card class is added directly in the template */

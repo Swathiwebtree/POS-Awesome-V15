@@ -958,7 +958,7 @@ def get_price_list_currency(price_list: str) -> str:
     if not price_list:
         return None
     return frappe.db.get_value("Price List", price_list, "currency")
-    
+
 
 @frappe.whitelist()
 def get_vehicles_by_customer(doctype, txt, searchfield, start, page_len, filters):
@@ -981,7 +981,7 @@ def get_vehicles_by_customer(doctype, txt, searchfield, start, page_len, filters
     results = []
     for v in vehicles:
         name = v.get("name")
-        label = (v.get("vehicle_no") or name)
+        label = v.get("vehicle_no") or name
         if v.get("model"):
             label = f"{label} — {v.get('model')}"
         results.append([name, label])
