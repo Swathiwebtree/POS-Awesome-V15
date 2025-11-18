@@ -1061,52 +1061,89 @@ export default {
                                 : [];
                 },
                 changeReturnedRows() {
-                        const rows = {};
-
-                        const accumulate = (items, type) => {
+                        const buildCurrencyMap = (items) => {
+                                const map = new Map();
                                 (items || []).forEach((item) => {
                                         const currency = item.currency || this.overviewCompanyCurrency || "";
                                         const existing =
-                                                rows[currency] ||
+                                                map.get(currency) ||
                                                 {
                                                         currency,
-                                                        invoice_total: 0,
-                                                        invoice_company_currency_total: 0,
-                                                        overpayment_total: 0,
-                                                        overpayment_company_currency_total: 0,
                                                         total: 0,
                                                         company_currency_total: 0,
                                                         exchange_rates: new Set(),
                                                 };
 
-                                        const total = item.total || 0;
-                                        const companyTotal = item.company_currency_total || 0;
-                                        if (type === "invoice") {
-                                                existing.invoice_total += total;
-                                                existing.invoice_company_currency_total += companyTotal;
-                                        } else if (type === "overpayment") {
-                                                existing.overpayment_total += total;
-                                                existing.overpayment_company_currency_total += companyTotal;
-                                        }
-
+                                        existing.total += item.total || 0;
+                                        existing.company_currency_total += item.company_currency_total || 0;
                                         (item.exchange_rates || []).forEach((rate) => existing.exchange_rates.add(rate));
-                                        rows[currency] = existing;
+                                        map.set(currency, existing);
                                 });
+                                return map;
                         };
 
-                        accumulate(this.invoiceChangeReturnedByCurrency, "invoice");
-                        accumulate(this.overpaymentChangeReturnedByCurrency, "overpayment");
+                        const invoiceMap = buildCurrencyMap(this.invoiceChangeReturnedByCurrency);
+                        const overpaymentMap = buildCurrencyMap(this.overpaymentChangeReturnedByCurrency);
+                        const combinedMap = buildCurrencyMap(this.changeReturnedByCurrency);
 
-                        return Object.values(rows)
-                                .map((row) => ({
-                                        ...row,
-                                        exchange_rates: Array.from(row.exchange_rates || []),
-                                        total: (row.invoice_total || 0) + (row.overpayment_total || 0),
-                                        company_currency_total:
-                                                (row.invoice_company_currency_total || 0) +
-                                                (row.overpayment_company_currency_total || 0),
-                                }))
-                                .sort((a, b) => (a.currency || "").localeCompare(b.currency || ""));
+                        const currencies = new Set([
+                                ...invoiceMap.keys(),
+                                ...overpaymentMap.keys(),
+                                ...combinedMap.keys(),
+                        ]);
+
+                        const rows = Array.from(currencies).map((currency) => {
+                                const invoiceEntry = invoiceMap.get(currency);
+                                const overpaymentEntry = overpaymentMap.get(currency);
+                                const combinedEntry = combinedMap.get(currency);
+
+                                const hasInvoiceBreakdown = Boolean(
+                                        this.invoiceChangeReturnedByCurrency &&
+                                                this.invoiceChangeReturnedByCurrency.length,
+                                );
+
+                                let invoiceTotal = invoiceEntry?.total || 0;
+                                let invoiceCompanyTotal = invoiceEntry?.company_currency_total || 0;
+                                let invoiceExchangeRates = new Set(invoiceEntry?.exchange_rates || []);
+
+                                // If invoice breakdown is missing, derive it from combined totals minus overpayment
+                                if (!hasInvoiceBreakdown && combinedEntry) {
+                                        invoiceTotal = (combinedEntry.total || 0) - (overpaymentEntry?.total || 0);
+                                        invoiceCompanyTotal =
+                                                (combinedEntry.company_currency_total || 0) -
+                                                (overpaymentEntry?.company_currency_total || 0);
+
+                                        invoiceTotal = invoiceTotal < 0 ? 0 : invoiceTotal;
+                                        invoiceCompanyTotal = invoiceCompanyTotal < 0 ? 0 : invoiceCompanyTotal;
+                                        invoiceExchangeRates = new Set(combinedEntry.exchange_rates || []);
+                                }
+
+                                const overpaymentTotal = overpaymentEntry?.total || 0;
+                                const overpaymentCompanyTotal =
+                                        overpaymentEntry?.company_currency_total || 0;
+
+                                const exchangeRates = new Set([
+                                        ...invoiceExchangeRates,
+                                        ...(overpaymentEntry?.exchange_rates || []),
+                                        ...(combinedEntry?.exchange_rates || []),
+                                ]);
+
+                                const total = invoiceTotal + overpaymentTotal;
+                                const companyTotal = invoiceCompanyTotal + overpaymentCompanyTotal;
+
+                                return {
+                                        currency,
+                                        invoice_total: invoiceTotal,
+                                        invoice_company_currency_total: invoiceCompanyTotal,
+                                        overpayment_total: overpaymentTotal,
+                                        overpayment_company_currency_total: overpaymentCompanyTotal,
+                                        total,
+                                        company_currency_total: companyTotal,
+                                        exchange_rates: Array.from(exchangeRates).sort((a, b) => a - b),
+                                };
+                        });
+
+                        return rows.sort((a, b) => (a.currency || "").localeCompare(b.currency || ""));
                 },
                 cashExpectedSummary() {
                         return this.overview?.cash_expected || {
