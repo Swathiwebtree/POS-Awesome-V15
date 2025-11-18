@@ -483,7 +483,6 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
     Create/update Customer and create Vehicle (ERPNext) + Vehicle Master safely,
     then link Vehicle Master to Customer using custom field: custom_vehicle_no (Link -> Vehicle Master).
     """
- 
 
     def _clear_vehicle_links_on_customer(doc):
         """
@@ -505,7 +504,9 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
     try:
         customer_data = json.loads(customer) if isinstance(customer, str) else (customer or {})
         vehicle_data = json.loads(vehicle) if isinstance(vehicle, str) else (vehicle or {})
-        pos_profile = json.loads(pos_profile_doc) if isinstance(pos_profile_doc, str) else (pos_profile_doc or {})
+        pos_profile = (
+            json.loads(pos_profile_doc) if isinstance(pos_profile_doc, str) else (pos_profile_doc or {})
+        )
 
         method = (customer_data.pop("method", "create") or "create").lower()
         customer_id = customer_data.get("customer_id")
@@ -515,9 +516,15 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
         if method == "update" and customer_id:
             customer_doc = frappe.get_doc("Customer", customer_id)
             for fld in [
-                "customer_name", "tax_id", "mobile_no", "email_id",
-                "customer_group", "territory", "customer_type",
-                "gender", "referral_code"
+                "customer_name",
+                "tax_id",
+                "mobile_no",
+                "email_id",
+                "customer_group",
+                "territory",
+                "customer_type",
+                "gender",
+                "referral_code",
             ]:
                 if fld in customer_data and customer_data.get(fld) is not None:
                     setattr(customer_doc, fld, customer_data.get(fld))
@@ -537,12 +544,18 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
             customer_doc.customer_group = customer_data.get("customer_group")
             customer_doc.territory = customer_data.get("territory")
 
-            if customer_data.get("tax_id"): customer_doc.tax_id = customer_data.get("tax_id")
-            if customer_data.get("mobile_no"): customer_doc.mobile_no = customer_data.get("mobile_no")
-            if customer_data.get("email_id"): customer_doc.email_id = customer_data.get("email_id")
-            if customer_data.get("gender"): customer_doc.gender = customer_data.get("gender")
-            if customer_data.get("referral_code"): customer_doc.posa_referral_code = customer_data.get("referral_code")
-            if customer_data.get("birthday"): customer_doc.posa_birthday = customer_data.get("birthday")
+            if customer_data.get("tax_id"):
+                customer_doc.tax_id = customer_data.get("tax_id")
+            if customer_data.get("mobile_no"):
+                customer_doc.mobile_no = customer_data.get("mobile_no")
+            if customer_data.get("email_id"):
+                customer_doc.email_id = customer_data.get("email_id")
+            if customer_data.get("gender"):
+                customer_doc.gender = customer_data.get("gender")
+            if customer_data.get("referral_code"):
+                customer_doc.posa_referral_code = customer_data.get("referral_code")
+            if customer_data.get("birthday"):
+                customer_doc.posa_birthday = customer_data.get("birthday")
 
             # ensure we do NOT link vehicle before it exists
             # explicitly clear the custom link field used by your site
@@ -559,7 +572,7 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
                         customer_doc.name,
                         customer_data.get("address_line1"),
                         customer_data.get("city"),
-                        customer_data.get("country", "Pakistan")
+                        customer_data.get("country", "Pakistan"),
                     )
                 except Exception:
                     frappe.log_error(frappe.get_traceback(), "create_customer_address error")
@@ -578,8 +591,10 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
                     v = frappe.new_doc("Vehicle")
 
                     # fill common incoming fields
-                    if vehicle_data.get("make") is not None: v.make = vehicle_data.get("make")
-                    if vehicle_data.get("model") is not None: v.model = vehicle_data.get("model")
+                    if vehicle_data.get("make") is not None:
+                        v.make = vehicle_data.get("make")
+                    if vehicle_data.get("model") is not None:
+                        v.model = vehicle_data.get("model")
                     if vehicle_data.get("mobile_no") is not None:
                         # ERPNext Vehicle uses fields like 'tel_mobile' or custom; try common names
                         if hasattr(v, "tel_mobile"):
@@ -674,9 +689,12 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
                         vm.vehicle_no = vehicle_doc.name
                         vm.customer = customer_doc.name
                         # Vehicle Master no longer has license_plate; set other fields
-                        if vehicle_data.get("make") is not None: vm.make = vehicle_data.get("make")
-                        if vehicle_data.get("model") is not None: vm.model = vehicle_data.get("model")
-                        if vehicle_data.get("mobile_no") is not None: vm.tel_mobile = vehicle_data.get("mobile_no")
+                        if vehicle_data.get("make") is not None:
+                            vm.make = vehicle_data.get("make")
+                        if vehicle_data.get("model") is not None:
+                            vm.model = vehicle_data.get("model")
+                        if vehicle_data.get("mobile_no") is not None:
+                            vm.tel_mobile = vehicle_data.get("mobile_no")
                         vm.insert(ignore_permissions=True)
                         frappe.db.commit()
                         vm_doc = vm
@@ -715,7 +733,8 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
             "gender": customer_doc.gender,
             "birthday": getattr(customer_doc, "posa_birthday", None),
             "referral_code": getattr(customer_doc, "posa_referral_code", None),
-            "vehicle_no": getattr(customer_doc, "custom_vehicle_no", None) or getattr(customer_doc, "vehicle_no", None),
+            "vehicle_no": getattr(customer_doc, "custom_vehicle_no", None)
+            or getattr(customer_doc, "vehicle_no", None),
             "loyalty_program": getattr(customer_doc, "loyalty_program", None),
             "loyalty_points": getattr(customer_doc, "loyalty_points", None),
         }
@@ -741,7 +760,6 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
         frappe.throw(_("Failed to create/update customer: {0}").format(str(e)))
 
 
-
 def create_customer_address(customer, address_line1, city, country):
     """Create a primary address for the customer."""
     try:
@@ -749,18 +767,16 @@ def create_customer_address(customer, address_line1, city, country):
         address.address_line1 = address_line1
         address.city = city
         address.country = country
-        address.append("links", {
-            "link_doctype": "Customer",
-            "link_name": customer
-        })
+        address.append("links", {"link_doctype": "Customer", "link_name": customer})
         address.insert(ignore_permissions=True)
         frappe.db.commit()
-        
+
         frappe.db.set_value("Customer", customer, "customer_primary_address", address.name)
         frappe.db.commit()
-        
+
     except Exception as e:
         frappe.log_error(f"Address creation failed: {str(e)}", "Address Creation Error")
+
 
 @frappe.whitelist()
 def create_customer(
