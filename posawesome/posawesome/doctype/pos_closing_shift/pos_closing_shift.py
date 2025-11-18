@@ -960,14 +960,6 @@ def get_closing_shift_overview(pos_opening_shift):
             if row["mode_of_payment"] != cash_mode_of_payment:
                 continue
 
-            change_row = change_totals_by_currency.get(row["currency"])
-            if change_row:
-                row["total"] -= flt(change_row.get("total"))
-
-                base_change = change_row.get("company_currency_total")
-                if base_change:
-                    row["company_currency_total"] -= flt(base_change)
-
             overpayment_change_row = overpayment_change_totals_by_currency.get(
                 row["currency"]
             )
