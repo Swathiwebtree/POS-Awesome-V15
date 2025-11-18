@@ -1,0 +1,205 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:vehicle_no",
+ "creation": "2025-11-18 12:55:06.887455",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "trans_number",
+  "vehicle_no",
+  "customer",
+  "model",
+  "chasis_no",
+  "color",
+  "reg_no",
+  "warranty",
+  "odometer",
+  "date",
+  "engine",
+  "body",
+  "year",
+  "division",
+  "address",
+  "po_box",
+  "city",
+  "tin",
+  "tel_mobile",
+  "office_tel",
+  "home_tel",
+  "bill_to",
+  "stationed",
+  "location",
+  "sales_rep",
+  "comments"
+ ],
+ "fields": [
+  {
+   "fieldname": "trans_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Transaction Number",
+   "unique": 1
+  },
+  {
+   "fieldname": "vehicle_no",
+   "fieldtype": "Link",
+   "label": "Vehicle No",
+   "options": "Vehicle",
+   "unique": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "fieldname": "chasis_no",
+   "fieldtype": "Data",
+   "label": "Chasis No"
+  },
+  {
+   "fieldname": "color",
+   "fieldtype": "Data",
+   "label": "Color"
+  },
+  {
+   "fieldname": "reg_no",
+   "fieldtype": "Data",
+   "label": "Registration No"
+  },
+  {
+   "fieldname": "warranty",
+   "fieldtype": "Select",
+   "label": "Warranty",
+   "options": "Yes\nNo"
+  },
+  {
+   "fieldname": "odometer",
+   "fieldtype": "Int",
+   "label": "Odometer"
+  },
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "label": "Date"
+  },
+  {
+   "fieldname": "engine",
+   "fieldtype": "Data",
+   "label": "Engine"
+  },
+  {
+   "fieldname": "body",
+   "fieldtype": "Data",
+   "label": "Body"
+  },
+  {
+   "fieldname": "year",
+   "fieldtype": "Int",
+   "label": "Year"
+  },
+  {
+   "fieldname": "division",
+   "fieldtype": "Link",
+   "label": "Division",
+   "options": "Division"
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "po_box",
+   "fieldtype": "Data",
+   "label": "PO Box"
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "tin",
+   "fieldtype": "Data",
+   "label": "TIN"
+  },
+  {
+   "fieldname": "tel_mobile",
+   "fieldtype": "Data",
+   "label": "Mobile"
+  },
+  {
+   "fieldname": "office_tel",
+   "fieldtype": "Data",
+   "label": "Office Tel"
+  },
+  {
+   "fieldname": "home_tel",
+   "fieldtype": "Data",
+   "label": "Home Tel"
+  },
+  {
+   "fieldname": "bill_to",
+   "fieldtype": "Data",
+   "label": "Bill To"
+  },
+  {
+   "fieldname": "stationed",
+   "fieldtype": "Data",
+   "label": "Stationed"
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Link",
+   "label": "Location",
+   "options": "Location"
+  },
+  {
+   "fieldname": "sales_rep",
+   "fieldtype": "Link",
+   "label": "Sales Rep",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-11-18 15:33:12.823005",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "Vehicle Master",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

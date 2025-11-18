@@ -274,6 +274,7 @@ fixtures = [
                     "POS Profile-posa_enable_camera_scanning",
                     "POS Profile-posa_camera_scan_type",
                     "POS Profile-posa_language",
+                    
                 ),
             ]
         ],
@@ -301,6 +302,7 @@ fixtures = [
                 [
                     "POS Profile-posa_allow_multi_currency",
                     "POS Profile-posa_decimal_precision",
+                    "Customer-custom_vehicle_no"
                 ],
             ]
         ],
