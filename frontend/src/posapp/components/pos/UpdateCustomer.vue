@@ -630,7 +630,7 @@ export default {
 							make: this.vehicle_make,
 							model: this.vehicle_model,
 							mobile_no: this.mobile_no,
-							odometer: this.odometer
+							odometer: this.odometer,
 						}
 					: {};
 

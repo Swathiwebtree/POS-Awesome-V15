@@ -497,6 +497,7 @@ def _parse_numeric(value):
         except Exception:
             return None
 
+
 def _set_odometer_on_doc(doc, od_value):
     """
     Write odometer value to doc on common odometer-like fields that exist.
@@ -526,6 +527,7 @@ def _set_odometer_on_doc(doc, od_value):
             pass
 
     return set_any
+
 
 @frappe.whitelist()
 def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
@@ -602,7 +604,13 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
 
     def _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc=None):
         """Try payload keys first, then vehicle_doc fields as fallback. Returns Decimal or None."""
-        candidates = ["odometer", "odometer_value_last", "odometer_value", "odometer_last", "odometer_reading"]
+        candidates = [
+            "odometer",
+            "odometer_value_last",
+            "odometer_value",
+            "odometer_last",
+            "odometer_reading",
+        ]
         for k in candidates:
             if vehicle_data and vehicle_data.get(k) not in (None, ""):
                 parsed = _parse_numeric(vehicle_data.get(k))
@@ -710,7 +718,8 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
                     v = frappe.new_doc("Vehicle")
 
                     # map incoming fields (defensively)
-                    if vehicle_data.get("make") is not None: v.make = vehicle_data.get("make")
+                    if vehicle_data.get("make") is not None:
+                        v.make = vehicle_data.get("make")
                     if vehicle_data.get("model") is not None:
                         # check existence of Vehicle Model link before assigning if it's Link
                         if frappe.db.exists("Vehicle Model", vehicle_data.get("model")):
@@ -791,7 +800,7 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
                         v.insert(ignore_permissions=True)
                     except LinkValidationError:
                         # clear invalid link fields and retry
-                        for f in (vehicle_meta.fields or []):
+                        for f in vehicle_meta.fields or []:
                             if f.fieldtype == "Link":
                                 val = getattr(v, f.fieldname, None)
                                 if val and not frappe.db.exists(f.options, val):
@@ -836,12 +845,14 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
                         vm.name = vehicle_doc.name
                         vm.vehicle_no = vehicle_doc.name
                         vm.customer = customer_doc.name
-                        if vehicle_data.get("make") is not None: vm.make = vehicle_data.get("make")
+                        if vehicle_data.get("make") is not None:
+                            vm.make = vehicle_data.get("make")
                         if vehicle_data.get("model") is not None:
                             # only set if Vehicle Model exists
                             if frappe.db.exists("Vehicle Model", vehicle_data.get("model")):
                                 vm.model = vehicle_data.get("model")
-                        if vehicle_data.get("mobile_no") is not None: vm.tel_mobile = vehicle_data.get("mobile_no")
+                        if vehicle_data.get("mobile_no") is not None:
+                            vm.tel_mobile = vehicle_data.get("mobile_no")
                         od_val = _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc)
                         if od_val is not None:
                             _set_odometer_on_doc(vm, od_val)
@@ -850,7 +861,7 @@ def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
                             vm.insert(ignore_permissions=True)
                         except LinkValidationError:
                             # clear invalid link fields and retry
-                            for f in (vm_meta.fields or []):
+                            for f in vm_meta.fields or []:
                                 if f.fieldtype == "Link":
                                     val = getattr(vm, f.fieldname, None)
                                     if val and not frappe.db.exists(f.options, val):
