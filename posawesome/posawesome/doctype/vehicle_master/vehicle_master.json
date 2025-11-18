@@ -83,7 +83,7 @@
   },
   {
    "fieldname": "odometer",
-   "fieldtype": "Int",
+   "fieldtype": "Float",
    "label": "Odometer"
   },
   {
@@ -178,7 +178,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-18 15:33:12.823005",
+ "modified": "2025-11-18 15:43:58.509221",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Vehicle Master",

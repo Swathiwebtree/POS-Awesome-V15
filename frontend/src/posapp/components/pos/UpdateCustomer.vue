@@ -82,11 +82,11 @@
 								<v-text-field
 									density="compact"
 									color="primary"
-									:label="frappe._('Tax ID')"
+									:label="frappe._('Odometer')"
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 									class="dark-field"
 									hide-details
-									v-model="tax_id"
+									v-model="odometer"
 								></v-text-field>
 							</v-col>
 							<v-col cols="12" v-if="!hideNonEssential">
@@ -292,6 +292,7 @@ export default {
 		vehicle_no: "",
 		vehicle_make: "",
 		vehicle_model: "",
+		odometer: "",
 		withVehicle: false, // Flag to show vehicle fields
 		countries: [
 			"Afghanistan",
@@ -457,6 +458,7 @@ export default {
 			this.vehicle_no = "";
 			this.vehicle_make = "";
 			this.vehicle_model = "";
+			this.odometer = "";
 			this.withVehicle = false;
 		},
 		getCustomerGroups() {
@@ -628,6 +630,7 @@ export default {
 							make: this.vehicle_make,
 							model: this.vehicle_model,
 							mobile_no: this.mobile_no,
+							odometer: this.odometer
 						}
 					: {};
 
