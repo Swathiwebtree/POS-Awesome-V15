@@ -642,7 +642,7 @@ def get_closing_shift_overview(pos_opening_shift):
                     reference_name,
                 )
 
-            if belongs_to_shift and reference_doctype == doctype:
+            if belongs_to_shift and reference_doctype in {"POS Invoice", "Sales Invoice"}:
                 overpayment_invoice_names.add(reference_name)
 
     def reference_base_amount(reference, fallback_rate=None):
