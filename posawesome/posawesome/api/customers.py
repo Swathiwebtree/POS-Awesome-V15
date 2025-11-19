@@ -436,7 +436,7 @@ def get_customer_by_vehicle(vehicle_no):
         filters={"vehicle_no": vehicle_no},
         fields=["name", "customer", "model", "chasis_no", "tel_mobile", "vehicle_no"],
         limit_page_length=1,
-        as_dict=True
+        as_dict=True,
     )
 
     # If no vehicle found
@@ -447,11 +447,7 @@ def get_customer_by_vehicle(vehicle_no):
 
     # If vehicle exists but no customer linked
     if not vehicle.get("customer"):
-        return {
-            "message": "Vehicle found but no customer linked",
-            "vehicle": vehicle,
-            "customer": {}
-        }
+        return {"message": "Vehicle found but no customer linked", "vehicle": vehicle, "customer": {}}
 
     # Fetch customer doc
     try:
@@ -478,7 +474,7 @@ def get_customer_by_vehicle(vehicle_no):
         return {
             "message": "Vehicle found but linked customer does not exist",
             "vehicle": vehicle,
-            "customer": {}
+            "customer": {},
         }
 
 
