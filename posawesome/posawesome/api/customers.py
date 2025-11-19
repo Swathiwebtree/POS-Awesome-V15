@@ -383,9 +383,9 @@ def get_customer_info(customer):
         {
             "name": v.name,
             "vehicle_no": v.vehicle_no,
-            "model": v.get("model", ""),   
-            "make": v.get("make", ""),       
-            "chasis_no": v.get("chasis_no", ""), 
+            "model": v.get("model", ""),
+            "make": v.get("make", ""),
+            "chasis_no": v.get("chasis_no", ""),
             "customer_name": customer_doc.customer_name,
             "mobile_no": customer_doc.mobile_no,
             "customer": customer_doc.name,

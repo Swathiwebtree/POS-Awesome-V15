@@ -107,7 +107,7 @@ doc_events = {
         "validate": "posawesome.posawesome.api.customer.validate",
         "after_insert": "posawesome.posawesome.api.customer.after_insert",
         "on_update": "posawesome.posawesome.api.customer_vehicle_update.update_vehicle_for_customer",
-        "after_save": "posawesome.posawesome.api.customer_vehicle_update.update_vehicle_for_customer"
+        "after_save": "posawesome.posawesome.api.customer_vehicle_update.update_vehicle_for_customer",
     },
 }
 

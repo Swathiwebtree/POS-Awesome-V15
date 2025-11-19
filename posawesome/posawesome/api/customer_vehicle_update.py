@@ -1,5 +1,6 @@
 import frappe
 
+
 def update_vehicle_for_customer(doc, method):
     vehicle_no = doc.custom_vehicle_no
 
