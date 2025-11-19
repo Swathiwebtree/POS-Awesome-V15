@@ -383,9 +383,9 @@ def get_customer_info(customer):
         {
             "name": v.name,
             "vehicle_no": v.vehicle_no,
-            "model": v.get("model", ""),   
-            "make": v.get("make", ""),       
-            "chasis_no": v.get("chasis_no", ""), 
+            "model": v.get("model", ""),
+            "make": v.get("make", ""),
+            "chasis_no": v.get("chasis_no", ""),
             "customer_name": customer_doc.customer_name,
             "mobile_no": customer_doc.mobile_no,
             "customer": customer_doc.name,
@@ -398,6 +398,7 @@ def get_customer_info(customer):
         res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
 
     return res
+
 
 @frappe.whitelist()
 def search_customers_new(query=None, limit=20):
@@ -465,16 +466,16 @@ def _build_customer_info(customer_name):
     # --- Standard fields ---
     res["email_id"] = customer_doc.email_id
     res["mobile_no"] = customer_doc.mobile_no
-    #res["image"] = customer_doc.image
+    # res["image"] = customer_doc.image
     res["loyalty_program"] = customer_doc.loyalty_program
-    #res["customer_price_list"] = customer_doc.default_price_list
-    #res["customer_group"] = customer_doc.customer_group
+    # res["customer_price_list"] = customer_doc.default_price_list
+    # res["customer_group"] = customer_doc.customer_group
     res["customer_type"] = customer_doc.customer_type
     res["territory"] = customer_doc.territory
-    #res["birthday"] = customer_doc.posa_birthday
-    #res["gender"] = customer_doc.gender
-    #res["tax_id"] = customer_doc.tax_id
-    #res["posa_discount"] = customer_doc.posa_discount
+    # res["birthday"] = customer_doc.posa_birthday
+    # res["gender"] = customer_doc.gender
+    # res["tax_id"] = customer_doc.tax_id
+    # res["posa_discount"] = customer_doc.posa_discount
     res["name"] = customer_doc.name
     res["customer_name"] = customer_doc.customer_name
     res["customer_group_price_list"] = frappe.get_value(
