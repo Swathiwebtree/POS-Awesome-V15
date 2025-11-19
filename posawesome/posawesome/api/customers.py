@@ -428,55 +428,58 @@ def get_customer_by_mobile(mobile_no):
 
 @frappe.whitelist()
 def get_customer_by_vehicle(vehicle_no):
-    """Return customer details for a vehicle number (exact match) with mobile info"""
+    """Return customer + vehicle details using exact vehicle_no match."""
 
-    if not vehicle_no:
-        frappe.throw(_("Vehicle number is required"))
+    # Fetch vehicle from Vehicle Master
+    vehicle_data = frappe.get_all(
+        "Vehicle Master",
+        filters={"vehicle_no": vehicle_no},
+        fields=["name", "customer", "model", "chasis_no", "tel_mobile", "vehicle_no"],
+        limit_page_length=1,
+        as_dict=True
+    )
 
+    # If no vehicle found
+    if not vehicle_data:
+        return {"message": "No vehicle found", "vehicle": {}, "customer": {}}
+
+    vehicle = vehicle_data[0]
+
+    # If vehicle exists but no customer linked
+    if not vehicle.get("customer"):
+        return {
+            "message": "Vehicle found but no customer linked",
+            "vehicle": vehicle,
+            "customer": {}
+        }
+
+    # Fetch customer doc
     try:
-        vehicle_data = frappe.get_all(
-            VEHICLE_DOCTYPE,
-            filters={"vehicle_no": vehicle_no},
-            fields=["name", "customer", "model", "chasis_no", "vehicle_no"],
-            limit_page_length=1,
-        )
+        cust_doc = frappe.get_doc("Customer", vehicle.customer)
 
-        if not vehicle_data:
-            return {}
+        customer = {
+            "name": cust_doc.name,
+            "customer_name": cust_doc.customer_name,
+            "email_id": cust_doc.email_id,
+            "mobile_no": cust_doc.mobile_no,
+            "tax_id": cust_doc.tax_id,
+            "customer_group": cust_doc.customer_group,
+            "territory": cust_doc.territory,
+            "posa_discount": getattr(cust_doc, "posa_discount", 0),
+        }
 
-        vehicle = vehicle_data[0]
-        cust_name = vehicle.get("customer")
+        return {
+            "message": "Success",
+            "vehicle": vehicle,
+            "customer": customer,
+        }
 
-        if not cust_name:
-            return {"vehicle": vehicle, "customer": {}}
-
-        # Retrieve customer details including mobile number
-        try:
-            cust_doc = frappe.get_doc("Customer", cust_name)
-            return {
-                "vehicle": {
-                    "name": vehicle.get("name"),
-                    "vehicle_no": vehicle.get("vehicle_no"),
-                    "model": vehicle.get("model"),
-                    "chasis_no": vehicle.get("chasis_no"),
-                },
-                "customer": {
-                    "name": cust_doc.name,
-                    "customer_name": cust_doc.customer_name,
-                    "email_id": getattr(cust_doc, "email_id", ""),
-                    "mobile_no": getattr(cust_doc, "mobile_no", ""),
-                    "tax_id": getattr(cust_doc, "tax_id", ""),
-                    "customer_group": cust_doc.customer_group,
-                    "territory": cust_doc.territory,
-                    "posa_discount": cust_doc.posa_discount,
-                },
-            }
-        except frappe.DoesNotExistError:
-            return {"vehicle": vehicle, "customer": {}}
-
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Vehicle Lookup Error")
-        return {}
+    except frappe.DoesNotExistError:
+        return {
+            "message": "Vehicle found but linked customer does not exist",
+            "vehicle": vehicle,
+            "customer": {}
+        }
 
 
 def _parse_numeric(value):
