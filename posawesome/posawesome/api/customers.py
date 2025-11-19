@@ -375,7 +375,7 @@ def get_customer_info(customer):
     vehicles = frappe.get_all(
         VEHICLE_DOCTYPE,
         filters={"customer": customer_doc.name},
-        fields=["name", "vehicle_no", "model", "make", "chasis_no"],
+        fields=["name", "vehicle_no"],
         limit_page_length=10,
     )
 
@@ -383,9 +383,9 @@ def get_customer_info(customer):
         {
             "name": v.name,
             "vehicle_no": v.vehicle_no,
-            "model": v.model,
-            "make": v.make,
-            "chasis_no": v.chasis_no,
+            "model": v.get("model", ""),   
+            "make": v.get("make", ""),       
+            "chasis_no": v.get("chasis_no", ""), 
             "customer_name": customer_doc.customer_name,
             "mobile_no": customer_doc.mobile_no,
             "customer": customer_doc.name,

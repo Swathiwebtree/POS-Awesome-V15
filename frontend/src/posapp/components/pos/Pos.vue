@@ -543,9 +543,9 @@ export default {
 			this.eventBus.on("register_pos_profile", async (data) => {
 				this.pos_profile = data.pos_profile;
 				this.get_items_groups();
+				this.refreshDrafts();
 				await this.initializeItems();
 				this.items_view = this.pos_profile.posa_default_card_view ? "card" : "list";
-				this.refreshDrafts();
 				this.active_price_list = this.pos_profile.selling_price_list;
 			});
 

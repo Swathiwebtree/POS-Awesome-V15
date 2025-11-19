@@ -44,9 +44,9 @@
   },
   {
    "fieldname": "vehicle_no",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Vehicle No",
-   "options": "Vehicle",
    "unique": 1
   },
   {
@@ -178,7 +178,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-18 15:43:58.509221",
+ "modified": "2025-11-19 11:18:25.958815",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Vehicle Master",
