@@ -3,48 +3,24 @@
 		<div style="flex: 1 1 0">
 			<Skeleton v-if="loadingVehicles" height="58" class="w-100" />
 
-			<v-autocomplete
-				v-else-if="vehicles.length > 1"
-				ref="vehicleDropdown"
-				class="vehicle-autocomplete sleek-field"
-				density="compact"
-				clearable
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				v-model="selectedVehicle"
-				:items="vehicles"
-				item-title="vehicle_no"
-				item-value="name"
-				hide-details
-				:disabled="loadingVehicles"
-				@update:modelValue="onVehicleSelect"
-				@update:search="onVehicleSearch"
-				:virtual-scroll="true"
-				:virtual-scroll-item-height="58"
-			>
+			<v-autocomplete v-else-if="vehicles.length > 1" ref="vehicleDropdown"
+				class="vehicle-autocomplete sleek-field" density="compact" clearable variant="solo"
+				:label="frappe._('Vehicle No')" v-model="selectedVehicle" :items="vehicles" item-title="vehicle_no"
+				item-value="name" hide-details :disabled="loadingVehicles" @update:modelValue="onVehicleSelect"
+				@update:search="onVehicleSearch" :virtual-scroll="true" :virtual-scroll-item-height="58">
 				<template #prepend-inner>
 					<v-tooltip text="Edit vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_vehicle"
-								>mdi-car-edit</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_vehicle">mdi-car-edit</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -73,62 +49,33 @@
 				</template>
 			</v-autocomplete>
 
-			<v-text-field
-				v-else-if="vehicles.length === 1 && vehicles[0].name"
-				readonly
-				dense
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				v-model="vehicle_no"
-			>
+			<v-text-field v-else-if="vehicles.length === 1 && vehicles[0].name" readonly dense variant="solo"
+				:label="frappe._('Vehicle No')" v-model="vehicle_no">
 				<template #prepend-inner>
 					<v-tooltip text="Edit vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_vehicle"
-								>mdi-car-edit</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_vehicle">mdi-car-edit</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
 			</v-text-field>
 
-			<v-text-field
-				v-else
-				v-model="vehicle_no"
-				dense
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				placeholder="Enter vehicle no and press Enter"
-				@keydown.enter.prevent="onVehicleNoEnter"
-				hide-details
-			>
+			<v-text-field v-else v-model="vehicle_no" dense variant="solo" :label="frappe._('Vehicle No')"
+				placeholder="Enter vehicle no and press Enter" @keydown.enter.prevent="onVehicleNoEnter" hide-details>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -137,44 +84,19 @@
 
 		<div style="flex: 1 1 0">
 			<Skeleton v-if="loadingCustomers" height="58" class="w-100" />
-			<v-autocomplete
-				v-else
-				ref="customerDropdown"
-				class="customer-autocomplete sleek-field"
-				density="compact"
-				clearable
-				variant="solo"
-				color="#4169E1"
-				:label="frappe._('Customer')"
-				v-model="internalCustomer"
-				:items="filteredCustomers"
-				item-title="customer_name"
-				item-value="name"
-				:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-				:no-data-text="
-					isCustomerBackgroundLoading ? __('Loading customer data...') : __('Customers not found')
-				"
-				hide-details
-				:customFilter="() => true"
-				:disabled="effectiveReadonly || loadingCustomers"
-				:menu-props="{ closeOnContentClick: false }"
-				@update:menu="onCustomerMenuToggle"
-				@update:modelValue="onCustomerChange"
-				@update:search="onCustomerSearch"
-				@keydown.enter="handleEnter"
-				:virtual-scroll="true"
-				:virtual-scroll-item-height="58"
-			>
+			<v-autocomplete v-else ref="customerDropdown" class="customer-autocomplete sleek-field" density="compact"
+				clearable variant="solo" color="#4169E1" :label="frappe._('Customer')" v-model="internalCustomer"
+				:items="filteredCustomers" item-title="customer_name" item-value="name"
+				:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" :no-data-text="isCustomerBackgroundLoading ? __('Loading customer data...') : __('Customers not found')
+					" hide-details :customFilter="() => true" :disabled="effectiveReadonly || loadingCustomers"
+				:menu-props="{ closeOnContentClick: false }" @update:menu="onCustomerMenuToggle"
+				@update:modelValue="onCustomerChange" @update:search="onCustomerSearch" @keydown.enter="handleEnter"
+				:virtual-scroll="true" :virtual-scroll-item-height="58">
 				<template #prepend-inner>
 					<v-tooltip text="Edit customer">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_customer"
-								>mdi-account-edit</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_customer">mdi-account-edit</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -182,13 +104,8 @@
 				<template #append-inner>
 					<v-tooltip text="Add new customer">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_customer"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_customer">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -456,6 +373,54 @@ export default {
 				this.selectedVehicle = null;
 				this.isMenuOpen = false;
 				event.target.blur();
+			}
+		},
+
+		async searchCustomerByMobile(mobile) {
+			// normalize
+			const mobile_no = (mobile || '').toString().trim();
+			if (!mobile_no) {
+				this.customerNotFound = false;
+				return;
+			}
+
+			// show loading UI if you want
+			this.searchingCustomer = true;
+			this.customerNotFound = false;
+
+			try {
+				// frappe.call style (ERPNext frontend)
+				frappe.call({
+					method: "posawesome.posawesome.api.customers.get_customer_by_mobile",
+					args: { mobile_no },
+					callback: (r) => {
+						const msg = r?.message ?? null;
+						if (msg) {
+							// populate invoice_doc (adapt field names you use)
+							this.invoice_doc.customer = msg.name || msg.customer_name || "";
+							this.invoice_doc.customer_name = msg.customer_name || msg.name || "";
+							this.invoice_doc.mobile_no = msg.mobile_no || mobile_no;
+							// clear not-found state
+							this.customerNotFound = false;
+						} else {
+							// nothing returned -> not found
+							this.customerNotFound = true;
+							// optional: clear any previous customer selection
+							this.invoice_doc.customer = null;
+							this.invoice_doc.customer_name = null;
+						}
+						this.searchingCustomer = false;
+					},
+					error: (err) => {
+						console.error("searchCustomerByMobile error:", err);
+						this.customerNotFound = true;
+						this.searchingCustomer = false;
+					}
+				});
+			} catch (e) {
+				console.error(e);
+				this.customerNotFound = true;
+				this.searchingCustomer = false;
 			}
 		},
 

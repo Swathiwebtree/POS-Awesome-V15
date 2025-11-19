@@ -383,6 +383,162 @@ def get_customer_info(customer):
         {
             "name": v.name,
             "vehicle_no": v.vehicle_no,
+            "model": v.get("model", ""),   
+            "make": v.get("make", ""),       
+            "chasis_no": v.get("chasis_no", ""), 
+            "customer_name": customer_doc.customer_name,
+            "mobile_no": customer_doc.mobile_no,
+            "customer": customer_doc.name,
+        }
+        for v in vehicles
+        if v.get("vehicle_no")
+    ]
+
+    if res["vehicles"]:
+        res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
+
+    return res
+
+@frappe.whitelist()
+def search_customers_new(query=None, limit=20):
+    """
+    Search customers by partial name or mobile number and return
+    the FULL detailed customer object (same shape as get_customer_info)
+    for each match.
+
+    - query: partial search string (required)
+    - limit: max number of customers to return (default 20, capped at 200)
+    """
+    if not query:
+        return {"customers": [], "count": 0}
+
+    # sanitize and cap limit
+    q = str(query).strip()
+    try:
+        limit = min(200, abs(int(limit)))
+    except Exception:
+        limit = 20
+
+    search_term = f"%{q}%"
+
+    try:
+        rows = frappe.db.sql(
+            """
+            SELECT name
+            FROM `tabCustomer`
+            WHERE (LOWER(customer_name) LIKE LOWER(%s) OR mobile_no LIKE %s)
+            ORDER BY customer_name ASC
+            LIMIT %s
+            """,
+            (search_term, search_term, limit),
+            as_dict=True,
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "search_customers - sql error")
+        return {"customers": [], "count": 0}
+
+    if not rows:
+        return {"customers": [], "count": 0}
+
+    customers = []
+    for r in rows:
+        cust_name = r.get("name")
+        try:
+            customers.append(_build_customer_info(cust_name))
+        except Exception:
+            # log but continue; skip problematic customers
+            frappe.log_error(frappe.get_traceback(), f"search_customers - building info for {cust_name}")
+            continue
+
+    return {"customers": customers, "count": len(customers)}
+
+
+def _build_customer_info(customer_name):
+    """
+    Helper: build the same detailed customer response you used in get_customer_info.
+    Reuse or replace this with your existing builder if you already have one.
+    """
+    customer_doc = frappe.get_doc("Customer", customer_name)
+
+    res = {"loyalty_points": 0, "conversion_factor": 0}
+
+    # --- Standard fields ---
+    res["email_id"] = customer_doc.email_id
+    res["mobile_no"] = customer_doc.mobile_no
+    #res["image"] = customer_doc.image
+    res["loyalty_program"] = customer_doc.loyalty_program
+    #res["customer_price_list"] = customer_doc.default_price_list
+    #res["customer_group"] = customer_doc.customer_group
+    res["customer_type"] = customer_doc.customer_type
+    res["territory"] = customer_doc.territory
+    #res["birthday"] = customer_doc.posa_birthday
+    #res["gender"] = customer_doc.gender
+    #res["tax_id"] = customer_doc.tax_id
+    #res["posa_discount"] = customer_doc.posa_discount
+    res["name"] = customer_doc.name
+    res["customer_name"] = customer_doc.customer_name
+    res["customer_group_price_list"] = frappe.get_value(
+        "Customer Group", customer_doc.customer_group, "default_price_list"
+    )
+
+    # Loyalty Points
+    if customer_doc.loyalty_program:
+        current_company = frappe.db.get_single_value("Global Defaults", "default_company") or "webtree"
+
+        conversion_factor = frappe.db.get_value(
+            "Loyalty Program", customer_doc.loyalty_program, "conversion_factor"
+        )
+        res["conversion_factor"] = flt(conversion_factor) or 1
+
+        loyalty_points = get_loyalty_points(customer_doc.name, customer_doc.loyalty_program, current_company)
+        res["loyalty_points"] = loyalty_points
+
+    # --- Address Query (shipping) ---
+    addresses = frappe.db.sql(
+        """
+        SELECT
+            address.name as address_name,
+            address.address_line1,
+            address.address_line2,
+            address.city,
+            address.state,
+            address.country,
+            address.address_type
+        FROM `tabAddress` address
+        INNER JOIN `tabDynamic Link` link
+            ON (address.name = link.parent)
+        WHERE
+            link.link_doctype = 'Customer'
+            AND link.link_name = %s
+            AND address.disabled = 0
+            AND address.address_type = 'Shipping'
+        ORDER BY address.creation DESC
+        LIMIT 1
+        """,
+        (customer_doc.name,),
+        as_dict=True,
+    )
+
+    if addresses:
+        addr = addresses[0]
+        res["address_line1"] = addr.address_line1 or ""
+        res["address_line2"] = addr.address_line2 or ""
+        res["city"] = addr.city or ""
+        res["state"] = addr.state or ""
+        res["country"] = addr.country or ""
+
+    # --- Vehicles with customer details ---
+    vehicles = frappe.get_all(
+        VEHICLE_DOCTYPE,
+        filters={"customer": customer_doc.name},
+        fields=["name", "vehicle_no", "model", "make", "chasis_no"],
+        limit_page_length=10,
+    )
+
+    res["vehicles"] = [
+        {
+            "name": v.name,
+            "vehicle_no": v.vehicle_no,
             "model": v.get("model", ""),
             "make": v.get("make", ""),
             "chasis_no": v.get("chasis_no", ""),
@@ -428,54 +584,55 @@ def get_customer_by_mobile(mobile_no):
 
 @frappe.whitelist()
 def get_customer_by_vehicle(vehicle_no):
-    """Return customer + vehicle details using exact vehicle_no match."""
+    """Return customer details for a vehicle number (exact match) with mobile info"""
 
-    # Fetch vehicle from Vehicle Master
-    vehicle_data = frappe.get_all(
-        "Vehicle Master",
-        filters={"vehicle_no": vehicle_no},
-        fields=["name", "customer", "model", "chasis_no", "tel_mobile", "vehicle_no"],
-        limit_page_length=1,
-        as_dict=True,
-    )
+    if not vehicle_no:
+        frappe.throw(_("Vehicle number is required"))
 
-    # If no vehicle found
-    if not vehicle_data:
-        return {"message": "No vehicle found", "vehicle": {}, "customer": {}}
-
-    vehicle = vehicle_data[0]
-
-    # If vehicle exists but no customer linked
-    if not vehicle.get("customer"):
-        return {"message": "Vehicle found but no customer linked", "vehicle": vehicle, "customer": {}}
-
-    # Fetch customer doc
     try:
-        cust_doc = frappe.get_doc("Customer", vehicle.customer)
+        vehicle_data = frappe.get_all(
+            VEHICLE_DOCTYPE,
+            filters={"vehicle_no": vehicle_no},
+            fields=["name", "customer", "model", "chasis_no", "vehicle_no"],
+            limit_page_length=1,
+        )
 
-        customer = {
-            "name": cust_doc.name,
-            "customer_name": cust_doc.customer_name,
-            "email_id": cust_doc.email_id,
-            "mobile_no": cust_doc.mobile_no,
-            "tax_id": cust_doc.tax_id,
-            "customer_group": cust_doc.customer_group,
-            "territory": cust_doc.territory,
-            "posa_discount": getattr(cust_doc, "posa_discount", 0),
-        }
+        if not vehicle_data:
+            return {}
 
-        return {
-            "message": "Success",
-            "vehicle": vehicle,
-            "customer": customer,
-        }
+        vehicle = vehicle_data[0]
+        cust_name = vehicle.get("customer")
 
-    except frappe.DoesNotExistError:
-        return {
-            "message": "Vehicle found but linked customer does not exist",
-            "vehicle": vehicle,
-            "customer": {},
-        }
+        if not cust_name:
+            return {"vehicle": vehicle, "customer": {}}
+
+        # Retrieve customer details including mobile number
+        try:
+            cust_doc = frappe.get_doc("Customer", cust_name)
+            return {
+                "vehicle": {
+                    "name": vehicle.get("name"),
+                    "vehicle_no": vehicle.get("vehicle_no"),
+                    "model": vehicle.get("model"),
+                    "chasis_no": vehicle.get("chasis_no"),
+                },
+                "customer": {
+                    "name": cust_doc.name,
+                    "customer_name": cust_doc.customer_name,
+                    "email_id": getattr(cust_doc, "email_id", ""),
+                    "mobile_no": getattr(cust_doc, "mobile_no", ""),
+                    "tax_id": getattr(cust_doc, "tax_id", ""),
+                    "customer_group": cust_doc.customer_group,
+                    "territory": cust_doc.territory,
+                    "posa_discount": cust_doc.posa_discount,
+                },
+            }
+        except frappe.DoesNotExistError:
+            return {"vehicle": vehicle, "customer": {}}
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Vehicle Lookup Error")
+        return {}
 
 
 def _parse_numeric(value):
