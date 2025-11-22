@@ -493,8 +493,7 @@ export default {
 			this.updateHeadersFromSelection();
 		},
 
-
-    // Add this NEW method to handle frequent card application
+		// Add this NEW method to handle frequent card application
 		handleApplyFrequentCard(cardData) {
 			console.log("[Invoice] Applying frequent card:", cardData);
 
@@ -504,7 +503,7 @@ export default {
 					item_code: cardData.item_code,
 					item_name: cardData.item_name || cardData.service_item_name,
 					qty: 1,
-					rate: 0,  // FREE!
+					rate: 0, // FREE!
 					price_list_rate: 0,
 					discount_percentage: 100,
 					discount_amount: 0,
@@ -515,7 +514,7 @@ export default {
 					uom: "Nos",
 					stock_uom: "Nos",
 					conversion_factor: 1,
-					posa_row_id: this.makeid(50),  // Generate unique ID
+					posa_row_id: this.makeid(50), // Generate unique ID
 				};
 
 				// CORRECT: Add to local items array
@@ -530,14 +529,13 @@ export default {
 				// Show success message
 				frappe.show_alert({
 					message: this.__(`🎉 Free ${cardData.service_item_name} added to invoice!`),
-					indicator: "green"
+					indicator: "green",
 				});
-
 			} catch (error) {
 				console.error("[Invoice] Error applying frequent card:", error);
 				frappe.show_alert({
 					message: this.__("Failed to add free service"),
-					indicator: "red"
+					indicator: "red",
 				});
 			}
 		},

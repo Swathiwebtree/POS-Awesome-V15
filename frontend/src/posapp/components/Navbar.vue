@@ -203,29 +203,29 @@ export default {
 			mini: true,
 			item: 0,
 			items: [
-				{ 
-					name: "POS", 
+				{
+					name: "POS",
 					text: "POS",
 					icon: "mdi-network-pos",
 					route: "point-of-sale", // Standard Frappe POS
 					routeType: "frappe", // Use Frappe routing
-					submodules: []
+					submodules: [],
 				},
-				{ 
-					name: "Payments", 
+				{
+					name: "Payments",
 					text: "Payments",
 					icon: "mdi-credit-card",
 					route: "List/Payment Entry", // Payment Entry DocType List
 					routeType: "frappe", // Use Frappe routing
-					submodules: []
+					submodules: [],
 				},
-				{ 
-					name: "LazerPOS", 
+				{
+					name: "LazerPOS",
 					text: "LazerPOS",
 					icon: "mdi-cash-register",
 					route: "posawesome", // Your custom POS Awesome app
 					routeType: "frappe", // Use Frappe routing
-					submodules: []
+					submodules: [],
 				},
 			],
 			company: "LazerPOS",
@@ -298,10 +298,10 @@ export default {
 		 */
 		handlePageChange(page) {
 			console.log("Navigating to page:", page);
-			
+
 			// Find the item that matches the page name
-			const item = this.items.find(i => i.name === page || i.text === page);
-			
+			const item = this.items.find((i) => i.name === page || i.text === page);
+
 			if (!item) {
 				console.warn(`No item found for page: ${page}`);
 				// Fallback to emit event
@@ -312,7 +312,7 @@ export default {
 			// Get the route from the item
 			const route = item.route;
 			const routeType = item.routeType || "frappe";
-			
+
 			if (!route) {
 				console.warn(`No route defined for page: ${page}`);
 				return;

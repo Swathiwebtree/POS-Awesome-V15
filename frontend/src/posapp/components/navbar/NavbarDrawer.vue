@@ -141,9 +141,9 @@ export default {
 		selectModule(module) {
 			const moduleName = module.name || module.text;
 			this.activeModule = moduleName;
-			
+
 			console.log("Module selected:", moduleName);
-			
+
 			// If module has no submodules or empty submodules array, navigate directly
 			if (!module.submodules || module.submodules.length === 0) {
 				this.navigateToPage(moduleName);
@@ -164,7 +164,7 @@ export default {
 		navigateToPage(pageName) {
 			console.log("Navigating to:", pageName);
 			this.$emit("change-page", pageName);
-			
+
 			// Close drawer on mobile devices
 			if (window.innerWidth < 1024) {
 				this.closeDrawer();

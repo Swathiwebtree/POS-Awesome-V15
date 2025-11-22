@@ -643,13 +643,13 @@ def submit_invoice(invoice, data):
     # ============================================================
     # FREQUENT CARDS INTEGRATION - Process after invoice is submitted
     # ============================================================
-    
+
     # Only process frequent cards if invoice was successfully submitted
     if invoice_doc.docstatus == 1:
         try:
             for item in invoice_doc.items:
                 # Check if item has a frequent card reference (free service redemption)
-                if hasattr(item, 'frequent_card') and item.frequent_card:
+                if hasattr(item, "frequent_card") and item.frequent_card:
                     try:
                         # Link the redeemed card to this invoice using direct DB update
                         frappe.db.set_value(
@@ -657,68 +657,73 @@ def submit_invoice(invoice, data):
                             item.frequent_card,
                             "redeemed_invoice",
                             invoice_doc.name,
-                            update_modified=False
+                            update_modified=False,
                         )
                         frappe.db.commit()
-                        
-                        frappe.logger().info(f"Linked frequent card {item.frequent_card} to invoice {invoice_doc.name}")
+
+                        frappe.logger().info(
+                            f"Linked frequent card {item.frequent_card} to invoice {invoice_doc.name}"
+                        )
                     except Exception as card_error:
                         frappe.log_error(
                             f"Failed to link frequent card {item.frequent_card} to invoice {invoice_doc.name}: {str(card_error)}",
-                            "Frequent Card Linking Error"
+                            "Frequent Card Linking Error",
                         )
                 else:
                     # Auto-increment visits for service items (not returns)
                     if not invoice_doc.is_return:
                         try:
                             item_doc = frappe.get_cached_doc("Item", item.item_code)
-                            
+
                             # Only process service items (non-stock items)
                             if item_doc.is_stock_item == 0:
                                 result = create_or_update_card(
                                     customer=invoice_doc.customer,
                                     service_item=item.item_code,
-                                    company=invoice_doc.company
+                                    company=invoice_doc.company,
                                 )
-                                
-                                frappe.logger().info(f"Frequent card processed for {item.item_code}: {result.get('status')}")
-                                
+
+                                frappe.logger().info(
+                                    f"Frequent card processed for {item.item_code}: {result.get('status')}"
+                                )
+
                                 # Show success message if card is now completed
                                 if result.get("status") == "updated":
                                     card_data = result.get("card", {})
                                     if card_data.get("status") == "Completed":
                                         # Card just became complete - notify user
                                         frappe.msgprint(
-                                            _("🎉 Congratulations! Your frequent card for {0} is now complete. Next service is FREE!").format(
-                                                item.item_name or item.item_code
-                                            ),
+                                            _(
+                                                "🎉 Congratulations! Your frequent card for {0} is now complete. Next service is FREE!"
+                                            ).format(item.item_name or item.item_code),
                                             indicator="green",
                                             alert=True,
-                                            title=_("Frequent Card Completed!")
+                                            title=_("Frequent Card Completed!"),
                                         )
                                 elif result.get("status") == "created":
                                     # New card created
                                     frappe.logger().info(f"New frequent card created for {item.item_code}")
-                                    
+
                         except Exception as card_error:
                             # Don't fail the invoice if card processing fails
                             frappe.log_error(
                                 f"Failed to process frequent card for item {item.item_code} in invoice {invoice_doc.name}: {str(card_error)}",
-                                "Frequent Card Processing Error"
+                                "Frequent Card Processing Error",
                             )
         except ImportError:
             frappe.log_error(
                 "Frequent cards module not found. Please ensure posawesome.posawesome.api.frequent_cards exists.",
-                "Frequent Cards Import Error"
+                "Frequent Cards Import Error",
             )
         except Exception as e:
             # Log error but don't fail the invoice submission
             frappe.log_error(
                 f"Unexpected error processing frequent cards for invoice {invoice_doc.name}: {str(e)}",
-                "Frequent Cards General Error"
+                "Frequent Cards General Error",
             )
-    
+
     return {"name": invoice_doc.name, "status": invoice_doc.docstatus}
+
 
 def submit_in_background_job(kwargs):
     invoice = kwargs.get("invoice")
@@ -747,7 +752,7 @@ def submit_in_background_job(kwargs):
 
     invoice_doc.submit()
     redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
-    
+
     # ============================================================
     # FREQUENT CARDS INTEGRATION - Background Job
     # ============================================================
@@ -755,7 +760,7 @@ def submit_in_background_job(kwargs):
         try:
             for item in invoice_doc.items:
                 # Check if item has a frequent card reference (free service redemption)
-                if hasattr(item, 'frequent_card') and item.frequent_card:
+                if hasattr(item, "frequent_card") and item.frequent_card:
                     try:
                         # Link the redeemed card to this invoice using direct DB update
                         frappe.db.set_value(
@@ -763,11 +768,13 @@ def submit_in_background_job(kwargs):
                             item.frequent_card,
                             "redeemed_invoice",
                             invoice_doc.name,
-                            update_modified=False
+                            update_modified=False,
                         )
                         frappe.db.commit()
-                        
-                        frappe.logger().info(f"[BG Job] Linked frequent card {item.frequent_card} to invoice {invoice_doc.name}")
+
+                        frappe.logger().info(
+                            f"[BG Job] Linked frequent card {item.frequent_card} to invoice {invoice_doc.name}"
+                        )
                     except Exception as e:
                         frappe.log_error(str(e), "Frequent Card Link Error (BG Job)")
                 else:
@@ -775,15 +782,17 @@ def submit_in_background_job(kwargs):
                     if not invoice_doc.is_return:
                         try:
                             item_doc = frappe.get_cached_doc("Item", item.item_code)
-                            
+
                             # Only process service items (non-stock items)
                             if item_doc.is_stock_item == 0:
                                 result = create_or_update_card(
                                     customer=invoice_doc.customer,
                                     service_item=item.item_code,
-                                    company=invoice_doc.company
+                                    company=invoice_doc.company,
                                 )
-                                frappe.logger().info(f"[BG Job] Frequent card processed for {item.item_code}: {result.get('status')}")
+                                frappe.logger().info(
+                                    f"[BG Job] Frequent card processed for {item.item_code}: {result.get('status')}"
+                                )
                         except Exception as e:
                             frappe.log_error(str(e), "Frequent Card Process Error (BG Job)")
         except Exception as e:

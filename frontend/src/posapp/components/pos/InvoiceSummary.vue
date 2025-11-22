@@ -186,7 +186,6 @@
 								</v-card>
 							</v-col>
 
-
 							<!-- Select Sales Order Button (Conditional) -->
 							<v-col
 								cols="12"
@@ -476,17 +475,26 @@
 															<v-chip
 																size="small"
 																:color="
-																	card.visits >= card.required_visits ? 'success' : 'orange'
+																	card.visits >= card.required_visits
+																		? 'success'
+																		: 'orange'
 																"
 															>
-																{{ card.visits }}/{{ card.required_visits }} visits
+																{{ card.visits }}/{{
+																	card.required_visits
+																}}
+																visits
 															</v-chip>
 														</v-col>
 														<v-col>
 															<v-progress-linear
-																:model-value="(card.visits / card.required_visits) * 100"
+																:model-value="
+																	(card.visits / card.required_visits) * 100
+																"
 																:color="
-																	card.visits >= card.required_visits ? 'success' : 'orange'
+																	card.visits >= card.required_visits
+																		? 'success'
+																		: 'orange'
 																"
 																height="6"
 																rounded
@@ -497,7 +505,12 @@
 
 												<!-- Status & Expiry -->
 												<div>
-													<v-chip v-if="card.is_expired" size="small" color="error" variant="flat">
+													<v-chip
+														v-if="card.is_expired"
+														size="small"
+														color="error"
+														variant="flat"
+													>
 														<v-icon size="small" left>mdi-clock-alert</v-icon>
 														{{ __("Expired") }}
 													</v-chip>
@@ -510,9 +523,15 @@
 														<v-icon size="small" left>mdi-gift</v-icon>
 														{{ __("Free Service Available!") }}
 													</v-chip>
-													<v-chip v-else size="small" color="grey" variant="outlined">
+													<v-chip
+														v-else
+														size="small"
+														color="grey"
+														variant="outlined"
+													>
 														<v-icon size="small" left>mdi-calendar</v-icon>
-														{{ __("Expires") }}: {{ formatDate(card.expiry_date) }}
+														{{ __("Expires") }}:
+														{{ formatDate(card.expiry_date) }}
 													</v-chip>
 												</div>
 											</v-col>
@@ -532,7 +551,9 @@
 							icon="mdi-information"
 						>
 							{{
-								__("Click on a completed card to add the free service to your invoice automatically")
+								__(
+									"Click on a completed card to add the free service to your invoice automatically",
+								)
 							}}
 						</v-alert>
 					</div>
@@ -633,9 +654,7 @@ export default {
 			);
 		},
 		hasCompletedCards() {
-			return this.frequentCards.some(
-				(card) => card.visits >= card.required_visits && !card.is_expired,
-			);
+			return this.frequentCards.some((card) => card.visits >= card.required_visits && !card.is_expired);
 		},
 		completedCardsCount() {
 			return this.frequentCards.filter(
@@ -953,8 +972,8 @@ export default {
 						rate: 0,
 						qty: 1,
 						discount_percentage: 100,
-						frequent_card: card.name,  // Important: link to card
-						name: card.name  // Also pass card name
+						frequent_card: card.name, // Important: link to card
+						name: card.name, // Also pass card name
 					});
 
 					frappe.show_alert({

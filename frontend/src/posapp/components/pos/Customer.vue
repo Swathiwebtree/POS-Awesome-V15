@@ -735,7 +735,7 @@ export default {
 		},
 
 		edit_customer() {
-			this.eventBus.emit("open_update_customer", this.customer_info,{ withVehicle: true });
+			this.eventBus.emit("open_update_customer", this.customer_info, { withVehicle: true });
 		},
 
 		// --- Vehicle Methods ---

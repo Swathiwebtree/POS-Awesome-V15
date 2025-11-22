@@ -1,22 +1,40 @@
 <template>
-	<v-app-bar app flat height="56" :color="appBarColor" :theme="isDark ? 'dark' : 'light'"
+	<v-app-bar
+		app
+		flat
+		height="56"
+		:color="appBarColor"
+		:theme="isDark ? 'dark' : 'light'"
 		:class="['navbar-enhanced elevation-2 px-2 pb-1', rtlClasses, isRtl ? 'rtl-app-bar' : 'ltr-app-bar']"
-		:style="[rtlStyles, { flexDirection: isRtl ? 'row-reverse' : 'row' }]">
+		:style="[rtlStyles, { flexDirection: isRtl ? 'row-reverse' : 'row' }]"
+	>
 		<!-- Brand Section (left in LTR, right in RTL) -->
 		<div :class="['navbar-brand-section', isRtl ? 'rtl-brand-section' : 'ltr-brand-section']">
-			<div class="logo-box flex items-center justify-center rounded-lg"
-				style="width: 100px; height: 100px; cursor: pointer;"
-				@click="$emit('nav-click')">
+			<div
+				class="logo-box flex items-center justify-center rounded-lg"
+				style="width: 100px; height: 100px; cursor: pointer"
+				@click="$emit('nav-click')"
+			>
 				<v-img :src="lazerLogo" alt="Lazer Car Wash" max-width="100" max-height="100" contain />
 			</div>
 
-			<v-img :src="lazerLogo" alt="Lazer Car Wash" max-width="48" max-height="48"
-				:class="['navbar-logo', isRtl ? 'rtl-logo' : 'ltr-logo']" contain />
+			<v-img
+				:src="lazerLogo"
+				alt="Lazer Car Wash"
+				max-width="48"
+				max-height="48"
+				:class="['navbar-logo', isRtl ? 'rtl-logo' : 'ltr-logo']"
+				contain
+			/>
 
-			<v-toolbar-title @click="$emit('go-desk')" :class="[
-				'text-h6 font-weight-bold text-primary navbar-title',
-				isRtl ? 'rtl-title' : 'ltr-title',
-			]" style="cursor: pointer; text-decoration: none">
+			<v-toolbar-title
+				@click="$emit('go-desk')"
+				:class="[
+					'text-h6 font-weight-bold text-primary navbar-title',
+					isRtl ? 'rtl-title' : 'ltr-title',
+				]"
+				style="cursor: pointer; text-decoration: none"
+			>
 			</v-toolbar-title>
 		</div>
 
@@ -44,11 +62,16 @@
 				</div>
 			</div>
 
-			<v-btn icon color="primary" :class="[
+			<v-btn
+				icon
+				color="primary"
+				:class="[
 					'offline-invoices-btn',
 					isRtl ? 'rtl-offline-btn' : 'ltr-offline-btn',
 					{ 'has-pending': pendingInvoices > 0 },
-				]" @click="$emit('show-offline-invoices')">
+				]"
+				@click="$emit('show-offline-invoices')"
+			>
 				<v-badge v-if="pendingInvoices > 0" :content="pendingInvoices" color="error" overlap>
 					<v-icon>mdi-file-document-multiple-outline</v-icon>
 				</v-badge>
@@ -69,8 +92,14 @@
 					<span class="loading-message">{{ loadingMessage }}</span>
 					<div class="progress-badge">{{ loadingProgress }}%</div>
 				</div>
-				<v-progress-linear :model-value="loadingProgress" color="primary" height="4" absolute location="bottom"
-					class="glass-progress" />
+				<v-progress-linear
+					:model-value="loadingProgress"
+					color="primary"
+					height="4"
+					absolute
+					location="bottom"
+					class="glass-progress"
+				/>
 			</div>
 		</transition>
 	</v-app-bar>

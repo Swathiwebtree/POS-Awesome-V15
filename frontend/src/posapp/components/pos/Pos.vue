@@ -1,8 +1,11 @@
 <template>
 	<div class="pos-app-container">
 		<!-- Main POS Container -->
-		<div class="pos-main-container" :class="[rtlClasses, { 'fullscreen-mode': isFullscreen }]"
-			:style="[responsiveStyles, rtlStyles]">
+		<div
+			class="pos-main-container"
+			:class="[rtlClasses, { 'fullscreen-mode': isFullscreen }]"
+			:style="[responsiveStyles, rtlStyles]"
+		>
 			<ClosingDialog></ClosingDialog>
 			<SalesOrders></SalesOrders>
 			<Returns></Returns>
@@ -19,8 +22,13 @@
 							<v-icon left color="primary">mdi-file-document</v-icon>
 							<span>{{ __("Job orders") }}</span>
 							<v-spacer></v-spacer>
-							<v-btn icon size="small" @click="refreshDrafts" :loading="loadDraftsLoading"
-								:aria-label="__('Refresh Drafts')">
+							<v-btn
+								icon
+								size="small"
+								@click="refreshDrafts"
+								:loading="loadDraftsLoading"
+								:aria-label="__('Refresh Drafts')"
+							>
 								<v-icon>mdi-refresh</v-icon>
 							</v-btn>
 						</div>
@@ -43,8 +51,12 @@
 						<v-divider></v-divider>
 
 						<div class="invoice-wrapper">
-							<Invoice ref="invoiceComponent" :items_group="items_group" :item_group="item_group"
-								@update:item_group="handleItemGroupUpdate"></Invoice>
+							<Invoice
+								ref="invoiceComponent"
+								:items_group="items_group"
+								:item_group="item_group"
+								@update:item_group="handleItemGroupUpdate"
+							></Invoice>
 						</div>
 					</div>
 				</div>
@@ -57,20 +69,35 @@
 							<span>{{ __("Search Items") }}</span>
 							<v-spacer></v-spacer>
 							<v-btn-group density="compact" variant="outlined">
-								<v-btn size="small" :color="items_view === 'list' ? 'primary' : ''"
-									@click="switchToListView" :aria-label="__('List View')">
+								<v-btn
+									size="small"
+									:color="items_view === 'list' ? 'primary' : ''"
+									@click="switchToListView"
+									:aria-label="__('List View')"
+								>
 									<v-icon>mdi-view-list</v-icon>
 								</v-btn>
-								<v-btn size="small" :color="items_view === 'card' ? 'primary' : ''"
-									@click="switchToCardView" :aria-label="__('Card View')">
+								<v-btn
+									size="small"
+									:color="items_view === 'card' ? 'primary' : ''"
+									@click="switchToCardView"
+									:aria-label="__('Card View')"
+								>
 									<v-icon>mdi-view-grid</v-icon>
 								</v-btn>
 							</v-btn-group>
-							<v-btn icon size="small" color="primary" variant="text" @click="toggleFullscreen"
-								:title="isFullscreen ? __('Exit Fullscreen') : __('Fullscreen')" class="ml-2">
+							<v-btn
+								icon
+								size="small"
+								color="primary"
+								variant="text"
+								@click="toggleFullscreen"
+								:title="isFullscreen ? __('Exit Fullscreen') : __('Fullscreen')"
+								class="ml-2"
+							>
 								<v-icon>{{
 									isFullscreen ? "mdi-arrow-collapse" : "mdi-arrow-expand"
-									}}</v-icon>
+								}}</v-icon>
 							</v-btn>
 						</div>
 						<v-divider></v-divider>
@@ -78,9 +105,14 @@
 						<!-- Scrollable Items List -->
 						<div class="column-scroll-content items-scroll">
 							<!-- KEY FIX: make view reactive for ItemsSelector -->
-							<ItemsSelector :initial-view-mode="items_view" :view-mode="items_view"
-								@update-view-mode="handleItemsViewUpdate" :is-modal="false" :hide-filters="true"
-								ref="itemsSelectorComponent" />
+							<ItemsSelector
+								:initial-view-mode="items_view"
+								:view-mode="items_view"
+								@update-view-mode="handleItemsViewUpdate"
+								:is-modal="false"
+								:hide-filters="true"
+								ref="itemsSelectorComponent"
+							/>
 						</div>
 
 						<!-- FOOTER FILTERS IN ITEMS COLUMN -->
@@ -131,12 +163,12 @@
 												<v-btn class="offer-style-btn" @click="handleShowOffers">
 													<v-icon left size="18">mdi-tag-multiple</v-icon>
 													<div class="btn-text">
-														<div class="btn-title">{{ offersCount }} {{ __("Offers") }}
+														<div class="btn-title">
+															{{ offersCount }} {{ __("Offers") }}
 														</div>
 													</div>
 												</v-btn>
 											</v-col>
-
 
 											<v-col sm="2"></v-col>
 
@@ -144,12 +176,12 @@
 												<v-btn class="coupon-style-btn" @click="handleShowCoupons">
 													<v-icon left size="18">mdi-ticket-percent</v-icon>
 													<div class="btn-text">
-														<div class="btn-title">{{ couponsCount }} {{ __("Coupons") }}
+														<div class="btn-title">
+															{{ couponsCount }} {{ __("Coupons") }}
 														</div>
 													</div>
 												</v-btn>
 											</v-col>
-
 										</v-row>
 									</v-col>
 								</v-row>
@@ -712,66 +744,68 @@ export default {
 
 .offer-style-btn,
 .coupon-style-btn {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 12px;
-  box-sizing: border-box;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	gap: 12px;
+	box-sizing: border-box;
 
-  /* fixed/consistent sizing */
-  min-width: 170px;
-  max-width: 210px;
-  height: 48px !important;
-  padding: 8px 14px !important;
+	/* fixed/consistent sizing */
+	min-width: 170px;
+	max-width: 210px;
+	height: 48px !important;
+	padding: 8px 14px !important;
 
-  border-radius: 10px !important;
-  text-transform: none !important;
-  font-weight: 800 !important;
-  color: #fff !important;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-  overflow: visible !important;
+	border-radius: 10px !important;
+	text-transform: none !important;
+	font-weight: 800 !important;
+	color: #fff !important;
+	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
+	transition:
+		transform 0.12s ease,
+		box-shadow 0.12s ease;
+	overflow: visible !important;
 }
 
 /* Hover / active micro-interaction */
 .offer-style-btn:hover,
 .coupon-style-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14) !important;
+	transform: translateY(-2px);
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14) !important;
 }
 
 /* icon alignment (left) */
 .offer-icon,
 .coupon-icon {
-  flex: 0 0 auto;
-  margin-right: 6px;
-  margin-left: 0;
+	flex: 0 0 auto;
+	margin-right: 6px;
+	margin-left: 0;
 }
 
 /* text container: center-aligned, allow short wrap */
 .btn-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start; /* left align next to icon */
-  justify-content: center;
-  line-height: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start; /* left align next to icon */
+	justify-content: center;
+	line-height: 1;
 }
 
 /* Title: number + word */
 .btn-title {
-  font-size: 15px;
-  font-weight: 900;
-  line-height: 1;
-  display: inline-block;
-  white-space: nowrap; /* keep number + word on same line if space; otherwise truncate gracefully */
-  overflow: hidden;
-  text-overflow: ellipsis;
+	font-size: 15px;
+	font-weight: 900;
+	line-height: 1;
+	display: inline-block;
+	white-space: nowrap; /* keep number + word on same line if space; otherwise truncate gracefully */
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* make the descriptive word slightly lighter */
 .btn-word {
-  font-weight: 700;
-  margin-left: 6px;
+	font-weight: 700;
+	margin-left: 6px;
 }
 /* Add clean spacing between Offers and Coupons buttons */
 .offer-btn-wrapper,
@@ -789,42 +823,41 @@ export default {
 	margin-left: 12px; /* spacing */
 }
 
-
 /* optional subtitle (if used) */
 .btn-sub {
-  font-size: 11px;
-  opacity: 0.9;
-  margin-top: 2px;
+	font-size: 11px;
+	opacity: 0.9;
+	margin-top: 2px;
 }
 
 /* gradients */
 .offer-style-btn {
-  background: linear-gradient(90deg, #ff9a1c 0%, #ff7a00 60%, #ff6f00 100%) !important;
+	background: linear-gradient(90deg, #ff9a1c 0%, #ff7a00 60%, #ff6f00 100%) !important;
 }
 
 .coupon-style-btn {
-  background: linear-gradient(90deg, #43b6ff 0%, #2196f3 60%, #1976d2 100%) !important;
+	background: linear-gradient(90deg, #43b6ff 0%, #2196f3 60%, #1976d2 100%) !important;
 }
 
 /* Responsive: stack & full width on small screens */
 @media (max-width: 600px) {
-  .offer-style-btn,
-  .coupon-style-btn {
-    min-width: 100% !important;
-    max-width: 100% !important;
-    justify-content: flex-start !important;
-    padding-left: 16px !important;
-    height: 52px !important;
-  }
+	.offer-style-btn,
+	.coupon-style-btn {
+		min-width: 100% !important;
+		max-width: 100% !important;
+		justify-content: flex-start !important;
+		padding-left: 16px !important;
+		height: 52px !important;
+	}
 
-  .btn-text {
-    align-items: flex-start;
-  }
+	.btn-text {
+		align-items: flex-start;
+	}
 
-  .btn-title {
-    white-space: nowrap;
-    font-size: 15px;
-  }
+	.btn-title {
+		white-space: nowrap;
+		font-size: 15px;
+	}
 }
 
 /* Offers = Orange gradient */
@@ -854,7 +887,6 @@ export default {
 	font-size: 12px;
 	opacity: 0.9;
 }
-
 
 /* Invoice Card */
 .invoice-card {
