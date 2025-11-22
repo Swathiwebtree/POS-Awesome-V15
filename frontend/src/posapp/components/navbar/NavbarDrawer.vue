@@ -42,7 +42,7 @@
 
 				<!-- Submodules -->
 				<v-list
-					v-if="module.submodules && module.name === activeModule"
+					v-if="module.submodules && module.submodules.length > 0 && module.name === activeModule"
 					dense
 					nav
 					class="submodule-list"
@@ -133,22 +133,46 @@ export default {
 				this.mini = true;
 			}, 250);
 		},
+		/**
+		 * Select a module from the drawer
+		 * If it has no submodules, navigate directly
+		 * If it has submodules, expand to show them
+		 */
 		selectModule(module) {
-			this.activeModule = module.name || module.text;
-			// If module has no submodules, emit page change
+			const moduleName = module.name || module.text;
+			this.activeModule = moduleName;
+			
+			console.log("Module selected:", moduleName);
+			
+			// If module has no submodules or empty submodules array, navigate directly
 			if (!module.submodules || module.submodules.length === 0) {
-				this.selectSubmodule(module.name || module.text);
+				this.navigateToPage(moduleName);
 			}
 		},
+		/**
+		 * Select a submodule and navigate
+		 */
 		selectSubmodule(subName) {
+			console.log("Submodule selected:", subName);
 			this.activeSubmodule = subName;
-			this.$emit("change-page", subName);
-			if (window.innerWidth < 1024) this.closeDrawer();
+			this.navigateToPage(subName);
 		},
-		changePage(key) {
-			this.$emit("change-page", key);
-			if (window.innerWidth < 1024) this.closeDrawer();
+		/**
+		 * Navigate to a specific page
+		 * Emits the change-page event to parent component
+		 */
+		navigateToPage(pageName) {
+			console.log("Navigating to:", pageName);
+			this.$emit("change-page", pageName);
+			
+			// Close drawer on mobile devices
+			if (window.innerWidth < 1024) {
+				this.closeDrawer();
+			}
 		},
+		/**
+		 * Close the drawer
+		 */
 		closeDrawer() {
 			this.drawerOpen = false;
 			this.mini = true;
@@ -210,6 +234,14 @@ export default {
 	font-family: "Roboto", sans-serif;
 }
 
+/* Styling for submodule items */
+.drawer-subitem-title {
+	font-size: 0.9rem;
+	color: #000000 !important;
+	font-family: "Roboto", sans-serif;
+	margin-left: 16px;
+}
+
 /* Hover effect for all list items in the navigation drawer */
 .v-list-item:hover {
 	background-color: rgba(25, 118, 210, 0.08) !important;
@@ -238,9 +270,16 @@ export default {
 
 :deep([data-theme="dark"]) .drawer-item-title,
 :deep(.v-theme--dark) .drawer-item-title {
-	color: #000000 !important;
+	color: #ffffff !important;
 	font-weight: 500;
 	font-size: 0.95rem;
+	font-family: "Roboto", sans-serif;
+}
+
+:deep([data-theme="dark"]) .drawer-subitem-title,
+:deep(.v-theme--dark) .drawer-subitem-title {
+	color: #ffffff !important;
+	font-size: 0.9rem;
 	font-family: "Roboto", sans-serif;
 }
 

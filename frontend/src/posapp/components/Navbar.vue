@@ -73,7 +73,7 @@
 			:company-img="companyImg"
 			:items="items"
 			:is-dark="isDark"
-			@change-page="changePage"
+			@change-page="handlePageChange"
 		/>
 
 		<!-- Use the modular AboutDialog component -->
@@ -203,9 +203,30 @@ export default {
 			mini: true,
 			item: 0,
 			items: [
-				{ text: "POS", icon: "mdi-network-pos" },
-				{ text: "Payments", icon: "mdi-credit-card" },
-				{ text: "LazerPOS", icon: "mdi-cash-register" },
+				{ 
+					name: "POS", 
+					text: "POS",
+					icon: "mdi-network-pos",
+					route: "point-of-sale", // Standard Frappe POS
+					routeType: "frappe", // Use Frappe routing
+					submodules: []
+				},
+				{ 
+					name: "Payments", 
+					text: "Payments",
+					icon: "mdi-credit-card",
+					route: "List/Payment Entry", // Payment Entry DocType List
+					routeType: "frappe", // Use Frappe routing
+					submodules: []
+				},
+				{ 
+					name: "LazerPOS", 
+					text: "LazerPOS",
+					icon: "mdi-cash-register",
+					route: "posawesome", // Your custom POS Awesome app
+					routeType: "frappe", // Use Frappe routing
+					submodules: []
+				},
 			],
 			company: "LazerPOS",
 			companyImg: posLogo,
@@ -270,6 +291,63 @@ export default {
 		},
 		goDesk() {
 			window.location.href = "/app";
+		},
+		/**
+		 * Handle page navigation when drawer items are clicked
+		 * This is the KEY method that handles navigation with proper routing
+		 */
+		handlePageChange(page) {
+			console.log("Navigating to page:", page);
+			
+			// Find the item that matches the page name
+			const item = this.items.find(i => i.name === page || i.text === page);
+			
+			if (!item) {
+				console.warn(`No item found for page: ${page}`);
+				// Fallback to emit event
+				this.$emit("change-page", page);
+				return;
+			}
+
+			// Get the route from the item
+			const route = item.route;
+			const routeType = item.routeType || "frappe";
+			
+			if (!route) {
+				console.warn(`No route defined for page: ${page}`);
+				return;
+			}
+
+			console.log(`Navigating to route: ${route} (type: ${routeType})`);
+
+			// Handle different routing types
+			if (routeType === "frappe") {
+				// Use Frappe's routing system
+				if (typeof frappe !== "undefined" && frappe.set_route) {
+					// For routes like "List/Payment Entry", split and pass as array
+					if (route.includes("/")) {
+						const routeParts = route.split("/");
+						frappe.set_route(routeParts);
+					} else {
+						frappe.set_route(route);
+					}
+				} else {
+					// Fallback to direct window navigation
+					window.location.href = `/app/${route}`;
+				}
+			} else if (routeType === "url") {
+				// Direct URL navigation
+				window.location.href = route;
+			} else if (routeType === "external") {
+				// External link (opens in new tab)
+				window.open(route, "_blank");
+			}
+
+			// Close drawer after navigation
+			this.drawer = false;
+
+			// Emit event for parent component if needed
+			this.$emit("change-page", page);
 		},
 		changePage(page) {
 			this.$emit("change-page", page);

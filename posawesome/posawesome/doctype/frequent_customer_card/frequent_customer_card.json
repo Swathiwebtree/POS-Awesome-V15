@@ -1,0 +1,140 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:FC-{customer}-{####}",
+ "creation": "2025-11-20 18:17:23.628164",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "card_name",
+  "customer",
+  "service_item",
+  "service_item_name",
+  "visits",
+  "required_visits",
+  "issue_date",
+  "expiry_date",
+  "company",
+  "status",
+  "redeemed_on",
+  "redeemed_invoice"
+ ],
+ "fields": [
+  {
+   "fieldname": "card_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Card_name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "service_item",
+   "fieldtype": "Link",
+   "label": "Service_item",
+   "options": "Item"
+  },
+  {
+   "fetch_from": "service_item.item_name",
+   "fieldname": "service_item_name",
+   "fieldtype": "Data",
+   "label": "Service_item_name"
+  },
+  {
+   "default": "0",
+   "fieldname": "visits",
+   "fieldtype": "Int",
+   "label": "Visits"
+  },
+  {
+   "default": "3",
+   "fieldname": "required_visits",
+   "fieldtype": "Int",
+   "label": "Required_visits"
+  },
+  {
+   "default": "Today",
+   "fieldname": "issue_date",
+   "fieldtype": "Date",
+   "label": "Issue_date"
+  },
+  {
+   "fieldname": "expiry_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Expiry_date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Active\nCompleted\nExpired\nRedeemed",
+   "sort_options": 1
+  },
+  {
+   "fieldname": "redeemed_on",
+   "fieldtype": "Datetime",
+   "label": "Redeemed_on",
+   "read_only": 1
+  },
+  {
+   "fieldname": "redeemed_invoice",
+   "fieldtype": "Link",
+   "label": "Redeemed_invoice",
+   "options": "Sales Invoice",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-11-20 18:35:43.655618",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "Frequent Customer Card",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Administrator",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

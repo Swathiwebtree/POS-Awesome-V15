@@ -6,19 +6,31 @@
 					<span v-if="customer_id" class="text-h5 text-primary">{{ __("Update Customer") }}</span>
 					<span v-else class="text-h5 text-primary">{{ __("Create Customer") }}</span>
 					<v-spacer></v-spacer>
-					<v-switch
+					<!-- <v-switch
 						v-model="hideNonEssential"
 						density="compact"
 						inset
 						hide-details
 						color="#4169E1"
 						:label="__('Hide Non Essential Fields')"
-					></v-switch>
+					></v-switch> -->
 				</v-card-title>
 				<v-card-text class="pa-0">
 					<v-container>
 						<v-row>
-							<v-col cols="12">
+							<v-col cols="6" v-if="withVehicle && !customer_id">
+								<v-text-field
+									density="compact"
+									color="primary"
+									:label="frappe._('Vehicle Number') + ' *'"
+									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+									class="dark-field"
+									hide-details
+									v-model="vehicle_no"
+									required
+								></v-text-field>
+							</v-col>
+							<v-col cols="6">
 								<v-text-field
 									density="compact"
 									color="primary"
@@ -27,22 +39,6 @@
 									hide-details
 									class="dark-field"
 									v-model="customer_name"
-								></v-text-field>
-							</v-col>
-							<v-col cols="12" v-if="withVehicle && !customer_id">
-								<v-divider class="my-2"></v-divider>
-								<div class="text-subtitle-1 text-primary">{{ __("Vehicle Details") }}</div>
-							</v-col>
-							<v-col cols="6" v-if="withVehicle && !customer_id">
-								<v-text-field
-									density="compact"
-									color="primary"
-									:label="frappe._('Vehicle # (VIN/License)') + ' *'"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-									hide-details
-									v-model="vehicle_no"
-									required
 								></v-text-field>
 							</v-col>
 							<v-col :cols="withVehicle && !customer_id ? 6 : 6">
@@ -60,22 +56,24 @@
 								<v-text-field
 									density="compact"
 									color="primary"
-									:label="frappe._('Make')"
+									:label="frappe._('Make') + ' *'"
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 									class="dark-field"
 									hide-details
 									v-model="vehicle_make"
+									required
 								></v-text-field>
 							</v-col>
 							<v-col cols="6" v-if="withVehicle && !customer_id">
 								<v-text-field
 									density="compact"
 									color="primary"
-									:label="frappe._('Model #')"
+									:label="frappe._('Model') + ' *'"
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 									class="dark-field"
 									hide-details
 									v-model="vehicle_model"
+									required
 								></v-text-field>
 							</v-col>
 							<v-col cols="6" v-if="!hideNonEssential">
@@ -89,7 +87,7 @@
 									v-model="odometer"
 								></v-text-field>
 							</v-col>
-							<v-col cols="12" v-if="!hideNonEssential">
+							<!-- <v-col cols="12" v-if="!hideNonEssential">
 								<v-text-field
 									density="compact"
 									color="primary"
@@ -99,9 +97,9 @@
 									class="dark-field"
 									v-model="address_line1"
 								></v-text-field>
-							</v-col>
+							</v-col> -->
 
-							<v-col cols="12" sm="6" v-if="!hideNonEssential">
+							<!-- <v-col cols="12" sm="6" v-if="!hideNonEssential">
 								<v-text-field
 									v-model="city"
 									variant="outlined"
@@ -110,9 +108,9 @@
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 									class="dark-field"
 								></v-text-field>
-							</v-col>
+							</v-col> -->
 
-							<v-col cols="12" sm="6" v-if="!hideNonEssential">
+							<!-- <v-col cols="12" sm="6" v-if="!hideNonEssential">
 								<v-select
 									v-model="country"
 									:items="countries"
@@ -122,9 +120,9 @@
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 									class="dark-field"
 								></v-select>
-							</v-col>
+							</v-col> -->
 
-							<v-col cols="6">
+							<!-- <v-col cols="6">
 								<v-text-field
 									density="compact"
 									color="primary"
@@ -134,8 +132,8 @@
 									hide-details
 									v-model="email_id"
 								></v-text-field>
-							</v-col>
-							<v-col cols="6">
+							</v-col> -->
+							<!-- <v-col cols="6">
 								<v-select
 									density="compact"
 									label="Gender"
@@ -144,8 +142,8 @@
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 									class="dark-field"
 								></v-select>
-							</v-col>
-							<v-col cols="6">
+							</v-col> -->
+							<!-- <v-col cols="6">
 								<v-text-field
 									density="compact"
 									color="primary"
@@ -155,8 +153,8 @@
 									hide-details
 									v-model="referral_code"
 								></v-text-field>
-							</v-col>
-							<v-col cols="6">
+							</v-col> -->
+							<!-- <v-col cols="6">
 								<v-text-field
 									v-model="birthday"
 									:label="frappe._('Birthday (DD-MM-YYYY)')"
@@ -169,7 +167,7 @@
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 									class="dark-field"
 								></v-text-field>
-							</v-col>
+							</v-col> -->
 							<v-col cols="6" v-if="!hideNonEssential">
 								<v-autocomplete
 									clearable

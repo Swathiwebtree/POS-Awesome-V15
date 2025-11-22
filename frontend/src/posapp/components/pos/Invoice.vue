@@ -316,6 +316,7 @@
 				:discount_percentage_offer_name="discount_percentage_offer_name"
 				:isNumber="isNumber"
 				:selectedCustomerId="customer"
+				@apply-frequent-card="handleApplyFrequentCard"
 				:items_group="items_group"
 				v-model:item_group="item_group"
 				@update:item_group="handleItemGroupUpdate"
@@ -490,6 +491,55 @@ export default {
 
 			// Generate headers based on selected columns
 			this.updateHeadersFromSelection();
+		},
+
+
+    // Add this NEW method to handle frequent card application
+		handleApplyFrequentCard(cardData) {
+			console.log("[Invoice] Applying frequent card:", cardData);
+
+			try {
+				// Create free item object with all required fields
+				const freeItem = {
+					item_code: cardData.item_code,
+					item_name: cardData.item_name || cardData.service_item_name,
+					qty: 1,
+					rate: 0,  // FREE!
+					price_list_rate: 0,
+					discount_percentage: 100,
+					discount_amount: 0,
+					amount: 0,
+					frequent_card: cardData.frequent_card || cardData.name,
+					is_free_item: 1,
+					warehouse: this.pos_profile?.warehouse || "",
+					uom: "Nos",
+					stock_uom: "Nos",
+					conversion_factor: 1,
+					posa_row_id: this.makeid(50),  // Generate unique ID
+				};
+
+				// CORRECT: Add to local items array
+				this.items.push(freeItem);
+
+				// Recalculate totals
+				this.$nextTick(() => {
+					this.apply_additional_discount();
+					this.$forceUpdate();
+				});
+
+				// Show success message
+				frappe.show_alert({
+					message: this.__(`🎉 Free ${cardData.service_item_name} added to invoice!`),
+					indicator: "green"
+				});
+
+			} catch (error) {
+				console.error("[Invoice] Error applying frequent card:", error);
+				frappe.show_alert({
+					message: this.__("Failed to add free service"),
+					indicator: "red"
+				});
+			}
 		},
 
 		apply_additional_discount() {

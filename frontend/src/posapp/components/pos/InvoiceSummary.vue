@@ -4,94 +4,6 @@
 		:style="(isDarkTheme ? 'background-color:#1E1E1E;' : '') + 'resize: vertical; overflow: auto;'"
 	>
 		<v-row dense class="w-100">
-			<!-- Filter and Action Controls -->
-			<!-- <v-col cols="12">
-                <v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
-                    Item Group and Price List
-                    <v-col cols="12" class="mb-2">
-                        <v-row dense>
-                            <v-col cols="12" md="6" class="pr-md-2">
-                                <v-select 
-                                    :items="items_group" 
-                                    :label="__('Items Group')" 
-                                    density="compact"
-                                    variant="solo" 
-                                    hide-details 
-                                    :model-value="item_group"
-                                    @update:model-value="handleItemGroupUpdate"
-                                ></v-select>
-                            </v-col>
-
-                            <v-col 
-                                cols="12" 
-                                md="6" 
-                                class="pl-md-2"
-                                v-if="pos_profile && pos_profile.posa_enable_price_list_dropdown !== false"
-                            >
-                                <v-text-field 
-                                    density="compact" 
-                                    variant="solo" 
-                                    color="primary"
-                                    :label="__('Price List')" 
-                                    hide-details 
-                                    :model-value="active_price_list"
-                                    readonly
-                                ></v-text-field>
-                            </v-col>
-                        </v-row>
-                    </v-col>
-
-                    View Toggle, Offers, Coupons
-                    <v-col cols="12" class="mt-2 mb-2">
-                        <v-row dense align="center">
-                             <v-col cols="12" sm="4" class="py-1">
-                                <v-btn-toggle 
-                                    :model-value="items_view" 
-                                    @update:model-value="handleItemsViewUpdate"
-                                    color="primary" 
-                                    group 
-                                    density="compact" 
-                                    rounded
-                                    mandatory
-                                >
-                                    <v-btn size="small" value="list">{{ __("List") }}</v-btn>
-                                    <v-btn size="small" value="card">{{ __("Card") }}</v-btn>
-                                </v-btn-toggle>
-                            </v-col> -->
-
-			<!-- <v-col cols="12" sm="4" class="py-1">
-                                <v-btn 
-                                    size="small" 
-                                    block 
-                                    color="orange" 
-                                    variant="text" 
-                                    @click="handleShowOffers"
-                                    class="action-btn-consistent"
-                                >
-                                    <v-icon size="small" class="mr-1">mdi-tag-multiple</v-icon>
-                                    {{ offersCount }} {{ __("Offers") }}
-                                </v-btn>
-                            </v-col> -->
-
-			<!-- <v-col sm="2"></v-col> -->
-
-			<!-- <v-col cols="12" sm="4" class="py-1 text-right">
-                                <v-btn 
-                                    size="small"  
-                                    color="blue" 
-                                    variant="text" 
-                                    @click="handleShowCoupons"
-                                    class="action-btn-consistent"
-                                >
-                                    <v-icon size="small" class="mr-1">mdi-ticket-percent</v-icon>
-                                    {{ couponsCount }} {{ __("Coupons") }}
-                                </v-btn>
-                            </v-col> -->
-			<!-- </v-row> -->
-			<!-- </v-col> -->
-			<!-- </v-row> -->
-			<!-- </v-col> -->
-
 			<v-col cols="12" class="my-2">
 				<v-divider />
 			</v-col>
@@ -188,18 +100,28 @@
 								/>
 							</v-col>
 
-							<!-- Loyalty Points Display -->
-							<v-col cols="12" v-if="loyaltyPoints !== null">
-								<v-text-field
-									:model-value="`${formatFloat(loyaltyPoints, 2)} pts`"
-									:label="__('Available Loyalty Points')"
-									prepend-inner-icon="mdi-star"
-									variant="solo"
-									density="compact"
-									readonly
-									color="info"
-									class="summary-field loyalty-points-field"
-								/>
+							<!-- Frequent Cards Button (LEFT SIDE) -->
+							<v-col cols="12">
+								<v-btn
+									block
+									color="orange"
+									theme="dark"
+									prepend-icon="mdi-cards"
+									@click="handleFrequentCards"
+									class="summary-btn"
+									:loading="frequentCardsLoading"
+								>
+									<span class="flex-grow-1">{{ __("FREQUENT CARDS") }}</span>
+									<v-chip
+										v-if="completedCardsCount > 0"
+										size="small"
+										color="white"
+										text-color="orange"
+										class="ml-2"
+									>
+										{{ completedCardsCount }} {{ __("Free") }}
+									</v-chip>
+								</v-btn>
 							</v-col>
 						</v-row>
 					</v-col>
@@ -235,6 +157,35 @@
 									{{ __("LOYALTY POINTS") }}
 								</v-btn>
 							</v-col>
+
+							<!-- Available Loyalty Points Display (RIGHT SIDE - BELOW LOYALTY BUTTON) -->
+							<v-col cols="12" v-if="loyaltyPoints !== null && selectedCustomerId">
+								<v-card class="loyalty-points-display-card" elevation="2">
+									<v-card-text class="pa-3">
+										<v-row align="center" no-gutters>
+											<v-col cols="auto" class="mr-3">
+												<v-avatar color="purple" size="40">
+													<v-icon color="white" size="24">mdi-star</v-icon>
+												</v-avatar>
+											</v-col>
+											<v-col>
+												<p class="text-caption mb-0 text-grey-darken-1">
+													{{ __("Available Loyalty Points") }}
+												</p>
+												<p class="text-h6 font-weight-bold mb-0 text-purple">
+													{{ formatFloat(loyaltyPoints, 0) }} pts
+												</p>
+											</v-col>
+											<v-col cols="auto">
+												<p class="text-caption text-grey">
+													≈ {{ formatCurrency(loyaltyPoints * conversionFactor) }}
+												</p>
+											</v-col>
+										</v-row>
+									</v-card-text>
+								</v-card>
+							</v-col>
+
 
 							<!-- Select Sales Order Button (Conditional) -->
 							<v-col
@@ -329,55 +280,95 @@
 			</v-col>
 		</v-row>
 
-		<!-- Loyalty Points Dialog -->
-		<v-dialog v-model="showLoyaltyDialog" max-width="500px">
+		<!-- Loyalty Points Dialog (Redeem Only) -->
+		<v-dialog v-model="showLoyaltyDialog" max-width="500px" persistent>
 			<v-card :style="isDarkTheme ? 'background-color:#1E1E1E;' : ''">
-				<v-card-title class="text-h6 pb-0">
-					<v-icon left color="purple">mdi-star</v-icon>
-					{{ __("Loyalty Points") }}
+				<v-card-title class="text-h6 pb-2 pt-4 px-6">
+					<v-row align="center" no-gutters>
+						<v-icon left color="purple" size="28">mdi-star</v-icon>
+						<span class="ml-2">{{ __("Redeem Loyalty Points") }}</span>
+						<v-spacer></v-spacer>
+						<v-btn icon size="small" variant="text" @click="showLoyaltyDialog = false">
+							<v-icon>mdi-close</v-icon>
+						</v-btn>
+					</v-row>
 				</v-card-title>
-				<v-card-text>
-					<div v-if="selectedCustomerId && String(selectedCustomerId).length > 0">
-						<p class="text-subtitle-1 mb-2">{{ customerName }} ({{ selectedCustomerId }})</p>
-						<v-card class="loyalty-points-display mb-4" flat>
-							<p class="text-subtitle-1 mb-0">{{ __("Available Points") }}:</p>
-							<p class="text-h4 font-weight-bold purple--text mb-0">
-								{{ formatFloat(loyaltyPoints, 2) }} <span class="text-subtitle-1">pts</span>
-							</p>
-						</v-card>
 
+				<v-divider></v-divider>
+
+				<v-card-text class="px-6 py-4">
+					<div v-if="selectedCustomerId && String(selectedCustomerId).length > 0">
+						<!-- Customer Info -->
+						<p class="text-subtitle-1 mb-3 font-weight-medium">
+							{{ customerName }} <span class="text-grey">({{ selectedCustomerId }})</span>
+						</p>
+
+						<!-- Available Points Summary -->
+						<v-alert variant="tonal" density="comfortable" class="mb-4">
+							<v-row align="center" no-gutters>
+								<v-col>
+									<p class="text-caption mb-1">{{ __("Available Points") }}</p>
+									<p class="text-h5 font-weight-bold mb-0">
+										{{ formatFloat(loyaltyPoints, 0) }} pts
+									</p>
+								</v-col>
+								<v-col cols="auto">
+									<p class="text-caption text-grey mb-1">{{ __("Value") }}</p>
+									<p class="text-subtitle-1 font-weight-bold mb-0">
+										{{ formatCurrency(loyaltyPoints * conversionFactor) }}
+									</p>
+								</v-col>
+							</v-row>
+						</v-alert>
+
+						<!-- Redeem Points Input -->
 						<v-text-field
 							v-model="pointsToRedeem"
 							:label="__('Points to Redeem')"
 							prepend-inner-icon="mdi-star-minus"
 							variant="outlined"
-							density="compact"
+							density="comfortable"
 							color="purple"
+							type="number"
 							:rules="[
 								isNumber,
 								(v) => v <= loyaltyPoints || __('Cannot redeem more than available points'),
+								(v) => v >= 0 || __('Points must be positive'),
 							]"
-							:hint="__('Enter points to redeem for a discount on this invoice.')"
+							:hint="__('Enter points to redeem for a discount')"
 							persistent-hint
 						/>
 
-						<p class="text-subtitle-2 mt-3">
-							{{ __("Discount Value") }}:
-							<span class="font-weight-bold purple--text">
-								{{ formatCurrency(redemptionValue) }}
-								({{ formatFloat(pointsToRedeem, 2) }} x
-								{{ formatFloat(conversionFactor, 4) }})
-							</span>
-						</p>
+						<!-- Redemption Preview -->
+						<div v-if="pointsToRedeem > 0" class="mt-3 pa-3 redemption-preview">
+							<v-row dense align="center">
+								<v-col cols="6">
+									<p class="text-caption mb-0 text-grey">{{ __("Points") }}</p>
+									<p class="text-subtitle-1 font-weight-bold mb-0">
+										{{ formatFloat(pointsToRedeem, 0) }} pts
+									</p>
+								</v-col>
+								<v-col cols="6" class="text-right">
+									<p class="text-caption mb-0 text-grey">{{ __("Discount Value") }}</p>
+									<p class="text-subtitle-1 font-weight-bold mb-0 text-purple">
+										{{ formatCurrency(redemptionValue) }}
+									</p>
+								</v-col>
+							</v-row>
+						</div>
 					</div>
-					<div v-else class="text-center pa-4">
-						<p class="text-grey">{{ __("No customer selected.") }}</p>
+					<div v-else class="text-center pa-8">
+						<v-icon size="64" color="grey-lighten-1">mdi-account-alert</v-icon>
+						<p class="text-subtitle-1 mt-3 text-grey">{{ __("No customer selected") }}</p>
 					</div>
 				</v-card-text>
-				<v-card-actions>
+
+				<v-divider></v-divider>
+
+				<v-card-actions class="px-6 py-4">
 					<v-spacer></v-spacer>
 					<v-btn color="error" variant="text" @click="showLoyaltyDialog = false">
-						{{ __("Close") }}
+						{{ __("Cancel") }}
 					</v-btn>
 					<v-btn
 						color="purple"
@@ -386,9 +377,173 @@
 						:loading="redeemLoading"
 						@click="handleRedeemPoints"
 					>
-						{{ __("Redeem") }}
+						<v-icon left>mdi-check</v-icon>
+						{{ __("Apply Redemption") }}
 					</v-btn>
 				</v-card-actions>
+			</v-card>
+		</v-dialog>
+
+		<!-- Frequent Cards Dialog (SEPARATE) -->
+		<v-dialog v-model="showFrequentCardsDialog" max-width="700px" persistent scrollable>
+			<v-card :style="isDarkTheme ? 'background-color:#1E1E1E;' : ''" class="dialog-card">
+				<v-card-title class="text-h6 pb-2 pt-4 px-6 sticky-header">
+					<v-row align="center" no-gutters>
+						<v-icon left color="orange" size="28">mdi-cards</v-icon>
+						<span class="ml-2">{{ __("Frequent Customer Cards") }}</span>
+						<v-spacer></v-spacer>
+						<v-btn icon size="small" variant="text" @click="showFrequentCardsDialog = false">
+							<v-icon>mdi-close</v-icon>
+						</v-btn>
+					</v-row>
+				</v-card-title>
+
+				<v-divider></v-divider>
+
+				<v-card-text class="px-6 py-4 scrollable-content">
+					<div v-if="selectedCustomerId && String(selectedCustomerId).length > 0">
+						<!-- Customer Info -->
+						<p class="text-subtitle-1 mb-4 font-weight-medium">
+							{{ customerName }} <span class="text-grey">({{ selectedCustomerId }})</span>
+						</p>
+
+						<!-- Loading State -->
+						<v-progress-linear
+							v-if="loadingFrequentCards"
+							indeterminate
+							color="orange"
+							class="mb-3"
+						></v-progress-linear>
+
+						<!-- Empty State -->
+						<div v-else-if="frequentCards.length === 0" class="text-center py-8">
+							<v-icon size="64" color="grey-lighten-1">mdi-cards-outline</v-icon>
+							<p class="text-subtitle-1 mt-3 text-grey">
+								{{ __("No frequent customer cards available") }}
+							</p>
+							<p class="text-caption text-grey">
+								{{ __("Cards will appear here after multiple service visits") }}
+							</p>
+						</div>
+
+						<!-- Cards Grid -->
+						<v-row v-else dense>
+							<v-col v-for="card in frequentCards" :key="card.name" cols="12">
+								<v-card
+									:class="[
+										'frequent-card',
+										card.is_expired ? 'expired-card' : '',
+										card.visits >= card.required_visits ? 'completed-card' : '',
+									]"
+									:elevation="card.visits >= card.required_visits ? 4 : 2"
+									@click="handleCardClick(card)"
+									:disabled="card.is_expired || applyingCard"
+								>
+									<v-card-text class="pa-4">
+										<v-row align="center" no-gutters>
+											<v-col cols="auto" class="mr-3">
+												<v-avatar
+													:color="
+														card.is_expired
+															? 'grey'
+															: card.visits >= card.required_visits
+																? 'success'
+																: 'orange'
+													"
+													size="56"
+												>
+													<v-icon color="white" size="28">
+														{{
+															card.visits >= card.required_visits
+																? "mdi-gift"
+																: "mdi-cards"
+														}}
+													</v-icon>
+												</v-avatar>
+											</v-col>
+											<v-col>
+												<p class="text-subtitle-1 font-weight-bold mb-1">
+													{{ card.card_name }}
+												</p>
+												<p class="text-caption mb-2 text-grey">
+													{{ card.service_item_name }}
+												</p>
+
+												<!-- Visit Progress -->
+												<div class="visit-progress mb-2">
+													<v-row dense align="center">
+														<v-col cols="auto">
+															<v-chip
+																size="small"
+																:color="
+																	card.visits >= card.required_visits ? 'success' : 'orange'
+																"
+															>
+																{{ card.visits }}/{{ card.required_visits }} visits
+															</v-chip>
+														</v-col>
+														<v-col>
+															<v-progress-linear
+																:model-value="(card.visits / card.required_visits) * 100"
+																:color="
+																	card.visits >= card.required_visits ? 'success' : 'orange'
+																"
+																height="6"
+																rounded
+															></v-progress-linear>
+														</v-col>
+													</v-row>
+												</div>
+
+												<!-- Status & Expiry -->
+												<div>
+													<v-chip v-if="card.is_expired" size="small" color="error" variant="flat">
+														<v-icon size="small" left>mdi-clock-alert</v-icon>
+														{{ __("Expired") }}
+													</v-chip>
+													<v-chip
+														v-else-if="card.visits >= card.required_visits"
+														size="small"
+														color="success"
+														variant="flat"
+													>
+														<v-icon size="small" left>mdi-gift</v-icon>
+														{{ __("Free Service Available!") }}
+													</v-chip>
+													<v-chip v-else size="small" color="grey" variant="outlined">
+														<v-icon size="small" left>mdi-calendar</v-icon>
+														{{ __("Expires") }}: {{ formatDate(card.expiry_date) }}
+													</v-chip>
+												</div>
+											</v-col>
+										</v-row>
+									</v-card-text>
+								</v-card>
+							</v-col>
+						</v-row>
+
+						<!-- Auto-apply notification -->
+						<v-alert
+							v-if="hasCompletedCards"
+							type="success"
+							variant="tonal"
+							density="compact"
+							class="mt-4"
+							icon="mdi-information"
+						>
+							{{
+								__("Click on a completed card to add the free service to your invoice automatically")
+							}}
+						</v-alert>
+					</div>
+					<div v-else class="text-center pa-8">
+						<v-icon size="64" color="grey-lighten-1">mdi-account-alert</v-icon>
+						<p class="text-subtitle-1 mt-3 text-grey">{{ __("No customer selected") }}</p>
+						<p class="text-caption text-grey">
+							{{ __("Please select a customer to view their frequent cards") }}
+						</p>
+					</div>
+				</v-card-text>
 			</v-card>
 		</v-dialog>
 	</v-card>
@@ -432,6 +587,12 @@ export default {
 			pointsToRedeem: 0,
 			conversionFactor: 0,
 			redeemLoading: false,
+			// Frequent Cards
+			frequentCards: [],
+			loadingFrequentCards: false,
+			applyingCard: false,
+			showFrequentCardsDialog: false,
+			frequentCardsLoading: false,
 		};
 	},
 	emits: [
@@ -449,6 +610,7 @@ export default {
 		"show-payment",
 		"show-offers",
 		"show-coupons",
+		"apply-frequent-card",
 	],
 	computed: {
 		__() {
@@ -470,6 +632,16 @@ export default {
 				this.conversionFactor > 0
 			);
 		},
+		hasCompletedCards() {
+			return this.frequentCards.some(
+				(card) => card.visits >= card.required_visits && !card.is_expired,
+			);
+		},
+		completedCardsCount() {
+			return this.frequentCards.filter(
+				(card) => card.visits >= card.required_visits && !card.is_expired,
+			).length;
+		},
 		hide_qty_decimals() {
 			try {
 				const saved = localStorage.getItem("posawesome_item_selector_settings");
@@ -488,10 +660,12 @@ export default {
 			handler(newVal) {
 				if (newVal) {
 					this.fetchLoyaltyPoints();
+					this.fetchFrequentCards();
 				} else {
 					this.loyaltyPoints = null;
 					this.customerName = "";
 					this.conversionFactor = 0;
+					this.frequentCards = [];
 				}
 			},
 			immediate: true,
@@ -499,53 +673,12 @@ export default {
 		total_qty: {
 			handler(newVal) {
 				console.log("[InvoiceSummary] total_qty changed:", newVal);
-				// Trigger re-render
-				this.$forceUpdate();
-			},
-			immediate: true,
-		},
-		subtotal: {
-			handler(newVal) {
-				console.log("[InvoiceSummary] subtotal changed:", newVal);
-				this.$forceUpdate();
-			},
-			immediate: true,
-		},
-		total_items_discount_amount: {
-			handler(newVal) {
-				console.log("[InvoiceSummary] total_items_discount_amount changed:", newVal);
-				this.$forceUpdate();
-			},
-			immediate: true,
-		},
-		additional_discount: {
-			handler(newVal) {
-				console.log("[InvoiceSummary] additional_discount changed:", newVal);
-				this.$forceUpdate();
-			},
-			immediate: true,
-		},
-		additional_discount_percentage: {
-			handler(newVal) {
-				console.log("[InvoiceSummary] additional_discount_percentage changed:", newVal);
 				this.$forceUpdate();
 			},
 			immediate: true,
 		},
 	},
 	methods: {
-		handleItemGroupUpdate(value) {
-			console.log("[InvoiceSummary] Item group updated:", value);
-			this.$emit("update:item_group", value);
-		},
-
-		handleItemsViewUpdate(value) {
-			console.log("[InvoiceSummary] Items view toggled to:", value);
-			this.$emit("update:items_view", value);
-			// Also broadcast via eventBus for real-time updates
-			this.eventBus.emit("update:items_view", value);
-		},
-
 		handleAdditionalDiscountUpdate(value) {
 			this.$emit("update:additional_discount", value);
 		},
@@ -555,19 +688,11 @@ export default {
 		},
 
 		async handleSaveAndClear() {
-			console.log("[InvoiceSummary] handleSaveAndClear clicked");
 			this.saveLoading = true;
 			try {
-				// Emit the event to parent Invoice component
 				this.$emit("save-and-clear");
-
-				// Wait for parent to process
 				await this.$nextTick();
 				await new Promise((resolve) => setTimeout(resolve, 1000));
-
-				console.log("[InvoiceSummary] Save completed, opening drafts");
-
-				// Open drafts modal after save
 				this.eventBus.emit("open_drafts_modal");
 			} catch (error) {
 				console.error("[InvoiceSummary] Error during save:", error);
@@ -588,7 +713,6 @@ export default {
 
 		async fetchLoyaltyPoints() {
 			const customerId = this.selectedCustomerId;
-
 			if (!customerId) {
 				this.loyaltyPoints = null;
 				return;
@@ -615,6 +739,77 @@ export default {
 			}
 		},
 
+		async fetchFrequentCards() {
+			const customerId = this.selectedCustomerId;
+			if (!customerId) {
+				this.frequentCards = [];
+				return;
+			}
+
+			this.loadingFrequentCards = true;
+			try {
+				const response = await frappe.call({
+					method: "posawesome.posawesome.api.frequent_cards.get_customer_frequent_cards",
+					args: {
+						customer: customerId,
+						company: this.pos_profile?.company,
+					},
+				});
+
+				if (response?.message) {
+					this.frequentCards = response.message.map((card) => ({
+						...card,
+						is_expired: new Date(card.expiry_date) < new Date(),
+					}));
+				}
+			} catch (err) {
+				console.error("Failed to fetch frequent cards:", err);
+
+				// TEMPORARY: Use mock data for testing
+				console.warn("Using mock data for testing frequent cards");
+				this.frequentCards = [
+					{
+						name: "FC-TEST-001",
+						card_name: "Haircut Frequent Card",
+						service_item: "ITEM-001",
+						service_item_name: "Basic Haircut",
+						visits: 2,
+						required_visits: 3,
+						issue_date: "2024-10-01",
+						expiry_date: "2025-04-01",
+						status: "Active",
+						is_expired: false,
+					},
+					{
+						name: "FC-TEST-002",
+						card_name: "Spa Treatment Card",
+						service_item: "ITEM-002",
+						service_item_name: "Full Body Massage",
+						visits: 3,
+						required_visits: 3,
+						issue_date: "2024-09-15",
+						expiry_date: "2025-03-15",
+						status: "Completed",
+						is_expired: false,
+					},
+					{
+						name: "FC-TEST-003",
+						card_name: "Expired Card",
+						service_item: "ITEM-003",
+						service_item_name: "Manicure",
+						visits: 1,
+						required_visits: 3,
+						issue_date: "2024-01-01",
+						expiry_date: "2024-07-01",
+						status: "Expired",
+						is_expired: true,
+					},
+				];
+			} finally {
+				this.loadingFrequentCards = false;
+			}
+		},
+
 		async handleLoyaltyPoints() {
 			if (!this.selectedCustomerId || String(this.selectedCustomerId).trim().length === 0) {
 				frappe.show_alert({ message: this.__("Please select a customer first"), indicator: "red" });
@@ -628,6 +823,24 @@ export default {
 				this.showLoyaltyDialog = true;
 			} finally {
 				this.loyaltyLoading = false;
+			}
+		},
+
+		async handleFrequentCards() {
+			if (!this.selectedCustomerId || String(this.selectedCustomerId).trim().length === 0) {
+				frappe.show_alert({
+					message: this.__("Please select a customer first"),
+					indicator: "red",
+				});
+				return;
+			}
+
+			this.frequentCardsLoading = true;
+			try {
+				await this.fetchFrequentCards();
+				this.showFrequentCardsDialog = true;
+			} finally {
+				this.frequentCardsLoading = false;
 			}
 		},
 
@@ -663,7 +876,6 @@ export default {
 
 				if (result?.status === "success") {
 					const newDiscountAmount = this.redemptionValue;
-
 					let currentDiscount = parseFloat(this.additional_discount || 0);
 					let updatedDiscount = currentDiscount + newDiscountAmount;
 
@@ -678,27 +890,104 @@ export default {
 						title: this.__("Redemption Successful"),
 					});
 
-					this.showLoyaltyDialog = false;
 					await this.fetchLoyaltyPoints();
+					this.pointsToRedeem = 0;
+					this.showLoyaltyDialog = false;
 				} else {
-					// Handle error response
 					frappe.show_alert({
 						message: result?.message || this.__("Redemption failed. Please try again."),
 						indicator: "red",
 						title: this.__("Redemption Failed"),
 					});
-
-					console.error("Redemption error:", result);
 				}
 			} catch (err) {
 				console.error("Redemption failed:", err);
 				frappe.show_alert({
-					message: this.__("An error occurred during redemption. See console for details."),
+					message: this.__("An error occurred during redemption."),
 					indicator: "red",
 				});
 			} finally {
 				this.redeemLoading = false;
 			}
+		},
+
+		async handleCardClick(card) {
+			// Don't allow clicking on expired cards
+			if (card.is_expired) {
+				frappe.show_alert({
+					message: this.__("This card has expired"),
+					indicator: "orange",
+				});
+				return;
+			}
+
+			// Don't allow clicking if not completed
+			if (card.visits < card.required_visits) {
+				frappe.show_alert({
+					message: this.__(
+						`Need ${card.required_visits - card.visits} more visits to complete this card`,
+					),
+					indicator: "blue",
+				});
+				return;
+			}
+
+			// Card is completed - apply the free service!
+			this.applyingCard = true;
+			try {
+				const response = await frappe.call({
+					method: "posawesome.posawesome.api.frequent_cards.apply_free_service",
+					args: {
+						card_name: card.name,
+						customer: this.selectedCustomerId,
+						service_item: card.service_item,
+					},
+				});
+
+				if (response?.message?.status === "success") {
+					// Emit event to parent to add the item to invoice
+					this.$emit("apply-frequent-card", {
+						item_code: card.service_item,
+						item_name: card.service_item_name,
+						service_item_name: card.service_item_name,
+						rate: 0,
+						qty: 1,
+						discount_percentage: 100,
+						frequent_card: card.name,  // Important: link to card
+						name: card.name  // Also pass card name
+					});
+
+					frappe.show_alert({
+						message: this.__("🎉 Free service added to invoice!"),
+						indicator: "green",
+					});
+
+					// Refresh cards to show updated status
+					await this.fetchFrequentCards();
+
+					// Close dialog
+					this.showFrequentCardsDialog = false;
+				} else {
+					frappe.show_alert({
+						message: response?.message?.message || this.__("Failed to apply card"),
+						indicator: "red",
+					});
+				}
+			} catch (err) {
+				console.error("Failed to apply card:", err);
+				frappe.show_alert({
+					message: this.__("Failed to apply free service"),
+					indicator: "red",
+				});
+			} finally {
+				this.applyingCard = false;
+			}
+		},
+
+		formatDate(dateStr) {
+			if (!dateStr) return "";
+			const date = new Date(dateStr);
+			return date.toLocaleDateString();
 		},
 
 		async handleCancelSale() {
@@ -748,16 +1037,8 @@ export default {
 			this.paymentLoading = true;
 			try {
 				console.log("[InvoiceSummary] Requesting invoice from parent");
-				console.log("[InvoiceSummary] Current totals:", {
-					subtotal: this.subtotal,
-					additional_discount: this.additional_discount,
-					total_qty: this.total_qty,
-				});
-
-				// Request invoice
 				this.eventBus.emit("get_current_invoice_from_component");
 
-				// Wait for response
 				await new Promise((resolve) => {
 					const handler = (data) => {
 						console.log("[InvoiceSummary] Invoice received:", data.grand_total);
@@ -771,7 +1052,6 @@ export default {
 					}, 2000);
 				});
 
-				// Show payment
 				console.log("[InvoiceSummary] Emitting show_payment");
 				this.eventBus.emit("show_payment", "true");
 			} catch (error) {
@@ -785,23 +1065,28 @@ export default {
 			}
 		},
 
-		// FIXED: Offers button handler
 		handleShowOffers() {
 			console.log("[InvoiceSummary] Show offers clicked");
 			this.$emit("show-offers");
 		},
 
-		// FIXED: Coupons button handler
 		handleShowCoupons() {
 			console.log("[InvoiceSummary] Show coupons clicked");
 			this.$emit("show-coupons");
 		},
 	},
 	mounted() {
-		console.log("[InvoiceSummary] Mounted with items_group:", this.items_group);
+		console.log("[InvoiceSummary] Mounted");
 		if (this.selectedCustomerId) {
 			this.fetchLoyaltyPoints();
+			this.fetchFrequentCards();
 		}
+
+		// Listen for item additions to check for auto-apply
+		this.eventBus.on("item_added_to_invoice", this.checkAutoApplyCard);
+	},
+	beforeUnmount() {
+		this.eventBus.off("item_added_to_invoice", this.checkAutoApplyCard);
 	},
 };
 </script>
@@ -817,16 +1102,75 @@ export default {
 	background-color: #1e1e1e !important;
 }
 
-.action-btn-consistent {
-	font-weight: 500 !important;
-	text-transform: uppercase;
-	transition: all 0.2s ease;
+/* Loyalty Points Display Card (OUTSIDE - in summary) */
+.loyalty-points-display-card {
+	background: linear-gradient(135deg, rgba(156, 39, 176, 0.12), rgba(106, 27, 154, 0.08));
+	border: 2px solid rgba(156, 39, 176, 0.3);
+	border-radius: 12px !important;
+	transition: all 0.3s ease;
 }
 
-.action-btn-consistent:hover {
-	transform: translateY(-1px);
+:deep(.v-theme--dark) .loyalty-points-display-card {
+	background: linear-gradient(135deg, rgba(156, 39, 176, 0.2), rgba(106, 27, 154, 0.12));
+	border-color: rgba(156, 39, 176, 0.4);
 }
 
+.loyalty-points-display-card:hover {
+	transform: translateY(-2px);
+}
+
+.text-purple {
+	color: #8e24aa !important;
+}
+
+/* Redemption Preview */
+.redemption-preview {
+	background: rgba(156, 39, 176, 0.08);
+	border-radius: 8px;
+	border-left: 4px solid #8e24aa;
+}
+
+:deep(.v-theme--dark) .redemption-preview {
+	background: rgba(156, 39, 176, 0.15);
+}
+
+/* Frequent Cards Styling */
+.frequent-card {
+	cursor: pointer;
+	transition: all 0.3s ease;
+	border-radius: 12px !important;
+	border: 2px solid transparent;
+}
+
+.frequent-card:hover:not(.expired-card):not([disabled]) {
+	transform: translateY(-2px);
+	border-color: rgba(255, 152, 0, 0.5);
+}
+
+.completed-card {
+	background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(56, 142, 60, 0.08)) !important;
+	border-color: rgba(76, 175, 80, 0.4) !important;
+}
+
+.completed-card:hover {
+	border-color: rgba(76, 175, 80, 0.7) !important;
+}
+
+.expired-card {
+	opacity: 0.6;
+	cursor: not-allowed;
+	filter: grayscale(0.5);
+}
+
+.expired-card:hover {
+	transform: none;
+}
+
+.visit-progress {
+	margin-top: 4px;
+}
+
+/* Summary Buttons */
 .summary-btn {
 	transition: all 0.2s ease !important;
 	position: relative;
@@ -836,9 +1180,8 @@ export default {
 	font-weight: 600 !important;
 }
 
-.summary-btn:hover {
+.summary-btn:hover:not(:disabled) {
 	transform: translateY(-1px);
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
 }
 
 .summary-btn[color="purple"] {
@@ -850,17 +1193,24 @@ export default {
 	background: linear-gradient(135deg, #9c27b0, #7b1fa2) !important;
 }
 
+.summary-btn[color="orange"] {
+	background: linear-gradient(135deg, #ff9800, #f57c00) !important;
+	color: white !important;
+}
+
+.summary-btn[color="orange"]:hover {
+	background: linear-gradient(135deg, #fb8c00, #ef6c00) !important;
+}
+
 .pay-btn {
 	font-weight: 700 !important;
 	font-size: 1.1rem !important;
 	background: linear-gradient(135deg, #4caf50, #45a049) !important;
-	box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3) !important;
 	height: 48px !important;
 }
 
 .pay-btn:hover {
 	background: linear-gradient(135deg, #45a049, #3d8b40) !important;
-	box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4) !important;
 	transform: translateY(-2px);
 }
 
@@ -872,12 +1222,61 @@ export default {
 	transform: translateY(-1px);
 }
 
-.loyalty-points-display {
-	padding: 20px;
-	border-radius: 12px;
-	background: linear-gradient(135deg, rgba(156, 39, 176, 0.1), rgba(106, 27, 154, 0.1));
+/* Dialog Scrolling */
+.dialog-card {
+	display: flex;
+	flex-direction: column;
+	max-height: 90vh;
 }
 
+.sticky-header {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background: inherit;
+}
+
+:deep(.v-theme--dark) .sticky-header {
+	background-color: #1e1e1e;
+}
+
+.scrollable-content {
+	overflow-y: auto;
+	max-height: calc(90vh - 80px);
+}
+
+/* Custom scrollbar for dialog */
+.scrollable-content::-webkit-scrollbar {
+	width: 8px;
+}
+
+.scrollable-content::-webkit-scrollbar-track {
+	background: rgba(0, 0, 0, 0.05);
+	border-radius: 4px;
+}
+
+.scrollable-content::-webkit-scrollbar-thumb {
+	background: rgba(255, 152, 0, 0.3);
+	border-radius: 4px;
+}
+
+.scrollable-content::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 152, 0, 0.5);
+}
+
+:deep(.v-theme--dark) .scrollable-content::-webkit-scrollbar-track {
+	background: rgba(255, 255, 255, 0.05);
+}
+
+:deep(.v-theme--dark) .scrollable-content::-webkit-scrollbar-thumb {
+	background: rgba(255, 152, 0, 0.4);
+}
+
+:deep(.v-theme--dark) .scrollable-content::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 152, 0, 0.6);
+}
+
+/* Responsive Design */
 @media (max-width: 960px) {
 	.pr-md-2 {
 		padding-right: 0 !important;
@@ -886,11 +1285,6 @@ export default {
 
 	.pl-md-2 {
 		padding-left: 0 !important;
-	}
-
-	.v-col-sm-4 {
-		flex-basis: 100% !important;
-		max-width: 100% !important;
 	}
 }
 

@@ -388,7 +388,6 @@
 <script>
 import format from "../../format";
 import Customer from "../pos/Customer.vue";
-import UpdateCustomer from "../pos/UpdateCustomer.vue";
 import {
 	getOpeningStorage,
 	setOpeningStorage,
@@ -566,7 +565,6 @@ export default {
 
 	components: {
 		Customer,
-		UpdateCustomer,
 	},
 
 	methods: {
