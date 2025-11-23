@@ -624,51 +624,49 @@
 		</v-card>
 
 		<!-- Action Buttons -->
-		<v-card flat class="cards mb-0 mt-3 pa-0">
-			<v-row align="start" no-gutters>
-				<v-col cols="12">
-					<v-menu offset-y>
+		<v-card flat class="cards mb-0 mt-3 pa-0" style="position: relative; overflow: visible;">
+			<v-row align="start" no-gutters class="button-row">
+				<!-- Submit Dropdown Button -->
+				<v-col cols="12" class="mb-2">
+					<v-menu offset-y :close-on-content-click="true" location="top"
+						transition="slide-y-reverse-transition">
 						<template v-slot:activator="{ props }">
-							<v-btn
-								ref="submitButton"
-								block
-								size="large"
-								color="primary"
-								theme="dark"
-								v-bind="props"
-								:loading="loading"
-								:disabled="loading || vaildatPayment"
-								:class="{ 'submit-highlight': highlightSubmit }"
-							>
-								{{ __("SUBMIT") }}
-								<v-icon right>mdi-chevron-down</v-icon>
+							<v-btn ref="submitButton" block size="x-large" color="primary" theme="dark" v-bind="props"
+								:loading="loading" :disabled="loading || vaildatPayment"
+								:class="['submit-btn-main', { 'submit-highlight': highlightSubmit }]" elevation="4">
+								<v-icon left size="24">mdi-check-circle</v-icon>
+								<span class="submit-text">{{ __("SUBMIT") }}</span>
+								<v-icon right size="20">mdi-chevron-up</v-icon>
 							</v-btn>
 						</template>
-						<v-list>
-							<v-list-item @click="submit">
-								<v-list-item-title>
-									<v-icon left>mdi-check</v-icon>
-									{{ __("Submit") }}
+						<v-list class="submit-menu" elevation="8" density="compact">
+							<v-list-item @click="submit" class="menu-item" prepend-icon="mdi-check">
+								<v-list-item-title class="menu-title">
+									{{ __("Submit Only") }}
 								</v-list-item-title>
+								<v-list-item-subtitle class="menu-subtitle">
+									{{ __("Save invoice without printing") }}
+								</v-list-item-subtitle>
 							</v-list-item>
-							<v-list-item @click="submit(undefined, false, true)">
-								<v-list-item-title>
-									<v-icon left>mdi-printer</v-icon>
+							<v-divider></v-divider>
+							<v-list-item @click="submit(undefined, false, true)" class="menu-item"
+								prepend-icon="mdi-printer-check">
+								<v-list-item-title class="menu-title">
 									{{ __("Submit & Print") }}
 								</v-list-item-title>
+								<v-list-item-subtitle class="menu-subtitle">
+									{{ __("Save and print receipt") }}
+								</v-list-item-subtitle>
 							</v-list-item>
 						</v-list>
 					</v-menu>
 				</v-col>
+
+				<!-- Cancel Payment Button -->
 				<v-col cols="12">
-					<v-btn
-						block
-						class="mt-2 pa-1"
-						size="large"
-						color="error"
-						theme="dark"
-						@click="back_to_invoice"
-					>
+					<v-btn block size="large" color="error" theme="dark" @click="back_to_invoice" class="cancel-btn"
+						elevation="2">
+						<v-icon left size="20">mdi-close-circle</v-icon>
 						{{ __("Cancel Payment") }}
 					</v-btn>
 				</v-col>
@@ -2232,9 +2230,220 @@ export default {
 	background-color: var(--surface-secondary) !important;
 }
 
-.submit-highlight {
-	box-shadow: 0 0 0 4px rgb(var(--v-theme-primary));
-	transition: box-shadow 0.3s ease-in-out;
+
+/* Main Submit Button */
+.submit-btn-main {
+	position: relative;
+	overflow: hidden;
+	font-weight: 700 !important;
+	font-size: 1.2rem !important;
+	letter-spacing: 1px !important;
+	height: 64px !important;
+	background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%) !important;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.submit-btn-main::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: -100%;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+	transition: left 0.5s;
+}
+
+.submit-btn-main:hover {
+	transform: translateY(-2px);
+	background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%) !important;
+}
+
+.submit-btn-main:hover::before {
+	left: 100%;
+}
+
+.submit-btn-main:active {
+	transform: translateY(0px);
+}
+
+.submit-btn-main:disabled {
+	opacity: 0.6;
+	transform: none !important;
+}
+
+/* Submit text styling */
+.submit-text {
+	font-size: 1.3rem;
+	font-weight: 800;
+	margin: 0 12px;
+	text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Highlight animation */
+/* .submit-highlight {
+	animation: pulse-glow 1.5s ease-in-out infinite;
+} */
+
+/* @keyframes pulse-glow {
+	0%, 100% {
+		box-shadow: 0 4px 12px rgba(25, 118, 210, 0.4),
+					0 0 0 0 rgba(25, 118, 210, 0.7);
+	}
+	50% {
+		box-shadow: 0 8px 20px rgba(25, 118, 210, 0.6),
+					0 0 0 8px rgba(25, 118, 210, 0);
+	}
+} */
+
+/* Dropdown Menu Styling - FIXED */
+.submit-menu {
+	border-radius: 8px !important;
+	overflow: hidden;
+	width: 100%;
+	max-width: none !important;
+	min-width: auto !important;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.menu-item {
+	padding: 12px 16px !important;
+	min-height: 60px !important;
+	transition: all 0.2s ease;
+	cursor: pointer;
+}
+
+.menu-item:hover {
+	background: rgba(25, 118, 210, 0.08) !important;
+}
+
+.menu-item :deep(.v-list-item__prepend) {
+	margin-right: 12px;
+}
+
+.menu-item :deep(.v-list-item-title) {
+	font-weight: 600 !important;
+	font-size: 0.95rem !important;
+	line-height: 1.3 !important;
+	margin-bottom: 2px !important;
+}
+
+.menu-item :deep(.v-list-item-subtitle) {
+	font-size: 0.8rem !important;
+	opacity: 0.7 !important;
+	line-height: 1.2 !important;
+}
+
+.menu-title {
+	font-weight: 600;
+	font-size: 0.95rem;
+	margin-bottom: 2px;
+}
+
+.menu-subtitle {
+	font-size: 0.8rem;
+	opacity: 0.7;
+	white-space: normal;
+	line-height: 1.2;
+}
+
+/* Cancel Button */
+.cancel-btn {
+	font-weight: 600 !important;
+	font-size: 1rem !important;
+	height: 52px !important;
+	background: linear-gradient(135deg, #d32f2f 0%, #c62828 100%) !important;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.cancel-btn:hover {
+	transform: translateY(-1px);
+	background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%) !important;
+}
+
+.cancel-btn:active {
+	transform: translateY(0px);
+}
+
+/* Button Row Spacing */
+.button-row {
+	gap: 8px;
+}
+
+/* Loading State */
+.submit-btn-main.v-btn--loading {
+	pointer-events: none;
+}
+
+.submit-btn-main .v-btn__loader {
+	color: white;
+}
+
+/* Ensure parent card allows overflow for dropdown */
+.cards {
+	overflow: visible !important;
+}
+
+/* Dark Theme Adjustments */
+:deep([data-theme="dark"]) .submit-btn-main,
+:deep(.v-theme--dark) .submit-btn-main {
+	background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%) !important;
+}
+
+:deep([data-theme="dark"]) .submit-btn-main:hover,
+:deep(.v-theme--dark) .submit-btn-main:hover {
+	background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%) !important;
+}
+
+:deep([data-theme="dark"]) .submit-menu,
+:deep(.v-theme--dark) .submit-menu {
+	background-color: #1e1e1e !important;
+	border-color: rgba(255, 255, 255, 0.1);
+}
+
+:deep([data-theme="dark"]) .menu-item:hover,
+:deep(.v-theme--dark) .menu-item:hover {
+	background: rgba(33, 150, 243, 0.12) !important;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+	.submit-btn-main {
+		height: 56px !important;
+		font-size: 1.1rem !important;
+	}
+	
+	.submit-text {
+		font-size: 1.1rem;
+	}
+	
+	.cancel-btn {
+		height: 48px !important;
+		font-size: 0.95rem !important;
+	}
+	
+	.menu-item {
+		min-height: 56px !important;
+		padding: 10px 14px !important;
+	}
+}
+
+/* Icon Animations */
+.submit-btn-main .v-icon {
+	transition: transform 0.3s ease;
+}
+
+.submit-btn-main:hover .v-icon:first-child {
+	transform: scale(1.1) rotate(5deg);
+}
+
+.submit-btn-main:hover .v-icon:last-child {
+	transform: rotate(180deg);
+}
+
+/* Menu appears above button */
+:deep(.v-overlay__content) {
+	position: absolute !important;
 }
 
 /* Dark mode styling for input fields */

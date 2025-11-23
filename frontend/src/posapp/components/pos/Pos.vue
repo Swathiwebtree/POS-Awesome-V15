@@ -17,7 +17,7 @@
 			<div v-show="!dialog" class="pos-layout">
 				<!-- Left Column: Drafts (25% width) -->
 				<div class="pos-column drafts-column">
-					<div class="column-card drafts-card">
+					<div v-show="!showOffers && !coupons && !payment" class="column-card drafts-card">
 						<div class="column-header">
 							<v-icon left color="primary">mdi-file-document</v-icon>
 							<span>{{ __("Job orders") }}</span>
@@ -39,10 +39,16 @@
 						</div>
 					</div>
 
-					<!-- Additional components -->
-					<PosOffers v-show="showOffers" class="mt-3"></PosOffers>
-					<PosCoupons v-show="coupons" class="mt-3"></PosCoupons>
-					<Payments v-show="payment" class="mt-3"></Payments>
+					<!-- Additional components with proper card styling -->
+					<div v-show="showOffers" class="column-card offers-coupons-card">
+						<PosOffers></PosOffers>
+					</div>
+					<div v-show="coupons" class="column-card offers-coupons-card">
+						<PosCoupons></PosCoupons>
+					</div>
+					<div v-show="payment" class="column-card payment-card">
+						<Payments></Payments>
+					</div>
 				</div>
 
 				<!-- Middle Column: Invoice (50% width) -->
@@ -65,7 +71,6 @@
 				<div class="pos-column items-column">
 					<div class="column-card items-card">
 						<div class="column-header">
-							<v-icon left color="primary">mdi-magnify</v-icon>
 							<span>{{ __("Search Items") }}</span>
 							<v-spacer></v-spacer>
 							<v-btn-group density="compact" variant="outlined">
@@ -1059,7 +1064,7 @@ invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb:hover),
 	}
 
 	.column-header {
-		font-size: 0.85rem;
+		font-size: 1.5rem;
 		padding: 8px 10px;
 		min-height: 44px;
 	}
