@@ -1,23 +1,43 @@
 <template>
 	<div>
-		<v-card :class="['selection mx-auto mt-3', isDarkTheme ? '' : 'bg-grey-lighten-5']"
-			:style="isDarkTheme ? 'background-color:#1E1E1E' : ''" style="max-height: 80vh; height: 80vh">
+		<v-card
+			:class="['selection mx-auto mt-3', isDarkTheme ? '' : 'bg-grey-lighten-5']"
+			:style="isDarkTheme ? 'background-color:#1E1E1E' : ''"
+			style="max-height: 80vh; height: 80vh"
+		>
 			<v-card-title>
 				<span class="text-h6 text-primary">{{ __("Offers") }}</span>
 			</v-card-title>
-			<div class="my-0 py-0 overflow-y-auto" style="max-height: 75vh" @mouseover="style = 'cursor: pointer'">
-				<v-data-table :headers="items_headers" :items="pos_offers" :single-expand="singleExpand"
-					v-model:expanded="expanded" show-expand item-value="row_id" class="elevation-1"
-					:items-per-page="itemsPerPage" hide-default-footer>
+			<div
+				class="my-0 py-0 overflow-y-auto"
+				style="max-height: 75vh"
+				@mouseover="style = 'cursor: pointer'"
+			>
+				<v-data-table
+					:headers="items_headers"
+					:items="pos_offers"
+					:single-expand="singleExpand"
+					v-model:expanded="expanded"
+					show-expand
+					item-value="row_id"
+					class="elevation-1"
+					:items-per-page="itemsPerPage"
+					hide-default-footer
+				>
 					<template v-slot:item.offer_applied="{ item }">
-						<v-btn v-if="!item.offer_applied" color="green" @click="applyOffer(item)" :disabled="
+						<v-btn
+							v-if="!item.offer_applied"
+							color="green"
+							@click="applyOffer(item)"
+							:disabled="
 								(item.offer == 'Give Product' &&
 									!item.give_item &&
 									(!item.replace_cheapest_item || !item.replace_item)) ||
 								(item.offer == 'Grand Total' &&
 									discount_percentage_offer_name &&
 									discount_percentage_offer_name != item.name)
-							">
+							"
+						>
 							{{ __("Apply") }}
 						</v-btn>
 						<v-btn v-else color="red" @click="removeOffer(item)">
@@ -31,13 +51,21 @@
 									<div class="text-primary" v-html="handleNewLine(item.description)"></div>
 								</v-col>
 								<v-col v-if="item.offer == 'Give Product'">
-									<v-autocomplete v-model="item.give_item" :items="get_give_items(item)"
-										item-title="item_name" item-value="item_code" variant="outlined"
-										density="compact" color="primary" :label="frappe._('Give Item')" :disabled="
+									<v-autocomplete
+										v-model="item.give_item"
+										:items="get_give_items(item)"
+										item-title="item_name"
+										item-value="item_code"
+										variant="outlined"
+										density="compact"
+										color="primary"
+										:label="frappe._('Give Item')"
+										:disabled="
 											item.apply_type != 'Item Group' ||
 											item.replace_item ||
 											item.replace_cheapest_item
-										"></v-autocomplete>
+										"
+									></v-autocomplete>
 								</v-col>
 							</v-row>
 						</td>
@@ -49,7 +77,14 @@
 		<v-card flat class="offer-footer-card mb-0 mt-3">
 			<v-row align="center" no-gutters>
 				<v-col cols="12">
-					<v-btn block class="back-btn" size="large" color="warning" theme="dark" @click="back_to_invoice">
+					<v-btn
+						block
+						class="back-btn"
+						size="large"
+						color="warning"
+						theme="dark"
+						@click="back_to_invoice"
+					>
 						<v-icon left>mdi-arrow-left</v-icon>
 						{{ __("Back") }}
 					</v-btn>
@@ -313,41 +348,41 @@ export default {
 <style scoped>
 /* Footer Card */
 .offer-footer-card {
-    background: white;
-    border-top: 2px solid #e0e0e0;
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
-    padding: 12px;
-    height: 80px;
+	background: white;
+	border-top: 2px solid #e0e0e0;
+	box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+	padding: 12px;
+	height: 80px;
 }
 
 .back-btn {
-    height: 56px !important;
-    font-size: 1.1rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.5px;
-    transition: all 0.2s ease;
+	height: 56px !important;
+	font-size: 1.1rem !important;
+	font-weight: 700 !important;
+	letter-spacing: 0.5px;
+	transition: all 0.2s ease;
 }
 
 .back-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(255, 152, 0, 0.4) !important;
+	transform: translateY(-2px);
+	box-shadow: 0 6px 16px rgba(255, 152, 0, 0.4) !important;
 }
 
 .back-btn .v-icon {
-    font-size: 24px;
-    margin-right: 8px;
+	font-size: 24px;
+	margin-right: 8px;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-    .offer-footer-card {
-        height: 70px;
-        padding: 8px;
-    }
-    
-    .back-btn {
-        height: 48px !important;
-        font-size: 1rem !important;
-    }
+	.offer-footer-card {
+		height: 70px;
+		padding: 8px;
+	}
+
+	.back-btn {
+		height: 48px !important;
+		font-size: 1rem !important;
+	}
 }
 </style>

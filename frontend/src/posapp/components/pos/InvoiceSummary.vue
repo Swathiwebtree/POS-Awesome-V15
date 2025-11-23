@@ -480,9 +480,7 @@
 																		: 'orange'
 																"
 															>
-																{{ card.visits }}/{{
-																	card.required_visits
-																}}
+																{{ card.visits }}/{{ card.required_visits }}
 																visits
 															</v-chip>
 														</v-col>

@@ -624,16 +624,29 @@
 		</v-card>
 
 		<!-- Action Buttons -->
-		<v-card flat class="cards mb-0 mt-3 pa-0" style="position: relative; overflow: visible;">
+		<v-card flat class="cards mb-0 mt-3 pa-0" style="position: relative; overflow: visible">
 			<v-row align="start" no-gutters class="button-row">
 				<!-- Submit Dropdown Button -->
 				<v-col cols="12" class="mb-2">
-					<v-menu offset-y :close-on-content-click="true" location="top"
-						transition="slide-y-reverse-transition">
+					<v-menu
+						offset-y
+						:close-on-content-click="true"
+						location="top"
+						transition="slide-y-reverse-transition"
+					>
 						<template v-slot:activator="{ props }">
-							<v-btn ref="submitButton" block size="x-large" color="primary" theme="dark" v-bind="props"
-								:loading="loading" :disabled="loading || vaildatPayment"
-								:class="['submit-btn-main', { 'submit-highlight': highlightSubmit }]" elevation="4">
+							<v-btn
+								ref="submitButton"
+								block
+								size="x-large"
+								color="primary"
+								theme="dark"
+								v-bind="props"
+								:loading="loading"
+								:disabled="loading || vaildatPayment"
+								:class="['submit-btn-main', { 'submit-highlight': highlightSubmit }]"
+								elevation="4"
+							>
 								<v-icon left size="24">mdi-check-circle</v-icon>
 								<span class="submit-text">{{ __("SUBMIT") }}</span>
 								<v-icon right size="20">mdi-chevron-up</v-icon>
@@ -649,8 +662,11 @@
 								</v-list-item-subtitle>
 							</v-list-item>
 							<v-divider></v-divider>
-							<v-list-item @click="submit(undefined, false, true)" class="menu-item"
-								prepend-icon="mdi-printer-check">
+							<v-list-item
+								@click="submit(undefined, false, true)"
+								class="menu-item"
+								prepend-icon="mdi-printer-check"
+							>
 								<v-list-item-title class="menu-title">
 									{{ __("Submit & Print") }}
 								</v-list-item-title>
@@ -664,8 +680,15 @@
 
 				<!-- Cancel Payment Button -->
 				<v-col cols="12">
-					<v-btn block size="large" color="error" theme="dark" @click="back_to_invoice" class="cancel-btn"
-						elevation="2">
+					<v-btn
+						block
+						size="large"
+						color="error"
+						theme="dark"
+						@click="back_to_invoice"
+						class="cancel-btn"
+						elevation="2"
+					>
 						<v-icon left size="20">mdi-close-circle</v-icon>
 						{{ __("Cancel Payment") }}
 					</v-btn>
@@ -2230,7 +2253,6 @@ export default {
 	background-color: var(--surface-secondary) !important;
 }
 
-
 /* Main Submit Button */
 .submit-btn-main {
 	position: relative;
@@ -2244,7 +2266,7 @@ export default {
 }
 
 .submit-btn-main::before {
-	content: '';
+	content: "";
 	position: absolute;
 	top: 0;
 	left: -100%;
@@ -2412,16 +2434,16 @@ export default {
 		height: 56px !important;
 		font-size: 1.1rem !important;
 	}
-	
+
 	.submit-text {
 		font-size: 1.1rem;
 	}
-	
+
 	.cancel-btn {
 		height: 48px !important;
 		font-size: 0.95rem !important;
 	}
-	
+
 	.menu-item {
 		min-height: 56px !important;
 		padding: 10px 14px !important;

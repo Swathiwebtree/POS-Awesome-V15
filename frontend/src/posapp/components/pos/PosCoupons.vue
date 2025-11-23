@@ -1,7 +1,10 @@
 <template>
 	<div>
-		<v-card :class="['selection mx-auto mt-3', isDarkTheme ? '' : 'bg-grey-lighten-5']"
-			:style="isDarkTheme ? 'background-color:#1E1E1E' : ''" style="max-height: 80vh; height: 80vh">
+		<v-card
+			:class="['selection mx-auto mt-3', isDarkTheme ? '' : 'bg-grey-lighten-5']"
+			:style="isDarkTheme ? 'background-color:#1E1E1E' : ''"
+			style="max-height: 80vh; height: 80vh"
+		>
 			<v-card-title>
 				<span class="text-h6 text-primary">{{ __("Coupons") }}</span>
 			</v-card-title>
@@ -9,22 +12,47 @@
 			<!-- Input and Button Row - Same Level -->
 			<v-row class="px-4 pb-2" no-gutters>
 				<v-col cols="8" class="pr-2">
-					<v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('Coupon')"
-						:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" hide-details v-model="new_coupon"
-						class="coupon-input" @keydown.enter="add_coupon(new_coupon)">
+					<v-text-field
+						density="compact"
+						variant="outlined"
+						color="primary"
+						:label="frappe._('Coupon')"
+						:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+						hide-details
+						v-model="new_coupon"
+						class="coupon-input"
+						@keydown.enter="add_coupon(new_coupon)"
+					>
 					</v-text-field>
 				</v-col>
 				<v-col cols="4">
-					<v-btn class="add-coupon-btn" color="success" theme="dark" block @click="add_coupon(new_coupon)">
+					<v-btn
+						class="add-coupon-btn"
+						color="success"
+						theme="dark"
+						block
+						@click="add_coupon(new_coupon)"
+					>
 						{{ __("add") }}
 					</v-btn>
 				</v-col>
 			</v-row>
 
-			<div class="my-0 py-0 overflow-y-auto" style="max-height: 75vh" @mouseover="style = 'cursor: pointer'">
-				<v-data-table :headers="items_headers" :items="posa_coupons" :single-expand="singleExpand"
-					v-model:expanded="expanded" item-key="coupon" class="elevation-1" :items-per-page="itemsPerPage"
-					hide-default-footer>
+			<div
+				class="my-0 py-0 overflow-y-auto"
+				style="max-height: 75vh"
+				@mouseover="style = 'cursor: pointer'"
+			>
+				<v-data-table
+					:headers="items_headers"
+					:items="posa_coupons"
+					:single-expand="singleExpand"
+					v-model:expanded="expanded"
+					item-key="coupon"
+					class="elevation-1"
+					:items-per-page="itemsPerPage"
+					hide-default-footer
+				>
 					<template v-slot:item.applied="{ item }">
 						<v-checkbox-btn v-model="item.applied" disabled></v-checkbox-btn>
 					</template>
@@ -35,7 +63,14 @@
 		<v-card flat class="coupon-footer-card mb-0 mt-3">
 			<v-row align="center" no-gutters>
 				<v-col cols="12">
-					<v-btn block class="back-btn" size="large" color="warning" theme="dark" @click="back_to_invoice">
+					<v-btn
+						block
+						class="back-btn"
+						size="large"
+						color="warning"
+						theme="dark"
+						@click="back_to_invoice"
+					>
 						<v-icon left>mdi-arrow-left</v-icon>
 						{{ __("Back") }}
 					</v-btn>
@@ -234,41 +269,41 @@ export default {
 
 /* Footer Card */
 .coupon-footer-card {
-    background: white;
-    border-top: 2px solid #e0e0e0;
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
-    padding: 12px;
-    height: 80px;
+	background: white;
+	border-top: 2px solid #e0e0e0;
+	box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+	padding: 12px;
+	height: 80px;
 }
 
 .back-btn {
-    height: 56px !important;
-    font-size: 1.1rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.5px;
-    transition: all 0.2s ease;
+	height: 56px !important;
+	font-size: 1.1rem !important;
+	font-weight: 700 !important;
+	letter-spacing: 0.5px;
+	transition: all 0.2s ease;
 }
 
 .back-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(255, 152, 0, 0.4) !important;
+	transform: translateY(-2px);
+	box-shadow: 0 6px 16px rgba(255, 152, 0, 0.4) !important;
 }
 
 .back-btn .v-icon {
-    font-size: 24px;
-    margin-right: 8px;
+	font-size: 24px;
+	margin-right: 8px;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-    .coupon-footer-card {
-        height: 70px;
-        padding: 8px;
-    }
-    
-    .back-btn {
-        height: 48px !important;
-        font-size: 1rem !important;
-    }
+	.coupon-footer-card {
+		height: 70px;
+		padding: 8px;
+	}
+
+	.back-btn {
+		height: 48px !important;
+		font-size: 1rem !important;
+	}
 }
 </style>
