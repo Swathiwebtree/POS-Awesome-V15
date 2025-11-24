@@ -73,7 +73,7 @@
 						<div class="column-header">
 							<span>{{ __("Search Items") }}</span>
 							<v-spacer></v-spacer>
-							<v-btn-group density="compact" variant="outlined">
+							<!-- <v-btn-group density="compact" variant="outlined">
 								<v-btn
 									size="small"
 									:color="items_view === 'list' ? 'primary' : ''"
@@ -90,7 +90,7 @@
 								>
 									<v-icon>mdi-view-grid</v-icon>
 								</v-btn>
-							</v-btn-group>
+							</v-btn-group> -->
 							<v-btn
 								icon
 								size="small"
