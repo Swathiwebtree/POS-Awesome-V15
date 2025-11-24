@@ -1476,13 +1476,14 @@ export default {
 			// Populate/sync fields from UI into invoice_doc
 			this.invoice_doc.customer = this.customer;
 			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
-			this.invoice_doc.currency = this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
+			this.invoice_doc.currency =
+				this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
 			this.invoice_doc.net_total = this.subtotal || 0;
 			this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
 			this.invoice_doc.additional_discount = this.additional_discount || 0;
 			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
-			this.invoice_doc.grand_total = this.grand_total || (this.subtotal || 0);
+			this.invoice_doc.grand_total = this.grand_total || this.subtotal || 0;
 			this.invoice_doc.rounded_total = this.rounded_total || this.invoice_doc.grand_total;
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
@@ -1553,7 +1554,8 @@ export default {
 				}
 
 				// Resolve draft name to update (prefer loaded_draft_name then invoice_doc.name)
-				const draft_name_to_update = this.loaded_draft_name || (this.invoice_doc && this.invoice_doc.name) || null;
+				const draft_name_to_update =
+					this.loaded_draft_name || (this.invoice_doc && this.invoice_doc.name) || null;
 				console.log("[Invoice] resolved draft_name_to_update:", draft_name_to_update);
 
 				if (draft_name_to_update) {
@@ -1737,7 +1739,7 @@ export default {
 					console.log("[Invoice] Draft data received:", response.message);
 
 					// IMPORTANT: Store the draft name before loading
-					this.loaded_draft_name = draftName; 
+					this.loaded_draft_name = draftName;
 
 					// Load the complete draft invoice
 					this.load_invoice(response.message);
@@ -1878,7 +1880,7 @@ export default {
 		this.eventBus.on("load_return_invoice", (data) => {
 			console.log("Invoice component received load_return_invoice event with data:", data);
 			this.load_invoice(data.invoice_doc);
-			this.loaded_draft_name = null; 
+			this.loaded_draft_name = null;
 			// Explicitly mark as return invoice
 			this.invoiceType = "Return";
 			this.invoiceTypes = ["Return"];

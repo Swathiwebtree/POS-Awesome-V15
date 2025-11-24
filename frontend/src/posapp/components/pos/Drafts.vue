@@ -14,7 +14,7 @@
 				return-object
 				density="compact"
 				:items-per-page="100"
-				:item-class="(item) => isCurrentDraft(item.name) ? 'v-data-table__tr--active' : ''"
+				:item-class="(item) => (isCurrentDraft(item.name) ? 'v-data-table__tr--active' : '')"
 			>
 				<template v-slot:column.posting_date="{ column }">
 					<span class="text-caption font-weight-medium">{{ column.title }}</span>
@@ -119,7 +119,10 @@
 									return-object
 									density="compact"
 									:items-per-page="10"
-									:item-class="(item) => isCurrentDraft(item.name) ? 'v-data-table__tr--active' : ''"
+									:item-class="
+										(item) =>
+											isCurrentDraft(item.name) ? 'v-data-table__tr--active' : ''
+									"
 								>
 									<template v-slot:column.posting_date="{ column }">
 										<span class="d-none">{{ column.title }}</span>
@@ -148,7 +151,9 @@
 											>
 												{{ __("Current") }}
 											</v-chip>
-											<span class="text-caption font-weight-medium text-primary">{{ item.name }}</span>
+											<span class="text-caption font-weight-medium text-primary">{{
+												item.name
+											}}</span>
 										</div>
 									</template>
 

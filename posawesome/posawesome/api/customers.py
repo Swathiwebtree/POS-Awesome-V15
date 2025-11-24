@@ -1304,6 +1304,7 @@ def search_customers(search_term="", pos_profile=None, limit=20):
 
     return rows
 
+
 @frappe.whitelist()
 def set_customer_info(customer, fieldname, value=""):
     """Update customer information and linked contacts"""
