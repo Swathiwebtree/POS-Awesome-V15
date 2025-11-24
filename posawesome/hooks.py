@@ -160,14 +160,13 @@ doc_events = {
 # auto_cancel_exempted_doctypes = ["Auto Repeat"]
 
 fixtures = [
-    {"doctype": "Workspace", "filters": [["name", "in", ["lazer_pos"]]]},
     {
         "doctype": "Custom Field",
         "filters": [
             [
                 "name",
                 "in",
-                (
+                [
                     "Sales Invoice-posa_pos_opening_shift",
                     "POS Invoice-posa_pos_opening_shift",
                     "Item Barcode-posa_uom",
@@ -276,9 +275,13 @@ fixtures = [
                     "POS Profile-posa_enable_camera_scanning",
                     "POS Profile-posa_camera_scan_type",
                     "POS Profile-posa_language",
-                ),
+                    "POS Profile-posa_allow_multi_currency",
+                    "POS Profile-posa_decimal_precision",
+                    "Customer-custom_vehicle_no",
+                    "Sales Invoice-custom_vehicle_no"
+                ]
             ]
-        ],
+        ]
     },
     {
         "doctype": "Property Setter",
@@ -286,29 +289,14 @@ fixtures = [
             [
                 "name",
                 "in",
-                (
+                [
                     "Sales Invoice-posa_pos_opening_shift-no_copy",
                     "POS Invoice-posa_pos_opening_shift-no_copy",
                     "Sales Invoice Reference-sales_invoice-reqd",
-                    "Sales Invoice-main-field_order",
-                ),
+                    "Sales Invoice-main-field_order"
+                ]
             ]
-        ],
-    },
-    {
-        "doctype": "Custom Field",
-        "filters": [
-            [
-                "name",
-                "in",
-                [
-                    "POS Profile-posa_allow_multi_currency",
-                    "POS Profile-posa_decimal_precision",
-                    "Customer-custom_vehicle_no",
-                    "Sales Invoice-custom_vehicle_no",
-                ],
-            ]
-        ],
+        ]
     },
     {
         "doctype": "DocType",
@@ -350,8 +338,8 @@ fixtures = [
                     "Vehicle Model",
                     "Vehicle Service Work Order",
                     "Frequent Customer Card"
-                ],
+                ]
             ]
-        ],
-    },
+        ]
+    }
 ]
