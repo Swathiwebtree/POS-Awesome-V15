@@ -278,10 +278,10 @@ fixtures = [
                     "POS Profile-posa_allow_multi_currency",
                     "POS Profile-posa_decimal_precision",
                     "Customer-custom_vehicle_no",
-                    "Sales Invoice-custom_vehicle_no"
-                ]
+                    "Sales Invoice-custom_vehicle_no",
+                ],
             ]
-        ]
+        ],
     },
     {
         "doctype": "Property Setter",
@@ -293,10 +293,10 @@ fixtures = [
                     "Sales Invoice-posa_pos_opening_shift-no_copy",
                     "POS Invoice-posa_pos_opening_shift-no_copy",
                     "Sales Invoice Reference-sales_invoice-reqd",
-                    "Sales Invoice-main-field_order"
-                ]
+                    "Sales Invoice-main-field_order",
+                ],
             ]
-        ]
+        ],
     },
     {
         "doctype": "DocType",
@@ -337,9 +337,9 @@ fixtures = [
                     "Vehicle Master",
                     "Vehicle Model",
                     "Vehicle Service Work Order",
-                    "Frequent Customer Card"
-                ]
+                    "Frequent Customer Card",
+                ],
             ]
-        ]
-    }
+        ],
+    },
 ]
