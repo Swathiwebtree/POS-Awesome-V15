@@ -204,27 +204,19 @@ export default {
 			item: 0,
 			items: [
 				{
+					name: "Home",
+					text: "Home",
+					icon: "mdi-home",
+					route: "/app/home",
+					routeType: "external",
+					submodules: [],
+				},
+				{
 					name: "POS",
 					text: "POS",
 					icon: "mdi-network-pos",
-					route: "point-of-sale", // Standard Frappe POS
-					routeType: "frappe", // Use Frappe routing
-					submodules: [],
-				},
-				{
-					name: "Payments",
-					text: "Payments",
-					icon: "mdi-credit-card",
-					route: "List/Payment Entry", // Payment Entry DocType List
-					routeType: "frappe", // Use Frappe routing
-					submodules: [],
-				},
-				{
-					name: "LazerPOS",
-					text: "LazerPOS",
-					icon: "mdi-cash-register",
-					route: "posawesome", // Your custom POS Awesome app
-					routeType: "frappe", // Use Frappe routing
+					route: "point-of-sale",
+					routeType: "frappe",
 					submodules: [],
 				},
 			],
@@ -294,7 +286,7 @@ export default {
 		},
 		/**
 		 * Handle page navigation when drawer items are clicked
-		 * This is the KEY method that handles navigation with proper routing
+		 * This method handles navigation with proper routing for different route types
 		 */
 		handlePageChange(page) {
 			console.log("Navigating to page:", page);
@@ -304,7 +296,6 @@ export default {
 
 			if (!item) {
 				console.warn(`No item found for page: ${page}`);
-				// Fallback to emit event
 				this.$emit("change-page", page);
 				return;
 			}
@@ -336,7 +327,8 @@ export default {
 					window.location.href = `/app/${route}`;
 				}
 			} else if (routeType === "url") {
-				// Direct URL navigation
+				// Direct URL navigation (for relative or absolute URLs)
+				// This works for both local and production environments
 				window.location.href = route;
 			} else if (routeType === "external") {
 				// External link (opens in new tab)

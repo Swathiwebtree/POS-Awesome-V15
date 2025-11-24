@@ -1262,29 +1262,47 @@ def create_customer(
 
 
 @frappe.whitelist()
-def search_customers(search_term=""):
+def search_customers(search_term="", pos_profile=None, limit=20):
     """
-    Search customers by ID or Name. Returns list for Vue Autocomplete.
+    Server-side fallback for substring search used by the POS frontend.
+    Returns list of dict: {name, customer_name, mobile_no, email_id, tax_id, vehicle_no}
     """
-    filters = {}
-    if search_term:
-        # Search by Customer ID (name) OR Customer Name
-        filters = [
-            ["name", "like", f"%{search_term}%"],
-            ["customer_name", "like", f"%{search_term}%"],
-        ]
+    search_term = (search_term or "").strip()
+    limit = int(limit or 20)
+    if not search_term:
+        # if no search term, return limited recent active customers
+        return frappe.get_all(
+            "Customer",
+            filters=[["disabled", "=", 0]],
+            fields=["name", "customer_name", "mobile_no", "email_id", "tax_id", "vehicle_no"],
+            limit_page_length=limit,
+            order_by="modified desc",
+        )
 
-    # Note: 'name' is the ID/DocName, 'customer_name' is the display name.
-    customers = frappe.get_list(
-        "Customer",
-        filters=filters,
-        fields=["name", "customer_name"],
-        limit_page_length=20,
-        or_filters=bool(search_term),  # Use OR filtering if a search term exists
+    # Build SQL-style like pattern safely
+    like = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
+
+    # Use SQL for OR across many fields (more reliable & fast)
+    rows = frappe.db.sql(
+        """
+        SELECT name, customer_name, mobile_no, email_id, COALESCE(tax_id, '') AS tax_id, COALESCE(vehicle_no, '') AS vehicle_no
+        FROM `tabCustomer`
+        WHERE disabled = 0
+        AND (
+            name LIKE %(like)s
+            OR customer_name LIKE %(like)s
+            OR mobile_no LIKE %(like)s
+            OR email_id LIKE %(like)s
+            OR tax_id LIKE %(like)s
+            OR vehicle_no LIKE %(like)s
+        )
+        LIMIT %(limit)s
+        """,
+        {"like": like, "limit": limit},
+        as_dict=1,
     )
 
-    return customers
-
+    return rows
 
 @frappe.whitelist()
 def set_customer_info(customer, fieldname, value=""):

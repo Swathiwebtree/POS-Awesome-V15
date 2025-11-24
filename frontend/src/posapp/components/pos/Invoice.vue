@@ -362,6 +362,7 @@ export default {
 	mixins: [format],
 	data() {
 		return {
+			loaded_draft_name: null,
 			// POS profile settings
 			pos_profile: "",
 			pos_opening_shift: "",
@@ -1456,14 +1457,9 @@ export default {
 
 		async save_and_clear_invoice() {
 			console.log("[Invoice] save_and_clear_invoice() called");
+			console.log("[Invoice] loaded_draft_name:", this.loaded_draft_name);
 
-			// Ensure invoice_doc exists
-			if (!this.invoice_doc) {
-				console.warn("[Invoice] Creating new invoice_doc");
-				this.invoice_doc = {};
-			}
-
-			// Validate invoice has items
+			// Basic validations
 			if (!this.items || this.items.length === 0) {
 				frappe.show_alert({
 					message: this.__("Please add items to invoice before saving"),
@@ -1472,32 +1468,47 @@ export default {
 				return null;
 			}
 
-			// Validate customer
-			if (!this.customer || String(this.customer).trim().length === 0) {
-				frappe.show_alert({
-					message: this.__("Please select a customer before saving"),
-					indicator: "warning",
-				});
-				return null;
+			// Ensure invoice_doc exists
+			if (!this.invoice_doc) {
+				this.invoice_doc = {};
 			}
 
-			// Sync all current values to invoice_doc
-			this.invoice_doc.doctype = "Sales Invoice";
-			this.invoice_doc.items = this.items;
+			// Populate/sync fields from UI into invoice_doc
 			this.invoice_doc.customer = this.customer;
 			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
-			this.invoice_doc.currency = this.selected_currency || this.pos_profile.currency;
-			this.invoice_doc.net_total = this.subtotal;
+			this.invoice_doc.currency = this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
+			this.invoice_doc.net_total = this.subtotal || 0;
 			this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
 			this.invoice_doc.additional_discount = this.additional_discount || 0;
 			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
-			this.invoice_doc.grand_total = this.grand_total;
-			this.invoice_doc.rounded_total = this.rounded_total;
+			this.invoice_doc.grand_total = this.grand_total || (this.subtotal || 0);
+			this.invoice_doc.rounded_total = this.rounded_total || this.invoice_doc.grand_total;
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
-			this.invoice_doc.pos_profile = this.pos_profile.name;
-			this.invoice_doc.company = this.pos_profile.company;
+			this.invoice_doc.pos_profile = this.pos_profile && this.pos_profile.name;
+			this.invoice_doc.company = this.pos_profile && this.pos_profile.company;
+
+			// Required: ensure parent doctype is set for insert
+			this.invoice_doc.doctype = "Sales Invoice";
+
+			// Ensure items exist and each child row has proper doctype
+			// Transform UI item structure into the format expected by Sales Invoice (adjust fields to your app)
+			if (!Array.isArray(this.invoice_doc.items)) {
+				this.invoice_doc.items = this.items || [];
+			}
+
+			// Attach doctype for each child item
+			this.invoice_doc.items = this.invoice_doc.items.map((it) => {
+				// if your app uses different property names adjust the mapping here
+				const itemRow = Object.assign({}, it);
+				itemRow.doctype = "Sales Invoice Item";
+				// Typical required fields for a sales invoice item (adjust to your schema)
+				// itemRow.item_code = itemRow.code || itemRow.item_code;
+				// itemRow.qty = itemRow.qty || 1;
+				// itemRow.rate = itemRow.rate || itemRow.price || 0;
+				return itemRow;
+			});
 
 			console.log("[Invoice] Invoice ready to save:", {
 				customer: this.invoice_doc.customer,
@@ -1507,33 +1518,121 @@ export default {
 			});
 
 			try {
-				// Call save via frappe method
-				const response = await frappe.call({
-					method: "frappe.client.insert",
-					args: {
-						doc: this.invoice_doc,
-					},
-				});
+				// 1) Ensure customer exists. If user typed a new customer name, create a minimal Customer record first.
+				//    This avoids failing the insert if the Customer doesn't exist.
+				const customer_name = this.invoice_doc.customer;
+				if (customer_name) {
+					const existsResp = await frappe.call({
+						method: "frappe.client.get_list",
+						args: {
+							doctype: "Customer",
+							fields: ["name"],
+							filters: { name: customer_name },
+							limit_page_length: 1,
+						},
+					});
+					const exists = Array.isArray(existsResp.message) && existsResp.message.length > 0;
+					if (!exists) {
+						console.log("[Invoice] Customer does not exist, creating Customer:", customer_name);
+						// Create a minimal customer. Add more fields if you want (customer_group, territory, etc).
+						const newCustomerResp = await frappe.call({
+							method: "frappe.client.insert",
+							args: {
+								doc: {
+									doctype: "Customer",
+									customer_name: customer_name,
+									name: customer_name,
+								},
+							},
+						});
+						if (!newCustomerResp.message) {
+							throw new Error("Failed to create Customer: " + (newCustomerResp.exc || ""));
+						}
+						console.log("[Invoice] Customer created:", newCustomerResp.message.name);
+					}
+				}
 
-				if (response.message) {
-					const saved_doc = response.message;
-					console.log("[Invoice] Invoice saved successfully:", saved_doc.name);
+				// Resolve draft name to update (prefer loaded_draft_name then invoice_doc.name)
+				const draft_name_to_update = this.loaded_draft_name || (this.invoice_doc && this.invoice_doc.name) || null;
+				console.log("[Invoice] resolved draft_name_to_update:", draft_name_to_update);
 
-					frappe.show_alert({
-						message: this.__("Invoice saved as draft: {0}", [saved_doc.name]),
-						indicator: "green",
+				if (draft_name_to_update) {
+					// Update existing draft — use set_value to change multiple fields
+					console.log("[Invoice] Updating existing draft:", draft_name_to_update);
+
+					// Prepare field map to update. Frappe's set_value accepts a dict for 'fieldname' to set multiple fields.
+					const field_map = {
+						items: this.invoice_doc.items,
+						customer: this.invoice_doc.customer,
+						posting_date: this.invoice_doc.posting_date,
+						currency: this.invoice_doc.currency,
+						net_total: this.invoice_doc.net_total,
+						total_taxes_and_charges: this.invoice_doc.total_taxes_and_charges,
+						discount_amount: this.invoice_doc.discount_amount,
+						additional_discount: this.invoice_doc.additional_discount,
+						additional_discount_percentage: this.invoice_doc.additional_discount_percentage,
+						grand_total: this.invoice_doc.grand_total,
+						rounded_total: this.invoice_doc.rounded_total,
+						conversion_rate: this.invoice_doc.conversion_rate,
+						plc_conversion_rate: this.invoice_doc.plc_conversion_rate,
+						pos_profile: this.invoice_doc.pos_profile,
+						company: this.invoice_doc.company,
+					};
+
+					const updResp = await frappe.call({
+						method: "frappe.client.set_value",
+						args: {
+							doctype: "Sales Invoice",
+							name: draft_name_to_update,
+							fieldname: field_map,
+						},
 					});
 
-					// Store the saved doc name
-					const saved_name = saved_doc.name;
+					if (updResp.message) {
+						console.log("[Invoice] Existing draft updated successfully:", draft_name_to_update);
+						frappe.show_alert({
+							message: this.__("Draft invoice updated: {0}", [draft_name_to_update]),
+							indicator: "green",
+						});
+						// Keep loaded_draft_name and invoice_doc.name in sync
+						this.loaded_draft_name = draft_name_to_update;
+						this.invoice_doc.name = draft_name_to_update;
+						this.eventBus.emit("invoice_saved_successfully", { name: draft_name_to_update });
+						return updResp.message;
+					} else {
+						throw new Error("Failed to update draft: " + (updResp.exc || ""));
+					}
+				} else {
+					// Create new Sales Invoice draft
+					console.log("[Invoice] Creating new draft (no existing draft loaded)");
 
-					// Clear the invoice
-					this.clear_invoice();
+					// Make sure the invoice_doc includes doctype (we did above)
+					const insertResp = await frappe.call({
+						method: "frappe.client.insert",
+						args: {
+							doc: this.invoice_doc,
+						},
+					});
 
-					// Emit event
-					this.eventBus.emit("invoice_saved_successfully", { name: saved_name });
+					if (insertResp.message) {
+						const saved_doc = insertResp.message;
+						const saved_name = saved_doc.name;
+						console.log("[Invoice] Invoice saved as new draft:", saved_name);
 
-					return saved_doc;
+						// Store name so future saves update this draft
+						this.loaded_draft_name = saved_name;
+						this.invoice_doc.name = saved_name;
+
+						frappe.show_alert({
+							message: this.__("Draft invoice saved: {0}", [saved_name]),
+							indicator: "green",
+						});
+
+						this.eventBus.emit("invoice_saved_successfully", { name: saved_name });
+						return saved_doc;
+					} else {
+						throw new Error("Failed to create invoice: " + (insertResp.exc || ""));
+					}
 				}
 			} catch (error) {
 				console.error("[Invoice] Error saving invoice:", error);
@@ -1542,6 +1641,9 @@ export default {
 					indicator: "red",
 				});
 				return null;
+			} finally {
+				// Force UI refresh if needed
+				this.$nextTick(() => this.$forceUpdate && this.$forceUpdate());
 			}
 		},
 
@@ -1578,6 +1680,7 @@ export default {
 			this.additional_discount_percentage = 0;
 			this.discount_amount = 0;
 			this.total_tax = 0;
+			this.loaded_draft_name = null;
 
 			// Emit event
 			this.eventBus.emit("invoice_cleared");
@@ -1632,6 +1735,9 @@ export default {
 
 				if (response.message) {
 					console.log("[Invoice] Draft data received:", response.message);
+
+					// IMPORTANT: Store the draft name before loading
+					this.loaded_draft_name = draftName; 
 
 					// Load the complete draft invoice
 					this.load_invoice(response.message);
@@ -1772,6 +1878,7 @@ export default {
 		this.eventBus.on("load_return_invoice", (data) => {
 			console.log("Invoice component received load_return_invoice event with data:", data);
 			this.load_invoice(data.invoice_doc);
+			this.loaded_draft_name = null; 
 			// Explicitly mark as return invoice
 			this.invoiceType = "Return";
 			this.invoiceTypes = ["Return"];

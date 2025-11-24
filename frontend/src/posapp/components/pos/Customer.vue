@@ -3,48 +3,24 @@
 		<div style="flex: 1 1 0">
 			<Skeleton v-if="loadingVehicles" height="58" class="w-100" />
 
-			<v-autocomplete
-				v-else-if="vehicles.length > 1"
-				ref="vehicleDropdown"
-				class="vehicle-autocomplete sleek-field"
-				density="compact"
-				clearable
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				v-model="selectedVehicle"
-				:items="vehicles"
-				item-title="vehicle_no"
-				item-value="name"
-				hide-details
-				:disabled="loadingVehicles"
-				@update:modelValue="onVehicleSelect"
-				@update:search="onVehicleSearch"
-				:virtual-scroll="true"
-				:virtual-scroll-item-height="58"
-			>
+			<v-autocomplete v-else-if="vehicles.length > 1" ref="vehicleDropdown"
+				class="vehicle-autocomplete sleek-field" density="compact" clearable variant="solo"
+				:label="frappe._('Vehicle No')" v-model="selectedVehicle" :items="vehicles" item-title="vehicle_no"
+				item-value="name" hide-details :disabled="loadingVehicles" @update:modelValue="onVehicleSelect"
+				@update:search="onVehicleSearch" :virtual-scroll="true" :virtual-scroll-item-height="58">
 				<template #prepend-inner>
 					<v-tooltip text="Edit vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_vehicle"
-								>mdi-car-edit</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_vehicle">mdi-car-edit</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -73,62 +49,33 @@
 				</template>
 			</v-autocomplete>
 
-			<v-text-field
-				v-else-if="vehicles.length === 1 && vehicles[0].name"
-				readonly
-				dense
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				v-model="vehicle_no"
-			>
+			<v-text-field v-else-if="vehicles.length === 1 && vehicles[0].name" readonly dense variant="solo"
+				:label="frappe._('Vehicle No')" v-model="vehicle_no">
 				<template #prepend-inner>
 					<v-tooltip text="Edit vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_vehicle"
-								>mdi-car-edit</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_vehicle">mdi-car-edit</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
 			</v-text-field>
 
-			<v-text-field
-				v-else
-				v-model="vehicle_no"
-				dense
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				placeholder="Enter vehicle no and press Enter"
-				@keydown.enter.prevent="onVehicleNoEnter"
-				hide-details
-			>
+			<v-text-field v-else v-model="vehicle_no" dense variant="solo" :label="frappe._('Vehicle No')"
+				placeholder="Enter vehicle no and press Enter" @keydown.enter.prevent="onVehicleNoEnter" hide-details>
 				<template #append-inner>
 					<v-tooltip text="Add vehicle">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_vehicle">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -137,44 +84,19 @@
 
 		<div style="flex: 1 1 0">
 			<Skeleton v-if="loadingCustomers" height="58" class="w-100" />
-			<v-autocomplete
-				v-else
-				ref="customerDropdown"
-				class="customer-autocomplete sleek-field"
-				density="compact"
-				clearable
-				variant="solo"
-				color="#4169E1"
-				:label="frappe._('Customer')"
-				v-model="internalCustomer"
-				:items="filteredCustomers"
-				item-title="customer_name"
-				item-value="name"
-				:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-				:no-data-text="
-					isCustomerBackgroundLoading ? __('Loading customer data...') : __('Customers not found')
-				"
-				hide-details
-				:customFilter="() => true"
-				:disabled="effectiveReadonly || loadingCustomers"
-				:menu-props="{ closeOnContentClick: false }"
-				@update:menu="onCustomerMenuToggle"
-				@update:modelValue="onCustomerChange"
-				@update:search="onCustomerSearch"
-				@keydown.enter="handleEnter"
-				:virtual-scroll="true"
-				:virtual-scroll-item-height="58"
-			>
+			<v-autocomplete v-else ref="customerDropdown" class="customer-autocomplete sleek-field" density="compact"
+				clearable variant="solo" color="#4169E1" :label="frappe._('Customer')" v-model="internalCustomer"
+				:items="filteredCustomers" item-title="customer_name" item-value="name"
+				:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" :no-data-text="isCustomerBackgroundLoading ? __('Loading customer data...') : __('Customers not found')
+					" hide-details :customFilter="() => true" :disabled="effectiveReadonly || loadingCustomers"
+				:menu-props="{ closeOnContentClick: false }" @update:menu="onCustomerMenuToggle"
+				@update:modelValue="onCustomerChange" @update:search="onCustomerSearch" @keydown.enter="handleEnter"
+				:virtual-scroll="true" :virtual-scroll-item-height="58">
 				<template #prepend-inner>
 					<v-tooltip text="Edit customer">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_customer"
-								>mdi-account-edit</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="edit_customer">mdi-account-edit</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -182,13 +104,8 @@
 				<template #append-inner>
 					<v-tooltip text="Add new customer">
 						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_customer"
-								>mdi-plus</v-icon
-							>
+							<v-icon v-bind="props" class="icon-button" @mousedown.prevent.stop
+								@click.stop="new_customer">mdi-plus</v-icon>
 						</template>
 					</v-tooltip>
 				</template>
@@ -511,36 +428,109 @@ export default {
 			try {
 				await checkDbHealth();
 				if (!db.isOpen()) await db.open();
-				let collection = db.table("customers");
-				if (term) {
-					collection = db
-						.table("customers")
-						.where("customer_name")
-						.startsWithIgnoreCase(term)
-						.or("mobile_no")
-						.startsWithIgnoreCase(term)
-						.or("email_id")
-						.startsWithIgnoreCase(term)
-						.or("tax_id")
-						.startsWithIgnoreCase(term)
-						.or("vehicle_no")
-						.startsWithIgnoreCase(term)
-						.or("name")
-						.startsWithIgnoreCase(term);
+
+				// If this is a "new" term (user typed new text), and page wasn't reset elsewhere,
+				// ensure page starts at 0 for fresh results.
+				// (Your searchDebounce already sets this.page = 0, but this is a safety net.)
+				if (term && this.searchTerm !== term) {
+					this.page = 0;
 				}
-				const results = await collection
-					.offset(this.page * this.pageSize)
-					.limit(this.pageSize)
-					.toArray();
+
+				let results = [];
+
+				// If there's a search term, do a robust "contains" search in local IndexedDB.
+				// If no term, fall back to paginated read of the customers table.
+				if (term) {
+					const q = term.toString().toLowerCase();
+
+					// Load all local customers (we filter in-memory for reliable substring search).
+					// Note: for very large datasets this is slower; we have a server fallback below.
+					const all = await db.table("customers").toArray();
+
+					const filtered = all.filter((c) => {
+						try {
+							return (
+								(c.customer_name && c.customer_name.toString().toLowerCase().includes(q)) ||
+								(c.name && c.name.toString().toLowerCase().includes(q)) ||
+								(c.mobile_no && c.mobile_no.toString().toLowerCase().includes(q)) ||
+								(c.email_id && c.email_id.toString().toLowerCase().includes(q)) ||
+								(c.tax_id && c.tax_id.toString().toLowerCase().includes(q)) ||
+								(c.vehicle_no && c.vehicle_no.toString().toLowerCase().includes(q))
+							);
+						} catch (err) {
+							return false;
+						}
+					});
+
+					// If nothing found locally, call server fallback (server does LIKE '%term%')
+					let serverResults = [];
+					if ((!filtered || filtered.length === 0) && term) {
+						try {
+							const resp = await frappe.call({
+								method: "posawesome.posawesome.api.customers.search_customers",
+								args: {
+									search_term: term,
+									pos_profile: this.pos_profile && this.pos_profile.pos_profile ? this.pos_profile.pos_profile : null,
+									limit: this.pageSize || 20
+								}
+							});
+							if (resp && resp.message && resp.message.length) {
+								serverResults = (resp.message || []).map((c) => ({
+									name: c.name,
+									customer_name: c.customer_name,
+									mobile_no: c.mobile_no || "",
+									email_id: c.email_id || "",
+									vehicle_no: c.vehicle_no || "",
+									tax_id: c.tax_id || ""
+								}));
+							}
+						} catch (err) {
+							// swallow server error, fallback to local behavior (empty results)
+							console.error("Server fallback search failed:", err);
+						}
+					}
+
+					// Choose data source: prefer server results if present, otherwise use local filtered + pagination
+					let slice = [];
+					if (serverResults && serverResults.length) {
+						// server returned limited results, use those directly
+						slice = serverResults;
+					} else {
+						const startIndex = (this.page || 0) * this.pageSize;
+						slice = filtered.slice(startIndex, startIndex + this.pageSize);
+					}
+
+					// Normalize the shape that the UI expects
+					results = slice.map((r) => ({
+						name: r.name,
+						customer_name: r.customer_name,
+						mobile_no: r.mobile_no || "",
+						email_id: r.email_id || "",
+						vehicle_no: r.vehicle_no || "",
+						tax_id: r.tax_id || ""
+					}));
+				} else {
+					// No search term — just read the paginated table rows
+					const collection = db.table("customers");
+					results = await collection
+						.offset((this.page || 0) * this.pageSize)
+						.limit(this.pageSize)
+						.toArray();
+				}
+
+				// assign results to component state (append vs replace)
 				if (append) {
 					this.customers.push(...results);
 				} else {
 					this.customers = results;
 				}
+
+				// set pagination flags
 				this.hasMore = results.length === this.pageSize;
 				if (this.hasMore) {
-					this.page += 1;
+					this.page = (this.page || 0) + 1;
 				}
+
 				return results.length;
 			} catch (e) {
 				console.error("Failed to search customers", e);
