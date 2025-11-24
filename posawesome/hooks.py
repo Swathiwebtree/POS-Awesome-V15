@@ -349,6 +349,7 @@ fixtures = [
                     "Vehicle Master",
                     "Vehicle Model",
                     "Vehicle Service Work Order",
+                    "Frequent Customer Card"
                 ],
             ]
         ],
