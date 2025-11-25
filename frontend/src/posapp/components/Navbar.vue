@@ -344,9 +344,59 @@ export default {
 		changePage(page) {
 			this.$emit("change-page", page);
 		},
-		openCloseShift() {
-			this.$emit("close-shift");
+		async openCloseShift() {
+			// guard: offline
+			if (typeof isOffline === "function" && isOffline()) {
+				this.showMessage({
+					color: "warning",
+					title: this.__("Cannot close shift while offline"),
+				});
+				return;
+			}
+
+			// immediately inform user we're preparing the dialog (no window.confirm)
+			this.showMessage({
+				color: "info",
+				title: this.__("Preparing closing dialog..."),
+			});
+
+			try {
+				// Request the data required by the closing dialog
+				const resp = await frappe.call({
+					method: "posawesome.posawesome.api.shifts.get_closing_dialog_data",
+				});
+
+				const closingData = resp?.message ?? resp;
+
+				if (closingData) {
+					// Try to emit on app eventBus if available
+					if (this.eventBus && typeof this.eventBus.emit === "function") {
+						this.eventBus.emit("open_ClosingDialog", closingData);
+					}
+
+					// Also dispatch a DOM CustomEvent fallback so components that listen via DOM will receive it
+					try {
+						window.dispatchEvent(new CustomEvent("open_ClosingDialog", { detail: closingData }));
+					} catch (e) {
+						// ignore dispatch errors
+					}
+
+					// If neither method is available, log an error to help debugging
+					if (!(this.eventBus && typeof this.eventBus.emit === "function")) {
+						console.info(
+							"openCloseShift: emitted open_ClosingDialog as DOM event fallback; ensure closingDialog.vue listens to this event or window.eventBus exists."
+						);
+					}
+				} else {
+					// no data -> likely no open shift
+					this.showMessage({ color: "warning", title: this.__("No open shift found") });
+				}
+			} catch (err) {
+				console.error("Failed to get closing dialog data:", err);
+				this.showMessage({ color: "error", title: this.__("Failed to open closing dialog") });
+			}
 		},
+
 		printLastInvoice() {
 			this.$emit("print-last-invoice");
 		},

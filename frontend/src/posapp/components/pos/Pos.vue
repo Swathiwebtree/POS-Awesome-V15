@@ -7,6 +7,8 @@
 			:style="[responsiveStyles, rtlStyles]"
 		>
 			<ClosingDialog></ClosingDialog>
+			<UpdateCustomer />
+			<UpdateVehicle />
 			<SalesOrders></SalesOrders>
 			<Returns></Returns>
 			<NewAddress></NewAddress>
@@ -216,6 +218,8 @@ import NewAddress from "./NewAddress.vue";
 import Variants from "./Variants.vue";
 import Returns from "./Returns.vue";
 import MpesaPayments from "./Mpesa-Payments.vue";
+import UpdateCustomer from "./UpdateCustomer.vue";
+import UpdateVehicle from "./UpdateVehicle.vue";
 
 import { getCurrentInstance } from "vue";
 import { usePosShift } from "../../composables/usePosShift.js";
@@ -273,6 +277,8 @@ export default {
 		NewAddress,
 		Variants,
 		MpesaPayments,
+		UpdateCustomer,
+		UpdateVehicle,
 		SalesOrders,
 	},
 

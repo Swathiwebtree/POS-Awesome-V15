@@ -216,10 +216,10 @@
 			</v-autocomplete>
 		</div>
 
-		<div class="mt-4">
+		<!-- <div class="mt-4">
 			<UpdateCustomer />
 			<UpdateVehicle />
-		</div>
+		</div> -->
 	</div>
 </template>
 
@@ -279,8 +279,8 @@
 
 <script>
 /* global frappe __ */
-import UpdateCustomer from "./UpdateCustomer.vue";
-import UpdateVehicle from "./UpdateVehicle.vue";
+// import UpdateCustomer from "./UpdateCustomer.vue";
+// import UpdateVehicle from "./UpdateVehicle.vue";
 import Skeleton from "../ui/Skeleton.vue";
 import {
 	db,
@@ -331,8 +331,8 @@ export default {
 	}),
 
 	components: {
-		UpdateCustomer,
-		UpdateVehicle,
+		// UpdateCustomer,
+		// UpdateVehicle,
 		Skeleton,
 	},
 
@@ -1090,6 +1090,7 @@ export default {
 		this.effectiveReadonly = this.readonly && navigator.onLine;
 
 		this.$nextTick(() => {
+			if (!window._customerListenersRegistered) {
 			this.eventBus.on("register_pos_profile", async (pos_profile) => {
 				await memoryInitPromise;
 				this.pos_profile = pos_profile;
@@ -1194,6 +1195,9 @@ export default {
 					this.fetchVehiclesForCustomer(customer.name);
 				}
 			});
+			window._customerListenersRegistered = true;
+		}
+
 		});
 
 		// Initial Vehicle Load

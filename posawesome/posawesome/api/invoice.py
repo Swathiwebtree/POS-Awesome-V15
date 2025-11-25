@@ -16,6 +16,42 @@ from posawesome.posawesome.doctype.delivery_charges.delivery_charges import (
 
 
 def validate(doc, method):
+    # try to auto-attach an open POS shift if one isn't provided
+    if not doc.get("posa_pos_opening_shift"):
+        try:
+            from posawesome.posawesome.api.invoices import get_current_user_open_shift
+
+            # prefer invoice owner (works for background jobs), else session user
+            user = doc.owner or frappe.session.user
+            open_shift = get_current_user_open_shift(user)
+
+            if open_shift:
+                # set on doc first
+                doc.posa_pos_opening_shift = open_shift.name
+
+                # try to persist immediately — guard against doc not existing in DB yet
+                try:
+                    # Only call set_value if open_shift is available and doc has a name
+                    if doc.name:
+                        frappe.db.set_value(
+                            doc.doctype,
+                            doc.name,
+                            "posa_pos_opening_shift",
+                            open_shift.name,
+                            update_modified=False,
+                        )
+                        frappe.db.commit()
+                except Exception:
+                    # don't raise — insertion may not have happened yet; log for debugging
+                    frappe.log_error(
+                        f"Could not persist posa_pos_opening_shift for {doc.doctype} {doc.name}",
+                        "POS Shift Persist Error",
+                    )
+        except Exception as e:
+            # don't stop validation if the lookup fails — just log it
+            frappe.log_error(str(e), "POS Shift Auto-Attach Error")
+
+    # existing validations and post-processing
     validate_shift(doc)
     set_patient(doc)
     auto_set_delivery_charges(doc)
@@ -238,19 +274,25 @@ def apply_tax_inclusive(doc):
 
     has_changes = False
     for tax in doc.get("taxes", []):
+        # Actual charges should always be excluded from "included_in_print_rate"
         if tax.charge_type == "Actual":
             if tax.included_in_print_rate:
                 tax.included_in_print_rate = 0
                 has_changes = True
-        continue
+            # skip further inclusive logic for Actual taxes
+            continue
+
+        # For non-Actual taxes, follow the POS Profile setting
         if tax_inclusive and not tax.included_in_print_rate:
             tax.included_in_print_rate = 1
             has_changes = True
         elif not tax_inclusive and tax.included_in_print_rate:
             tax.included_in_print_rate = 0
             has_changes = True
+
     if has_changes:
         doc.calculate_taxes_and_totals()
+
 
 
 def validate_shift(doc):

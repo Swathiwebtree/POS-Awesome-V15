@@ -258,8 +258,8 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None):
                 "name",
                 "customer",
                 "vehicle_no",
-                "model",
-                "make",
+                #"model",
+                #"make",
                 "chasis_no",
             ],
             order_by="name asc",
@@ -269,8 +269,8 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None):
         # Enrich all vehicles with customer details
         for row in vehicles:
             row.setdefault("vehicle_no", row.get("name", ""))
-            row.setdefault("model", "")
-            row.setdefault("make", "")
+            #row.setdefault("model", "")
+            #row.setdefault("make", "")
             row.setdefault("chasis_no", "")
             row["customer"] = customer_name
             row["customer_name"] = cust_doc.customer_name
