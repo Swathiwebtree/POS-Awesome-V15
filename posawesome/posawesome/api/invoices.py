@@ -432,8 +432,8 @@ def submit_invoice(invoice, data):
     paymentsPayload = invoice.get("payments")
     actual_payment_method = None
     payment_account = None
-    
-    #frappe.throw(f"Debug: Payments Payload: {paymentsPayload}")  # Debug line to inspect payments payload
+
+    # frappe.throw(f"Debug: Payments Payload: {paymentsPayload}")  # Debug line to inspect payments payload
 
     # Find the payment method that was actually used (has amount > 0)
     
@@ -493,8 +493,6 @@ def submit_invoice(invoice, data):
     invoice_doc.remarks = "\n".join(items)
 
     invoice_doc = frappe.get_doc("Sales Invoice", invoice_name)
-
-    
 
     total_cash = 0
     if data.get("redeemed_customer_credit"):

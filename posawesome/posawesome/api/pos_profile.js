@@ -3,7 +3,6 @@
 
 frappe.ui.form.on("POS Profile", {
 	setup: function (frm) {
-
 		// Filter to only Cash payment types
 		frm.set_query("posa_cash_mode_of_payment", function (doc) {
 			return {
@@ -24,11 +23,9 @@ frappe.ui.form.on("POS Profile", {
 	},
 });
 
-
 // ✅ Child table script MUST be separate
 frappe.ui.form.on("POS Payment Method", {
 	mode_of_payment: function (frm, cdt, cdn) {
-
 		let row = locals[cdt][cdn];
 
 		if (!row.mode_of_payment) {
@@ -39,26 +36,26 @@ frappe.ui.form.on("POS Payment Method", {
 			method: "frappe.client.get",
 			args: {
 				doctype: "Mode of Payment",
-				name: row.mode_of_payment
+				name: row.mode_of_payment,
 			},
 			callback: function (r) {
 				if (r.message && r.message.accounts) {
-
 					// get company from parent POS Profile
 					let company = frm.doc.company;
 
 					// find matching account for company
-					let acc_row = r.message.accounts.find(acc => acc.company === company);
+					let acc_row = r.message.accounts.find((acc) => acc.company === company);
 
 					if (acc_row) {
 						frappe.model.set_value(
-							cdt, cdn,
+							cdt,
+							cdn,
 							"custom_account",
-							acc_row.default_account || acc_row.account
+							acc_row.default_account || acc_row.account,
 						);
 					}
 				}
-			}
+			},
 		});
-	}
+	},
 });
