@@ -2022,7 +2022,7 @@ export default {
 						return {
 							name: "",
 							mode_of_payment: payment.mode_of_payment,
-							account: payment.default_account || "",
+							account: payment.custom_account || "",
 							amount: 0,
 							base_amount: 0,
 							type: payment.type || "Cash",
