@@ -7,6 +7,7 @@
 					<span v-else class="text-h5 text-primary">{{ __("Add Vehicle") }}</span>
 					<v-spacer></v-spacer>
 				</v-card-title>
+
 				<v-card-text class="pa-0">
 					<v-container>
 						<v-row>
@@ -37,6 +38,7 @@
 									item-value="name"
 									:loading="loading_customers"
 									@update:search="search_customers"
+									clearable
 								>
 									<template #no-data>
 										<div class="pa-2 text-center text-caption text-medium-emphasis">
@@ -103,6 +105,7 @@
 									v-model="color"
 								></v-text-field>
 							</v-col>
+
 							<v-col cols="12">
 								<v-text-field
 									density="compact"
@@ -114,6 +117,7 @@
 									v-model="registration_number"
 								></v-text-field>
 							</v-col>
+
 							<v-col cols="12">
 								<v-text-field
 									density="compact"
@@ -128,6 +132,7 @@
 						</v-row>
 					</v-container>
 				</v-card-text>
+
 				<v-card-actions>
 					<v-spacer></v-spacer>
 					<v-btn color="grey-darken-1" variant="text" @click="close_dialog">
@@ -150,6 +155,9 @@
 
 <script>
 /* global frappe __ */
+let _updateVehicleInstance = null;
+let _updateVehicleListenerRegistered = false;
+
 export default {
 	data: () => ({
 		vehicleDialog: false,
@@ -174,7 +182,7 @@ export default {
 
 	computed: {
 		isDarkTheme() {
-			return this.$theme.current === "dark";
+			return this.$theme && this.$theme.current === "dark";
 		},
 		is_valid() {
 			return this.vehicle_no && this.customer;
@@ -202,8 +210,9 @@ export default {
 			this.reset_dialog();
 		},
 
-		// --- Customer Search Logic (from previous step) ---
+		// --- Customer Search Logic ---
 		async search_customers(search_term = "") {
+			// small debounce could be added if needed
 			this.loading_customers = true;
 			try {
 				const res = await frappe.call({
@@ -211,8 +220,10 @@ export default {
 					args: { search_term },
 				});
 
-				if (res.message) {
+				if (res && res.message) {
 					this.customer_list = res.message;
+				} else {
+					this.customer_list = [];
 				}
 			} catch (err) {
 				console.error("Customer search failed:", err);
@@ -231,8 +242,10 @@ export default {
 					args: { search_term },
 				});
 
-				if (res.message) {
+				if (res && res.message) {
 					this.model_list = res.message;
+				} else {
+					this.model_list = [];
 				}
 			} catch (err) {
 				console.error("Model search failed:", err);
@@ -242,20 +255,18 @@ export default {
 			}
 		},
 
-		async open_dialog(payload) {
+		// single entry point to open and populate the dialog
+		async open_dialog(payload = {}) {
 			this.reset_dialog();
 
-			// Load initial data for Customer and Model
-			await Promise.all([
-				this.search_customers(),
-				this.search_models(), // Call new function to load models
-			]);
+			// pre-load lists (no-op if server returns quickly)
+			await Promise.all([this.search_customers(), this.search_models()]);
 
-			if (payload.name) {
-				// Editing an existing vehicle
+			if (payload && payload.name) {
+				// editing an existing vehicle
 				this.vehicle_id = payload.name;
-				this.vehicle_no = payload.vehicle_no;
-				this.customer = payload.customer;
+				this.vehicle_no = payload.vehicle_no || "";
+				this.customer = payload.customer || "";
 				this.make = payload.make || "";
 				this.model = payload.model || "";
 				this.mobile_no = payload.mobile_no || "";
@@ -263,29 +274,34 @@ export default {
 				this.color = payload.color || "";
 				this.registration_number = payload.registration_number || "";
 
-				// Ensure the selected customer is available in the list
+				// ensure chosen customer exists in the dropdown list
 				if (this.customer && !this.customer_list.find((c) => c.name === this.customer)) {
-					const cust_doc = await frappe.call({
-						method: "frappe.client.get",
-						args: { doctype: "Customer", name: this.customer },
-					});
-					if (cust_doc) {
-						this.customer_list.push({
-							name: cust_doc.name,
-							customer_name: cust_doc.customer_name,
+					try {
+						const cust_doc_res = await frappe.call({
+							method: "frappe.client.get",
+							args: { doctype: "Customer", name: this.customer },
 						});
+						if (cust_doc_res && cust_doc_res.message) {
+							this.customer_list.push({
+								name: cust_doc_res.message.name,
+								customer_name: cust_doc_res.message.customer_name,
+							});
+						}
+					} catch (e) {
+						// ignore missing customer; still open dialog
+						console.warn("Failed to fetch customer for dialog:", e);
 					}
 				}
-			} else if (payload.customer) {
-				this.customer = payload.customer;
-				this.vehicle_no = payload.vehicle_no || "";
+			} else {
+				// payload may include preselected customer or vehicle_no
+				if (payload && payload.customer) this.customer = payload.customer;
+				if (payload && payload.vehicle_no) this.vehicle_no = payload.vehicle_no;
 			}
 
 			this.vehicleDialog = true;
 		},
 
 		async save_vehicle() {
-			// Basic validation
 			if (!this.vehicle_no || !this.customer) {
 				frappe.show_alert({
 					message: this.__("Please fill in all mandatory fields."),
@@ -293,40 +309,40 @@ export default {
 				});
 				return;
 			}
+
 			this.loading = true;
 			try {
 				const args = {
-					// MANDATORY FIELDS
 					vehicle_no: this.vehicle_no,
 					customer: this.customer,
-
-					// --- CRITICAL CHANGE: Ensure all Python arguments are passed ---
-					// Use '|| null' to handle optional fields that might be blank strings
 					model: this.model || null,
 					make: this.make || null,
 					chasis_no: this.chasis_no || null,
 					color: this.color || null,
 					registration_number: this.registration_number || null,
 					mobile_no: this.mobile_no || null,
-
-					// CONTROL FIELDS
 					method: this.vehicle_id ? "update" : "create",
 					vehicle_id: this.vehicle_id,
 				};
 
 				const res = await frappe.call({
 					method: "posawesome.posawesome.api.vehicles.create_vehicle",
-					args: args,
+					args,
 				});
 
-				if (res.message) {
+				if (res && res.message) {
 					frappe.show_alert({
 						message: this.__("Vehicle saved successfully!"),
 						indicator: "green",
 					});
 					this.close_dialog();
-					this.eventBus.emit("add_vehicle_to_list", res.message);
-					this.eventBus.emit("set_vehicle", res.message.name);
+					// notify other parts of the app
+					try {
+						this.eventBus?.emit("add_vehicle_to_list", res.message);
+						this.eventBus?.emit("set_vehicle", res.message.name);
+					} catch (e) {
+						// ignore if eventBus missing
+					}
 				}
 			} catch (err) {
 				console.error("Vehicle save failed:", err);
@@ -341,10 +357,47 @@ export default {
 	},
 
 	created() {
-		this.eventBus.on("open_update_vehicle", this.open_dialog);
+		// singleton listener to avoid duplicate handlers across mounts
+		_updateVehicleInstance = this;
+		const bus = this.eventBus || window.eventBus || window.app_event_bus || null;
+
+		const globalHandler = (payload) => {
+			const data = payload && payload.detail ? payload.detail : payload;
+			if (_updateVehicleInstance && typeof _updateVehicleInstance.open_dialog === "function") {
+				_updateVehicleInstance.open_dialog(data || {});
+			}
+		};
+
+		if (!_updateVehicleListenerRegistered) {
+			if (bus && typeof bus.on === "function") {
+				bus.on("open_update_vehicle", globalHandler);
+			} else if (typeof window !== "undefined") {
+				window.addEventListener("open_update_vehicle", globalHandler);
+			}
+			_updateVehicleListenerRegistered = true;
+		}
+
+		// Also register a local eventBus handler to support direct local emits
+		// if (this.eventBus && typeof this.eventBus.on === "function") {
+		//   this.eventBus.on("open_update_vehicle", (data) => {
+		//     // forward into the canonical handler
+		//     this.open_dialog(data && data.detail ? data.detail : data);
+		//   });
+		// } else {
+		//   // DOM fallback (already registered above as globalHandler)
+		//   // no-op
+		// }
 	},
+
 	beforeUnmount() {
-		this.eventBus.off("open_update_vehicle", this.open_dialog);
+		// clear instance reference but leave the global listener in place for app lifetime
+		_updateVehicleInstance = null;
+		_updateVehicleListenerRegistered = false;
+
+		// remove local eventBus handler if present
+		if (this.eventBus && typeof this.eventBus.off === "function") {
+			this.eventBus.off("open_update_vehicle", this.open_dialog);
+		}
 	},
 };
 </script>
@@ -358,7 +411,7 @@ export default {
 	background-color: #1e1e1e !important;
 }
 
-/* Style the actual input field and label inside the dark-field wrapper to be white in dark mode */
+/* Style the input and label inside the dark-field wrapper to be white in dark mode */
 :deep([data-theme="dark"]) .dark-field :deep(.v-field__input),
 :deep(.v-theme--dark) .dark-field :deep(.v-field__input),
 :deep([data-theme="dark"]) .dark-field :deep(input),

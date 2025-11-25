@@ -424,6 +424,23 @@ def update_invoice(data):
     return response
 
 
+def get_current_user_open_shift(user=None):
+    user = user or frappe.session.user
+    open_shifts = frappe.get_all(
+        "POS Opening Shift",
+        filters={
+            "user": user,
+            "pos_closing_shift": ["in", ["", None]],
+            "docstatus": 1,
+            "status": "Open",
+        },
+        fields=["name", "pos_profile"],
+        order_by="period_start_date desc",
+        limit_page_length=1,
+    )
+    return frappe.get_doc("POS Opening Shift", open_shifts[0]["name"]) if open_shifts else None
+
+
 @frappe.whitelist()
 def submit_invoice(invoice, data):
     data = json.loads(data)
@@ -574,6 +591,50 @@ def submit_invoice(invoice, data):
 
     # Set the POS-specific flags to skip validation
     invoice_doc.flags.posa_skip_due_date_validation = True
+    try:
+        current_open = get_current_user_open_shift(frappe.session.user)
+        if current_open:
+            if invoice_doc.get("posa_pos_opening_shift") != current_open.name:
+                invoice_doc.posa_pos_opening_shift = current_open.name
+                frappe.db.set_value(
+                    invoice_doc.doctype,
+                    invoice_doc.name,
+                    "posa_pos_opening_shift",
+                    current_open.name,
+                    update_modified=False,
+                )
+            frappe.db.commit()
+            frappe.logger().info(f"Linked invoice {invoice_doc.name} to open shift {current_open.name}")
+        else:
+            ref = invoice_doc.get("posa_pos_opening_shift")
+        if ref:
+            try:
+                shift = frappe.get_cached_doc("POS Opening Shift", ref)
+                if shift.status != "Open":
+                    invoice_doc.posa_pos_opening_shift = None
+                    frappe.db.set_value(
+                        invoice_doc.doctype,
+                        invoice_doc.name,
+                        "posa_pos_opening_shift",
+                        None,
+                        update_modified=False,
+                    )
+                    frappe.db.commit()
+                    frappe.logger().info(f"Cleared non-open shift {ref} from invoice {invoice_doc.name}")
+            except Exception:
+                # if shift doc can't be loaded, clear reference anyway
+                invoice_doc.posa_pos_opening_shift = None
+                frappe.db.set_value(
+                    invoice_doc.doctype,
+                    invoice_doc.name,
+                    "posa_pos_opening_shift",
+                    None,
+                    update_modified=False,
+                )
+                frappe.db.commit()
+    except Exception as e:
+        frappe.log_error(str(e), "POS Shift Ensure Error")
+
     # ============================================================
 
     if frappe.get_value(

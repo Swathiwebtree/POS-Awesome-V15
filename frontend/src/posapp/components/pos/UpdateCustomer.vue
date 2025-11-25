@@ -6,15 +6,8 @@
 					<span v-if="customer_id" class="text-h5 text-primary">{{ __("Update Customer") }}</span>
 					<span v-else class="text-h5 text-primary">{{ __("Create Customer") }}</span>
 					<v-spacer></v-spacer>
-					<!-- <v-switch
-						v-model="hideNonEssential"
-						density="compact"
-						inset
-						hide-details
-						color="#4169E1"
-						:label="__('Hide Non Essential Fields')"
-					></v-switch> -->
 				</v-card-title>
+
 				<v-card-text class="pa-0">
 					<v-container>
 						<v-row>
@@ -30,6 +23,7 @@
 									required
 								></v-text-field>
 							</v-col>
+
 							<v-col cols="6">
 								<v-text-field
 									density="compact"
@@ -41,6 +35,7 @@
 									v-model="customer_name"
 								></v-text-field>
 							</v-col>
+
 							<v-col :cols="withVehicle && !customer_id ? 6 : 6">
 								<v-text-field
 									density="compact"
@@ -52,6 +47,7 @@
 									v-model="mobile_no"
 								></v-text-field>
 							</v-col>
+
 							<v-col cols="6" v-if="withVehicle && !customer_id">
 								<v-text-field
 									density="compact"
@@ -64,6 +60,7 @@
 									required
 								></v-text-field>
 							</v-col>
+
 							<v-col cols="6" v-if="withVehicle && !customer_id">
 								<v-text-field
 									density="compact"
@@ -76,6 +73,7 @@
 									required
 								></v-text-field>
 							</v-col>
+
 							<v-col cols="6" v-if="!hideNonEssential">
 								<v-text-field
 									density="compact"
@@ -87,87 +85,7 @@
 									v-model="odometer"
 								></v-text-field>
 							</v-col>
-							<!-- <v-col cols="12" v-if="!hideNonEssential">
-								<v-text-field
-									density="compact"
-									color="primary"
-									:label="__('Address Line 1')"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									hide-details
-									class="dark-field"
-									v-model="address_line1"
-								></v-text-field>
-							</v-col> -->
 
-							<!-- <v-col cols="12" sm="6" v-if="!hideNonEssential">
-								<v-text-field
-									v-model="city"
-									variant="outlined"
-									density="compact"
-									:label="__('City')"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-								></v-text-field>
-							</v-col> -->
-
-							<!-- <v-col cols="12" sm="6" v-if="!hideNonEssential">
-								<v-select
-									v-model="country"
-									:items="countries"
-									variant="outlined"
-									density="compact"
-									:label="__('Country')"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-								></v-select>
-							</v-col> -->
-
-							<!-- <v-col cols="6">
-								<v-text-field
-									density="compact"
-									color="primary"
-									:label="frappe._('Email Id')"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-									hide-details
-									v-model="email_id"
-								></v-text-field>
-							</v-col> -->
-							<!-- <v-col cols="6">
-								<v-select
-									density="compact"
-									label="Gender"
-									:items="genders"
-									v-model="gender"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-								></v-select>
-							</v-col> -->
-							<!-- <v-col cols="6">
-								<v-text-field
-									density="compact"
-									color="primary"
-									:label="frappe._('Referral Code')"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-									hide-details
-									v-model="referral_code"
-								></v-text-field>
-							</v-col> -->
-							<!-- <v-col cols="6">
-								<v-text-field
-									v-model="birthday"
-									:label="frappe._('Birthday (DD-MM-YYYY)')"
-									density="compact"
-									clearable
-									hide-details
-									color="primary"
-									placeholder="DD-MM-YYYY"
-									@update:model-value="formatBirthdayOnInput"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-								></v-text-field>
-							</v-col> -->
 							<v-col cols="6" v-if="!hideNonEssential">
 								<v-autocomplete
 									clearable
@@ -182,9 +100,9 @@
 									:no-data-text="__('Group not found')"
 									hide-details
 									required
-								>
-								</v-autocomplete>
+								></v-autocomplete>
 							</v-col>
+
 							<v-col cols="6" v-if="!hideNonEssential">
 								<v-autocomplete
 									clearable
@@ -199,9 +117,9 @@
 									:no-data-text="__('Territory not found')"
 									hide-details
 									required
-								>
-								</v-autocomplete>
+								></v-autocomplete>
 							</v-col>
+
 							<v-col cols="6" v-if="loyalty_program">
 								<v-text-field
 									v-model="loyalty_program"
@@ -213,6 +131,7 @@
 									class="dark-field"
 								></v-text-field>
 							</v-col>
+
 							<v-col cols="6" v-if="loyalty_points">
 								<v-text-field
 									v-model="loyalty_points"
@@ -227,6 +146,7 @@
 						</v-row>
 					</v-container>
 				</v-card-text>
+
 				<v-card-actions>
 					<v-spacer></v-spacer>
 					<v-btn color="error" theme="dark" @click="confirm_close">{{ __("Close") }}</v-btn>
@@ -259,6 +179,9 @@
 
 <script>
 import { isOffline, saveOfflineCustomer } from "../../../offline/index.js";
+
+let _updateCustomerInstance = null;
+let _updateCustomerListenerRegistered = false;
 
 export default {
 	data: () => ({
@@ -339,7 +262,6 @@ export default {
 			}
 		},
 		birthday(newVal) {
-			// ... (Existing birthday watchers remain unchanged)
 			if (newVal && /^\d{8}$/.test(newVal)) {
 				try {
 					const day = newVal.substring(0, 2);
@@ -390,7 +312,6 @@ export default {
 	},
 	methods: {
 		updateCalendarDate(day, month, year) {
-			// ... (Existing method remains unchanged)
 			const wasOpen = this.birthday_menu;
 			this.birthday_menu = false;
 
@@ -459,8 +380,40 @@ export default {
 			this.odometer = "";
 			this.withVehicle = false;
 		},
+
+		// Centralised open handler used by the global listener and eventBus
+		handleOpen(data) {
+			this.customerDialog = true;
+			this.clear_customer(); // Always clear fields first
+
+			// Determine if vehicle fields should be shown
+			this.withVehicle = data && data.withVehicle === true && !data.name;
+
+			if (data && data.name) {
+				// Existing Customer: Populate fields
+				this.customer_name = data.customer_name;
+				this.customer_id = data.name;
+				this.address_line1 = data.address_line1 || "";
+				this.city = data.city || "";
+				this.country =
+					data.country || (this.pos_profile && this.pos_profile.posa_default_country) || "India";
+				this.tax_id = data.tax_id;
+				this.mobile_no = data.mobile_no;
+				this.email_id = data.email_id;
+				this.referral_code = data.referral_code;
+				this.birthday = data.birthday;
+				this.group = data.customer_group;
+				this.territory = data.territory;
+				this.loyalty_points = data.loyalty_points;
+				this.loyalty_program = data.loyalty_program;
+				this.gender = data.gender;
+			} else {
+				// New Customer: Set defaults
+				this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
+			}
+		},
+
 		getCustomerGroups() {
-			// ... (Existing method remains unchanged)
 			if (this.groups.length > 0) return;
 			const vm = this;
 			frappe.db
@@ -479,7 +432,6 @@ export default {
 				});
 		},
 		getCustomerTerritorys() {
-			// ... (Existing method remains unchanged)
 			if (this.territorys.length > 0) return;
 			const vm = this;
 			frappe.db
@@ -498,7 +450,6 @@ export default {
 				});
 		},
 		getGenders() {
-			// ... (Existing method remains unchanged)
 			const vm = this;
 			frappe.db
 				.get_list("Gender", {
@@ -514,7 +465,6 @@ export default {
 				});
 		},
 		formatBirthdayOnInput() {
-			// ... (Existing method remains unchanged)
 			if (this.birthday && /^\d{8}$/.test(this.birthday)) {
 				try {
 					const day = this.birthday.substring(0, 2);
@@ -616,7 +566,7 @@ export default {
 				territory: this.territory,
 				customer_type: this.customer_type,
 				gender: this.gender,
-				method: this.customer_id ? "update" : "create", // Add method here
+				method: this.customer_id ? "update" : "create",
 				vehicle_no: this.vehicle_no || "",
 			};
 
@@ -662,7 +612,7 @@ export default {
 				return;
 			}
 
-			// FIXED: Use the correct method for both create and update
+			// API method (same endpoint handles create & update based on args.method)
 			const apiMethod = "posawesome.posawesome.api.customers.create_customer_with_vehicle";
 
 			frappe.call({
@@ -695,12 +645,12 @@ export default {
 					}
 				},
 				error: (r) => {
-					// CRITICAL FIX: Better error handling
+					// Better error handling
 					frappe.utils.play_sound("error");
 
 					let errorMessage = __("Customer/Vehicle operation failed.");
 
-					// Extract the actual error message from the response
+					// Extract real message if available
 					if (r && r._server_messages) {
 						try {
 							const messages = JSON.parse(r._server_messages);
@@ -722,8 +672,8 @@ export default {
 				},
 			});
 		},
+
 		onDateSelect() {
-			// ... (Existing method remains unchanged)
 			this.birthday_menu = false;
 			if (this.birthday) {
 				try {
@@ -751,56 +701,57 @@ export default {
 		},
 	},
 	created: function () {
-		// ... (Existing created hook remains largely unchanged)
+		// Load hideNonEssential state from localStorage
 		if (typeof localStorage !== "undefined") {
 			const saved = localStorage.getItem("posawesome_hide_non_essential_fields");
 			if (saved !== null) {
 				this.hideNonEssential = JSON.parse(saved);
 			}
 		}
-		this.eventBus.on("open_update_customer", (data) => {
-			this.customerDialog = true;
-			this.clear_customer(); // Always clear fields first
 
-			// Determine if vehicle fields should be shown
-			this.withVehicle = data && data.withVehicle === true && !data.name;
+		// Register ONLY ONE global listener for opening the dialog
+		_updateCustomerInstance = this;
+		const bus = this.eventBus || window.eventBus || window.app_event_bus || null;
 
-			if (data && data.name) {
-				// Existing Customer: Populate fields
-				this.customer_name = data.customer_name;
-				this.customer_id = data.name;
-				this.address_line1 = data.address_line1 || "";
-				this.city = data.city || "";
-				this.country =
-					data.country || (this.pos_profile && this.pos_profile.posa_default_country) || "India";
-				this.tax_id = data.tax_id;
-				this.mobile_no = data.mobile_no;
-				this.email_id = data.email_id;
-				this.referral_code = data.referral_code;
-				this.birthday = data.birthday;
-				this.group = data.customer_group;
-				this.territory = data.territory;
-				this.loyalty_points = data.loyalty_points;
-				this.loyalty_program = data.loyalty_program;
-				this.gender = data.gender;
-			} else {
-				// New Customer: Set defaults
-				this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
+		if (!_updateCustomerListenerRegistered) {
+			const handler = (data) => {
+				const payload = data && data.detail ? data.detail : data;
+				if (_updateCustomerInstance && typeof _updateCustomerInstance.handleOpen === "function") {
+					_updateCustomerInstance.handleOpen(payload);
+				}
+			};
+
+			// Register on eventBus only (not both eventBus AND window)
+			if (bus && typeof bus.on === "function") {
+				bus.on("open_update_customer", handler);
+			} else if (typeof window !== "undefined") {
+				window.addEventListener("open_update_customer", handler);
 			}
-		});
-		this.eventBus.on("register_pos_profile", (data) => {
-			this.pos_profile = data.pos_profile;
-			this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
-		});
-		this.eventBus.on("payments_register_pos_profile", (data) => {
-			this.pos_profile = data.pos_profile;
-			this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
-		});
+			_updateCustomerListenerRegistered = true;
+		}
+
+		// Register OTHER listeners (NOT open_update_customer)
+		if (this.eventBus && typeof this.eventBus.on === "function") {
+			this.eventBus.on("register_pos_profile", (data) => {
+				this.pos_profile = data.pos_profile;
+				this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
+			});
+			this.eventBus.on("payments_register_pos_profile", (data) => {
+				this.pos_profile = data.pos_profile;
+				this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
+			});
+		}
+
+		// bootstrap lists and defaults
 		this.getCustomerGroups();
 		this.getCustomerTerritorys();
 		this.getGenders();
 		this.group = frappe.defaults.get_user_default("Customer Group");
 		this.territory = frappe.defaults.get_user_default("Territory");
+	},
+	beforeUnmount() {
+		_updateCustomerInstance = null;
+		_updateCustomerListenerRegistered = false;
 	},
 };
 </script>

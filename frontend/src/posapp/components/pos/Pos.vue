@@ -7,6 +7,8 @@
 			:style="[responsiveStyles, rtlStyles]"
 		>
 			<ClosingDialog></ClosingDialog>
+			<UpdateCustomer />
+			<UpdateVehicle />
 			<SalesOrders></SalesOrders>
 			<Returns></Returns>
 			<NewAddress></NewAddress>
@@ -73,7 +75,7 @@
 						<div class="column-header">
 							<span>{{ __("Search Items") }}</span>
 							<v-spacer></v-spacer>
-							<v-btn-group density="compact" variant="outlined">
+							<!-- <v-btn-group density="compact" variant="outlined">
 								<v-btn
 									size="small"
 									:color="items_view === 'list' ? 'primary' : ''"
@@ -90,7 +92,7 @@
 								>
 									<v-icon>mdi-view-grid</v-icon>
 								</v-btn>
-							</v-btn-group>
+							</v-btn-group> -->
 							<v-btn
 								icon
 								size="small"
@@ -216,6 +218,8 @@ import NewAddress from "./NewAddress.vue";
 import Variants from "./Variants.vue";
 import Returns from "./Returns.vue";
 import MpesaPayments from "./Mpesa-Payments.vue";
+import UpdateCustomer from "./UpdateCustomer.vue";
+import UpdateVehicle from "./UpdateVehicle.vue";
 
 import { getCurrentInstance } from "vue";
 import { usePosShift } from "../../composables/usePosShift.js";
@@ -273,6 +277,8 @@ export default {
 		NewAddress,
 		Variants,
 		MpesaPayments,
+		UpdateCustomer,
+		UpdateVehicle,
 		SalesOrders,
 	},
 

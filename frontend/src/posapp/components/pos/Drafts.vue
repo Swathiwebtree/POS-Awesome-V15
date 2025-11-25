@@ -14,6 +14,7 @@
 				return-object
 				density="compact"
 				:items-per-page="100"
+				:item-class="(item) => (isCurrentDraft(item.name) ? 'v-data-table__tr--active' : '')"
 			>
 				<template v-slot:column.posting_date="{ column }">
 					<span class="text-caption font-weight-medium">{{ column.title }}</span>
@@ -36,7 +37,18 @@
 				</template>
 
 				<template v-slot:item.name="{ item }">
-					<span class="text-caption font-weight-medium text-primary">{{ item.name }}</span>
+					<div class="d-flex align-center">
+						<v-chip
+							v-if="isCurrentDraft(item.name)"
+							color="success"
+							size="x-small"
+							class="mr-2"
+							prepend-icon="mdi-check-circle"
+						>
+							{{ __("Current") }}
+						</v-chip>
+						<span class="text-caption font-weight-medium text-primary">{{ item.name }}</span>
+					</div>
 				</template>
 
 				<template v-slot:item.grand_total="{ item }">
@@ -107,6 +119,10 @@
 									return-object
 									density="compact"
 									:items-per-page="10"
+									:item-class="
+										(item) =>
+											isCurrentDraft(item.name) ? 'v-data-table__tr--active' : ''
+									"
 								>
 									<template v-slot:column.posting_date="{ column }">
 										<span class="d-none">{{ column.title }}</span>
@@ -122,6 +138,23 @@
 										<span class="text-caption">{{
 											item.posting_time ? item.posting_time.split(".")[0] : ""
 										}}</span>
+									</template>
+
+									<template v-slot:item.name="{ item }">
+										<div class="d-flex align-center">
+											<v-chip
+												v-if="isCurrentDraft(item.name)"
+												color="success"
+												size="x-small"
+												class="mr-2"
+												prepend-icon="mdi-check-circle"
+											>
+												{{ __("Current") }}
+											</v-chip>
+											<span class="text-caption font-weight-medium text-primary">{{
+												item.name
+											}}</span>
+										</div>
 									</template>
 
 									<template v-slot:item.grand_total="{ item }">
@@ -230,6 +263,10 @@ export default {
 		},
 	},
 	methods: {
+		// Check if this draft is currently loaded
+		isCurrentDraft(draftName) {
+			return this.$parent?.loaded_draft_name === draftName;
+		},
 		// Submit selection for inline view
 		submit_selection() {
 			if (this.selected.length > 0) {
@@ -360,6 +397,15 @@ export default {
 :deep(.v-data-table__wrapper) {
 	overflow-y: auto;
 	max-height: 100%;
+}
+
+/* Highlight current draft row */
+:deep(.v-data-table__tr--active) {
+	background-color: rgba(76, 175, 80, 0.08) !important;
+}
+
+:deep(.v-data-table__tr--active:hover) {
+	background-color: rgba(76, 175, 80, 0.12) !important;
 }
 
 /* Fixed Footer Button */

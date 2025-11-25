@@ -204,27 +204,19 @@ export default {
 			item: 0,
 			items: [
 				{
+					name: "Home",
+					text: "Home",
+					icon: "mdi-home",
+					route: "/app/home",
+					routeType: "external",
+					submodules: [],
+				},
+				{
 					name: "POS",
 					text: "POS",
 					icon: "mdi-network-pos",
-					route: "point-of-sale", // Standard Frappe POS
-					routeType: "frappe", // Use Frappe routing
-					submodules: [],
-				},
-				{
-					name: "Payments",
-					text: "Payments",
-					icon: "mdi-credit-card",
-					route: "List/Payment Entry", // Payment Entry DocType List
-					routeType: "frappe", // Use Frappe routing
-					submodules: [],
-				},
-				{
-					name: "LazerPOS",
-					text: "LazerPOS",
-					icon: "mdi-cash-register",
-					route: "posawesome", // Your custom POS Awesome app
-					routeType: "frappe", // Use Frappe routing
+					route: "point-of-sale",
+					routeType: "frappe",
 					submodules: [],
 				},
 			],
@@ -294,7 +286,7 @@ export default {
 		},
 		/**
 		 * Handle page navigation when drawer items are clicked
-		 * This is the KEY method that handles navigation with proper routing
+		 * This method handles navigation with proper routing for different route types
 		 */
 		handlePageChange(page) {
 			console.log("Navigating to page:", page);
@@ -304,7 +296,6 @@ export default {
 
 			if (!item) {
 				console.warn(`No item found for page: ${page}`);
-				// Fallback to emit event
 				this.$emit("change-page", page);
 				return;
 			}
@@ -336,7 +327,8 @@ export default {
 					window.location.href = `/app/${route}`;
 				}
 			} else if (routeType === "url") {
-				// Direct URL navigation
+				// Direct URL navigation (for relative or absolute URLs)
+				// This works for both local and production environments
 				window.location.href = route;
 			} else if (routeType === "external") {
 				// External link (opens in new tab)
@@ -352,9 +344,59 @@ export default {
 		changePage(page) {
 			this.$emit("change-page", page);
 		},
-		openCloseShift() {
-			this.$emit("close-shift");
+		async openCloseShift() {
+			// guard: offline
+			if (typeof isOffline === "function" && isOffline()) {
+				this.showMessage({
+					color: "warning",
+					title: this.__("Cannot close shift while offline"),
+				});
+				return;
+			}
+
+			// immediately inform user we're preparing the dialog (no window.confirm)
+			this.showMessage({
+				color: "info",
+				title: this.__("Preparing closing dialog..."),
+			});
+
+			try {
+				// Request the data required by the closing dialog
+				const resp = await frappe.call({
+					method: "posawesome.posawesome.api.shifts.get_closing_dialog_data",
+				});
+
+				const closingData = resp?.message ?? resp;
+
+				if (closingData) {
+					// Try to emit on app eventBus if available
+					if (this.eventBus && typeof this.eventBus.emit === "function") {
+						this.eventBus.emit("open_ClosingDialog", closingData);
+					}
+
+					// Also dispatch a DOM CustomEvent fallback so components that listen via DOM will receive it
+					try {
+						window.dispatchEvent(new CustomEvent("open_ClosingDialog", { detail: closingData }));
+					} catch (e) {
+						// ignore dispatch errors
+					}
+
+					// If neither method is available, log an error to help debugging
+					if (!(this.eventBus && typeof this.eventBus.emit === "function")) {
+						console.info(
+							"openCloseShift: emitted open_ClosingDialog as DOM event fallback; ensure closingDialog.vue listens to this event or window.eventBus exists.",
+						);
+					}
+				} else {
+					// no data -> likely no open shift
+					this.showMessage({ color: "warning", title: this.__("No open shift found") });
+				}
+			} catch (err) {
+				console.error("Failed to get closing dialog data:", err);
+				this.showMessage({ color: "error", title: this.__("Failed to open closing dialog") });
+			}
 		},
+
 		printLastInvoice() {
 			this.$emit("print-last-invoice");
 		},

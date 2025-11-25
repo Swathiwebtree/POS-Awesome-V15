@@ -134,7 +134,9 @@ import {
 
 export default {
 	mixins: [format],
-	props: ["dialog"],
+	props: {
+		dialog: { type: Boolean, default: false },
+	},
 
 	data() {
 		return {
@@ -163,7 +165,8 @@ export default {
 				},
 			],
 			itemsPerPage: 100,
-			max25chars: (v) => v.length <= 12 || "Input too long!",
+			max25chars: (v) =>
+				v === null || v === undefined ? true : String(v).length <= 12 || "Input too long!",
 			pagination: {},
 			snack: false,
 			snackColor: "",
@@ -172,18 +175,26 @@ export default {
 	},
 
 	watch: {
+		dialog(val) {
+			// sync parent -> local dialog open state
+			this.isOpen = !!val;
+		},
+		isOpen(val) {
+			// when dialog closed locally, let parent know by emitting event on eventBus
+			// (many of your components use eventBus; if you use v-model from parent, adapt accordingly)
+			if (!val) {
+				this.eventBus?.emit?.("close_opening_dialog");
+			}
+		},
 		company(val) {
 			this.pos_profiles = [];
 			this.pos_profiles_data.forEach((element) => {
 				if (element.company === val) {
 					this.pos_profiles.push(element.name);
 				}
-				if (this.pos_profiles.length) {
-					this.pos_profile = this.pos_profiles[0];
-				} else {
-					this.pos_profile = "";
-				}
 			});
+			// set default pos_profile if available
+			this.pos_profile = this.pos_profiles.length ? this.pos_profiles[0] : "";
 		},
 
 		pos_profile(val) {
@@ -202,7 +213,8 @@ export default {
 
 	methods: {
 		close_opening_dialog() {
-			this.eventBus.emit("close_opening_dialog");
+			this.isOpen = false;
+			this.eventBus?.emit("close_opening_dialog");
 		},
 
 		async get_opening_dialog_data() {
@@ -223,26 +235,29 @@ export default {
 				}
 			}
 
-			frappe.call({
-				method: "posawesome.posawesome.api.shifts.get_opening_dialog_data",
-				args: {},
-				callback: function (r) {
-					if (r.message) {
-						vm.companies = r.message.companies.map((element) => element.name);
-						vm.pos_profiles_data = r.message.pos_profiles_data;
-						vm.payments_method_data = r.message.payments_method;
-						vm.company = vm.companies[0] || "";
-						try {
-							setOpeningDialogStorage(r.message);
-						} catch (e) {
-							console.error("Failed to cache opening dialog data", e);
-						}
+			try {
+				const r = await frappe.call({
+					method: "posawesome.posawesome.api.shifts.get_opening_dialog_data",
+					args: {},
+				});
+
+				if (r?.message) {
+					vm.companies = r.message.companies.map((element) => element.name);
+					vm.pos_profiles_data = r.message.pos_profiles_data;
+					vm.payments_method_data = r.message.payments_method;
+					vm.company = vm.companies[0] || "";
+					try {
+						setOpeningDialogStorage(r.message);
+					} catch (e) {
+						console.error("Failed to cache opening dialog data", e);
 					}
-				},
-			});
+				}
+			} catch (err) {
+				console.error("get_opening_dialog_data failed", err);
+			}
 		},
 
-		submit_dialog() {
+		async submit_dialog() {
 			if (!this.payments_methods.length || !this.company || !this.pos_profile) {
 				return;
 			}
@@ -250,39 +265,114 @@ export default {
 			this.is_loading = true;
 			const vm = this;
 
-			return frappe
-				.call("posawesome.posawesome.api.shifts.create_opening_voucher", {
-					pos_profile: this.pos_profile,
-					company: this.company,
-					balance_details: this.payments_methods,
-				})
-				.then((r) => {
-					if (r.message) {
-						vm.eventBus.emit("register_pos_data", r.message);
-						vm.eventBus.emit("set_company", r.message.company);
-						try {
-							setOpeningStorage(r.message);
-						} catch (e) {
-							console.error("Failed to cache opening data", e);
-						}
-						vm.close_opening_dialog();
-						vm.is_loading = false;
-					}
+			// Ensure balance_details shape matches server expectation:
+			const balance_details = this.payments_methods.map((p) => ({
+				mode_of_payment: p.mode_of_payment,
+				amount: Number(p.amount) || 0,
+				currency: p.currency,
+			}));
+
+			try {
+				const r = await frappe.call({
+					method: "posawesome.posawesome.api.shifts.create_opening_voucher",
+					args: {
+						pos_profile: this.pos_profile,
+						company: this.company,
+						balance_details: JSON.stringify(balance_details),
+					},
 				});
+
+				if (r?.message) {
+					vm.eventBus?.emit("register_pos_data", r.message);
+					vm.eventBus?.emit("set_company", r.message.company);
+					try {
+						setOpeningStorage(r.message);
+					} catch (e) {
+						console.error("Failed to cache opening data", e);
+					}
+					vm.close_opening_dialog();
+				}
+			} catch (err) {
+				console.error("create_opening_voucher failed:", err);
+			} finally {
+				vm.is_loading = false;
+			}
 		},
 
 		go_desk() {
+			// Navigate to root/desk and reload to ensure fresh state
 			frappe.set_route("/");
 			location.reload();
 		},
+
+		// internal helper to resolve the app eventBus instance robustly
+		_resolveEventBus() {
+			// prefer component's injected eventBus (if your app injects it)
+			if (this.eventBus) return this.eventBus;
+			// try common globals
+			if (window.eventBus) return window.eventBus;
+			if (window.app_event_bus) return window.app_event_bus;
+			// fallback: DOM events
+			return null;
+		},
 	},
 
-	mounted() {
+	created() {
+		// Use robust event bus resolution
+		this.eventBus = this._resolveEventBus();
+
+		// When app emits open_OpeningDialog with payload, populate and open
+		this._openOpeningDialogHandler = (data) => {
+			try {
+				// if data is a CustomEvent (DOM), get detail
+				if (data?.detail) data = data.detail;
+
+				this.dialog_data = data || {};
+
+				this.companies = (data?.companies || []).map((c) => c.name) || [];
+				this.pos_profiles_data = data?.pos_profiles_data || [];
+				this.payments_method_data = data?.payments_method || [];
+
+				this.company = this.companies[0] || this.company;
+				this.pos_profiles = this.pos_profiles_data.map((p) => p.name) || [];
+				this.pos_profile = this.pos_profiles[0] || this.pos_profile;
+
+				// Build payments_methods initial state (defensive)
+				this.payments_methods = [];
+				(this.payments_method_data || []).forEach((element) => {
+					if (element.parent === this.pos_profile) {
+						this.payments_methods.push({
+							mode_of_payment: element.mode_of_payment,
+							amount: 0,
+							currency: element.currency,
+						});
+					}
+				});
+			} catch (e) {
+				console.error("Error initializing opening dialog from event data", e);
+			}
+			this.isOpen = true;
+		};
+
+		// Register listener (support both app event bus and DOM events)
+		if (this.eventBus && typeof this.eventBus.on === "function") {
+			this.eventBus.on("open_OpeningDialog", this._openOpeningDialogHandler);
+		} else {
+			// DOM fallback: listen for a CustomEvent
+			window.addEventListener("open_OpeningDialog", this._openOpeningDialogHandler);
+		}
+
+		// Also proactively fetch data on mount (existing behavior)
 		this.get_opening_dialog_data();
 	},
 
 	beforeUnmount() {
-		// Clean up event listeners if any were added
+		// Clean up event listener
+		if (this.eventBus && typeof this.eventBus.off === "function" && this._openOpeningDialogHandler) {
+			this.eventBus.off("open_OpeningDialog", this._openOpeningDialogHandler);
+		} else {
+			window.removeEventListener("open_OpeningDialog", this._openOpeningDialogHandler);
+		}
 	},
 };
 </script>

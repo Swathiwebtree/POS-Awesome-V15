@@ -1,5 +1,11 @@
 <template>
-	<v-menu :min-width="240" :close-on-content-click="true" location="bottom end" :offset="[0, 4]">
+	<v-menu
+		v-model="menuOpen"
+		:min-width="240"
+		:close-on-content-click="true"
+		location="bottom end"
+		:offset="[0, 4]"
+	>
 		<template #activator="{ props }">
 			<v-btn
 				v-bind="props"
@@ -20,7 +26,7 @@
 			<v-list density="compact" class="menu-list-compact">
 				<v-list-item
 					v-if="!posProfile.posa_hide_closing_shift"
-					@click="$emit('close-shift')"
+					@click="onCloseShift"
 					class="menu-item-compact primary-action"
 				>
 					<template v-slot:prepend>
@@ -308,6 +314,7 @@ export default {
 	},
 	data() {
 		return {
+			menuOpen: false,
 			showLanguageDialog: false,
 			selectedLanguage: "en",
 			currentLanguage: "en",
@@ -470,6 +477,15 @@ export default {
 
 		__(text) {
 			return window.__ ? window.__(text) : text;
+		},
+
+		// New: closes the menu (UI) and emits the event for the parent to handle
+		onCloseShift() {
+			// close menu immediately for responsive UX
+			this.menuOpen = false;
+
+			// emit event for parent to handle the actual shift-closing logic
+			this.$emit("close-shift");
 		},
 	},
 	emits: [
