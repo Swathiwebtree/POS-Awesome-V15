@@ -40,6 +40,7 @@ app_include_css = [
 # include js in doctype views
 doctype_js = {
     "POS Profile": "posawesome/api/pos_profile.js",
+    "POS Payment Method": "posawesome/api/pos_profile.js",
     "Sales Invoice": "posawesome/api/invoice.js",
     "Company": "posawesome/api/company.js",
 }
@@ -279,6 +280,7 @@ fixtures = [
                     "POS Profile-posa_decimal_precision",
                     "Customer-custom_vehicle_no",
                     "Sales Invoice-custom_vehicle_no",
+                    "POS Payment Method-custom_account"
                 ],
             ]
         ],
@@ -294,6 +296,7 @@ fixtures = [
                     "POS Invoice-posa_pos_opening_shift-no_copy",
                     "Sales Invoice Reference-sales_invoice-reqd",
                     "Sales Invoice-main-field_order",
+                    "POS Payment Method-main-field_order"
                 ],
             ]
         ],
