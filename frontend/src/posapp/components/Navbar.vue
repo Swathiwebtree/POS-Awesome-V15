@@ -384,7 +384,7 @@ export default {
 					// If neither method is available, log an error to help debugging
 					if (!(this.eventBus && typeof this.eventBus.emit === "function")) {
 						console.info(
-							"openCloseShift: emitted open_ClosingDialog as DOM event fallback; ensure closingDialog.vue listens to this event or window.eventBus exists."
+							"openCloseShift: emitted open_ClosingDialog as DOM event fallback; ensure closingDialog.vue listens to this event or window.eventBus exists.",
 						);
 					}
 				} else {

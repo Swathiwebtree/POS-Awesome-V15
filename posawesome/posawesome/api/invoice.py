@@ -294,7 +294,6 @@ def apply_tax_inclusive(doc):
         doc.calculate_taxes_and_totals()
 
 
-
 def validate_shift(doc):
     if doc.posa_pos_opening_shift and doc.pos_profile and doc.is_pos:
         # check if shift is open

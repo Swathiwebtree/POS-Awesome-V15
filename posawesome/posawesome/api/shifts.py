@@ -111,7 +111,8 @@ def update_opening_shift_data(data, pos_profile):
     allow_negative_stock = frappe.get_value("Stock Settings", None, "allow_negative_stock")
     data["stock_settings"] = {}
     data["stock_settings"].update({"allow_negative_stock": allow_negative_stock})
-    
+
+
 @frappe.whitelist()
 def close_shift():
     """
@@ -220,7 +221,9 @@ def get_closing_dialog_data():
                 # fallback: try company default currency if profile has no currency
                 profile_company = frappe.get_cached_value("POS Profile", row.get("parent"), "company")
                 if profile_company:
-                    row["currency"] = frappe.get_cached_value("Company", profile_company, "default_currency") or row.get("currency")
+                    row["currency"] = frappe.get_cached_value(
+                        "Company", profile_company, "default_currency"
+                    ) or row.get("currency")
         except Exception as e:
             # don't break the entire function for one missing value; log and continue
             frappe.log_error(frappe.get_traceback(), "get_closing_dialog_data: currency lookup failed")
@@ -229,6 +232,7 @@ def get_closing_dialog_data():
     data["payments_method"] = payments
 
     return data
+
 
 @frappe.whitelist()
 def close_shift_with_reconciliation(balance_details=None):

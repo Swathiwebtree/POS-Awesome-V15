@@ -1091,113 +1091,112 @@ export default {
 
 		this.$nextTick(() => {
 			if (!window._customerListenersRegistered) {
-			this.eventBus.on("register_pos_profile", async (pos_profile) => {
-				await memoryInitPromise;
-				this.pos_profile = pos_profile;
-				await this.get_customer_names();
-				if (this.customer) {
-					this.fetchVehiclesForCustomer(this.customer);
-				}
-			});
-
-			this.eventBus.on("payments_register_pos_profile", async (pos_profile) => {
-				await memoryInitPromise;
-				this.pos_profile = pos_profile;
-				await this.get_customer_names();
-				if (this.customer) {
-					this.fetchVehiclesForCustomer(this.customer);
-				}
-			});
-
-			this.eventBus.on("set_customer", (customer) => {
-				this.customer = customer;
-				this.internalCustomer = customer;
-				this.fetchVehiclesForCustomer(customer);
-			});
-
-			// MODIFIED: Handle both customer and vehicle data from UpdateCustomer.vue
-			this.eventBus.on("add_customer_to_list", async (data) => {
-				// Assume data can be a customer object OR { customer: {...}, vehicle: {...} }
-				const customer = data.customer || data;
-				const vehicle = data.vehicle || null;
-
-				const index = this.customers.findIndex((c) => c.name === customer.name);
-				if (index !== -1) {
-					this.customers.splice(index, 1, customer);
-				} else {
-					this.customers.push(customer);
-				}
-				await setCustomerStorage([customer]);
-				this.customer = customer.name;
-				this.internalCustomer = customer.name;
-				this.eventBus.emit("update_customer", customer.name);
-
-				if (vehicle && vehicle.vehicle_no) {
-					// If a vehicle was created, update the vehicle list directly
-					this.eventBus.emit("add_vehicle_to_list", vehicle);
-					this.selectedVehicle = vehicle.name;
-					this.eventBus.emit("vehicle_selected", vehicle.name);
-				} else {
-					// Otherwise, fetch existing vehicles
-					this.fetchVehiclesForCustomer(customer.name);
-				}
-			});
-
-			this.eventBus.on("set_customer_readonly", (value) => {
-				this.readonly = value;
-			});
-
-			this.eventBus.on("set_customer_info_to_edit", (data) => {
-				this.customer_info = data;
-			});
-
-			this.eventBus.on("fetch_customer_details", async () => {
-				await this.get_customer_names();
-			});
-
-			this.eventBus.on("add_vehicle_to_list", (vehicle) => {
-				if (vehicle.customer === this.customer) {
-					// Remove placeholder and old entry if updating
-					this.vehicles = this.vehicles.filter((v) => v.name && v.name !== vehicle.name);
-					this.vehicles.push({
-						name: vehicle.name,
-						vehicle_no: vehicle.vehicle_no,
-						model: vehicle.model || "",
-						make: vehicle.make || "",
-						mobile_no: vehicle.mobile_no || "",
-						customer_name: vehicle.customer_name,
-						customer: vehicle.customer,
-					});
-
-					if (this.vehicles.length === 1) {
-						// Case: New vehicle is the only vehicle
-						this.selectedVehicle = vehicle.name;
-						this.eventBus.emit("vehicle_selected", vehicle.name);
-					} else {
-						// Case: Vehicle added to a list with other vehicles (re-add placeholder)
-						this.vehicles.unshift({ name: null, vehicle_no: frappe._("Select Vehicle...") });
-						this.selectedVehicle = vehicle.name;
-						this.eventBus.emit("vehicle_selected", vehicle.name);
+				this.eventBus.on("register_pos_profile", async (pos_profile) => {
+					await memoryInitPromise;
+					this.pos_profile = pos_profile;
+					await this.get_customer_names();
+					if (this.customer) {
+						this.fetchVehiclesForCustomer(this.customer);
 					}
-				}
-			});
+				});
 
-			this.eventBus.on("set_vehicle", (vehicle_name) => {
-				this.selectedVehicle = vehicle_name;
-				this.onVehicleSelect(vehicle_name);
-			});
+				this.eventBus.on("payments_register_pos_profile", async (pos_profile) => {
+					await memoryInitPromise;
+					this.pos_profile = pos_profile;
+					await this.get_customer_names();
+					if (this.customer) {
+						this.fetchVehiclesForCustomer(this.customer);
+					}
+				});
 
-			this.eventBus.on("set_customer_from_vehicle", (customer) => {
-				if (customer && customer.name) {
+				this.eventBus.on("set_customer", (customer) => {
+					this.customer = customer;
+					this.internalCustomer = customer;
+					this.fetchVehiclesForCustomer(customer);
+				});
+
+				// MODIFIED: Handle both customer and vehicle data from UpdateCustomer.vue
+				this.eventBus.on("add_customer_to_list", async (data) => {
+					// Assume data can be a customer object OR { customer: {...}, vehicle: {...} }
+					const customer = data.customer || data;
+					const vehicle = data.vehicle || null;
+
+					const index = this.customers.findIndex((c) => c.name === customer.name);
+					if (index !== -1) {
+						this.customers.splice(index, 1, customer);
+					} else {
+						this.customers.push(customer);
+					}
+					await setCustomerStorage([customer]);
 					this.customer = customer.name;
 					this.internalCustomer = customer.name;
 					this.eventBus.emit("update_customer", customer.name);
-					this.fetchVehiclesForCustomer(customer.name);
-				}
-			});
-			window._customerListenersRegistered = true;
-		}
 
+					if (vehicle && vehicle.vehicle_no) {
+						// If a vehicle was created, update the vehicle list directly
+						this.eventBus.emit("add_vehicle_to_list", vehicle);
+						this.selectedVehicle = vehicle.name;
+						this.eventBus.emit("vehicle_selected", vehicle.name);
+					} else {
+						// Otherwise, fetch existing vehicles
+						this.fetchVehiclesForCustomer(customer.name);
+					}
+				});
+
+				this.eventBus.on("set_customer_readonly", (value) => {
+					this.readonly = value;
+				});
+
+				this.eventBus.on("set_customer_info_to_edit", (data) => {
+					this.customer_info = data;
+				});
+
+				this.eventBus.on("fetch_customer_details", async () => {
+					await this.get_customer_names();
+				});
+
+				this.eventBus.on("add_vehicle_to_list", (vehicle) => {
+					if (vehicle.customer === this.customer) {
+						// Remove placeholder and old entry if updating
+						this.vehicles = this.vehicles.filter((v) => v.name && v.name !== vehicle.name);
+						this.vehicles.push({
+							name: vehicle.name,
+							vehicle_no: vehicle.vehicle_no,
+							model: vehicle.model || "",
+							make: vehicle.make || "",
+							mobile_no: vehicle.mobile_no || "",
+							customer_name: vehicle.customer_name,
+							customer: vehicle.customer,
+						});
+
+						if (this.vehicles.length === 1) {
+							// Case: New vehicle is the only vehicle
+							this.selectedVehicle = vehicle.name;
+							this.eventBus.emit("vehicle_selected", vehicle.name);
+						} else {
+							// Case: Vehicle added to a list with other vehicles (re-add placeholder)
+							this.vehicles.unshift({ name: null, vehicle_no: frappe._("Select Vehicle...") });
+							this.selectedVehicle = vehicle.name;
+							this.eventBus.emit("vehicle_selected", vehicle.name);
+						}
+					}
+				});
+
+				this.eventBus.on("set_vehicle", (vehicle_name) => {
+					this.selectedVehicle = vehicle_name;
+					this.onVehicleSelect(vehicle_name);
+				});
+
+				this.eventBus.on("set_customer_from_vehicle", (customer) => {
+					if (customer && customer.name) {
+						this.customer = customer.name;
+						this.internalCustomer = customer.name;
+						this.eventBus.emit("update_customer", customer.name);
+						this.fetchVehiclesForCustomer(customer.name);
+					}
+				});
+				window._customerListenersRegistered = true;
+			}
 		});
 
 		// Initial Vehicle Load

@@ -1,5 +1,11 @@
 <template>
-	<v-menu v-model="menuOpen" :min-width="240" :close-on-content-click="true" location="bottom end" :offset="[0, 4]">
+	<v-menu
+		v-model="menuOpen"
+		:min-width="240"
+		:close-on-content-click="true"
+		location="bottom end"
+		:offset="[0, 4]"
+	>
 		<template #activator="{ props }">
 			<v-btn
 				v-bind="props"

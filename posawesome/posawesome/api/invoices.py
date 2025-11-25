@@ -440,6 +440,7 @@ def get_current_user_open_shift(user=None):
     )
     return frappe.get_doc("POS Opening Shift", open_shifts[0]["name"]) if open_shifts else None
 
+
 @frappe.whitelist()
 def submit_invoice(invoice, data):
     data = json.loads(data)
@@ -603,16 +604,14 @@ def submit_invoice(invoice, data):
             if invoice_doc.get("posa_pos_opening_shift") != current_open.name:
                 invoice_doc.posa_pos_opening_shift = current_open.name
                 frappe.db.set_value(
-                invoice_doc.doctype,
-                invoice_doc.name,
-                "posa_pos_opening_shift",
-                current_open.name,
-                update_modified=False,
-            )
+                    invoice_doc.doctype,
+                    invoice_doc.name,
+                    "posa_pos_opening_shift",
+                    current_open.name,
+                    update_modified=False,
+                )
             frappe.db.commit()
-            frappe.logger().info(
-                f"Linked invoice {invoice_doc.name} to open shift {current_open.name}"
-            )
+            frappe.logger().info(f"Linked invoice {invoice_doc.name} to open shift {current_open.name}")
         else:
             ref = invoice_doc.get("posa_pos_opening_shift")
         if ref:
@@ -642,7 +641,6 @@ def submit_invoice(invoice, data):
                 frappe.db.commit()
     except Exception as e:
         frappe.log_error(str(e), "POS Shift Ensure Error")
-
 
     # ============================================================
 
