@@ -110,6 +110,13 @@ doc_events = {
         "on_update": "posawesome.posawesome.api.customer_vehicle_update.update_vehicle_for_customer",
         "after_save": "posawesome.posawesome.api.customer_vehicle_update.update_vehicle_for_customer",
     },
+    "Consumables Material Issue": {
+        "on_submit": "posawesome.posawesome.doctype.consumables_material_issue.consumables_material_issue.create_stock_entry"
+    },
+    "Purchase Receipt": {
+        "on_submit": "posawesome.posawesome.api.purchase_receipt.create_stock_entry_from_pr"
+    }
+
 }
 
 # Scheduled Tasks
