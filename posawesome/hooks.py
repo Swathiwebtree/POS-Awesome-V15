@@ -43,6 +43,7 @@ doctype_js = {
     "POS Payment Method": "posawesome/api/pos_profile.js",
     "Sales Invoice": "posawesome/api/invoice.js",
     "Company": "posawesome/api/company.js",
+    "Payment Entry": "posawesome/api/payment_entry.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
