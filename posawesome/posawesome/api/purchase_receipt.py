@@ -1,5 +1,6 @@
 import frappe
 
+
 def create_stock_entry_from_pr(doc, method):
 
     # prevent duplicate creation
@@ -18,16 +19,18 @@ def create_stock_entry_from_pr(doc, method):
         # choose correct rate source (valuation_rate preferred)
         rate = item.valuation_rate or item.rate or 0
 
-        se.append("items", {
-            "item_code": item.item_code,
-            "qty": item.qty,
-            "uom": item.uom,
-            "t_warehouse": item.warehouse,
-            "basic_rate": item.base_rate or item.rate,
-            "basic_amount": item.base_amount, 
-            "amount": item.amount,             
-            
-        })
+        se.append(
+            "items",
+            {
+                "item_code": item.item_code,
+                "qty": item.qty,
+                "uom": item.uom,
+                "t_warehouse": item.warehouse,
+                "basic_rate": item.base_rate or item.rate,
+                "basic_amount": item.base_amount,
+                "amount": item.amount,
+            },
+        )
 
     se.set_posting_date = 1
     se.posting_date = doc.posting_date

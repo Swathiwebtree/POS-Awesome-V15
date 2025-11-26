@@ -115,8 +115,7 @@ doc_events = {
     },
     "Purchase Receipt": {
         "on_submit": "posawesome.posawesome.api.purchase_receipt.create_stock_entry_from_pr"
-    }
-
+    },
 }
 
 # Scheduled Tasks
