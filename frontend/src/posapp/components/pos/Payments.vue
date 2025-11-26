@@ -2030,6 +2030,17 @@ export default {
 							default: payment.default || 0,
 						};
 					});
+					if (customer == "corporate")
+						invoiceData.payments.append({
+							name: "",
+							mode_of_payment: "Credit",
+							account: "",
+							amount: 0,
+							base_amount: 0,
+							type: "Credit",
+							idx: invoiceData.payments.length + 1,
+							default: 0,
+						});
 					console.log("[Payment] Loaded payment methods:", invoiceData.payments);
 				} else {
 					// Fallback if POS Profile is not loaded yet

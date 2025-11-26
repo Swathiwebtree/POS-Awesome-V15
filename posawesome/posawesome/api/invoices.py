@@ -424,6 +424,23 @@ def update_invoice(data):
     return response
 
 
+def get_current_user_open_shift(user=None):
+    user = user or frappe.session.user
+    open_shifts = frappe.get_all(
+        "POS Opening Shift",
+        filters={
+            "user": user,
+            "pos_closing_shift": ["in", ["", None]],
+            "docstatus": 1,
+            "status": "Open",
+        },
+        fields=["name", "pos_profile"],
+        order_by="period_start_date desc",
+        limit_page_length=1,
+    )
+    return frappe.get_doc("POS Opening Shift", open_shifts[0]["name"]) if open_shifts else None
+
+
 @frappe.whitelist()
 def submit_invoice(invoice, data):
     data = json.loads(data)
@@ -436,7 +453,6 @@ def submit_invoice(invoice, data):
     # frappe.throw(f"Debug: Payments Payload: {paymentsPayload}")  # Debug line to inspect payments payload
 
     # Find the payment method that was actually used (has amount > 0)
-    
 
     # Fix: Ensure payments array is never empty
     if not invoice.get("payments") or len(invoice.get("payments", [])) == 0:
@@ -575,6 +591,50 @@ def submit_invoice(invoice, data):
 
     # Set the POS-specific flags to skip validation
     invoice_doc.flags.posa_skip_due_date_validation = True
+    try:
+        current_open = get_current_user_open_shift(frappe.session.user)
+        if current_open:
+            if invoice_doc.get("posa_pos_opening_shift") != current_open.name:
+                invoice_doc.posa_pos_opening_shift = current_open.name
+                frappe.db.set_value(
+                    invoice_doc.doctype,
+                    invoice_doc.name,
+                    "posa_pos_opening_shift",
+                    current_open.name,
+                    update_modified=False,
+                )
+            frappe.db.commit()
+            frappe.logger().info(f"Linked invoice {invoice_doc.name} to open shift {current_open.name}")
+        else:
+            ref = invoice_doc.get("posa_pos_opening_shift")
+        if ref:
+            try:
+                shift = frappe.get_cached_doc("POS Opening Shift", ref)
+                if shift.status != "Open":
+                    invoice_doc.posa_pos_opening_shift = None
+                    frappe.db.set_value(
+                        invoice_doc.doctype,
+                        invoice_doc.name,
+                        "posa_pos_opening_shift",
+                        None,
+                        update_modified=False,
+                    )
+                    frappe.db.commit()
+                    frappe.logger().info(f"Cleared non-open shift {ref} from invoice {invoice_doc.name}")
+            except Exception:
+                # if shift doc can't be loaded, clear reference anyway
+                invoice_doc.posa_pos_opening_shift = None
+                frappe.db.set_value(
+                    invoice_doc.doctype,
+                    invoice_doc.name,
+                    "posa_pos_opening_shift",
+                    None,
+                    update_modified=False,
+                )
+                frappe.db.commit()
+    except Exception as e:
+        frappe.log_error(str(e), "POS Shift Ensure Error")
+
     # ============================================================
 
     if frappe.get_value(
@@ -617,60 +677,70 @@ def submit_invoice(invoice, data):
                     actual_payment_method = payment.get("mode_of_payment")
                     payment_account = payment.get("account")
                     payment_amount = payment.get("amount", 0)
-                    
+
                     if not payment_account and actual_payment_method:
-                        #payment_account = get_bank_cash_account(actual_payment_method, invoice_doc.company)
+                        # payment_account = get_bank_cash_account(actual_payment_method, invoice_doc.company)
                         if isinstance(payment_account, dict):
                             payment_account = payment_account.get("account")
-                    
+
                     # Final fallback to cash account
                     if not payment_account:
-                        payment_account = frappe.get_value("Company", invoice_doc.company, "default_cash_account")
+                        payment_account = frappe.get_value(
+                            "Company", invoice_doc.company, "default_cash_account"
+                        )
                         if not actual_payment_method:
                             actual_payment_method = "Cash"
-                    
-                    # Create payment entry with ACTUAL payment method
-                    advance_payment_entry = frappe.get_doc({
-                        "doctype": "Payment Entry",
-                        "payment_type": "Receive",
-                        "mode_of_payment": actual_payment_method,
-                        "party_type": "Customer",
-                        "party": invoice_doc.get("customer"),
-                        "company": invoice_doc.get("company"),
-                        
-                        # Required account fields
-                        "paid_from": invoice_doc.get("debit_to"),  # Customer's receivable account
-                        "paid_to": payment_account,  # Your cash/bank account
-                        "paid_from_account_currency": frappe.get_cached_value("Account", invoice_doc.get("debit_to"), "account_currency"),
-                        "paid_to_account_currency": frappe.get_cached_value("Account", payment_account, "account_currency"),
-                        
-                        # Amount fields
-                        "paid_amount": payment_amount,
-                        "received_amount": payment_amount,
-                        "source_exchange_rate": 1,  # Adjust if multi-currency
-                        "target_exchange_rate": 1,
-                        
-                        # Reference fields
-                        "reference_no": invoice_doc.name,
-                        "reference_date": invoice_doc.posting_date,
-                        "posting_date": invoice_doc.posting_date,  # Important!
-                    })
 
-                    frappe.logger().info(f"Creating Payment Entry for credit change: {actual_payment_method}, Amount: {invoice_doc.get('rounded_total')}")
+                    # Create payment entry with ACTUAL payment method
+                    advance_payment_entry = frappe.get_doc(
+                        {
+                            "doctype": "Payment Entry",
+                            "payment_type": "Receive",
+                            "mode_of_payment": actual_payment_method,
+                            "party_type": "Customer",
+                            "party": invoice_doc.get("customer"),
+                            "company": invoice_doc.get("company"),
+                            # Required account fields
+                            "paid_from": invoice_doc.get("debit_to"),  # Customer's receivable account
+                            "paid_to": payment_account,  # Your cash/bank account
+                            "paid_from_account_currency": frappe.get_cached_value(
+                                "Account", invoice_doc.get("debit_to"), "account_currency"
+                            ),
+                            "paid_to_account_currency": frappe.get_cached_value(
+                                "Account", payment_account, "account_currency"
+                            ),
+                            # Amount fields
+                            "paid_amount": payment_amount,
+                            "received_amount": payment_amount,
+                            "source_exchange_rate": 1,  # Adjust if multi-currency
+                            "target_exchange_rate": 1,
+                            # Reference fields
+                            "reference_no": invoice_doc.name,
+                            "reference_date": invoice_doc.posting_date,
+                            "posting_date": invoice_doc.posting_date,  # Important!
+                        }
+                    )
+
+                    frappe.logger().info(
+                        f"Creating Payment Entry for credit change: {actual_payment_method}, Amount: {invoice_doc.get('rounded_total')}"
+                    )
 
                     advance_payment_entry.flags.ignore_permissions = True
                     frappe.flags.ignore_account_permission = True
 
                     # Set references if linking to invoice
-                    advance_payment_entry.append("references", {
-                        "reference_doctype": "Sales Invoice",
-                        "reference_name": invoice_doc.name,
-                        "allocated_amount": payment_amount
-                    })
+                    advance_payment_entry.append(
+                        "references",
+                        {
+                            "reference_doctype": "Sales Invoice",
+                            "reference_name": invoice_doc.name,
+                            "allocated_amount": payment_amount,
+                        },
+                    )
 
                     advance_payment_entry.insert()
                     advance_payment_entry.submit()
-            
+
         except frappe.ValidationError as e:
             error_msg = str(e)
             if "Due Date cannot be before" in error_msg:
