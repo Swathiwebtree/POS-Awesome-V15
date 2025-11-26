@@ -29,13 +29,16 @@ def create_stock_entry(doc, method):
 
     # loop through consumable items
     for row in doc.material_issue:
-        item = se.append("items", {
-            "s_warehouse": row.source_warehouse,
-            "item_code": row.item,
-            "qty": row.quantity,
-            "uom": frappe.get_value("Item", row.item, "stock_uom"),
-            "cost_center": getattr(doc, "cost_center", None)
-        })
+        item = se.append(
+            "items",
+            {
+                "s_warehouse": row.source_warehouse,
+                "item_code": row.item,
+                "qty": row.quantity,
+                "uom": frappe.get_value("Item", row.item, "stock_uom"),
+                "cost_center": getattr(doc, "cost_center", None),
+            },
+        )
 
         # allow zero valuation rate for consumables
         item.allow_zero_valuation_rate = 1
