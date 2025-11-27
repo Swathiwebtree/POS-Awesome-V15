@@ -311,6 +311,7 @@ def get_vehicle_models(search_term=""):
     # Return a list of strings (model names)
     return [d.get("model") for d in models if d.get("model")]
 
+
 @frappe.whitelist()
 def get_customer_by_vehicle(vehicle_no):
     """
@@ -379,7 +380,10 @@ def get_customer_by_vehicle(vehicle_no):
     try:
         cust_doc = frappe.get_doc("Customer", cust_name)
     except Exception:
-        frappe.log_error(frappe.get_traceback(), f"Failed to fetch Customer {cust_name} linked to vehicle {vehicle.get('name')}")
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"Failed to fetch Customer {cust_name} linked to vehicle {vehicle.get('name')}",
+        )
         return {"vehicle": vehicle, "customer": {}}
 
     resp = {
@@ -401,6 +405,7 @@ def get_customer_by_vehicle(vehicle_no):
         },
     }
 
-    frappe.logger().info(f"get_customer_by_vehicle returning for {vehicle_no_clean}: customer {cust_doc.name}")
+    frappe.logger().info(
+        f"get_customer_by_vehicle returning for {vehicle_no_clean}: customer {cust_doc.name}"
+    )
     return resp
-
