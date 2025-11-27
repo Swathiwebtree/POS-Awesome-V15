@@ -464,13 +464,13 @@ export default {
 			this.available_columns = [
 				{ title: __("Name"), align: "start", sortable: true, key: "item_name", required: true },
 				{ title: __("QTY"), key: "qty", align: "start", required: true },
-				{ title: __("Actions"), key: "actions", align: "start", required: true },
 				{ title: __("UOM"), key: "uom", align: "start", required: false },
 				{ title: __("Price"), key: "price_list_rate", align: "start", required: false },
 				{ title: __("Discount %"), key: "discount_value", align: "start", required: false },
 				{ title: __("Discount Amount"), key: "discount_amount", align: "start", required: false },
 				{ title: __("Rate"), key: "rate", align: "start", required: false },
 				{ title: __("Amount"), key: "amount", align: "start", required: true },
+				{ title: __("Actions"), key: "actions", align: "start", required: true },
 				{ title: __("Offer?"), key: "posa_is_offer", align: "center", required: false },
 			];
 
@@ -2389,4 +2389,84 @@ export default {
 .invoice-content::-webkit-scrollbar-thumb:hover {
 	background: #666;
 }
+/* ------ Center QTY cell and controls ------ */
+/* targets qty UI inside the table cells (qty-control OR amount-value used for qty) */
+.modern-items-table :deep(td) > .qty-control,
+.modern-items-table :deep(td) .qty-control,
+.modern-items-table :deep(td) > .amount-value.qty-cell,
+.modern-items-table :deep(td) .amount-value.qty-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 0;
+}
+
+/* If you used .qty-value in the control template, make sure it's centered, bold and stable width */
+.qty-value {
+  display: inline-block;
+  min-width: 56px;
+  text-align: center;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Make amount-value used for qty (fallback) centered */
+.modern-items-table :deep(td) .amount-value {
+  display: inline-block;
+  width: 100%;
+  text-align: center;
+}
+
+/* Vertical centering for table cells to keep icons/buttons centered */
+.modern-items-table :deep(td) {
+  vertical-align: middle;
+}
+
+/* ----- Actions column: center buttons and keep them compact/tappable ----- */
+.action-buttons,
+.modern-items-table :deep(td) > .action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* center horizontally inside the column */
+  gap: 8px;
+  min-width: 120px; /* helps keep column width stable */
+}
+
+/* tighten button sizes and ensure good tap targets */
+.item-action-btn {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+/* icon size inside */
+.item-action-btn .v-icon,
+.qty-btn .v-icon {
+  font-size: 18px !important;
+}
+
+/* On small screens, increase touch target slightly */
+@media (max-width: 600px) {
+  .item-action-btn,
+  .qty-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+  }
+  .qty-value {
+    min-width: 64px;
+    font-size: 1rem;
+  }
+}
+
 </style>
