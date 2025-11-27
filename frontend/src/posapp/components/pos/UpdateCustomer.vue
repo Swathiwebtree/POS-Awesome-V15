@@ -2,7 +2,6 @@
 	<v-row justify="center">
 		<v-dialog v-model="customerDialog" max-width="780px" persistent>
 			<v-card>
-
 				<!-- HEADER -->
 				<v-card-title class="d-flex align-center py-4 px-6">
 					<span class="text-h5 text-primary font-weight-bold">
@@ -14,13 +13,10 @@
 				<!-- BODY -->
 				<v-card-text class="px-6 pb-6 pt-0">
 					<v-container fluid>
-
 						<!-- TWO COLUMN FORM -->
 						<v-row dense>
-
 							<!-- VEHICLE COLUMN -->
 							<v-col cols="6" class="pr-4">
-
 								<v-text-field
 									v-model="vehicle_no"
 									:label="__('Vehicle Number') + (isCreateWithVehicle ? ' *' : '')"
@@ -65,12 +61,10 @@
 									color="primary"
 									hide-details="auto"
 								/>
-
 							</v-col>
 
 							<!-- CUSTOMER COLUMN -->
 							<v-col cols="6" class="pl-4">
-
 								<v-text-field
 									v-model="customer_name"
 									:label="__('Customer Name') + ' *'"
@@ -102,11 +96,8 @@
 									class="mb-3"
 									clearable
 								/>
-
 							</v-col>
-
 						</v-row>
-
 					</v-container>
 				</v-card-text>
 
@@ -114,13 +105,12 @@
 				<v-card-actions class="px-6 pb-4">
 					<v-spacer></v-spacer>
 					<v-btn color="error" theme="dark" @click="confirm_close">
-						{{ __('Close') }}
+						{{ __("Close") }}
 					</v-btn>
 					<v-btn color="success" theme="dark" @click="submit_dialog">
-						{{ __('Submit') }}
+						{{ __("Submit") }}
 					</v-btn>
 				</v-card-actions>
-
 			</v-card>
 		</v-dialog>
 
@@ -275,7 +265,10 @@ export default {
 				this.mobile_no = payload.mobile_no || "";
 				this.address_line1 = payload.address_line1 || "";
 				this.city = payload.city || "";
-				this.country = payload.country || (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
+				this.country =
+					payload.country ||
+					(this.pos_profile && this.pos_profile.posa_default_country) ||
+					"Pakistan";
 				this.email_id = payload.email_id || "";
 				this.referral_code = payload.referral_code || "";
 				this.birthday = payload.birthday || "";
@@ -469,17 +462,25 @@ export default {
 					if (!r.exc && r.message && r.message.customer) {
 						const customerDoc = r.message.customer;
 						const vehicleDoc = r.message.vehicle || null;
-						const msg = this.customer_id ? __("Customer updated successfully.") : __("Customer created successfully.");
+						const msg = this.customer_id
+							? __("Customer updated successfully.")
+							: __("Customer created successfully.");
 
 						vm.eventBus.emit("show_message", { title: msg, color: "success" });
 						frappe.utils.play_sound("submit");
 
-						vm.eventBus.emit("add_customer_to_list", { customer: customerDoc, vehicle: vehicleDoc });
+						vm.eventBus.emit("add_customer_to_list", {
+							customer: customerDoc,
+							vehicle: vehicleDoc,
+						});
 						vm.eventBus.emit("set_customer", customerDoc.name);
 						vm.eventBus.emit("fetch_customer_details");
 						vm.close_dialog();
 					} else {
-						vm.eventBus.emit("show_message", { title: __("Customer operation failed"), color: "error" });
+						vm.eventBus.emit("show_message", {
+							title: __("Customer operation failed"),
+							color: "error",
+						});
 					}
 				},
 				error: (r) => {

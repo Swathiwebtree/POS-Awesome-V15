@@ -1476,7 +1476,8 @@ export default {
 			// Populate/sync fields from UI into invoice_doc
 			this.invoice_doc.customer = this.customer;
 			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
-			this.invoice_doc.currency = this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
+			this.invoice_doc.currency =
+				this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
 			this.invoice_doc.net_total = this.subtotal || 0;
 			this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
@@ -1546,14 +1547,16 @@ export default {
 				let openingShiftName = null;
 
 				if (this.pos_opening_shift) {
-					openingShiftName = typeof this.pos_opening_shift === "string"
-						? this.pos_opening_shift
-						: (this.pos_opening_shift.name || null);
+					openingShiftName =
+						typeof this.pos_opening_shift === "string"
+							? this.pos_opening_shift
+							: this.pos_opening_shift.name || null;
 				}
 
 				if (!openingShiftName && this.pos_profile) {
 					openingShiftName =
-						(this.pos_profile.posa_pos_opening_shift && String(this.pos_profile.posa_pos_opening_shift)) ||
+						(this.pos_profile.posa_pos_opening_shift &&
+							String(this.pos_profile.posa_pos_opening_shift)) ||
 						(this.pos_profile.pos_opening_shift && String(this.pos_profile.pos_opening_shift)) ||
 						null;
 				}
@@ -1572,7 +1575,9 @@ export default {
 
 					if (!shiftResp || !shiftResp.message) {
 						frappe.show_alert({
-							message: this.__("Referenced POS Opening Shift {0} not found", [openingShiftName]),
+							message: this.__("Referenced POS Opening Shift {0} not found", [
+								openingShiftName,
+							]),
 							indicator: "red",
 						});
 						return null;
@@ -1581,7 +1586,10 @@ export default {
 					const shiftDoc = shiftResp.message;
 					if (String(shiftDoc.status).toLowerCase() !== "open") {
 						frappe.show_alert({
-							message: this.__("POS Shift {0} is not open. Please open/start the shift before saving invoice.", [openingShiftName]),
+							message: this.__(
+								"POS Shift {0} is not open. Please open/start the shift before saving invoice.",
+								[openingShiftName],
+							),
 							indicator: "red",
 						});
 						return null;
@@ -1590,7 +1598,9 @@ export default {
 					this.invoice_doc.posa_pos_opening_shift = openingShiftName;
 				} else {
 					frappe.show_alert({
-						message: this.__("No POS Opening Shift selected. Please select/open a POS shift before saving invoice."),
+						message: this.__(
+							"No POS Opening Shift selected. Please select/open a POS shift before saving invoice.",
+						),
 						indicator: "warning",
 					});
 					return null;
@@ -1598,7 +1608,8 @@ export default {
 				// ----------------------------------------------------------------
 
 				// Resolve draft name to update (prefer loaded_draft_name then invoice_doc.name)
-				const draft_name_to_update = this.loaded_draft_name || (this.invoice_doc && this.invoice_doc.name) || null;
+				const draft_name_to_update =
+					this.loaded_draft_name || (this.invoice_doc && this.invoice_doc.name) || null;
 				console.log("[Invoice] resolved draft_name_to_update:", draft_name_to_update);
 
 				if (draft_name_to_update) {
@@ -1621,7 +1632,7 @@ export default {
 						plc_conversion_rate: this.invoice_doc.plc_conversion_rate,
 						pos_profile: this.invoice_doc.pos_profile,
 						company: this.invoice_doc.company,
-						posa_pos_opening_shift: this.invoice_doc.posa_pos_opening_shift
+						posa_pos_opening_shift: this.invoice_doc.posa_pos_opening_shift,
 					};
 
 					const updResp = await frappe.call({
@@ -1654,7 +1665,10 @@ export default {
 								currency: this.invoice_doc.currency,
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
-							console.log("[Invoice] Emitted draft_saved for updated draft:", draft_name_to_update);
+							console.log(
+								"[Invoice] Emitted draft_saved for updated draft:",
+								draft_name_to_update,
+							);
 						} catch (e) {
 							console.warn("[Invoice] Failed to emit draft_saved for update", e);
 						}
@@ -1697,7 +1711,10 @@ export default {
 								customer: saved_doc.customer || this.invoice_doc.customer,
 								posting_date: saved_doc.posting_date || this.invoice_doc.posting_date,
 								posting_time: saved_doc.posting_time || this.invoice_doc.posting_time || null,
-								grand_total: saved_doc.grand_total != null ? saved_doc.grand_total : this.invoice_doc.grand_total,
+								grand_total:
+									saved_doc.grand_total != null
+										? saved_doc.grand_total
+										: this.invoice_doc.grand_total,
 								currency: saved_doc.currency || this.invoice_doc.currency,
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
@@ -1721,10 +1738,16 @@ export default {
 							const parsed = JSON.parse(msgs[0]);
 							frappe.show_alert({ message: parsed.message || parsed, indicator: "red" });
 						} else {
-							frappe.show_alert({ message: this.__("Error saving invoice") + ": " + error.message, indicator: "red" });
+							frappe.show_alert({
+								message: this.__("Error saving invoice") + ": " + error.message,
+								indicator: "red",
+							});
 						}
 					} catch (e) {
-						frappe.show_alert({ message: this.__("Error saving invoice") + ": " + (error.message || error), indicator: "red" });
+						frappe.show_alert({
+							message: this.__("Error saving invoice") + ": " + (error.message || error),
+							indicator: "red",
+						});
 					}
 				} else {
 					frappe.show_alert({

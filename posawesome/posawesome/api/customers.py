@@ -15,8 +15,8 @@ from frappe.exceptions import ValidationError, LinkValidationError, DoesNotExist
 from decimal import Decimal, InvalidOperation
 
 # Clarify doctypes:
-VEHICLE_DOCTYPE = "Vehicle"          # ERPNext Vehicle doctype
-VM_DOCTYPE = "Vehicle Master"        # Your custom Vehicle Master doctype (linked to Vehicle)
+VEHICLE_DOCTYPE = "Vehicle"  # ERPNext Vehicle doctype
+VM_DOCTYPE = "Vehicle Master"  # Your custom Vehicle Master doctype (linked to Vehicle)
 
 # ---------------- LOYALTY POINTS FUNCTIONS ----------------
 
@@ -345,7 +345,9 @@ def get_customer_info(customer):
             "Loyalty Program", customer_doc.loyalty_program, "conversion_factor"
         )
         res["conversion_factor"] = flt(conversion_factor) or 1
-        res["loyalty_points"] = get_loyalty_points(customer_doc.name, customer_doc.loyalty_program, current_company)
+        res["loyalty_points"] = get_loyalty_points(
+            customer_doc.name, customer_doc.loyalty_program, current_company
+        )
 
     # --- Address Query (unchanged) ---
     addresses = frappe.db.sql(
@@ -389,7 +391,9 @@ def get_customer_info(customer):
     try:
         fields = _existing_fields(VM_DOCTYPE, candidates)
         if fields:
-            vehicles = frappe.get_all(VM_DOCTYPE, filters={"customer": customer_doc.name}, fields=fields, limit_page_length=10)
+            vehicles = frappe.get_all(
+                VM_DOCTYPE, filters={"customer": customer_doc.name}, fields=fields, limit_page_length=10
+            )
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Error fetching vehicles from VM_DOCTYPE")
         vehicles = []
@@ -400,7 +404,12 @@ def get_customer_info(customer):
             fallback_doctype = VEHICLE_DOCTYPE or "Vehicle"
             fields = _existing_fields(fallback_doctype, candidates)
             if fields:
-                vehicles = frappe.get_all(fallback_doctype, filters={"customer": customer_doc.name}, fields=fields, limit_page_length=10)
+                vehicles = frappe.get_all(
+                    fallback_doctype,
+                    filters={"customer": customer_doc.name},
+                    fields=fields,
+                    limit_page_length=10,
+                )
         except Exception:
             frappe.log_error(frappe.get_traceback(), "Error fetching vehicles from fallback Vehicle doctype")
             vehicles = []
@@ -411,17 +420,19 @@ def get_customer_info(customer):
         vehicle_no = v.get("vehicle_no") or v.get("name")
         if not vehicle_no:
             continue
-        res["vehicles"].append({
-            "name": v.get("name"),
-            "vehicle_no": vehicle_no,
-            "model": v.get("model", "") if isinstance(v, dict) else "",
-            "make": v.get("make", "") if isinstance(v, dict) else "",
-            "odometer": v.get("odometer", "") if isinstance(v, dict) else "",
-            "chasis_no": v.get("chasis_no", "") if isinstance(v, dict) else "",
-            "customer_name": customer_doc.customer_name,
-            "mobile_no": customer_doc.mobile_no,
-            "customer": customer_doc.name,
-        })
+        res["vehicles"].append(
+            {
+                "name": v.get("name"),
+                "vehicle_no": vehicle_no,
+                "model": v.get("model", "") if isinstance(v, dict) else "",
+                "make": v.get("make", "") if isinstance(v, dict) else "",
+                "odometer": v.get("odometer", "") if isinstance(v, dict) else "",
+                "chasis_no": v.get("chasis_no", "") if isinstance(v, dict) else "",
+                "customer_name": customer_doc.customer_name,
+                "mobile_no": customer_doc.mobile_no,
+                "customer": customer_doc.name,
+            }
+        )
 
     if res["vehicles"]:
         res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
@@ -771,9 +782,9 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
             customer_doc = frappe.new_doc("Customer")
             customer_doc.customer_name = cd.get("customer_name")
             customer_doc.customer_type = cd.get("customer_type", "Individual")
-            customer_doc.customer_group = cd.get(
-                "customer_group"
-            ) or frappe.defaults.get_user_default("Customer Group")
+            customer_doc.customer_group = cd.get("customer_group") or frappe.defaults.get_user_default(
+                "Customer Group"
+            )
             customer_doc.territory = cd.get("territory") or frappe.defaults.get_user_default("Territory")
             if cd.get("tax_id"):
                 customer_doc.tax_id = cd.get("tax_id")
@@ -930,7 +941,9 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
 
                             # ensure vm has vehicle identifier and customer link
                             if hasattr(vm_doc, "vehicle_no"):
-                                vm_doc.vehicle_no = getattr(vehicle_doc, "vehicle_no", getattr(vehicle_doc, "name", None))
+                                vm_doc.vehicle_no = getattr(
+                                    vehicle_doc, "vehicle_no", getattr(vehicle_doc, "name", None)
+                                )
                             if hasattr(vm_doc, "customer"):
                                 vm_doc.customer = customer_doc.name
 
@@ -944,7 +957,9 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                         try:
                             vm.name = vehicle_doc.name
                             if hasattr(vm, "vehicle_no"):
-                                vm.vehicle_no = getattr(vehicle_doc, "vehicle_no", getattr(vehicle_doc, "name", None))
+                                vm.vehicle_no = getattr(
+                                    vehicle_doc, "vehicle_no", getattr(vehicle_doc, "name", None)
+                                )
                             if hasattr(vm, "customer"):
                                 vm.customer = customer_doc.name
                             if vehicle_data.get("make") is not None and hasattr(vm, "make"):
@@ -1025,7 +1040,8 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                 "vehicle_no": getattr(vehicle_doc, "vehicle_no", None) or getattr(vehicle_doc, "name", None),
                 "make": getattr(vehicle_doc, "make", None),
                 "model": getattr(vehicle_doc, "model", None),
-                "mobile_no": getattr(vehicle_doc, "tel_mobile", None) or getattr(vehicle_doc, "mobile_no", None),
+                "mobile_no": getattr(vehicle_doc, "tel_mobile", None)
+                or getattr(vehicle_doc, "mobile_no", None),
                 "customer": getattr(vehicle_doc, "customer", None),
                 "odometer": getattr(vehicle_doc, "odometer", None),
             }
@@ -1048,7 +1064,9 @@ def update_customer_api(customer, vehicle=None, pos_profile_doc=None):
         # ensure there is an identifier: accept customer_id or name
         if not (c.get("customer_id") or c.get("name") or c.get("customer")):
             frappe.throw(_("customer_id (existing Customer.name) is required for update"))
-        return create_customer_with_vehicle(json.dumps(c), json.dumps(vehicle or {}), "", pos_profile_doc or "{}")
+        return create_customer_with_vehicle(
+            json.dumps(c), json.dumps(vehicle or {}), "", pos_profile_doc or "{}"
+        )
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "update_customer_api error")
         return {"error": True, "message": str(e)}
@@ -1065,7 +1083,9 @@ def update_customer_api(customer, vehicle=None, pos_profile_doc=None):
         # ensure there is an identifier: accept customer_id or name
         if not (c.get("customer_id") or c.get("name") or c.get("customer")):
             frappe.throw(_("customer_id (existing Customer.name) is required for update"))
-        return create_customer_with_vehicle(json.dumps(c), json.dumps(vehicle or {}), "", pos_profile_doc or "{}")
+        return create_customer_with_vehicle(
+            json.dumps(c), json.dumps(vehicle or {}), "", pos_profile_doc or "{}"
+        )
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "update_customer_api error")
         return {"error": True, "message": str(e)}
@@ -1401,23 +1421,24 @@ def get_sales_person_names():
 # ==============================================================================
 # Add this new function after the existing search_customers function
 
+
 @frappe.whitelist()
 def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
     """
     Enhanced search that searches BOTH customers AND vehicles.
     When vehicle number matches, returns the customer who owns that vehicle.
-    
+
     Args:
         search_term: Search string (can be customer name, mobile, vehicle number, etc.)
         pos_profile: POS Profile for filtering
         limit: Maximum results to return
-    
+
     Returns:
         List of customers with vehicle information if matched via vehicle
     """
     search_term = (search_term or "").strip()
     limit = int(limit or 20)
-    
+
     if not search_term:
         # Return recent customers
         return frappe.get_all(
@@ -1479,63 +1500,62 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
             {"like": like_pattern, "limit": limit},
             as_dict=1,
         )
-        
+
         # Get customer details for each vehicle match
         for vehicle in vehicle_matches:
             if not vehicle.get("customer"):
                 continue
-                
+
             try:
                 customer_data = frappe.db.get_value(
                     "Customer",
                     vehicle.customer,
                     ["name", "customer_name", "mobile_no", "email_id", "tax_id"],
-                    as_dict=1
+                    as_dict=1,
                 )
-                
+
                 if customer_data:
-                    vehicle_results.append({
-                        "name": customer_data.name,
-                        "customer_name": customer_data.customer_name,
-                        "mobile_no": customer_data.mobile_no or "",
-                        "email_id": customer_data.email_id or "",
-                        "tax_id": customer_data.tax_id or "",
-                        "vehicle_no": vehicle.vehicle_no,
-                        "vehicle_model": vehicle.model or "",
-                        "vehicle_make": vehicle.make or "",
-                        "match_source": "vehicle"
-                    })
+                    vehicle_results.append(
+                        {
+                            "name": customer_data.name,
+                            "customer_name": customer_data.customer_name,
+                            "mobile_no": customer_data.mobile_no or "",
+                            "email_id": customer_data.email_id or "",
+                            "tax_id": customer_data.tax_id or "",
+                            "vehicle_no": vehicle.vehicle_no,
+                            "vehicle_model": vehicle.model or "",
+                            "vehicle_make": vehicle.make or "",
+                            "match_source": "vehicle",
+                        }
+                    )
             except Exception as e:
                 frappe.log_error(
                     f"Error fetching customer {vehicle.customer} for vehicle {vehicle.vehicle_no}: {str(e)}",
-                    "Vehicle Search Error"
+                    "Vehicle Search Error",
                 )
                 continue
-                
+
     except Exception as e:
-        frappe.log_error(
-            f"Error searching vehicles: {str(e)}",
-            "Vehicle Search Error"
-        )
+        frappe.log_error(f"Error searching vehicles: {str(e)}", "Vehicle Search Error")
 
     # STEP 3: Combine and deduplicate (prioritize vehicle matches)
     seen_customers = {}
     final_results = []
-    
+
     # Add vehicle matches first (they have more context)
     for row in vehicle_results:
         customer_key = row["name"]
         if customer_key not in seen_customers:
             seen_customers[customer_key] = True
             final_results.append(row)
-    
+
     # Add direct customer matches that weren't found via vehicles
     for row in customer_results:
         customer_key = row["name"]
         if customer_key not in seen_customers:
             seen_customers[customer_key] = True
             final_results.append(row)
-    
+
     # Return limited results
     return final_results[:limit]
 
@@ -1544,6 +1564,7 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
 # ALSO UPDATE THE EXISTING search_customers FUNCTION
 # Replace the existing search_customers function with this enhanced version:
 # ==============================================================================
+
 
 @frappe.whitelist()
 def search_customers(search_term="", pos_profile=None, limit=20):
@@ -1558,6 +1579,7 @@ def search_customers(search_term="", pos_profile=None, limit=20):
 # ==============================================================================
 # Add this new function to vehicles.py
 
+
 @frappe.whitelist()
 def search_vehicles(search_term="", limit=20):
     """
@@ -1566,12 +1588,12 @@ def search_vehicles(search_term="", limit=20):
     """
     search_term = (search_term or "").strip()
     limit = int(limit or 20)
-    
+
     if not search_term:
         return []
-    
+
     like_pattern = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
-    
+
     try:
         vehicles = frappe.db.sql(
             """
@@ -1597,16 +1619,13 @@ def search_vehicles(search_term="", limit=20):
             LIMIT %(limit)s
             """,
             {"like": like_pattern, "limit": limit},
-            as_dict=1
+            as_dict=1,
         )
-        
+
         return vehicles
-        
+
     except Exception as e:
-        frappe.log_error(
-            f"Error searching vehicles: {str(e)}",
-            "Vehicle Search Error"
-        )
+        frappe.log_error(f"Error searching vehicles: {str(e)}", "Vehicle Search Error")
         return []
 
 
@@ -1617,26 +1636,26 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
     """
     search_term = (search_term or "").strip()
     limit = int(limit or 20)
-    
+
     filters = {}
     if customer:
         filters["customer"] = customer
-    
+
     if not search_term:
         return frappe.get_all(
             "Vehicle Master",
             filters=filters,
             fields=["name", "vehicle_no", "model", "make", "customer", "odometer"],
             limit_page_length=limit,
-            order_by="modified desc"
+            order_by="modified desc",
         )
-    
+
     like_pattern = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
-    
+
     where_clause = "1=1"
     if customer:
         where_clause += f" AND vm.customer = '{frappe.db.escape(customer)}'"
-    
+
     try:
         vehicles = frappe.db.sql(
             f"""
@@ -1659,14 +1678,11 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
             LIMIT %(limit)s
             """,
             {"like": like_pattern, "limit": limit},
-            as_dict=1
+            as_dict=1,
         )
-        
+
         return vehicles
-        
+
     except Exception as e:
-        frappe.log_error(
-            f"Error searching vehicles: {str(e)}",
-            "Vehicle Search Error"
-        )
+        frappe.log_error(f"Error searching vehicles: {str(e)}", "Vehicle Search Error")
         return []
