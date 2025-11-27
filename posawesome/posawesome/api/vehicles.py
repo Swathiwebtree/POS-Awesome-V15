@@ -291,62 +291,6 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None):
 
 
 @frappe.whitelist()
-def get_customer_by_vehicle(vehicle_no):
-    """
-    Return customer details for a vehicle number (exact match).
-    Includes mobile_no and other customer details.
-    """
-
-    if not vehicle_no:
-        frappe.throw(_("Vehicle number is required"))
-
-    try:
-        vehicle_data = frappe.get_all(
-            VEHICLE_DOCTYPE,
-            filters={"vehicle_no": vehicle_no},
-            fields=["name", "customer", "model", "make", "chasis_no", "vehicle_no"],
-            limit_page_length=1,
-        )
-
-        if not vehicle_data:
-            return {}
-
-        vehicle = vehicle_data[0]
-        cust_name = vehicle.get("customer")
-
-        if not cust_name:
-            return {"vehicle": vehicle, "customer": {}}
-
-        try:
-            cust_doc = frappe.get_doc(CUSTOMER_DOCTYPE, cust_name)
-            return {
-                "vehicle": {
-                    "name": vehicle.get("name"),
-                    "vehicle_no": vehicle.get("vehicle_no"),
-                    "model": vehicle.get("model"),
-                    "make": vehicle.get("make"),
-                    "chasis_no": vehicle.get("chasis_no"),
-                },
-                "customer": {
-                    "name": cust_doc.name,
-                    "customer_name": cust_doc.customer_name,
-                    "email_id": getattr(cust_doc, "email_id", ""),
-                    "mobile_no": getattr(cust_doc, "mobile_no", ""),
-                    "tax_id": getattr(cust_doc, "tax_id", ""),
-                    "customer_group": getattr(cust_doc, "customer_group", ""),
-                    "territory": getattr(cust_doc, "territory", ""),
-                    "posa_discount": getattr(cust_doc, "posa_discount", 0),
-                },
-            }
-        except frappe.DoesNotExistError:
-            return {"vehicle": vehicle, "customer": {}}
-
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "Vehicle Lookup Error")
-        return {}
-
-
-@frappe.whitelist()
 def get_vehicle_models(search_term=""):
     """
     Search and return a distinct list of Vehicle Model names for autocomplete.
@@ -366,3 +310,97 @@ def get_vehicle_models(search_term=""):
 
     # Return a list of strings (model names)
     return [d.get("model") for d in models if d.get("model")]
+
+@frappe.whitelist()
+def get_customer_by_vehicle(vehicle_no):
+    """
+    Return customer details for a vehicle number (exact match).
+    Defensive: tries Vehicle Master then Vehicle; normalizes vehicle_no and logs findings.
+    """
+    if not vehicle_no:
+        frappe.logger().warning("get_customer_by_vehicle called without vehicle_no")
+        frappe.throw(_("Vehicle number is required"))
+
+    # normalize common input issues
+    vehicle_no_clean = str(vehicle_no).strip().upper()
+
+    frappe.logger().info(f"get_customer_by_vehicle lookup starting for: {vehicle_no_clean}")
+
+    # try Vehicle Master first, then Vehicle
+    doctype_candidates = ["Vehicle Master", "Vehicle"]
+    vehicle = None
+    vehicle_doc = None
+
+    for dt in doctype_candidates:
+        try:
+            found = frappe.get_all(
+                dt,
+                filters={"vehicle_no": vehicle_no_clean},
+                fields=["name", "customer", "model", "chasis_no", "vehicle_no"],
+                limit_page_length=1,
+            )
+            if found:
+                vehicle = found[0]
+                frappe.logger().info(f"Found vehicle in {dt}: {vehicle}")
+                break
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), f"Error querying {dt} for vehicle {vehicle_no_clean}")
+            # continue to next candidate
+
+    if not vehicle:
+        # Try loose search (in case of extra spaces/case or vehicle_no stored differently)
+        try:
+            loose = frappe.db.sql(
+                """
+                SELECT name, customer, model, chasis_no, vehicle_no
+                FROM `tabVehicle Master`
+                WHERE REPLACE(UPPER(vehicle_no), ' ', '') = %s
+                LIMIT 1
+                """,
+                (vehicle_no_clean.replace(" ", ""),),
+                as_dict=1,
+            )
+            if loose:
+                vehicle = loose[0]
+                frappe.logger().info(f"Found vehicle via loose match in Vehicle Master: {vehicle}")
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Loose match attempt failed")
+
+    if not vehicle:
+        frappe.logger().info(f"No vehicle found for '{vehicle_no_clean}'")
+        # return empty object (consistent with your current behavior), but log
+        return {}
+
+    cust_name = vehicle.get("customer")
+    if not cust_name:
+        frappe.logger().info(f"Vehicle {vehicle.get('name')} has no customer linked")
+        return {"vehicle": vehicle, "customer": {}}
+
+    try:
+        cust_doc = frappe.get_doc("Customer", cust_name)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"Failed to fetch Customer {cust_name} linked to vehicle {vehicle.get('name')}")
+        return {"vehicle": vehicle, "customer": {}}
+
+    resp = {
+        "vehicle": {
+            "name": vehicle.get("name"),
+            "vehicle_no": vehicle.get("vehicle_no"),
+            "model": vehicle.get("model"),
+            "chasis_no": vehicle.get("chasis_no"),
+        },
+        "customer": {
+            "name": cust_doc.name,
+            "customer_name": getattr(cust_doc, "customer_name", ""),
+            "email_id": getattr(cust_doc, "email_id", ""),
+            "mobile_no": getattr(cust_doc, "mobile_no", ""),
+            "tax_id": getattr(cust_doc, "tax_id", ""),
+            "customer_group": getattr(cust_doc, "customer_group", ""),
+            "territory": getattr(cust_doc, "territory", ""),
+            "posa_discount": getattr(cust_doc, "posa_discount", 0),
+        },
+    }
+
+    frappe.logger().info(f"get_customer_by_vehicle returning for {vehicle_no_clean}: customer {cust_doc.name}")
+    return resp
+
