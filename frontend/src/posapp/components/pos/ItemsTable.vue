@@ -62,11 +62,22 @@
 
 			<!-- Quantity column -->
 			<template v-slot:item.qty="{ item }">
-				<div class="qty-control" :class="{ 'negative-number': isNegative(item.qty) }" role="group"
-					:aria-label="__('Quantity controls')">
+				<div
+					class="qty-control"
+					:class="{ 'negative-number': isNegative(item.qty) }"
+					role="group"
+					:aria-label="__('Quantity controls')"
+				>
 					<!-- Decrease -->
-					<v-btn class="qty-btn qty-decrease" icon size="small" :disabled="!!item.posa_is_replace"
-						@click.stop="subtractOne(item)" :aria-label="__('Decrease quantity')" title="Decrease">
+					<v-btn
+						class="qty-btn qty-decrease"
+						icon
+						size="small"
+						:disabled="!!item.posa_is_replace"
+						@click.stop="subtractOne(item)"
+						:aria-label="__('Decrease quantity')"
+						title="Decrease"
+					>
 						<v-icon size="18">mdi-minus</v-icon>
 					</v-btn>
 
@@ -76,11 +87,21 @@
 					</div>
 
 					<!-- Increase -->
-					<v-btn class="qty-btn qty-increase" icon size="small" :disabled="!!item.posa_is_replace ||
-						((!stock_settings.allow_negative_stock || pos_profile.posa_block_sale_beyond_available_qty) &&
-							item.max_qty !== undefined &&
-							item.qty >= item.max_qty)
-						" @click.stop="addOne(item)" :aria-label="__('Increase quantity')" title="Increase">
+					<v-btn
+						class="qty-btn qty-increase"
+						icon
+						size="small"
+						:disabled="
+							!!item.posa_is_replace ||
+							((!stock_settings.allow_negative_stock ||
+								pos_profile.posa_block_sale_beyond_available_qty) &&
+								item.max_qty !== undefined &&
+								item.qty >= item.max_qty)
+						"
+						@click.stop="addOne(item)"
+						:aria-label="__('Increase quantity')"
+						title="Increase"
+					>
 						<v-icon size="18">mdi-plus</v-icon>
 					</v-btn>
 				</div>
@@ -114,13 +135,20 @@
 					<div class="actions-center" role="group" :aria-label="__('Item Actions')">
 						<v-tooltip location="top">
 							<template #activator="{ props }">
-								<v-btn v-bind="props" :disabled="!!item.posa_is_replace"
-									class="action-btn action-delete" variant="tonal" size="small"
-									@click.stop="removeItem(item)" :aria-label="__('Remove item')" title="Remove">
+								<v-btn
+									v-bind="props"
+									:disabled="!!item.posa_is_replace"
+									class="action-btn action-delete"
+									variant="tonal"
+									size="small"
+									@click.stop="removeItem(item)"
+									:aria-label="__('Remove item')"
+									title="Remove"
+								>
 									<v-icon size="18">mdi-trash-can-outline</v-icon>
 								</v-btn>
 							</template>
-							<span>{{ __('Remove') }}</span>
+							<span>{{ __("Remove") }}</span>
 						</v-tooltip>
 
 						<!-- <v-tooltip location="top">
@@ -1381,98 +1409,99 @@ export default {
 
 /* Qty control: minus - qty - plus (centered) */
 .qty-control {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 2px 4px;
-  height: 100%;
-  /* ensure it doesn't push layout */
-  box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 2px 4px;
+	height: 100%;
+	/* ensure it doesn't push layout */
+	box-sizing: border-box;
 }
 
 /* Buttons around qty */
 .qty-btn {
-  width: 34px !important;
-  height: 34px !important;
-  min-width: 34px !important;
-  padding: 0 !important;
-  border-radius: 8px !important;
-  display: inline-flex !important;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 6px 14px rgba(16, 24, 40, 0.06);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+	width: 34px !important;
+	height: 34px !important;
+	min-width: 34px !important;
+	padding: 0 !important;
+	border-radius: 8px !important;
+	display: inline-flex !important;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 6px 14px rgba(16, 24, 40, 0.06);
+	transition:
+		transform 0.12s ease,
+		box-shadow 0.12s ease;
 }
 
 /* Slight color hints (non-invasive) */
 .qty-decrease {
-  background: linear-gradient(180deg, #fff8f8, #fff0f0) !important;
-  color: #d32f2f !important;
-  border: 1px solid rgba(211, 47, 47, 0.06) !important;
+	background: linear-gradient(180deg, #fff8f8, #fff0f0) !important;
+	color: #d32f2f !important;
+	border: 1px solid rgba(211, 47, 47, 0.06) !important;
 }
 .qty-decrease:disabled {
-  opacity: 0.5 !important;
+	opacity: 0.5 !important;
 }
 
 .qty-increase {
-  background: linear-gradient(180deg, #f5fffa, #ecfff2) !important;
-  color: #1b7029 !important;
-  border: 1px solid rgba(27, 112, 41, 0.06) !important;
+	background: linear-gradient(180deg, #f5fffa, #ecfff2) !important;
+	color: #1b7029 !important;
+	border: 1px solid rgba(27, 112, 41, 0.06) !important;
 }
 .qty-increase:disabled {
-  opacity: 0.5 !important;
+	opacity: 0.5 !important;
 }
 
 /* Icon size */
 .qty-btn .v-icon {
-  font-size: 18px !important;
+	font-size: 18px !important;
 }
 
 /* Qty numeric display */
 .qty-value {
-  min-width: 48px;
-  text-align: center;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: transparent;
-  font-variant-numeric: lining-nums tabular-nums;
+	min-width: 48px;
+	text-align: center;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 6px;
+	background: transparent;
+	font-variant-numeric: lining-nums tabular-nums;
 }
 
 /* Negative number styling (inherits your .negative-number rules) */
 .qty-control.negative-number .qty-value {
-  color: #d32f2f;
+	color: #d32f2f;
 }
 
 /* Hover/focus affordance */
 .qty-btn:hover:not(:disabled),
 .qty-btn:focus-visible {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(16, 24, 40, 0.12);
-  outline: none;
+	transform: translateY(-2px);
+	box-shadow: 0 10px 20px rgba(16, 24, 40, 0.12);
+	outline: none;
 }
 
 /* Ensure header alignment for the qty column stays centered */
 .modern-items-table :deep(th) {
-  /* keep your existing rules; these won't override them badly
+	/* keep your existing rules; these won't override them badly
      but ensure center alignment for qty header as well */
-  text-align: center;
+	text-align: center;
 }
 
 /* Responsive tweaks - keep tap targets comfortable */
 @media (max-width: 600px) {
-  .qty-btn {
-    width: 44px !important;
-    height: 44px !important;
-    min-width: 44px !important;
-  }
-  .qty-value {
-    min-width: 56px;
-    font-size: 0.95rem;
-  }
+	.qty-btn {
+		width: 44px !important;
+		height: 44px !important;
+		min-width: 44px !important;
+	}
+	.qty-value {
+		min-width: 56px;
+		font-size: 0.95rem;
+	}
 }
-
 
 /* Enhanced Arabic support for all numeric displays in the table */
 .modern-items-table :deep(td),
@@ -1491,12 +1520,11 @@ export default {
 
 /* center header label text for all columns */
 .modern-items-table :deep(thead tr th .v-data-table-header__content) {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
 }
-
 
 /* Drag and drop styles */
 .draggable-row {
