@@ -464,13 +464,13 @@ export default {
 			this.available_columns = [
 				{ title: __("Name"), align: "start", sortable: true, key: "item_name", required: true },
 				{ title: __("QTY"), key: "qty", align: "start", required: true },
+				{ title: __("Actions"), key: "actions", align: "start", required: true },
 				{ title: __("UOM"), key: "uom", align: "start", required: false },
 				{ title: __("Price"), key: "price_list_rate", align: "start", required: false },
 				{ title: __("Discount %"), key: "discount_value", align: "start", required: false },
 				{ title: __("Discount Amount"), key: "discount_amount", align: "start", required: false },
 				{ title: __("Rate"), key: "rate", align: "start", required: false },
 				{ title: __("Amount"), key: "amount", align: "start", required: true },
-				{ title: __("Actions"), key: "actions", align: "start", required: true },
 				{ title: __("Offer?"), key: "posa_is_offer", align: "center", required: false },
 			];
 
@@ -529,7 +529,7 @@ export default {
 
 				// Show success message
 				frappe.show_alert({
-					message: this.__(`🎉 Free ${cardData.service_item_name} added to invoice!`),
+					message: this.__(` Free ${cardData.service_item_name} added to invoice!`),
 					indicator: "green",
 				});
 			} catch (error) {
@@ -1476,8 +1476,7 @@ export default {
 			// Populate/sync fields from UI into invoice_doc
 			this.invoice_doc.customer = this.customer;
 			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
-			this.invoice_doc.currency =
-				this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
+			this.invoice_doc.currency = this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
 			this.invoice_doc.net_total = this.subtotal || 0;
 			this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
@@ -1494,20 +1493,12 @@ export default {
 			this.invoice_doc.doctype = "Sales Invoice";
 
 			// Ensure items exist and each child row has proper doctype
-			// Transform UI item structure into the format expected by Sales Invoice (adjust fields to your app)
 			if (!Array.isArray(this.invoice_doc.items)) {
 				this.invoice_doc.items = this.items || [];
 			}
-
-			// Attach doctype for each child item
 			this.invoice_doc.items = this.invoice_doc.items.map((it) => {
-				// if your app uses different property names adjust the mapping here
 				const itemRow = Object.assign({}, it);
 				itemRow.doctype = "Sales Invoice Item";
-				// Typical required fields for a sales invoice item (adjust to your schema)
-				// itemRow.item_code = itemRow.code || itemRow.item_code;
-				// itemRow.qty = itemRow.qty || 1;
-				// itemRow.rate = itemRow.rate || itemRow.price || 0;
 				return itemRow;
 			});
 
@@ -1519,8 +1510,7 @@ export default {
 			});
 
 			try {
-				// 1) Ensure customer exists. If user typed a new customer name, create a minimal Customer record first.
-				//    This avoids failing the insert if the Customer doesn't exist.
+				// 1) Ensure customer exists (as before)
 				const customer_name = this.invoice_doc.customer;
 				if (customer_name) {
 					const existsResp = await frappe.call({
@@ -1535,7 +1525,6 @@ export default {
 					const exists = Array.isArray(existsResp.message) && existsResp.message.length > 0;
 					if (!exists) {
 						console.log("[Invoice] Customer does not exist, creating Customer:", customer_name);
-						// Create a minimal customer. Add more fields if you want (customer_group, territory, etc).
 						const newCustomerResp = await frappe.call({
 							method: "frappe.client.insert",
 							args: {
@@ -1553,16 +1542,69 @@ export default {
 					}
 				}
 
+				// ---------- NEW: Resolve and validate POS Opening Shift ----------
+				let openingShiftName = null;
+
+				if (this.pos_opening_shift) {
+					openingShiftName = typeof this.pos_opening_shift === "string"
+						? this.pos_opening_shift
+						: (this.pos_opening_shift.name || null);
+				}
+
+				if (!openingShiftName && this.pos_profile) {
+					openingShiftName =
+						(this.pos_profile.posa_pos_opening_shift && String(this.pos_profile.posa_pos_opening_shift)) ||
+						(this.pos_profile.pos_opening_shift && String(this.pos_profile.pos_opening_shift)) ||
+						null;
+				}
+
+				if (!openingShiftName && this.invoice_doc.posa_pos_opening_shift) {
+					openingShiftName = String(this.invoice_doc.posa_pos_opening_shift);
+				}
+
+				console.log("[Invoice] Resolved openingShiftName:", openingShiftName);
+
+				if (openingShiftName) {
+					const shiftResp = await frappe.call({
+						method: "frappe.client.get",
+						args: { doctype: "POS Opening Shift", name: openingShiftName },
+					});
+
+					if (!shiftResp || !shiftResp.message) {
+						frappe.show_alert({
+							message: this.__("Referenced POS Opening Shift {0} not found", [openingShiftName]),
+							indicator: "red",
+						});
+						return null;
+					}
+
+					const shiftDoc = shiftResp.message;
+					if (String(shiftDoc.status).toLowerCase() !== "open") {
+						frappe.show_alert({
+							message: this.__("POS Shift {0} is not open. Please open/start the shift before saving invoice.", [openingShiftName]),
+							indicator: "red",
+						});
+						return null;
+					}
+
+					this.invoice_doc.posa_pos_opening_shift = openingShiftName;
+				} else {
+					frappe.show_alert({
+						message: this.__("No POS Opening Shift selected. Please select/open a POS shift before saving invoice."),
+						indicator: "warning",
+					});
+					return null;
+				}
+				// ----------------------------------------------------------------
+
 				// Resolve draft name to update (prefer loaded_draft_name then invoice_doc.name)
-				const draft_name_to_update =
-					this.loaded_draft_name || (this.invoice_doc && this.invoice_doc.name) || null;
+				const draft_name_to_update = this.loaded_draft_name || (this.invoice_doc && this.invoice_doc.name) || null;
 				console.log("[Invoice] resolved draft_name_to_update:", draft_name_to_update);
 
 				if (draft_name_to_update) {
-					// Update existing draft — use set_value to change multiple fields
+					// Update existing draft
 					console.log("[Invoice] Updating existing draft:", draft_name_to_update);
 
-					// Prepare field map to update. Frappe's set_value accepts a dict for 'fieldname' to set multiple fields.
 					const field_map = {
 						items: this.invoice_doc.items,
 						customer: this.invoice_doc.customer,
@@ -1579,6 +1621,7 @@ export default {
 						plc_conversion_rate: this.invoice_doc.plc_conversion_rate,
 						pos_profile: this.invoice_doc.pos_profile,
 						company: this.invoice_doc.company,
+						posa_pos_opening_shift: this.invoice_doc.posa_pos_opening_shift
 					};
 
 					const updResp = await frappe.call({
@@ -1596,10 +1639,26 @@ export default {
 							message: this.__("Draft invoice updated: {0}", [draft_name_to_update]),
 							indicator: "green",
 						});
-						// Keep loaded_draft_name and invoice_doc.name in sync
 						this.loaded_draft_name = draft_name_to_update;
 						this.invoice_doc.name = draft_name_to_update;
 						this.eventBus.emit("invoice_saved_successfully", { name: draft_name_to_update });
+
+						// --- NEW: emit draft_saved for fast auto-refresh (merge into drafts list) ---
+						try {
+							const savedDraft = {
+								name: draft_name_to_update,
+								customer: this.invoice_doc.customer,
+								posting_date: this.invoice_doc.posting_date,
+								posting_time: this.invoice_doc.posting_time || null,
+								grand_total: this.invoice_doc.grand_total,
+								currency: this.invoice_doc.currency,
+							};
+							this.eventBus.emit("draft_saved", savedDraft);
+							console.log("[Invoice] Emitted draft_saved for updated draft:", draft_name_to_update);
+						} catch (e) {
+							console.warn("[Invoice] Failed to emit draft_saved for update", e);
+						}
+
 						return updResp.message;
 					} else {
 						throw new Error("Failed to update draft: " + (updResp.exc || ""));
@@ -1608,7 +1667,6 @@ export default {
 					// Create new Sales Invoice draft
 					console.log("[Invoice] Creating new draft (no existing draft loaded)");
 
-					// Make sure the invoice_doc includes doctype (we did above)
 					const insertResp = await frappe.call({
 						method: "frappe.client.insert",
 						args: {
@@ -1621,7 +1679,6 @@ export default {
 						const saved_name = saved_doc.name;
 						console.log("[Invoice] Invoice saved as new draft:", saved_name);
 
-						// Store name so future saves update this draft
 						this.loaded_draft_name = saved_name;
 						this.invoice_doc.name = saved_name;
 
@@ -1631,6 +1688,24 @@ export default {
 						});
 
 						this.eventBus.emit("invoice_saved_successfully", { name: saved_name });
+
+						// --- NEW: emit draft_saved for fast auto-refresh (merge into drafts list) ---
+						try {
+							// saved_doc likely has fields; build minimal object for drafts table
+							const savedDraft = {
+								name: saved_doc.name,
+								customer: saved_doc.customer || this.invoice_doc.customer,
+								posting_date: saved_doc.posting_date || this.invoice_doc.posting_date,
+								posting_time: saved_doc.posting_time || this.invoice_doc.posting_time || null,
+								grand_total: saved_doc.grand_total != null ? saved_doc.grand_total : this.invoice_doc.grand_total,
+								currency: saved_doc.currency || this.invoice_doc.currency,
+							};
+							this.eventBus.emit("draft_saved", savedDraft);
+							console.log("[Invoice] Emitted draft_saved for new draft:", saved_doc.name);
+						} catch (e) {
+							console.warn("[Invoice] Failed to emit draft_saved for create", e);
+						}
+
 						return saved_doc;
 					} else {
 						throw new Error("Failed to create invoice: " + (insertResp.exc || ""));
@@ -1638,13 +1713,27 @@ export default {
 				}
 			} catch (error) {
 				console.error("[Invoice] Error saving invoice:", error);
-				frappe.show_alert({
-					message: this.__("Error saving invoice: ") + (error.message || error),
-					indicator: "red",
-				});
+				// If the server returned _server_messages (frappe throws) show that
+				if (error && error._server_messages) {
+					try {
+						const msgs = JSON.parse(error._server_messages);
+						if (Array.isArray(msgs) && msgs.length) {
+							const parsed = JSON.parse(msgs[0]);
+							frappe.show_alert({ message: parsed.message || parsed, indicator: "red" });
+						} else {
+							frappe.show_alert({ message: this.__("Error saving invoice") + ": " + error.message, indicator: "red" });
+						}
+					} catch (e) {
+						frappe.show_alert({ message: this.__("Error saving invoice") + ": " + (error.message || error), indicator: "red" });
+					}
+				} else {
+					frappe.show_alert({
+						message: this.__("Error saving invoice: ") + (error.message || error),
+						indicator: "red",
+					});
+				}
 				return null;
 			} finally {
-				// Force UI refresh if needed
 				this.$nextTick(() => this.$forceUpdate && this.$forceUpdate());
 			}
 		},

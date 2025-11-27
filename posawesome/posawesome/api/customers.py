@@ -14,9 +14,9 @@ from frappe.exceptions import ValidationError, LinkValidationError, DoesNotExist
 
 from decimal import Decimal, InvalidOperation
 
-# Define the DocType here too for the get_customer_info function
-VEHICLE_DOCTYPE = "Vehicle Master"
-
+# Clarify doctypes:
+VEHICLE_DOCTYPE = "Vehicle"          # ERPNext Vehicle doctype
+VM_DOCTYPE = "Vehicle Master"        # Your custom Vehicle Master doctype (linked to Vehicle)
 
 # ---------------- LOYALTY POINTS FUNCTIONS ----------------
 
@@ -298,26 +298,40 @@ def get_customers_count(pos_profile=None):
         return 0
 
 
+def _existing_fields(doctype, candidates):
+    """
+    Return a list of candidate fieldnames that actually exist on the given doctype.
+    Prevents SQL errors when different sites have slightly different doctype schemas.
+    """
+    try:
+        meta = frappe.get_meta(doctype)
+        existing = {f.fieldname for f in meta.fields}
+        return [f for f in candidates if f in existing]
+    except Exception:
+        # be conservative: if meta lookup fails, only allow 'name'
+        return [f for f in candidates if f == "name"] or ["name"]
+
+
 @frappe.whitelist()
 def get_customer_info(customer):
-    """Get comprehensive customer information including vehicles"""
+    """Get comprehensive customer information including vehicles (defensive about missing fields)."""
     customer_doc = frappe.get_doc("Customer", customer)
 
     res = {"loyalty_points": 0, "conversion_factor": 0}
 
     # --- Standard fields ---
-    res["email_id"] = customer_doc.email_id
-    res["mobile_no"] = customer_doc.mobile_no
-    res["image"] = customer_doc.image
-    res["loyalty_program"] = customer_doc.loyalty_program
-    res["customer_price_list"] = customer_doc.default_price_list
-    res["customer_group"] = customer_doc.customer_group
-    res["customer_type"] = customer_doc.customer_type
-    res["territory"] = customer_doc.territory
-    res["birthday"] = customer_doc.posa_birthday
-    res["gender"] = customer_doc.gender
-    res["tax_id"] = customer_doc.tax_id
-    res["posa_discount"] = customer_doc.posa_discount
+    res["email_id"] = getattr(customer_doc, "email_id", None)
+    res["mobile_no"] = getattr(customer_doc, "mobile_no", None)
+    res["image"] = getattr(customer_doc, "image", None)
+    res["loyalty_program"] = getattr(customer_doc, "loyalty_program", None)
+    res["customer_price_list"] = getattr(customer_doc, "default_price_list", None)
+    res["customer_group"] = getattr(customer_doc, "customer_group", None)
+    res["customer_type"] = getattr(customer_doc, "customer_type", None)
+    res["territory"] = getattr(customer_doc, "territory", None)
+    res["birthday"] = getattr(customer_doc, "posa_birthday", None)
+    res["gender"] = getattr(customer_doc, "gender", None)
+    res["tax_id"] = getattr(customer_doc, "tax_id", None)
+    res["posa_discount"] = getattr(customer_doc, "posa_discount", None)
     res["name"] = customer_doc.name
     res["customer_name"] = customer_doc.customer_name
     res["customer_group_price_list"] = frappe.get_value(
@@ -327,17 +341,13 @@ def get_customer_info(customer):
     # Loyalty Points
     if customer_doc.loyalty_program:
         current_company = frappe.db.get_single_value("Global Defaults", "default_company") or "webtree"
-
         conversion_factor = frappe.db.get_value(
             "Loyalty Program", customer_doc.loyalty_program, "conversion_factor"
         )
         res["conversion_factor"] = flt(conversion_factor) or 1
+        res["loyalty_points"] = get_loyalty_points(customer_doc.name, customer_doc.loyalty_program, current_company)
 
-        # Get loyalty points using the helper function
-        loyalty_points = get_loyalty_points(customer_doc.name, customer_doc.loyalty_program, current_company)
-        res["loyalty_points"] = loyalty_points
-
-    # --- Address Query ---
+    # --- Address Query (unchanged) ---
     addresses = frappe.db.sql(
         """
         SELECT
@@ -371,28 +381,47 @@ def get_customer_info(customer):
         res["state"] = addr.state or ""
         res["country"] = addr.country or ""
 
-    # --- Vehicles with customer details ---
-    vehicles = frappe.get_all(
-        VEHICLE_DOCTYPE,
-        filters={"customer": customer_doc.name},
-        fields=["name", "vehicle_no"],
-        limit_page_length=10,
-    )
+    # --- Vehicles with customer details (defensive) ---
+    candidates = ["name", "vehicle_no", "model", "make", "odometer", "chasis_no"]
 
-    res["vehicles"] = [
-        {
-            "name": v.name,
-            "vehicle_no": v.vehicle_no,
-            "model": v.get("model", ""),
-            "make": v.get("make", ""),
-            "chasis_no": v.get("chasis_no", ""),
+    vehicles = []
+    # Try VM_DOCTYPE first (Vehicle Master)
+    try:
+        fields = _existing_fields(VM_DOCTYPE, candidates)
+        if fields:
+            vehicles = frappe.get_all(VM_DOCTYPE, filters={"customer": customer_doc.name}, fields=fields, limit_page_length=10)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Error fetching vehicles from VM_DOCTYPE")
+        vehicles = []
+
+    # Fallback: try standard VEHICLE_DOCTYPE
+    if not vehicles:
+        try:
+            fallback_doctype = VEHICLE_DOCTYPE or "Vehicle"
+            fields = _existing_fields(fallback_doctype, candidates)
+            if fields:
+                vehicles = frappe.get_all(fallback_doctype, filters={"customer": customer_doc.name}, fields=fields, limit_page_length=10)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Error fetching vehicles from fallback Vehicle doctype")
+            vehicles = []
+
+    # Normalize response
+    res["vehicles"] = []
+    for v in vehicles:
+        vehicle_no = v.get("vehicle_no") or v.get("name")
+        if not vehicle_no:
+            continue
+        res["vehicles"].append({
+            "name": v.get("name"),
+            "vehicle_no": vehicle_no,
+            "model": v.get("model", "") if isinstance(v, dict) else "",
+            "make": v.get("make", "") if isinstance(v, dict) else "",
+            "odometer": v.get("odometer", "") if isinstance(v, dict) else "",
+            "chasis_no": v.get("chasis_no", "") if isinstance(v, dict) else "",
             "customer_name": customer_doc.customer_name,
             "mobile_no": customer_doc.mobile_no,
             "customer": customer_doc.name,
-        }
-        for v in vehicles
-        if v.get("vehicle_no")
-    ]
+        })
 
     if res["vehicles"]:
         res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
@@ -530,9 +559,9 @@ def _build_customer_info(customer_name):
 
     # --- Vehicles with customer details ---
     vehicles = frappe.get_all(
-        VEHICLE_DOCTYPE,
+        VM_DOCTYPE,
         filters={"customer": customer_doc.name},
-        fields=["name", "vehicle_no", "model", "make", "chasis_no"],
+        fields=["name", "vehicle_no", "model", "make", "chasis_no", "odometer"],
         limit_page_length=10,
     )
 
@@ -543,6 +572,7 @@ def _build_customer_info(customer_name):
             "model": v.get("model", ""),
             "make": v.get("make", ""),
             "chasis_no": v.get("chasis_no", ""),
+            "odometer": v.get("odometer", ""),
             "customer_name": customer_doc.customer_name,
             "mobile_no": customer_doc.mobile_no,
             "customer": customer_doc.name,
@@ -592,7 +622,7 @@ def get_customer_by_vehicle(vehicle_no):
 
     try:
         vehicle_data = frappe.get_all(
-            VEHICLE_DOCTYPE,
+            VM_DOCTYPE,
             filters={"vehicle_no": vehicle_no},
             fields=["name", "customer", "model", "chasis_no", "vehicle_no"],
             limit_page_length=1,
@@ -637,18 +667,12 @@ def get_customer_by_vehicle(vehicle_no):
 
 
 def _parse_numeric(value):
-    """Convert value to Decimal (preferred) or float/int fallback; return None if invalid."""
     if value is None or value == "":
         return None
-    # already numeric
-    if isinstance(value, (int, float, Decimal)):
-        return Decimal(str(value))
-    # try to parse strings
     try:
-        # strip commas and whitespace
         s = str(value).replace(",", "").strip()
         return Decimal(s)
-    except (InvalidOperation, ValueError, TypeError):
+    except Exception:
         try:
             return Decimal(str(float(s)))
         except Exception:
@@ -656,440 +680,395 @@ def _parse_numeric(value):
 
 
 def _set_odometer_on_doc(doc, od_value):
-    """
-    Write odometer value to doc on common odometer-like fields that exist.
-    Returns True if any field was set.
-    """
     if od_value is None:
         return False
-
     set_any = False
-    # prefer a canonical 'odometer' field if present
     for fname in ("odometer", "odometer_value_last", "odometer_value", "odometer_reading"):
         if hasattr(doc, fname):
             try:
-                # use Decimal for numeric precision
                 setattr(doc, fname, od_value)
                 set_any = True
             except Exception:
-                # if direct set fails (rare), skip it
                 pass
-
-    # if there is a generic numeric field (like Float or Int), try 'odometer' fallback
     if not set_any and hasattr(doc, "odometer"):
         try:
             doc.odometer = od_value
             set_any = True
         except Exception:
             pass
-
     return set_any
 
 
-@frappe.whitelist()
-def create_customer_with_vehicle(customer, vehicle, company, pos_profile_doc):
+def _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc=None):
     """
-    Create/update Customer and create Vehicle (ERPNext) + Vehicle Master safely,
-    link Vehicle Master to Customer.custom_vehicle_no, and robustly write odometer
-    into both Vehicle and Vehicle Master when present.
+    Return a Decimal/number odometer candidate found either in vehicle_data
+    (payload) or on an existing vehicle_doc. Returns None if nothing found.
     """
-
-    import json
-    from decimal import Decimal, InvalidOperation
-    from frappe.exceptions import ValidationError, LinkValidationError
-
-    def _clear_vehicle_links_on_customer(doc):
-        try:
-            meta = frappe.get_meta("Customer")
-            for f in meta.fields:
-                if f.fieldtype == "Link" and (f.options or "").strip() in ("Vehicle", "Vehicle Master"):
-                    if getattr(doc, f.fieldname, None):
-                        setattr(doc, f.fieldname, None)
-            if hasattr(doc, "custom_vehicle_no") and getattr(doc, "custom_vehicle_no", None):
-                setattr(doc, "custom_vehicle_no", None)
-        except Exception:
-            frappe.log_error(frappe.get_traceback(), "clear_vehicle_links_on_customer error")
-
-    def _parse_numeric(value):
-        """Convert value to Decimal. Return None if not parseable."""
-        if value is None or value == "":
-            return None
-        # if already numeric
-        if isinstance(value, (int, float, Decimal)):
-            try:
-                return Decimal(str(value))
-            except Exception:
-                return None
-        s = str(value).strip()
-        # remove common thousand separators
-        s = s.replace(",", "")
-        try:
-            return Decimal(s)
-        except (InvalidOperation, ValueError, TypeError):
-            try:
-                return Decimal(str(float(s)))
-            except Exception:
-                return None
-
-    def _set_odometer_on_doc(doc, od_value):
-        """
-        Write odometer value to doc on common odometer-like fields that exist.
-        Returns True if any field was set.
-        """
-        if od_value is None:
-            return False
-
-        set_any = False
-        for fname in ("odometer", "odometer_value_last", "odometer_value", "odometer_reading"):
-            if hasattr(doc, fname):
-                try:
-                    setattr(doc, fname, od_value)
-                    set_any = True
-                except Exception:
-                    # skip failing writes
-                    pass
-
-        # fallback try 'odometer' if no named fields were present
-        if not set_any and hasattr(doc, "odometer"):
-            try:
-                doc.odometer = od_value
-                set_any = True
-            except Exception:
-                pass
-
-        return set_any
-
-    def _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc=None):
-        """Try payload keys first, then vehicle_doc fields as fallback. Returns Decimal or None."""
-        candidates = [
-            "odometer",
-            "odometer_value_last",
-            "odometer_value",
-            "odometer_last",
-            "odometer_reading",
-        ]
+    candidates = ["odometer", "odometer_value_last", "odometer_value", "odometer_last", "odometer_reading"]
+    for k in candidates:
+        if vehicle_data and vehicle_data.get(k) not in (None, ""):
+            parsed = _parse_numeric(vehicle_data.get(k))
+            if parsed is not None:
+                return parsed
+    if vehicle_doc:
         for k in candidates:
-            if vehicle_data and vehicle_data.get(k) not in (None, ""):
-                parsed = _parse_numeric(vehicle_data.get(k))
+            v = getattr(vehicle_doc, k, None)
+            if v not in (None, ""):
+                parsed = _parse_numeric(v)
                 if parsed is not None:
                     return parsed
-        # fallback to vehicle_doc if provided
-        if vehicle_doc:
-            for k in candidates + ["odometer", "odometer_value_last"]:
-                v = getattr(vehicle_doc, k, None)
-                if v not in (None, ""):
-                    parsed = _parse_numeric(v)
-                    if parsed is not None:
-                        return parsed
-        return None
+    return None
 
+
+@frappe.whitelist()
+def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_doc=None):
+    """
+    Create or update customer and create/update corresponding Vehicle & Vehicle Master (VM).
+    Accepts JSON strings (as the frontend sends stringified JSON).
+    Returns: {"customer": {...}, "vehicle": {...}} on success.
+    """
     try:
         customer_data = json.loads(customer) if isinstance(customer, str) else (customer or {})
         vehicle_data = json.loads(vehicle) if isinstance(vehicle, str) else (vehicle or {})
-        pos_profile = (
-            json.loads(pos_profile_doc) if isinstance(pos_profile_doc, str) else (pos_profile_doc or {})
-        )
 
-        method = (customer_data.pop("method", "create") or "create").lower()
-        customer_id = customer_data.get("customer_id")
-        vehicle_no = (vehicle_data or {}).get("vehicle_no")
+        method = (customer_data.get("method") or "create").lower()
+        customer_id = customer_data.get("customer_id") or None
+        vehicle_no_from_payload = (vehicle_data or {}).get("vehicle_no") or None
 
-        # ---------- UPDATE ----------
+        # ---------- UPDATE OR CREATE CUSTOMER ----------
         if method == "update" and customer_id:
-            customer_doc = frappe.get_doc("Customer", customer_id)
+            cust = frappe.get_doc("Customer", customer_id)
+            # update safe fields if provided
             for fld in [
                 "customer_name",
                 "tax_id",
                 "mobile_no",
                 "email_id",
-                "customer_group",
-                "territory",
                 "customer_type",
                 "gender",
                 "referral_code",
             ]:
                 if fld in customer_data and customer_data.get(fld) is not None:
-                    setattr(customer_doc, fld, customer_data.get(fld))
+                    setattr(cust, fld, customer_data.get(fld))
+            if customer_data.get("customer_group") is not None:
+                cust.customer_group = customer_data.get("customer_group")
+            if customer_data.get("territory") is not None:
+                cust.territory = customer_data.get("territory")
             if customer_data.get("birthday"):
-                customer_doc.posa_birthday = customer_data.get("birthday")
-
-            _clear_vehicle_links_on_customer(customer_doc)
-            customer_doc.save(ignore_permissions=True)
-            frappe.db.commit()
-
-        # ---------- CREATE ----------
-        else:
-            customer_doc = frappe.new_doc("Customer")
-            customer_doc.customer_name = customer_data.get("customer_name")
-            customer_doc.customer_type = customer_data.get("customer_type", "Individual")
-            customer_doc.customer_group = customer_data.get("customer_group")
-            customer_doc.territory = customer_data.get("territory")
-
-            if customer_data.get("tax_id"):
-                customer_doc.tax_id = customer_data.get("tax_id")
-            if customer_data.get("mobile_no"):
-                customer_doc.mobile_no = customer_data.get("mobile_no")
-            if customer_data.get("email_id"):
-                customer_doc.email_id = customer_data.get("email_id")
-            if customer_data.get("gender"):
-                customer_doc.gender = customer_data.get("gender")
-            if customer_data.get("referral_code"):
-                customer_doc.posa_referral_code = customer_data.get("referral_code")
-            if customer_data.get("birthday"):
-                customer_doc.posa_birthday = customer_data.get("birthday")
-
-            if hasattr(customer_doc, "custom_vehicle_no"):
-                customer_doc.custom_vehicle_no = None
-            _clear_vehicle_links_on_customer(customer_doc)
-
-            customer_doc.insert(ignore_permissions=True)
-            frappe.db.commit()
-
-            if customer_data.get("address_line1"):
                 try:
-                    create_customer_address(
-                        customer_doc.name,
-                        customer_data.get("address_line1"),
-                        customer_data.get("city"),
-                        customer_data.get("country", "Pakistan"),
-                    )
+                    cust.posa_birthday = customer_data.get("birthday")
                 except Exception:
-                    frappe.log_error(frappe.get_traceback(), "create_customer_address error")
+                    pass
+            try:
+                cust.save(ignore_permissions=True)
+                frappe.db.commit()
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "Customer update save error")
+            customer_doc = cust
+        else:
+            # create
+            cd = customer_data
+            customer_doc = frappe.new_doc("Customer")
+            customer_doc.customer_name = cd.get("customer_name")
+            customer_doc.customer_type = cd.get("customer_type", "Individual")
+            customer_doc.customer_group = cd.get(
+                "customer_group"
+            ) or frappe.defaults.get_user_default("Customer Group")
+            customer_doc.territory = cd.get("territory") or frappe.defaults.get_user_default("Territory")
+            if cd.get("tax_id"):
+                customer_doc.tax_id = cd.get("tax_id")
+            if cd.get("mobile_no"):
+                customer_doc.mobile_no = cd.get("mobile_no")
+            if cd.get("email_id"):
+                customer_doc.email_id = cd.get("email_id")
+            if cd.get("gender"):
+                customer_doc.gender = cd.get("gender")
+            if cd.get("referral_code"):
+                customer_doc.posa_referral_code = cd.get("referral_code")
+            if cd.get("birthday"):
+                try:
+                    customer_doc.posa_birthday = cd.get("birthday")
+                except Exception:
+                    pass
+            try:
+                customer_doc.insert(ignore_permissions=True)
+                frappe.db.commit()
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "Customer create error")
+                raise
 
-        # ---------- VEHICLE (ERPNext) creation — create Vehicle first ----------
+        # ---------- VEHICLE (existing or create) ----------
         vehicle_doc = None
         vm_doc = None
 
-        if vehicle_no:
+        # determine effective vehicle identifier to operate on
+        effective_vehicle_no = vehicle_no_from_payload
+        if not effective_vehicle_no:
+            # prefer custom_vehicle_no or vehicle_no fields on customer if present
+            if hasattr(customer_doc, "custom_vehicle_no") and getattr(customer_doc, "custom_vehicle_no"):
+                effective_vehicle_no = getattr(customer_doc, "custom_vehicle_no")
+            elif hasattr(customer_doc, "vehicle_no") and getattr(customer_doc, "vehicle_no"):
+                effective_vehicle_no = getattr(customer_doc, "vehicle_no")
+
+        # only act on vehicles if we have an identifier
+        if effective_vehicle_no:
             try:
-                # fetch existing Vehicle if present
-                if frappe.db.exists("Vehicle", vehicle_no):
-                    vehicle_doc = frappe.get_doc("Vehicle", vehicle_no)
-                    # if incoming odometer present, write it to existing Vehicle
-                    od_val_existing = _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc)
-                    if od_val_existing is not None:
-                        if _set_odometer_on_doc(vehicle_doc, od_val_existing):
-                            vehicle_doc.save(ignore_permissions=True)
-                            frappe.db.commit()
-                else:
-                    v = frappe.new_doc("Vehicle")
-
-                    # map incoming fields (defensively)
-                    if vehicle_data.get("make") is not None:
-                        v.make = vehicle_data.get("make")
-                    if vehicle_data.get("model") is not None:
-                        # check existence of Vehicle Model link before assigning if it's Link
-                        if frappe.db.exists("Vehicle Model", vehicle_data.get("model")):
-                            v.model = vehicle_data.get("model")
-                        else:
-                            # leave blank rather than assigning invalid link
-                            pass
-
-                    if vehicle_data.get("mobile_no") is not None:
-                        if hasattr(v, "tel_mobile"):
-                            v.tel_mobile = vehicle_data.get("mobile_no")
-                        elif hasattr(v, "mobile_no"):
-                            v.mobile_no = vehicle_data.get("mobile_no")
-
-                    # fill required fields defensively from meta
+                # --- EXISTING ERPNext Vehicle ---
+                if frappe.db.exists(VEHICLE_DOCTYPE, effective_vehicle_no):
+                    vehicle_doc = frappe.get_doc(VEHICLE_DOCTYPE, effective_vehicle_no)
                     try:
-                        vehicle_meta = frappe.get_meta("Vehicle")
+                        # defensive updates
+                        if vehicle_data.get("make") is not None and hasattr(vehicle_doc, "make"):
+                            vehicle_doc.make = vehicle_data.get("make")
+                        if vehicle_data.get("model") is not None:
+                            try:
+                                if frappe.db.exists("Vehicle Model", vehicle_data.get("model")):
+                                    vehicle_doc.model = vehicle_data.get("model")
+                                else:
+                                    if hasattr(vehicle_doc, "model"):
+                                        vehicle_doc.model = vehicle_data.get("model")
+                            except Exception:
+                                if hasattr(vehicle_doc, "model"):
+                                    vehicle_doc.model = vehicle_data.get("model")
+                        if vehicle_data.get("mobile_no") is not None:
+                            if hasattr(vehicle_doc, "tel_mobile"):
+                                vehicle_doc.tel_mobile = vehicle_data.get("mobile_no")
+                            elif hasattr(vehicle_doc, "mobile_no"):
+                                vehicle_doc.mobile_no = vehicle_data.get("mobile_no")
+                        # odometer
+                        od_val = _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc)
+                        if od_val is not None:
+                            _set_odometer_on_doc(vehicle_doc, od_val)
+
+                        # ensure stable identifier and link to customer before saving
+                        if effective_vehicle_no:
+                            if hasattr(vehicle_doc, "vehicle_no"):
+                                vehicle_doc.vehicle_no = effective_vehicle_no
+                            elif hasattr(vehicle_doc, "license_plate"):
+                                vehicle_doc.license_plate = effective_vehicle_no
+                        if hasattr(vehicle_doc, "customer"):
+                            vehicle_doc.customer = customer_doc.name
+
+                        vehicle_doc.save(ignore_permissions=True)
+                        frappe.db.commit()
                     except Exception:
-                        vehicle_meta = None
+                        frappe.log_error(frappe.get_traceback(), "Vehicle update error")
 
-                    if vehicle_meta:
-                        for f in vehicle_meta.fields:
-                            if getattr(f, "reqd", False):
-                                fname = f.fieldname
-                                if fname == "name":
-                                    continue
-                                if vehicle_data and vehicle_data.get(fname) not in (None, ""):
-                                    # if Link, verify existence
-                                    if f.fieldtype == "Link":
-                                        if frappe.db.exists(f.options, vehicle_data.get(fname)):
-                                            setattr(v, fname, vehicle_data.get(fname))
-                                        else:
-                                            # skip invalid link
-                                            pass
-                                    else:
-                                        setattr(v, fname, vehicle_data.get(fname))
-                                    continue
-                                if fname in ("license_plate", "plate_no", "plate", "vehicle_no"):
-                                    setattr(v, fname, vehicle_no)
-                                    continue
-                                if fname in ("odometer_value_last", "odometer"):
-                                    od_tmp = _extract_odometer_from_payload_or_doc(vehicle_data, None)
-                                    setattr(v, fname, od_tmp if od_tmp is not None else 0)
-                                    continue
-                                if fname in ("fuel_uom", "fuel_type"):
-                                    setattr(v, fname, vehicle_data.get(fname) or "L")
-                                    continue
-                                setattr(v, fname, vehicle_data.get(fname) or "")
+                else:
+                    # --- CREATE ERPNext Vehicle ---
+                    v = frappe.new_doc(VEHICLE_DOCTYPE)
+                    try:
+                        if vehicle_data.get("make") is not None and hasattr(v, "make"):
+                            v.make = vehicle_data.get("make")
+                        if vehicle_data.get("model") is not None and hasattr(v, "model"):
+                            v.model = vehicle_data.get("model")
+                        if vehicle_data.get("mobile_no") is not None:
+                            if hasattr(v, "tel_mobile"):
+                                v.tel_mobile = vehicle_data.get("mobile_no")
+                            elif hasattr(v, "mobile_no"):
+                                v.mobile_no = vehicle_data.get("mobile_no")
 
-                    # minimal defaults
-                    if not getattr(v, "make", None):
-                        v.make = vehicle_data.get("make") or "Unknown"
-                    if not getattr(v, "model", None):
-                        v.model = vehicle_data.get("model") or None
-                    if not getattr(v, "license_plate", None) and not getattr(v, "vehicle_no", None):
+                        # set obvious identifier fields if they exist
+                        if effective_vehicle_no:
+                            if hasattr(v, "vehicle_no"):
+                                v.vehicle_no = effective_vehicle_no
+                            elif hasattr(v, "license_plate"):
+                                try:
+                                    v.license_plate = effective_vehicle_no
+                                except Exception:
+                                    pass
+
+                        # link to customer if possible
+                        if hasattr(v, "customer"):
+                            v.customer = customer_doc.name
+
+                        # odometer
+                        od_val = _extract_odometer_from_payload_or_doc(vehicle_data, None)
+                        if od_val is not None:
+                            _set_odometer_on_doc(v, od_val)
+
+                        # attempt to set name if autoname uses a field that matches
                         try:
-                            v.license_plate = vehicle_no
+                            meta = frappe.get_meta(VEHICLE_DOCTYPE)
+                            if getattr(meta, "autoname", "").startswith("field:"):
+                                name_field = meta.autoname.split(":", 1)[1]
+                                if name_field in ("license_plate", "vehicle_no", "plate", "plate_no"):
+                                    v.name = effective_vehicle_no
                         except Exception:
                             pass
 
-                    # attempt to set name if Vehicle autoname expects a field that matches vehicle_no
-                    try:
-                        vehicle_autoname = (vehicle_meta.autoname or "").strip() if vehicle_meta else ""
-                        if vehicle_autoname.startswith("field:"):
-                            name_field = vehicle_autoname.split(":", 1)[1]
-                            if name_field in ("license_plate", "vehicle_no", "plate", "plate_no"):
-                                v.name = vehicle_no
-                    except Exception:
-                        pass
-
-                    # write odometer values robustly
-                    od_val = _extract_odometer_from_payload_or_doc(vehicle_data, None)
-                    if od_val is not None:
-                        _set_odometer_on_doc(v, od_val)
-
-                    # insert vehicle doc (tolerant strategy)
-                    try:
                         v.insert(ignore_permissions=True)
-                    except LinkValidationError:
-                        # clear invalid link fields and retry
-                        for f in vehicle_meta.fields or []:
-                            if f.fieldtype == "Link":
-                                val = getattr(v, f.fieldname, None)
-                                if val and not frappe.db.exists(f.options, val):
-                                    setattr(v, f.fieldname, None)
-                        v.insert(ignore_permissions=True)
-                    except Exception:
-                        # retry without forced name if necessary
-                        if hasattr(v, "name"):
-                            try:
-                                delattr(v, "name")
-                            except Exception:
-                                pass
-                        v.insert(ignore_permissions=True)
-
-                    frappe.db.commit()
-                    vehicle_doc = v
-
-            except Exception:
-                frappe.log_error(frappe.get_traceback(), "Vehicle creation error")
-                vehicle_doc = None
-
-            # ---------- VEHICLE MASTER creation: create VM linking to Vehicle ----------
-            try:
-                vm_meta = None
-                try:
-                    vm_meta = frappe.get_meta("Vehicle Master")
-                except Exception:
-                    vm_meta = None
-
-                if vehicle_doc:
-                    # existing VM (same name)
-                    if frappe.db.exists("Vehicle Master", vehicle_doc.name):
-                        vm_doc = frappe.get_doc("Vehicle Master", vehicle_doc.name)
-                        # update odometer if provided
-                        od_val = _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc)
-                        if od_val is not None:
-                            if _set_odometer_on_doc(vm_doc, od_val):
-                                vm_doc.save(ignore_permissions=True)
-                                frappe.db.commit()
-                    else:
-                        vm = frappe.new_doc("Vehicle Master")
-                        vm.name = vehicle_doc.name
-                        vm.vehicle_no = vehicle_doc.name
-                        vm.customer = customer_doc.name
-                        if vehicle_data.get("make") is not None:
-                            vm.make = vehicle_data.get("make")
-                        if vehicle_data.get("model") is not None:
-                            # only set if Vehicle Model exists
-                            if frappe.db.exists("Vehicle Model", vehicle_data.get("model")):
-                                vm.model = vehicle_data.get("model")
-                        if vehicle_data.get("mobile_no") is not None:
-                            vm.tel_mobile = vehicle_data.get("mobile_no")
-                        od_val = _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc)
-                        if od_val is not None:
-                            _set_odometer_on_doc(vm, od_val)
-                        # insert VM
-                        try:
-                            vm.insert(ignore_permissions=True)
-                        except LinkValidationError:
-                            # clear invalid link fields and retry
-                            for f in vm_meta.fields or []:
-                                if f.fieldtype == "Link":
-                                    val = getattr(vm, f.fieldname, None)
-                                    if val and not frappe.db.exists(f.options, val):
-                                        setattr(vm, f.fieldname, None)
-                            vm.insert(ignore_permissions=True)
                         frappe.db.commit()
-                        vm_doc = vm
-                else:
-                    # existing VM by vehicle_no
-                    if frappe.db.exists("Vehicle Master", vehicle_no):
-                        vm_doc = frappe.get_doc("Vehicle Master", vehicle_no)
-                        od_val = _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc)
-                        if od_val is not None:
-                            if _set_odometer_on_doc(vm_doc, od_val):
+                        vehicle_doc = v
+                    except Exception:
+                        frappe.log_error(frappe.get_traceback(), "Vehicle create error")
+                        vehicle_doc = None
+
+                # --- VEHICLE MASTER (VM) create/update ---
+                try:
+                    if vehicle_doc and frappe.db.exists(VM_DOCTYPE, vehicle_doc.name):
+                        vm_doc = frappe.get_doc(VM_DOCTYPE, vehicle_doc.name)
+                        try:
+                            if vehicle_data.get("make") is not None and hasattr(vm_doc, "make"):
+                                vm_doc.make = vehicle_data.get("make")
+                            if vehicle_data.get("model") is not None and hasattr(vm_doc, "model"):
+                                try:
+                                    if frappe.db.exists("Vehicle Model", vehicle_data.get("model")):
+                                        vm_doc.model = vehicle_data.get("model")
+                                    else:
+                                        vm_doc.model = vehicle_data.get("model")
+                                except Exception:
+                                    vm_doc.model = vehicle_data.get("model")
+                            if vehicle_data.get("mobile_no") is not None:
+                                if hasattr(vm_doc, "tel_mobile"):
+                                    vm_doc.tel_mobile = vehicle_data.get("mobile_no")
+                                elif hasattr(vm_doc, "mobile_no"):
+                                    vm_doc.mobile_no = vehicle_data.get("mobile_no")
+                            od_val = _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc)
+                            if od_val is not None:
+                                _set_odometer_on_doc(vm_doc, od_val)
+
+                            # ensure vm has vehicle identifier and customer link
+                            if hasattr(vm_doc, "vehicle_no"):
+                                vm_doc.vehicle_no = getattr(vehicle_doc, "vehicle_no", getattr(vehicle_doc, "name", None))
+                            if hasattr(vm_doc, "customer"):
+                                vm_doc.customer = customer_doc.name
+
+                            vm_doc.save(ignore_permissions=True)
+                            frappe.db.commit()
+                        except Exception:
+                            frappe.log_error(frappe.get_traceback(), "VM update error")
+                    elif vehicle_doc:
+                        # create new VM from vehicle_doc
+                        vm = frappe.new_doc(VM_DOCTYPE)
+                        try:
+                            vm.name = vehicle_doc.name
+                            if hasattr(vm, "vehicle_no"):
+                                vm.vehicle_no = getattr(vehicle_doc, "vehicle_no", getattr(vehicle_doc, "name", None))
+                            if hasattr(vm, "customer"):
+                                vm.customer = customer_doc.name
+                            if vehicle_data.get("make") is not None and hasattr(vm, "make"):
+                                vm.make = vehicle_data.get("make")
+                            if vehicle_data.get("model") is not None and hasattr(vm, "model"):
+                                vm.model = vehicle_data.get("model")
+                            if vehicle_data.get("mobile_no") is not None and hasattr(vm, "tel_mobile"):
+                                vm.tel_mobile = vehicle_data.get("mobile_no")
+                            od_val = _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc)
+                            if od_val is not None:
+                                _set_odometer_on_doc(vm, od_val)
+                            vm.insert(ignore_permissions=True)
+                            frappe.db.commit()
+                            vm_doc = vm
+                        except Exception:
+                            frappe.log_error(frappe.get_traceback(), "VM create error")
+                            vm_doc = None
+                    else:
+                        # fallback: VM exists by effective_vehicle_no
+                        if effective_vehicle_no and frappe.db.exists(VM_DOCTYPE, effective_vehicle_no):
+                            vm_doc = frappe.get_doc(VM_DOCTYPE, effective_vehicle_no)
+                            try:
+                                od_val = _extract_odometer_from_payload_or_doc(vehicle_data, None)
+                                if od_val is not None:
+                                    _set_odometer_on_doc(vm_doc, od_val)
+                                # ensure vm is linked to customer
+                                if hasattr(vm_doc, "customer"):
+                                    vm_doc.customer = customer_doc.name
+                                if hasattr(vm_doc, "vehicle_no"):
+                                    vm_doc.vehicle_no = effective_vehicle_no
                                 vm_doc.save(ignore_permissions=True)
                                 frappe.db.commit()
+                            except Exception:
+                                frappe.log_error(frappe.get_traceback(), "VM update fallback error")
+                except Exception:
+                    frappe.log_error(frappe.get_traceback(), "Vehicle Master logic error")
 
             except Exception:
-                frappe.log_error(frappe.get_traceback(), "Vehicle Master creation error")
-                vm_doc = None
+                frappe.log_error(frappe.get_traceback(), "vehicle block error")
 
-        # ---------- LINK back to customer using custom_vehicle_no ----------
-        if vm_doc:
-            try:
+        # Link VM back to customer in customer_doc fields (defensive)
+        try:
+            if vm_doc:
                 if hasattr(customer_doc, "custom_vehicle_no"):
                     customer_doc.custom_vehicle_no = vm_doc.name
-                else:
+                elif hasattr(customer_doc, "vehicle_no"):
                     customer_doc.vehicle_no = vm_doc.name
                 customer_doc.save(ignore_permissions=True)
                 frappe.db.commit()
-            except Exception:
-                frappe.log_error(frappe.get_traceback(), "Failed to link VM to Customer")
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Failed to link VM to Customer")
 
-        # ---------- BUILD RESPONSE ----------
+        # Build response
         customer_response = {
             "name": customer_doc.name,
             "customer_name": customer_doc.customer_name,
             "mobile_no": customer_doc.mobile_no,
             "email_id": customer_doc.email_id,
             "tax_id": customer_doc.tax_id,
-            "customer_group": customer_doc.customer_group,
-            "territory": customer_doc.territory,
-            "gender": customer_doc.gender,
-            "birthday": getattr(customer_doc, "posa_birthday", None),
-            "referral_code": getattr(customer_doc, "posa_referral_code", None),
-            "vehicle_no": getattr(customer_doc, "custom_vehicle_no", None)
-            or getattr(customer_doc, "vehicle_no", None),
-            "loyalty_program": getattr(customer_doc, "loyalty_program", None),
-            "loyalty_points": getattr(customer_doc, "loyalty_points", None),
+            "customer_group": getattr(customer_doc, "customer_group", None),
+            "territory": getattr(customer_doc, "territory", None),
         }
 
         vehicle_response = None
         if vm_doc:
             vehicle_response = {
-                "name": vm_doc.name,
-                "vehicle_no": vm_doc.vehicle_no,
+                "name": getattr(vm_doc, "name", None),
+                "vehicle_no": getattr(vm_doc, "vehicle_no", None) or getattr(vm_doc, "name", None),
                 "make": getattr(vm_doc, "make", None),
                 "model": getattr(vm_doc, "model", None),
-                "mobile_no": getattr(vm_doc, "tel_mobile", None),
+                "mobile_no": getattr(vm_doc, "tel_mobile", None) or getattr(vm_doc, "mobile_no", None),
                 "customer": getattr(vm_doc, "customer", None),
                 "odometer": getattr(vm_doc, "odometer", None),
+            }
+        elif vehicle_doc:
+            vehicle_response = {
+                "name": getattr(vehicle_doc, "name", None),
+                "vehicle_no": getattr(vehicle_doc, "vehicle_no", None) or getattr(vehicle_doc, "name", None),
+                "make": getattr(vehicle_doc, "make", None),
+                "model": getattr(vehicle_doc, "model", None),
+                "mobile_no": getattr(vehicle_doc, "tel_mobile", None) or getattr(vehicle_doc, "mobile_no", None),
+                "customer": getattr(vehicle_doc, "customer", None),
+                "odometer": getattr(vehicle_doc, "odometer", None),
             }
 
         return {"customer": customer_response, "vehicle": vehicle_response}
 
-    except (ValidationError, LinkValidationError):
-        raise
-
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "create_customer_with_vehicle - Unexpected")
         frappe.throw(_("Failed to create/update customer: {0}").format(str(e)))
+
+
+@frappe.whitelist()
+def update_customer_api(customer, vehicle=None, pos_profile_doc=None):
+    """
+    Simple wrapper to call create_customer_with_vehicle with method=update.
+    """
+    try:
+        c = json.loads(customer) if isinstance(customer, str) else (customer or {})
+        c["method"] = "update"
+        # ensure there is an identifier: accept customer_id or name
+        if not (c.get("customer_id") or c.get("name") or c.get("customer")):
+            frappe.throw(_("customer_id (existing Customer.name) is required for update"))
+        return create_customer_with_vehicle(json.dumps(c), json.dumps(vehicle or {}), "", pos_profile_doc or "{}")
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "update_customer_api error")
+        return {"error": True, "message": str(e)}
+
+
+@frappe.whitelist()
+def update_customer_api(customer, vehicle=None, pos_profile_doc=None):
+    """
+    Simple wrapper to call create_customer_with_vehicle with method=update.
+    """
+    try:
+        c = json.loads(customer) if isinstance(customer, str) else (customer or {})
+        c["method"] = "update"
+        # ensure there is an identifier: accept customer_id or name
+        if not (c.get("customer_id") or c.get("name") or c.get("customer")):
+            frappe.throw(_("customer_id (existing Customer.name) is required for update"))
+        return create_customer_with_vehicle(json.dumps(c), json.dumps(vehicle or {}), "", pos_profile_doc or "{}")
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "update_customer_api error")
+        return {"error": True, "message": str(e)}
 
 
 def create_customer_address(customer, address_line1, city, country):
@@ -1414,4 +1393,280 @@ def get_sales_person_names():
         return sales_persons
     except Exception as e:
         frappe.log_error(f"Error fetching sales persons: {str(e)}", "POS Sales Person Error")
+        return []
+
+
+# ==============================================================================
+# FILE 1: posawesome/posawesome/api/customers.py
+# ==============================================================================
+# Add this new function after the existing search_customers function
+
+@frappe.whitelist()
+def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
+    """
+    Enhanced search that searches BOTH customers AND vehicles.
+    When vehicle number matches, returns the customer who owns that vehicle.
+    
+    Args:
+        search_term: Search string (can be customer name, mobile, vehicle number, etc.)
+        pos_profile: POS Profile for filtering
+        limit: Maximum results to return
+    
+    Returns:
+        List of customers with vehicle information if matched via vehicle
+    """
+    search_term = (search_term or "").strip()
+    limit = int(limit or 20)
+    
+    if not search_term:
+        # Return recent customers
+        return frappe.get_all(
+            "Customer",
+            filters=[["disabled", "=", 0]],
+            fields=["name", "customer_name", "mobile_no", "email_id", "tax_id"],
+            limit_page_length=limit,
+            order_by="modified desc",
+        )
+
+    # Build safe LIKE pattern
+    like_pattern = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
+
+    # STEP 1: Search Customers Directly
+    customer_results = frappe.db.sql(
+        """
+        SELECT 
+            c.name,
+            c.customer_name,
+            c.mobile_no,
+            c.email_id,
+            c.tax_id,
+            NULL as vehicle_no,
+            NULL as vehicle_model,
+            NULL as vehicle_make,
+            'customer' as match_source
+        FROM `tabCustomer` c
+        WHERE c.disabled = 0
+        AND (
+            c.name LIKE %(like)s
+            OR c.customer_name LIKE %(like)s
+            OR c.mobile_no LIKE %(like)s
+            OR c.email_id LIKE %(like)s
+            OR c.tax_id LIKE %(like)s
+        )
+        LIMIT %(limit)s
+        """,
+        {"like": like_pattern, "limit": limit},
+        as_dict=1,
+    )
+
+    # STEP 2: Search Vehicle Master for matching vehicle numbers
+    vehicle_results = []
+    try:
+        vehicle_matches = frappe.db.sql(
+            """
+            SELECT 
+                vm.name as vehicle_id,
+                vm.vehicle_no,
+                vm.customer,
+                vm.model,
+                vm.make
+            FROM `tabVehicle Master` vm
+            WHERE vm.vehicle_no LIKE %(like)s
+            AND vm.customer IS NOT NULL
+            AND vm.customer != ''
+            LIMIT %(limit)s
+            """,
+            {"like": like_pattern, "limit": limit},
+            as_dict=1,
+        )
+        
+        # Get customer details for each vehicle match
+        for vehicle in vehicle_matches:
+            if not vehicle.get("customer"):
+                continue
+                
+            try:
+                customer_data = frappe.db.get_value(
+                    "Customer",
+                    vehicle.customer,
+                    ["name", "customer_name", "mobile_no", "email_id", "tax_id"],
+                    as_dict=1
+                )
+                
+                if customer_data:
+                    vehicle_results.append({
+                        "name": customer_data.name,
+                        "customer_name": customer_data.customer_name,
+                        "mobile_no": customer_data.mobile_no or "",
+                        "email_id": customer_data.email_id or "",
+                        "tax_id": customer_data.tax_id or "",
+                        "vehicle_no": vehicle.vehicle_no,
+                        "vehicle_model": vehicle.model or "",
+                        "vehicle_make": vehicle.make or "",
+                        "match_source": "vehicle"
+                    })
+            except Exception as e:
+                frappe.log_error(
+                    f"Error fetching customer {vehicle.customer} for vehicle {vehicle.vehicle_no}: {str(e)}",
+                    "Vehicle Search Error"
+                )
+                continue
+                
+    except Exception as e:
+        frappe.log_error(
+            f"Error searching vehicles: {str(e)}",
+            "Vehicle Search Error"
+        )
+
+    # STEP 3: Combine and deduplicate (prioritize vehicle matches)
+    seen_customers = {}
+    final_results = []
+    
+    # Add vehicle matches first (they have more context)
+    for row in vehicle_results:
+        customer_key = row["name"]
+        if customer_key not in seen_customers:
+            seen_customers[customer_key] = True
+            final_results.append(row)
+    
+    # Add direct customer matches that weren't found via vehicles
+    for row in customer_results:
+        customer_key = row["name"]
+        if customer_key not in seen_customers:
+            seen_customers[customer_key] = True
+            final_results.append(row)
+    
+    # Return limited results
+    return final_results[:limit]
+
+
+# ==============================================================================
+# ALSO UPDATE THE EXISTING search_customers FUNCTION
+# Replace the existing search_customers function with this enhanced version:
+# ==============================================================================
+
+@frappe.whitelist()
+def search_customers(search_term="", pos_profile=None, limit=20):
+    """
+    ENHANCED: Now calls search_customers_with_vehicles for unified search
+    """
+    return search_customers_with_vehicles(search_term, pos_profile, limit)
+
+
+# ==============================================================================
+# FILE 2: posawesome/posawesome/api/vehicles.py
+# ==============================================================================
+# Add this new function to vehicles.py
+
+@frappe.whitelist()
+def search_vehicles(search_term="", limit=20):
+    """
+    Search vehicles by vehicle number, model, make, or customer
+    Returns vehicles with customer information
+    """
+    search_term = (search_term or "").strip()
+    limit = int(limit or 20)
+    
+    if not search_term:
+        return []
+    
+    like_pattern = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
+    
+    try:
+        vehicles = frappe.db.sql(
+            """
+            SELECT 
+                vm.name,
+                vm.vehicle_no,
+                vm.model,
+                vm.make,
+                vm.customer,
+                vm.odometer,
+                vm.chasis_no,
+                c.customer_name,
+                c.mobile_no
+            FROM `tabVehicle Master` vm
+            LEFT JOIN `tabCustomer` c ON vm.customer = c.name
+            WHERE (
+                vm.vehicle_no LIKE %(like)s
+                OR vm.model LIKE %(like)s
+                OR vm.make LIKE %(like)s
+                OR c.customer_name LIKE %(like)s
+            )
+            ORDER BY vm.modified DESC
+            LIMIT %(limit)s
+            """,
+            {"like": like_pattern, "limit": limit},
+            as_dict=1
+        )
+        
+        return vehicles
+        
+    except Exception as e:
+        frappe.log_error(
+            f"Error searching vehicles: {str(e)}",
+            "Vehicle Search Error"
+        )
+        return []
+
+
+@frappe.whitelist()
+def get_vehicles_by_search(search_term="", customer=None, limit=20):
+    """
+    Get vehicles filtered by search term and optionally by customer
+    """
+    search_term = (search_term or "").strip()
+    limit = int(limit or 20)
+    
+    filters = {}
+    if customer:
+        filters["customer"] = customer
+    
+    if not search_term:
+        return frappe.get_all(
+            "Vehicle Master",
+            filters=filters,
+            fields=["name", "vehicle_no", "model", "make", "customer", "odometer"],
+            limit_page_length=limit,
+            order_by="modified desc"
+        )
+    
+    like_pattern = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
+    
+    where_clause = "1=1"
+    if customer:
+        where_clause += f" AND vm.customer = '{frappe.db.escape(customer)}'"
+    
+    try:
+        vehicles = frappe.db.sql(
+            f"""
+            SELECT 
+                vm.name,
+                vm.vehicle_no,
+                vm.model,
+                vm.make,
+                vm.customer,
+                vm.odometer,
+                vm.chasis_no
+            FROM `tabVehicle Master` vm
+            WHERE {where_clause}
+            AND (
+                vm.vehicle_no LIKE %(like)s
+                OR vm.model LIKE %(like)s
+                OR vm.make LIKE %(like)s
+            )
+            ORDER BY vm.modified DESC
+            LIMIT %(limit)s
+            """,
+            {"like": like_pattern, "limit": limit},
+            as_dict=1
+        )
+        
+        return vehicles
+        
+    except Exception as e:
+        frappe.log_error(
+            f"Error searching vehicles: {str(e)}",
+            "Vehicle Search Error"
+        )
         return []

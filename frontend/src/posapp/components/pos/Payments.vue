@@ -2030,7 +2030,7 @@ export default {
 							default: payment.default || 0,
 						};
 					});
-					if (customer == "corporate")
+					if (this.customer == "corporate")
 						invoiceData.payments.append({
 							name: "",
 							mode_of_payment: "Credit",

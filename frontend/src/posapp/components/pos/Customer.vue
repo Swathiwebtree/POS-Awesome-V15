@@ -459,6 +459,239 @@ export default {
 			}
 		},
 
+		async searchVehiclesByNumber(term, append = false) {
+		/**
+		 * Search vehicles in local IndexedDB first, then server fallback.
+		 * Similar to searchCustomers() but for vehicles.
+		 */
+		try {
+			await checkDbHealth();
+			if (!db.isOpen()) await db.open();
+
+			if (term && this.vehicleSearchTerm !== term) {
+				this.vehiclePage = 0;
+			}
+
+			let results = [];
+
+			if (term) {
+				const q = term.toString().toLowerCase();
+
+				// Load all local vehicles and filter
+				const all = await db.table("vehicles").toArray();
+
+				const filtered = all.filter((v) => {
+					try {
+						return (
+							(v.vehicle_no && v.vehicle_no.toString().toLowerCase().includes(q)) ||
+							(v.make && v.make.toString().toLowerCase().includes(q)) ||
+							(v.model && v.model.toString().toLowerCase().includes(q)) ||
+							(v.customer_name && v.customer_name.toString().toLowerCase().includes(q))
+						);
+					} catch (err) {
+						return false;
+					}
+				});
+
+				// Server fallback for vehicle search
+				let serverResults = [];
+				if ((!filtered || filtered.length === 0) && term) {
+					try {
+						const resp = await frappe.call({
+							method: "posawesome.posawesome.api.vehicles.search_vehicles",
+							args: {
+								search_term: term,
+								limit: this.pageSize || 50,
+							},
+						});
+						if (resp && resp.message && resp.message.length) {
+							serverResults = (resp.message || []).map((v) => ({
+								name: v.name,
+								vehicle_no: v.vehicle_no,
+								make: v.make || "",
+								model: v.model || "",
+								customer: v.customer || "",
+								customer_name: v.customer_name || "",
+								mobile_no: v.mobile_no || "",
+								odometer: v.odometer || 0,
+							}));
+						}
+					} catch (err) {
+						console.error("Server vehicle search failed:", err);
+					}
+				}
+
+				// Choose data source
+				let slice = [];
+				if (serverResults && serverResults.length) {
+					slice = serverResults;
+				} else {
+					const startIndex = (this.vehiclePage || 0) * this.pageSize;
+					slice = filtered.slice(startIndex, startIndex + this.pageSize);
+				}
+
+				results = slice.map((r) => ({
+					name: r.name,
+					vehicle_no: r.vehicle_no,
+					make: r.make || "",
+					model: r.model || "",
+					customer: r.customer || "",
+					customer_name: r.customer_name || "",
+					mobile_no: r.mobile_no || "",
+					odometer: r.odometer || 0,
+				}));
+			}
+
+			if (append) {
+				this.vehicleSearchResults.push(...results);
+			} else {
+				this.vehicleSearchResults = results;
+			}
+
+			this.vehicleHasMore = results.length === this.pageSize;
+			if (this.vehicleHasMore) {
+				this.vehiclePage = (this.vehiclePage || 0) + 1;
+			}
+
+			return results.length;
+		} catch (e) {
+			console.error("Failed to search vehicles", e);
+			return 0;
+		}
+	},
+
+	onVehicleSearch: _.debounce(function (val) {
+		/**
+		 * Debounced vehicle search - called when user types in vehicle field.
+		 * Updates the dropdown list and searches by vehicle number/make/model.
+		 */
+		this.vehicleSearchTerm = val || "";
+		this.vehiclePage = 0;
+		this.vehicleSearchResults = [];
+		this.vehicleHasMore = true;
+
+		if (val) {
+			this.searchVehiclesByNumber(this.vehicleSearchTerm);
+		}
+	}, 500),
+
+	onVehicleSelect(val) {
+		/**
+		 * Called when user selects a vehicle from the dropdown.
+		 * Updates vehicle info and associated customer if needed.
+		 */
+		if (!val) {
+			this.selectedVehicle = null;
+			this.vehicle_no = "";
+			this.eventBus.emit("vehicle_selected", null);
+			return;
+		}
+
+		const vehicle = (this.vehicles || []).find((v) => v.name === val);
+		if (vehicle) {
+			this.selectedVehicle = val;
+			this.vehicle_no = vehicle.vehicle_no || "";
+			this.eventBus.emit("vehicle_selected", vehicle.name);
+
+			// Set customer if not already set
+			if (!this.customer && vehicle.customer) {
+				this.customer = vehicle.customer;
+				this.internalCustomer = vehicle.customer;
+				this.eventBus.emit("update_customer", vehicle.customer);
+			}
+		}
+	},
+
+	async onVehicleNoEnter() {
+		/**
+		 * Called when user presses Enter in the vehicle number input field.
+		 * Searches for vehicle and auto-loads associated customer.
+		 */
+		const vehicleNo = (this.vehicle_no || "").trim();
+		if (!vehicleNo) return;
+
+		this.loadingVehicles = true;
+		try {
+			let customerName = null;
+			let vehicleData = null;
+
+			// 1. Local Lookup
+			try {
+				await checkDbHealth();
+				if (!db.isOpen()) await db.open();
+				const local = await db
+					.table("vehicles")
+					.where("vehicle_no")
+					.equals(vehicleNo)
+					.first();
+				if (local) {
+					customerName = local.customer;
+					vehicleData = {
+						name: local.name,
+						vehicle_no: local.vehicle_no,
+						make: local.make || "",
+						model: local.model || "",
+						customer_name: local.customer_name,
+					};
+				}
+			} catch (e) {
+				console.warn("Local vehicle lookup error", e);
+			}
+
+			// 2. Server Lookup if no local match or online
+			if (!customerName && navigator.onLine) {
+				const res = await frappe.call({
+					method: "posawesome.posawesome.api.vehicles.get_vehicles_by_search",
+					args: { search_term: vehicleNo },
+				});
+				const payload = res?.message || {};
+				if (payload.customer && payload.customer.name) {
+					customerName = payload.customer.name;
+				}
+				if (payload.vehicle) {
+					vehicleData = payload.vehicle;
+				}
+			}
+
+			// Final update logic
+			if (customerName) {
+				this.customer = customerName;
+				this.internalCustomer = customerName;
+				this.eventBus.emit("update_customer", customerName);
+
+				if (vehicleData) {
+					this.selectedVehicle = vehicleData.name;
+					this.eventBus.emit("vehicle_selected", vehicleData.name);
+					await this.fetchVehiclesForCustomer(customerName);
+
+					// Highlight the selected vehicle
+					const existingVehicle = this.vehicles.find((v) => v.name === vehicleData.name);
+					if (existingVehicle) {
+						this.selectedVehicle = vehicleData.name;
+					}
+				} else {
+					this.selectedVehicle = null;
+					this.eventBus.emit("vehicle_selected", null);
+				}
+			} else {
+				frappe.show_alert({
+					message: __("No customer found for vehicle: " + vehicleNo),
+					indicator: "red",
+				});
+				this.selectedVehicle = null;
+				this.eventBus.emit("vehicle_selected", null);
+			}
+		} catch (err) {
+			console.error("Failed to lookup customer by vehicle:", err);
+			frappe.show_alert({
+				message: __("Error looking up vehicle"),
+				indicator: "red",
+			});
+		} finally {
+			this.loadingVehicles = false;
+		}
+	},
+
 		async searchCustomerByMobile(mobile) {
 			// normalize
 			const mobile_no = (mobile || "").toString().trim();
@@ -810,8 +1043,82 @@ export default {
 			this.eventBus.emit("open_update_customer", { withVehicle: true });
 		},
 
-		edit_customer() {
-			this.eventBus.emit("open_update_customer", this.customer_info, { withVehicle: true });
+		async edit_customer() {
+			try {
+				const cust_name = this.customer || this.internalCustomer || this.tempSelectedCustomer;
+				if (!cust_name) {
+					frappe.msgprint(__("Please select a customer to edit."), __("Error"));
+					return;
+				}
+
+				// Get customer details
+				const resp = await frappe.call({
+					method: "posawesome.posawesome.api.get_customer_info",
+					args: { customer: cust_name },
+				});
+
+				const payload = resp?.message || null;
+				if (!payload) {
+					frappe.msgprint(__("Failed to fetch customer details."), __("Error"));
+					return;
+				}
+
+				// Try to get vehicles for this customer (server method used in parent component)
+				let vehicles = [];
+				try {
+					const vResp = await frappe.call({
+						method: "posawesome.posawesome.api.vehicles.get_vehicles_by_customer",
+						args: { customer_name: cust_name },
+					});
+					vehicles = vResp?.message || [];
+				} catch (e) {
+					// swallow — not critical, we'll still open the dialog
+					console.warn("Failed to fetch vehicles for customer", e);
+				}
+
+				// Attach vehicles (even if empty) so the dialog can decide to show fields
+				payload.vehicles = vehicles;
+
+				this.eventBus.emit("open_update_customer", {
+					customer: payload,
+					withVehicle: true,
+				});
+			} catch (err) {
+				console.error("edit_customer error:", err);
+				frappe.msgprint({ message: __("Unable to open edit dialog"), indicator: "red" });
+			}
+		},
+
+
+		async submitUpdatedCustomer(customerPayload, vehiclePayload = null) {
+			// Accepts the shape produced by the UpdateCustomer dialog (plain JS objects)
+			// Calls backend update endpoint and then emits add_customer_to_list with response.
+			try {
+				const res = await frappe.call({
+					method: "posawesome.posawesome.api.update_customer_api",
+					args: {
+						customer: customerPayload,
+						vehicle: vehiclePayload,
+						pos_profile_doc: this.pos_profile ? this.pos_profile.pos_profile || this.pos_profile : "{}",
+					},
+				});
+
+				const msg = res?.message || null;
+				if (!msg || !msg.customer) {
+					frappe.msgprint({ message: __("Failed to update customer"), indicator: "red" });
+					return null;
+				}
+
+				// Update the frontend list via existing listener expectations
+				this.eventBus.emit("add_customer_to_list", { customer: msg.customer, vehicle: msg.vehicle });
+				// Close the dialog (UpdateCustomer component should react to eventBus or handle itself)
+				this.eventBus.emit("close_update_customer");
+				return msg;
+			} catch (err) {
+				console.error("submitUpdatedCustomer error:", err);
+				frappe.msgprint({ message: __("Error updating customer"), indicator: "red" });
+				return null;
+			}
 		},
 
 		// --- Vehicle Methods ---

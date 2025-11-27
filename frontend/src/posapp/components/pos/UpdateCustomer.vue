@@ -1,163 +1,133 @@
 <template>
 	<v-row justify="center">
-		<v-dialog v-model="customerDialog" max-width="600px" persistent>
+		<v-dialog v-model="customerDialog" max-width="780px" persistent>
 			<v-card>
-				<v-card-title class="d-flex align-center">
-					<span v-if="customer_id" class="text-h5 text-primary">{{ __("Update Customer") }}</span>
-					<span v-else class="text-h5 text-primary">{{ __("Create Customer") }}</span>
+
+				<!-- HEADER -->
+				<v-card-title class="d-flex align-center py-4 px-6">
+					<span class="text-h5 text-primary font-weight-bold">
+						{{ customer_id ? __("Update Customer") : __("Create Customer") }}
+					</span>
 					<v-spacer></v-spacer>
 				</v-card-title>
 
-				<v-card-text class="pa-0">
-					<v-container>
-						<v-row>
-							<v-col cols="6" v-if="withVehicle && !customer_id">
+				<!-- BODY -->
+				<v-card-text class="px-6 pb-6 pt-0">
+					<v-container fluid>
+
+						<!-- TWO COLUMN FORM -->
+						<v-row dense>
+
+							<!-- VEHICLE COLUMN -->
+							<v-col cols="6" class="pr-4">
+
 								<v-text-field
-									density="compact"
-									color="primary"
-									:label="frappe._('Vehicle Number') + ' *'"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-									hide-details
 									v-model="vehicle_no"
-									required
-								></v-text-field>
-							</v-col>
-
-							<v-col cols="6">
-								<v-text-field
-									density="compact"
+									:label="__('Vehicle Number') + (isCreateWithVehicle ? ' *' : '')"
+									density="comfortable"
 									color="primary"
-									:label="frappe._('Customer Name') + ' *'"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									hide-details
-									class="dark-field"
-									v-model="customer_name"
-								></v-text-field>
-							</v-col>
+									hide-details="auto"
+									:required="isCreateWithVehicle"
+									class="mb-3"
+								/>
 
-							<v-col :cols="withVehicle && !customer_id ? 6 : 6">
 								<v-text-field
-									density="compact"
-									color="primary"
-									:label="frappe._('Mobile No') + (withVehicle && !customer_id ? ' *' : '')"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-									hide-details
 									v-model="mobile_no"
-								></v-text-field>
-							</v-col>
-
-							<v-col cols="6" v-if="withVehicle && !customer_id">
-								<v-text-field
-									density="compact"
+									:label="__('Mobile No') + (isCreateWithVehicle ? ' *' : '')"
+									density="comfortable"
 									color="primary"
-									:label="frappe._('Make') + ' *'"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-									hide-details
-									v-model="vehicle_make"
-									required
-								></v-text-field>
-							</v-col>
+									hide-details="auto"
+									class="mb-3"
+								/>
 
-							<v-col cols="6" v-if="withVehicle && !customer_id">
 								<v-text-field
-									density="compact"
-									color="primary"
-									:label="frappe._('Model') + ' *'"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-									hide-details
 									v-model="vehicle_model"
-									required
-								></v-text-field>
-							</v-col>
+									:label="__('Model')"
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+									class="mb-3"
+								/>
 
-							<v-col cols="6" v-if="!hideNonEssential">
 								<v-text-field
-									density="compact"
+									v-model="vehicle_make"
+									:label="__('Make')"
+									density="comfortable"
 									color="primary"
-									:label="frappe._('Odometer')"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-									hide-details
+									hide-details="auto"
+									class="mb-3"
+								/>
+
+								<v-text-field
 									v-model="odometer"
-								></v-text-field>
+									:label="__('Odometer')"
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+								/>
+
 							</v-col>
 
-							<v-col cols="6" v-if="!hideNonEssential">
-								<v-autocomplete
-									clearable
-									density="compact"
-									auto-select-first
+							<!-- CUSTOMER COLUMN -->
+							<v-col cols="6" class="pl-4">
+
+								<v-text-field
+									v-model="customer_name"
+									:label="__('Customer Name') + ' *'"
+									density="comfortable"
 									color="primary"
-									:label="frappe._('Customer Group') + ' *'"
+									hide-details="auto"
+									required
+									class="mb-3"
+								/>
+
+								<v-autocomplete
 									v-model="group"
 									:items="groups"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-									:no-data-text="__('Group not found')"
-									hide-details
-									required
-								></v-autocomplete>
-							</v-col>
-
-							<v-col cols="6" v-if="!hideNonEssential">
-								<v-autocomplete
-									clearable
-									density="compact"
-									auto-select-first
+									:label="__('Customer Group') + ' *'"
+									density="comfortable"
+									hide-details="auto"
 									color="primary"
-									:label="frappe._('Territory') + ' *'"
+									class="mb-3"
+									clearable
+								/>
+
+								<v-autocomplete
 									v-model="territory"
 									:items="territorys"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-									:no-data-text="__('Territory not found')"
-									hide-details
-									required
-								></v-autocomplete>
+									:label="__('Territory') + ' *'"
+									density="comfortable"
+									hide-details="auto"
+									color="primary"
+									class="mb-3"
+									clearable
+								/>
+
 							</v-col>
 
-							<v-col cols="6" v-if="loyalty_program">
-								<v-text-field
-									v-model="loyalty_program"
-									:label="frappe._('Loyalty Program')"
-									density="compact"
-									readonly
-									hide-details
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-								></v-text-field>
-							</v-col>
-
-							<v-col cols="6" v-if="loyalty_points">
-								<v-text-field
-									v-model="loyalty_points"
-									:label="frappe._('Loyalty Points')"
-									density="compact"
-									readonly
-									hide-details
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									class="dark-field"
-								></v-text-field>
-							</v-col>
 						</v-row>
+
 					</v-container>
 				</v-card-text>
 
-				<v-card-actions>
+				<!-- FOOTER BUTTONS -->
+				<v-card-actions class="px-6 pb-4">
 					<v-spacer></v-spacer>
-					<v-btn color="error" theme="dark" @click="confirm_close">{{ __("Close") }}</v-btn>
-					<v-btn color="success" theme="dark" @click="submit_dialog">{{ __("Submit") }}</v-btn>
+					<v-btn color="error" theme="dark" @click="confirm_close">
+						{{ __('Close') }}
+					</v-btn>
+					<v-btn color="success" theme="dark" @click="submit_dialog">
+						{{ __('Submit') }}
+					</v-btn>
 				</v-card-actions>
+
 			</v-card>
 		</v-dialog>
 
+		<!-- CLOSE CONFIRMATION -->
 		<v-dialog v-model="confirmDialog" max-width="400px">
 			<v-card>
-				<v-card-title class="text-h5 text-primary">
+				<v-card-title class="text-h6 font-weight-bold text-primary">
 					{{ __("Confirm Close") }}
 				</v-card-title>
 				<v-card-text>
@@ -187,7 +157,9 @@ export default {
 	data: () => ({
 		customerDialog: false,
 		confirmDialog: false,
-		pos_profile: "",
+		pos_profile: null,
+
+		// Customer fields
 		customer_id: "",
 		customer_name: "",
 		tax_id: "",
@@ -198,7 +170,6 @@ export default {
 		email_id: "",
 		referral_code: "",
 		birthday: "",
-		birthday_menu: false,
 		group: "",
 		groups: [],
 		territory: "",
@@ -209,127 +180,24 @@ export default {
 		loyalty_points: null,
 		loyalty_program: null,
 		hideNonEssential: false,
-		// NEW VEHICLE DATA PROPERTIES
+
+		// Vehicle fields (visible in both create & update)
 		vehicle_no: "",
 		vehicle_make: "",
 		vehicle_model: "",
 		odometer: "",
-		withVehicle: false, // Flag to show vehicle fields
-		countries: [
-			"Afghanistan",
-			"Australia",
-			"Bahrain",
-			"Bangladesh",
-			"Canada",
-			"China",
-			"Denmark",
-			"France",
-			"Germany",
-			"India",
-			"Indonesia",
-			"Italy",
-			"Japan",
-			"Kuwait",
-			"Malaysia",
-			"Nepal",
-			"Netherlands",
-			"New Zealand",
-			"Norway",
-			"Oman",
-			"Pakistan",
-			"Philippines",
-			"Qatar",
-			"Saudi Arabia",
-			"Singapore",
-			"South Korea",
-			"Spain",
-			"Sri Lanka",
-			"Sweden",
-			"Switzerland",
-			"Syria",
-			"Thailand",
-			"United Arab Emirates",
-			"United Kingdom",
-			"United States",
-			"Vietnam",
-			"Yemen",
-		],
+
+		// control - if this was explicitly opened as create-with-vehicle
+		isCreateWithVehicle: false,
 	}),
-	watch: {
-		hideNonEssential(val) {
-			if (typeof localStorage !== "undefined") {
-				localStorage.setItem("posawesome_hide_non_essential_fields", JSON.stringify(val));
-			}
-		},
-		birthday(newVal) {
-			if (newVal && /^\d{8}$/.test(newVal)) {
-				try {
-					const day = newVal.substring(0, 2);
-					const month = newVal.substring(2, 4);
-					const year = newVal.substring(4);
-
-					this.birthday = `${day}-${month}-${year}`;
-
-					this.updateCalendarDate(day, month, year);
-				} catch (error) {
-					console.error("Error processing 8-digit date:", error);
-				}
-			} else if (newVal && /^\d{2}-\d{2}-\d{4}$/.test(newVal)) {
-				try {
-					const parts = newVal.split("-");
-					const day = parts[0];
-					const month = parts[1];
-					const year = parts[2];
-
-					this.updateCalendarDate(day, month, year);
-				} catch (error) {
-					console.error("Error processing formatted date:", error);
-				}
-			}
-		},
-
-		birthday_menu(isOpen) {
-			if (isOpen && this.birthday && /^\d{2}-\d{2}-\d{4}$/.test(this.birthday)) {
-				try {
-					const parts = this.birthday.split("-");
-					const day = parts[0];
-					const month = parts[1];
-					const year = parts[2];
-
-					this.$nextTick(() => {
-						this.updateCalendarDate(day, month, year);
-					});
-				} catch (error) {
-					console.error("Error updating calendar on menu open:", error);
-				}
-			}
-		},
-	},
 	computed: {
 		isDarkTheme() {
-			return this.$theme.current === "dark";
+			return this.$theme && this.$theme.current === "dark";
 		},
 	},
 	methods: {
-		updateCalendarDate(day, month, year) {
-			const wasOpen = this.birthday_menu;
-			this.birthday_menu = false;
-
-			this.$nextTick(() => {
-				const tempDate = `${year}-${month}-${day}`;
-
-				setTimeout(() => {
-					if (this.$refs.birthday_menu) {
-						this.$refs.birthday_menu.date = tempDate;
-						if (wasOpen) {
-							this.birthday_menu = true;
-						}
-					}
-				}, 50);
-			});
-		},
 		confirm_close() {
-			// Check if any data has been entered (including new vehicle fields)
+			// If any data entered, ask confirmation
 			if (
 				this.customer_name ||
 				this.tax_id ||
@@ -356,7 +224,6 @@ export default {
 			this.clear_customer();
 		},
 		clear_customer() {
-			// Reset Customer Fields
 			this.customer_name = "";
 			this.tax_id = "";
 			this.mobile_no = "";
@@ -373,42 +240,64 @@ export default {
 			this.gender = "";
 			this.loyalty_points = null;
 			this.loyalty_program = null;
-			// Reset Vehicle Fields
+
 			this.vehicle_no = "";
 			this.vehicle_make = "";
 			this.vehicle_model = "";
 			this.odometer = "";
-			this.withVehicle = false;
+
+			this.isCreateWithVehicle = false;
 		},
 
-		// Centralised open handler used by the global listener and eventBus
+		/**
+		 * handleOpen accepts either:
+		 * - { withVehicle: true }  => blank create dialog (vehicle fields available)
+		 * - { ...customerObject }  => full customer object (editing). payload should include name and optionally vehicles array
+		 * - { customer: {...}, withVehicle: true } => wrapper shape
+		 */
 		handleOpen(data) {
+			const wrapper = data && data.customer ? data : null;
+			const payload = wrapper ? wrapper.customer : data || {};
+
+			// Reset first
+			this.clear_customer();
 			this.customerDialog = true;
-			this.clear_customer(); // Always clear fields first
 
-			// Determine if vehicle fields should be shown
-			this.withVehicle = data && data.withVehicle === true && !data.name;
+			// If wrapper explicitly said create-with-vehicle, remember that for validation
+			this.isCreateWithVehicle = !!(wrapper && wrapper.withVehicle === true && !payload.name);
 
-			if (data && data.name) {
-				// Existing Customer: Populate fields
-				this.customer_name = data.customer_name;
-				this.customer_id = data.name;
-				this.address_line1 = data.address_line1 || "";
-				this.city = data.city || "";
-				this.country =
-					data.country || (this.pos_profile && this.pos_profile.posa_default_country) || "India";
-				this.tax_id = data.tax_id;
-				this.mobile_no = data.mobile_no;
-				this.email_id = data.email_id;
-				this.referral_code = data.referral_code;
-				this.birthday = data.birthday;
-				this.group = data.customer_group;
-				this.territory = data.territory;
-				this.loyalty_points = data.loyalty_points;
-				this.loyalty_program = data.loyalty_program;
-				this.gender = data.gender;
+			// If payload has name -> editing existing customer, prefill all fields
+			if (payload && payload.name) {
+				// populate customer fields
+				this.customer_id = payload.name;
+				this.customer_name = payload.customer_name || "";
+				this.tax_id = payload.tax_id || "";
+				this.mobile_no = payload.mobile_no || "";
+				this.address_line1 = payload.address_line1 || "";
+				this.city = payload.city || "";
+				this.country = payload.country || (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
+				this.email_id = payload.email_id || "";
+				this.referral_code = payload.referral_code || "";
+				this.birthday = payload.birthday || "";
+				this.group = payload.customer_group || "";
+				this.territory = payload.territory || "";
+				this.loyalty_points = payload.loyalty_points || null;
+				this.loyalty_program = payload.loyalty_program || null;
+				this.gender = payload.gender || "";
+
+				// Prefill vehicle details if provided (take the first vehicle)
+				if (payload.vehicles && payload.vehicles.length) {
+					const v = payload.vehicles[0];
+					this.vehicle_no = v.vehicle_no || "";
+					this.vehicle_make = v.make || "";
+					this.vehicle_model = v.model || "";
+					this.odometer = v.odometer || "";
+				}
 			} else {
-				// New Customer: Set defaults
+				// New customer: if caller asked for withVehicle then require vehicle fields during submit
+				// we still show vehicle fields for create (and update) per your request
+				// mark isCreateWithVehicle true only when wrapper.withVehicle === true
+				this.isCreateWithVehicle = !!(wrapper && wrapper.withVehicle === true);
 				this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
 			}
 		},
@@ -424,12 +313,9 @@ export default {
 					order_by: "name",
 				})
 				.then((data) => {
-					if (data.length > 0) {
-						data.forEach((el) => {
-							vm.groups.push(el.name);
-						});
-					}
-				});
+					data.forEach((el) => vm.groups.push(el.name));
+				})
+				.catch((e) => console.error("Failed to load groups", e));
 		},
 		getCustomerTerritorys() {
 			if (this.territorys.length > 0) return;
@@ -442,60 +328,41 @@ export default {
 					order_by: "name",
 				})
 				.then((data) => {
-					if (data.length > 0) {
-						data.forEach((el) => {
-							vm.territorys.push(el.name);
-						});
-					}
-				});
+					data.forEach((el) => vm.territorys.push(el.name));
+				})
+				.catch((e) => console.error("Failed to load territorys", e));
 		},
 		getGenders() {
+			if (this.genders.length > 0) return;
 			const vm = this;
 			frappe.db
 				.get_list("Gender", {
 					fields: ["name"],
-					page_length: 10,
+					page_length: 50,
 				})
-				.then((data) => {
-					if (data.length > 0) {
-						data.forEach((el) => {
-							vm.genders.push(el.name);
-						});
-					}
-				});
-		},
-		formatBirthdayOnInput() {
-			if (this.birthday && /^\d{8}$/.test(this.birthday)) {
-				try {
-					const day = this.birthday.substring(0, 2);
-					const month = this.birthday.substring(2, 4);
-					const year = this.birthday.substring(4);
-					this.birthday = `${day}-${month}-${year}`;
-				} catch (error) {
-					console.error("Error formatting date:", error);
-				}
-			}
+				.then((data) => data.forEach((el) => vm.genders.push(el.name)))
+				.catch((e) => console.error("Failed to load genders", e));
 		},
 
+		// Submit create / update
 		submit_dialog() {
 			const vm = this;
+
+			// Basic validation
 			if (!this.customer_name) {
 				frappe.throw(__("Customer Name is required"));
 				return;
 			}
-
 			if (!this.group) {
 				frappe.throw(__("Customer group is required"));
 				return;
 			}
-
 			if (!this.territory) {
 				frappe.throw(__("Customer territory is required"));
 				return;
 			}
-
-			// Validate Vehicle fields only if creating a new customer AND 'withVehicle' is true
-			if (!this.customer_id && this.withVehicle) {
+			// If this was an explicit create-with-vehicle flow, require vehicle + mobile
+			if (!this.customer_id && this.isCreateWithVehicle) {
 				if (!this.vehicle_no) {
 					frappe.throw(__("Vehicle # is required to create a new customer with a vehicle."));
 					return;
@@ -506,9 +373,10 @@ export default {
 				}
 			}
 
-			// Format birthday to YYYY-MM-DD
+			// Format birthday to YYYY-MM-DD if necessary
 			let formatted_birthday = null;
 			if (this.birthday) {
+				// handle ddmmyyyy, dd-mm-yyyy, dd/mm/yyyy or Date string
 				try {
 					if (/^\d{8}$/.test(this.birthday)) {
 						const day = this.birthday.substring(0, 2);
@@ -517,40 +385,21 @@ export default {
 						formatted_birthday = `${year}-${month}-${day}`;
 					} else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(this.birthday)) {
 						const parts = this.birthday.split("-");
-						if (parts.length === 3) {
-							const day = parts[0].padStart(2, "0");
-							const month = parts[1].padStart(2, "0");
-							const year = parts[2];
-							formatted_birthday = `${year}-${month}-${day}`;
-						}
+						formatted_birthday = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
 					} else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(this.birthday)) {
 						const parts = this.birthday.split("/");
-						if (parts.length === 3) {
-							const day = parts[0].padStart(2, "0");
-							const month = parts[1].padStart(2, "0");
-							const year = parts[2];
-							formatted_birthday = `${year}-${month}-${day}`;
-						}
-					} else if (this.birthday) {
-						try {
-							const date = new Date(this.birthday);
-							if (!isNaN(date.getTime())) {
-								const year = date.getFullYear();
-								const month = String(date.getMonth() + 1).padStart(2, "0");
-								const day = String(date.getDate()).padStart(2, "0");
-								formatted_birthday = `${year}-${month}-${day}`;
-							}
-						} catch (e) {
-							console.error("Failed to parse date:", e);
+						formatted_birthday = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+					} else {
+						const d = new Date(this.birthday);
+						if (!isNaN(d.getTime())) {
+							formatted_birthday = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 						}
 					}
-				} catch (error) {
-					console.error("Error formatting date:", error);
-					formatted_birthday = null;
+				} catch (e) {
+					console.error("birthday format error", e);
 				}
 			}
 
-			// Arguments for Customer
 			const customerArgs = {
 				customer_id: this.customer_id,
 				customer_name: this.customer_name,
@@ -570,25 +419,23 @@ export default {
 				vehicle_no: this.vehicle_no || "",
 			};
 
-			// Arguments for Vehicle (only when creating a new customer)
-			const vehicleArgs =
-				this.withVehicle && !this.customer_id
-					? {
-							vehicle_no: this.vehicle_no,
-							make: this.vehicle_make,
-							model: this.vehicle_model,
-							mobile_no: this.mobile_no,
-							odometer: this.odometer,
-						}
-					: {};
+			// Always include vehicle object (server will decide whether to create or update)
+			const vehicleArgs = {
+				vehicle_no: this.vehicle_no || "",
+				make: this.vehicle_make || "",
+				model: this.vehicle_model || "",
+				mobile_no: this.mobile_no || "",
+				odometer: this.odometer || "",
+			};
 
 			const apiArgs = {
 				customer: JSON.stringify(customerArgs),
 				vehicle: JSON.stringify(vehicleArgs),
-				company: vm.pos_profile.company,
-				pos_profile_doc: JSON.stringify(vm.pos_profile),
+				company: vm.pos_profile ? vm.pos_profile.company : undefined,
+				pos_profile_doc: JSON.stringify(vm.pos_profile || {}),
 			};
 
+			// Offline handling
 			if (isOffline()) {
 				const offlineData = {
 					customer: customerArgs,
@@ -612,7 +459,7 @@ export default {
 				return;
 			}
 
-			// API method (same endpoint handles create & update based on args.method)
+			// API call (single endpoint handles create & update)
 			const apiMethod = "posawesome.posawesome.api.customers.create_customer_with_vehicle";
 
 			frappe.call({
@@ -620,37 +467,24 @@ export default {
 				args: apiArgs,
 				callback: (r) => {
 					if (!r.exc && r.message && r.message.customer) {
-						let text = vm.customer_id
-							? __("Customer updated successfully.")
-							: __("Customer created successfully.");
-
 						const customerDoc = r.message.customer;
 						const vehicleDoc = r.message.vehicle || null;
+						const msg = this.customer_id ? __("Customer updated successfully.") : __("Customer created successfully.");
 
-						vm.eventBus.emit("show_message", {
-							title: text,
-							color: "success",
-						});
-
+						vm.eventBus.emit("show_message", { title: msg, color: "success" });
 						frappe.utils.play_sound("submit");
 
-						vm.eventBus.emit("add_customer_to_list", {
-							customer: customerDoc,
-							vehicle: vehicleDoc,
-						});
-
+						vm.eventBus.emit("add_customer_to_list", { customer: customerDoc, vehicle: vehicleDoc });
 						vm.eventBus.emit("set_customer", customerDoc.name);
 						vm.eventBus.emit("fetch_customer_details");
 						vm.close_dialog();
+					} else {
+						vm.eventBus.emit("show_message", { title: __("Customer operation failed"), color: "error" });
 					}
 				},
 				error: (r) => {
-					// Better error handling
 					frappe.utils.play_sound("error");
-
 					let errorMessage = __("Customer/Vehicle operation failed.");
-
-					// Extract real message if available
 					if (r && r._server_messages) {
 						try {
 							const messages = JSON.parse(r._server_messages);
@@ -664,11 +498,7 @@ export default {
 					} else if (r && r.message) {
 						errorMessage = r.message;
 					}
-
-					vm.eventBus.emit("show_message", {
-						title: errorMessage,
-						color: "error",
-					});
+					vm.eventBus.emit("show_message", { title: errorMessage, color: "error" });
 				},
 			});
 		},
@@ -680,36 +510,29 @@ export default {
 					let dateObj;
 					if (typeof this.birthday === "object") {
 						dateObj = this.birthday;
-					} else if (
-						typeof this.birthday === "string" &&
-						(this.birthday.includes("GMT") || this.birthday.includes("T"))
-					) {
-						dateObj = new Date(this.birthday);
 					} else {
-						return;
+						dateObj = new Date(this.birthday);
 					}
-
-					const year = dateObj.getFullYear();
-					const month = String(dateObj.getMonth() + 1).padStart(2, "0");
-					const day = String(dateObj.getDate()).padStart(2, "0");
-
-					this.birthday = `${day}-${month}-${year}`;
+					if (!isNaN(dateObj.getTime())) {
+						const year = dateObj.getFullYear();
+						const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+						const day = String(dateObj.getDate()).padStart(2, "0");
+						this.birthday = `${day}-${month}-${year}`;
+					}
 				} catch (error) {
 					console.error("Error formatting date from picker:", error);
 				}
 			}
 		},
 	},
-	created: function () {
-		// Load hideNonEssential state from localStorage
+	created() {
+		// restore hideNonEssential (if used elsewhere)
 		if (typeof localStorage !== "undefined") {
 			const saved = localStorage.getItem("posawesome_hide_non_essential_fields");
-			if (saved !== null) {
-				this.hideNonEssential = JSON.parse(saved);
-			}
+			if (saved !== null) this.hideNonEssential = JSON.parse(saved);
 		}
 
-		// Register ONLY ONE global listener for opening the dialog
+		// keep instance reference for single global handler
 		_updateCustomerInstance = this;
 		const bus = this.eventBus || window.eventBus || window.app_event_bus || null;
 
@@ -721,7 +544,6 @@ export default {
 				}
 			};
 
-			// Register on eventBus only (not both eventBus AND window)
 			if (bus && typeof bus.on === "function") {
 				bus.on("open_update_customer", handler);
 			} else if (typeof window !== "undefined") {
@@ -730,7 +552,7 @@ export default {
 			_updateCustomerListenerRegistered = true;
 		}
 
-		// Register OTHER listeners (NOT open_update_customer)
+		// other event listeners
 		if (this.eventBus && typeof this.eventBus.on === "function") {
 			this.eventBus.on("register_pos_profile", (data) => {
 				this.pos_profile = data.pos_profile;
@@ -742,7 +564,7 @@ export default {
 			});
 		}
 
-		// bootstrap lists and defaults
+		// bootstrap lists & defaults
 		this.getCustomerGroups();
 		this.getCustomerTerritorys();
 		this.getGenders();
@@ -757,7 +579,7 @@ export default {
 </script>
 
 <style scoped>
-/* Dark mode input styling (remains unchanged) */
+/* Dark mode input styling */
 :deep([data-theme="dark"]) .dark-field,
 :deep(.v-theme--dark) .dark-field,
 ::v-deep([data-theme="dark"]) .dark-field,
