@@ -1390,8 +1390,8 @@ export default {
 				}
 			}
 		}, 500);
-	
-	   // ADD THESE EVENT LISTENERS FOR CLEARING FIELDS
+
+		// ADD THESE EVENT LISTENERS FOR CLEARING FIELDS
 		this.eventBus.on("clear_customer", () => {
 			console.log("[Customer] Clearing customer from event");
 			this.selectedCustomer = null;

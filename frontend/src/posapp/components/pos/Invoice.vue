@@ -376,9 +376,9 @@ export default {
 			additional_discount: 0,
 			additional_discount_percentage: 0,
 			service_employee: null,
-		    service_employee_name: null,
-		    service_employee_designation: null,
-	     	service_employee_department: null,
+			service_employee_name: null,
+			service_employee_designation: null,
+			service_employee_department: null,
 			total_tax: 0,
 			items: [], // List of invoice items
 			packed_items: [], // Packed items for bundles
@@ -551,24 +551,25 @@ export default {
 			}
 
 			// Check if any item is a car wash service
-			const hasCarWashService = this.items.some(item => {
+			const hasCarWashService = this.items.some((item) => {
 				// Check item group
-				const itemGroupMatch = item.item_group &&
-					(item.item_group.toLowerCase().includes('car wash') ||
-						item.item_group.toLowerCase().includes('Carwash') ||
-						item.item_group.toLowerCase().includes('wash'));
+				const itemGroupMatch =
+					item.item_group &&
+					(item.item_group.toLowerCase().includes("car wash") ||
+						item.item_group.toLowerCase().includes("Carwash") ||
+						item.item_group.toLowerCase().includes("wash"));
 
 				// Check item code
-				const itemCodeMatch = item.item_code &&
-					(item.item_code.toLowerCase().includes('wash') ||
-						item.item_code.toLowerCase().includes('service'));
+				const itemCodeMatch =
+					item.item_code &&
+					(item.item_code.toLowerCase().includes("wash") ||
+						item.item_code.toLowerCase().includes("service"));
 
 				// Check if item has service_item flag
 				const serviceItemFlag = item.service_item === 1 || item.is_service_item === 1;
 
 				// Check item name
-				const itemNameMatch = item.item_name &&
-					item.item_name.toLowerCase().includes('wash');
+				const itemNameMatch = item.item_name && item.item_name.toLowerCase().includes("wash");
 
 				return itemGroupMatch || itemCodeMatch || serviceItemFlag || itemNameMatch;
 			});
@@ -576,7 +577,7 @@ export default {
 			console.log("[Invoice] checkForCarWashServices result:", hasCarWashService);
 			return hasCarWashService;
 		},
-	
+
 		updateServiceEmployeeInDoc() {
 			// Ensure invoice_doc exists - create if it doesn't
 			if (!this.invoice_doc) {
@@ -618,7 +619,7 @@ export default {
 			// Force update
 			this.$forceUpdate();
 		},
-	
+
 		clearServiceEmployee() {
 			console.log("[Invoice] Clearing service employee");
 			this.service_employee = null;
@@ -633,7 +634,6 @@ export default {
 				this.invoice_doc.custom_service_employee_department = null;
 			}
 		},
-
 
 		apply_additional_discount() {
 			console.log("[Invoice] apply_additional_discount called");
@@ -1855,7 +1855,9 @@ export default {
 										? saved_doc.grand_total
 										: this.invoice_doc.grand_total,
 								currency: saved_doc.currency || this.invoice_doc.currency,
-								custom_service_employee: saved_doc.custom_service_employee || this.invoice_doc.custom_service_employee,
+								custom_service_employee:
+									saved_doc.custom_service_employee ||
+									this.invoice_doc.custom_service_employee,
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
 							console.log("[Invoice] Emitted draft_saved for new draft:", saved_doc.name);
@@ -2037,7 +2039,6 @@ export default {
 			}
 		});
 
-
 		this.eventBus.on("employee_selected", (data) => {
 			console.log("[Invoice] employee_selected event received:", data);
 
@@ -2062,13 +2063,12 @@ export default {
 			});
 		});
 
-
 		this.eventBus.on("check_items_for_service", (data) => {
 			console.log("[Invoice] check_items_for_service event received");
 
 			const hasCarWashService = this.checkForCarWashServices();
 
-			if (data && typeof data.callback === 'function') {
+			if (data && typeof data.callback === "function") {
 				data.callback(hasCarWashService);
 			}
 		});
