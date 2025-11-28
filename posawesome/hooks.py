@@ -281,6 +281,9 @@ fixtures = [
                     "Customer-custom_vehicle_no",
                     "Sales Invoice-custom_vehicle_no",
                     "POS Payment Method-custom_account",
+                    "Sales Invoice-custom_has_oil_item",
+                    "Sales Invoice-custom_odometer_reading",
+                    "Sales Invoice-custom_service_employee"
                 ],
             ]
         ],
@@ -297,6 +300,10 @@ fixtures = [
                     "Sales Invoice Reference-sales_invoice-reqd",
                     "Sales Invoice-main-field_order",
                     "POS Payment Method-main-field_order",
+                    "Sales Invoice-main-field_order",
+                    "Sales Invoice-contact_mobile-fieldtype",
+                    "Sales Invoice-contact_mobile-hidden",
+                    "Sales Invoice-main-field_order"
                 ],
             ]
         ],

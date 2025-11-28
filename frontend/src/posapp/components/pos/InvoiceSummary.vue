@@ -1,8 +1,6 @@
 <template>
-	<v-card
-		:class="['cards mb-0 mt-3 py-2 px-3 rounded-lg resizable', isDarkTheme ? '' : 'bg-grey-lighten-4']"
-		:style="(isDarkTheme ? 'background-color:#1E1E1E;' : '') + 'resize: vertical; overflow: auto;'"
-	>
+	<v-card :class="['cards mb-0 mt-3 py-2 px-3 rounded-lg resizable', isDarkTheme ? '' : 'bg-grey-lighten-4']"
+		:style="(isDarkTheme ? 'background-color:#1E1E1E;' : '') + 'resize: vertical; overflow: auto;'">
 		<v-row dense class="w-100">
 			<v-col cols="12" class="my-2">
 				<v-divider />
@@ -14,111 +12,98 @@
 					<!-- Left Side - Summary Fields -->
 					<v-col cols="12" md="7">
 						<v-row dense>
+							<!-- Service Employee Selection (for car wash services) -->
+							<v-col cols="12" v-if="showEmployeeSelection">
+								<v-autocomplete v-model="selectedEmployee" :items="employees"
+									:loading="loadingEmployees" :label="__('Select Service Employee')"
+									item-title="employee_name" item-value="name"
+									prepend-inner-icon="mdi-account-hard-hat" variant="solo" density="compact"
+									color="primary" clearable class="summary-field" :custom-filter="employeeFilter"
+									@update:model-value="handleEmployeeChange">
+									<template v-slot:item="{ props, item }">
+										<v-list-item v-bind="props" :title="item.raw.employee_name">
+											<template v-slot:prepend>
+												<v-avatar size="32" color="primary" class="mr-2">
+													<v-img v-if="item.raw.image" :src="item.raw.image" />
+													<v-icon v-else color="white">mdi-account</v-icon>
+												</v-avatar>
+											</template>
+											<template v-slot:subtitle>
+												<span class="text-caption">
+													{{ item.raw.name }}
+													<span v-if="item.raw.designation"> - {{ item.raw.designation
+														}}</span>
+												</span>
+											</template>
+										</v-list-item>
+									</template>
+									<template v-slot:chip="{ item }">
+										<v-chip size="small" color="primary">
+											<v-avatar left>
+												<v-img v-if="item.raw.image" :src="item.raw.image" />
+												<v-icon v-else>mdi-account</v-icon>
+											</v-avatar>
+											{{ item.raw.employee_name }} ({{ item.raw.name }})
+										</v-chip>
+									</template>
+								</v-autocomplete>
+							</v-col>
+
 							<!-- Total Qty -->
 							<v-col cols="6">
-								<v-text-field
-									:model-value="formatFloat(total_qty, hide_qty_decimals ? 0 : undefined)"
-									:label="__('Total Qty')"
-									prepend-inner-icon="mdi-format-list-numbered"
-									variant="solo"
-									density="compact"
-									readonly
-									color="accent"
-									class="summary-field"
-								/>
+								<v-text-field :model-value="formatFloat(total_qty, hide_qty_decimals ? 0 : undefined)"
+									:label="__('Total Qty')" prepend-inner-icon="mdi-format-list-numbered"
+									variant="solo" density="compact" readonly color="accent" class="summary-field" />
 							</v-col>
 
 							<!-- Additional Discount -->
 							<v-col cols="6" v-if="pos_profile && !pos_profile.posa_use_percentage_discount">
-								<v-text-field
-									:model-value="additional_discount"
+								<v-text-field :model-value="additional_discount"
 									@update:model-value="handleAdditionalDiscountUpdate"
-									@change="apply_additional_discount"
-									:label="__('Additional Discount')"
-									prepend-inner-icon="mdi-cash-minus"
-									variant="solo"
-									density="compact"
-									color="warning"
-									:prefix="pos_profile ? currencySymbol(pos_profile.currency) : ''"
-									:disabled="
+									@change="apply_additional_discount" :label="__('Additional Discount')"
+									prepend-inner-icon="mdi-cash-minus" variant="solo" density="compact" color="warning"
+									:prefix="pos_profile ? currencySymbol(pos_profile.currency) : ''" :disabled="
 										!pos_profile ||
 										!pos_profile.posa_allow_user_to_edit_additional_discount ||
 										!!discount_percentage_offer_name
-									"
-									class="summary-field"
-								/>
+									" class="summary-field" />
 							</v-col>
 
 							<!-- Additional Discount Percentage -->
 							<v-col cols="6" v-else-if="pos_profile">
-								<v-text-field
-									:model-value="additional_discount_percentage"
+								<v-text-field :model-value="additional_discount_percentage"
 									@update:model-value="handleAdditionalDiscountPercentageUpdate"
-									@change="apply_additional_discount"
-									:rules="[isNumber]"
-									:label="__('Additional Discount %')"
-									suffix="%"
-									prepend-inner-icon="mdi-percent"
-									variant="solo"
-									density="compact"
-									color="warning"
-									:disabled="
+									@change="apply_additional_discount" :rules="[isNumber]"
+									:label="__('Additional Discount %')" suffix="%" prepend-inner-icon="mdi-percent"
+									variant="solo" density="compact" color="warning" :disabled="
 										!pos_profile.posa_allow_user_to_edit_additional_discount ||
 										!!discount_percentage_offer_name
-									"
-									class="summary-field"
-								/>
+									" class="summary-field" />
 							</v-col>
 
 							<!-- Items Discounts -->
 							<v-col cols="6">
-								<v-text-field
-									:model-value="formatCurrency(total_items_discount_amount)"
-									:prefix="currencySymbol(displayCurrency)"
-									:label="__('Items Discounts')"
-									prepend-inner-icon="mdi-tag-minus"
-									variant="solo"
-									density="compact"
-									color="warning"
-									readonly
-									class="summary-field"
-								/>
+								<v-text-field :model-value="formatCurrency(total_items_discount_amount)"
+									:prefix="currencySymbol(displayCurrency)" :label="__('Items Discounts')"
+									prepend-inner-icon="mdi-tag-minus" variant="solo" density="compact" color="warning"
+									readonly class="summary-field" />
 							</v-col>
 
 							<!-- Total -->
 							<v-col cols="6">
-								<v-text-field
-									:model-value="formatCurrency(subtotal)"
-									:prefix="currencySymbol(displayCurrency)"
-									:label="__('Total')"
-									prepend-inner-icon="mdi-cash"
-									variant="solo"
-									density="compact"
-									readonly
-									color="success"
-									class="summary-field"
-								/>
+								<v-text-field :model-value="formatCurrency(subtotal)"
+									:prefix="currencySymbol(displayCurrency)" :label="__('Total')"
+									prepend-inner-icon="mdi-cash" variant="solo" density="compact" readonly
+									color="success" class="summary-field" />
 							</v-col>
 
 							<!-- Frequent Cards Button (LEFT SIDE) -->
 							<v-col cols="12">
-								<v-btn
-									block
-									color="orange"
-									theme="dark"
-									prepend-icon="mdi-cards"
-									@click="handleFrequentCards"
-									class="summary-btn"
-									:loading="frequentCardsLoading"
-								>
+								<v-btn block color="orange" theme="dark" prepend-icon="mdi-cards"
+									@click="handleFrequentCards" class="summary-btn" :loading="frequentCardsLoading">
 									<span class="flex-grow-1">{{ __("FREQUENT CARDS") }}</span>
-									<v-chip
-										v-if="completedCardsCount > 0"
-										size="small"
-										color="white"
-										text-color="orange"
-										class="ml-2"
-									>
+									<v-chip v-if="completedCardsCount > 0" size="small" color="white"
+										text-color="orange" class="ml-2">
 										{{ completedCardsCount }} {{ __("Free") }}
 									</v-chip>
 								</v-btn>
@@ -131,29 +116,16 @@
 						<v-row dense>
 							<!-- Save Button -->
 							<v-col cols="12">
-								<v-btn
-									block
-									color="info"
-									prepend-icon="mdi-content-save"
-									@click="handleSaveAndClear"
-									class="summary-btn"
-									:loading="saveLoading"
-								>
+								<v-btn block color="info" prepend-icon="mdi-content-save" @click="handleSaveAndClear"
+									class="summary-btn" :loading="saveLoading">
 									{{ __("SAVE & CLEAR") }}
 								</v-btn>
 							</v-col>
 
 							<!-- Loyalty Points Button -->
 							<v-col cols="12">
-								<v-btn
-									block
-									color="purple"
-									theme="dark"
-									prepend-icon="mdi-star"
-									@click="handleLoyaltyPoints"
-									class="summary-btn"
-									:loading="loyaltyLoading"
-								>
+								<v-btn block color="purple" theme="dark" prepend-icon="mdi-star"
+									@click="handleLoyaltyPoints" class="summary-btn" :loading="loyaltyLoading">
 									{{ __("LOYALTY POINTS") }}
 								</v-btn>
 							</v-col>
@@ -187,52 +159,25 @@
 							</v-col>
 
 							<!-- Select Sales Order Button (Conditional) -->
-							<v-col
-								cols="12"
-								v-if="pos_profile && pos_profile.custom_allow_select_sales_order == 1"
-							>
-								<v-btn
-									block
-									color="info"
-									theme="dark"
-									prepend-icon="mdi-book-search"
-									@click="handleSelectOrder"
-									class="summary-btn"
-									:loading="selectOrderLoading"
-								>
+							<v-col cols="12" v-if="pos_profile && pos_profile.custom_allow_select_sales_order == 1">
+								<v-btn block color="info" theme="dark" prepend-icon="mdi-book-search"
+									@click="handleSelectOrder" class="summary-btn" :loading="selectOrderLoading">
 									{{ __("SELECT S.O") }}
 								</v-btn>
 							</v-col>
 
 							<!-- Sales Return Button (Conditional) -->
 							<v-col cols="12" v-if="pos_profile && pos_profile.posa_allow_return == 1">
-								<v-btn
-									block
-									color="secondary"
-									theme="dark"
-									prepend-icon="mdi-backup-restore"
-									@click="handleOpenReturns"
-									class="summary-btn"
-									:loading="returnsLoading"
-								>
+								<v-btn block color="secondary" theme="dark" prepend-icon="mdi-backup-restore"
+									@click="handleOpenReturns" class="summary-btn" :loading="returnsLoading">
 									{{ __("SALES RETURN") }}
 								</v-btn>
 							</v-col>
 
 							<!-- Print Draft Button (Conditional) -->
-							<v-col
-								cols="12"
-								v-if="pos_profile && pos_profile.posa_allow_print_draft_invoices"
-							>
-								<v-btn
-									block
-									color="primary"
-									theme="dark"
-									prepend-icon="mdi-printer"
-									@click="handlePrintDraft"
-									class="summary-btn"
-									:loading="printLoading"
-								>
+							<v-col cols="12" v-if="pos_profile && pos_profile.posa_allow_print_draft_invoices">
+								<v-btn block color="primary" theme="dark" prepend-icon="mdi-printer"
+									@click="handlePrintDraft" class="summary-btn" :loading="printLoading">
 									{{ __("PRINT DRAFT") }}
 								</v-btn>
 							</v-col>
@@ -246,15 +191,9 @@
 				<v-row dense class="mt-4">
 					<!-- Cancel Sale Button -->
 					<v-col cols="6">
-						<v-btn
-							block
-							color="error"
-							theme="dark"
-							@click="handleCancelSale"
-							class="summary-btn"
+						<v-btn block color="error" theme="dark" @click="handleCancelSale" class="summary-btn"
 							:loading="cancelLoading"
-							style="display: flex; align-items: center; justify-content: center"
-						>
+							style="display: flex; align-items: center; justify-content: center">
 							<v-icon left size="18">mdi-close-circle</v-icon>
 							{{ __("CANCEL SALE") }}
 						</v-btn>
@@ -262,15 +201,9 @@
 
 					<!-- Pay Button -->
 					<v-col cols="6">
-						<v-btn
-							block
-							color="green darken-2"
-							theme="dark"
-							@click="handleShowPayment"
-							class="summary-btn pay-btn"
-							:loading="paymentLoading"
-							style="display: flex; align-items: center; justify-content: center"
-						>
+						<v-btn block color="green darken-2" theme="dark" @click="handleShowPayment"
+							class="summary-btn pay-btn" :loading="paymentLoading"
+							style="display: flex; align-items: center; justify-content: center">
 							<v-icon left size="18">mdi-credit-card</v-icon>
 							{{ __("PAY") }}
 						</v-btn>
@@ -321,22 +254,13 @@
 						</v-alert>
 
 						<!-- Redeem Points Input -->
-						<v-text-field
-							v-model="pointsToRedeem"
-							:label="__('Points to Redeem')"
-							prepend-inner-icon="mdi-star-minus"
-							variant="outlined"
-							density="comfortable"
-							color="purple"
-							type="number"
-							:rules="[
+						<v-text-field v-model="pointsToRedeem" :label="__('Points to Redeem')"
+							prepend-inner-icon="mdi-star-minus" variant="outlined" density="comfortable" color="purple"
+							type="number" :rules="[
 								isNumber,
 								(v) => v <= loyaltyPoints || __('Cannot redeem more than available points'),
 								(v) => v >= 0 || __('Points must be positive'),
-							]"
-							:hint="__('Enter points to redeem for a discount')"
-							persistent-hint
-						/>
+							]" :hint="__('Enter points to redeem for a discount')" persistent-hint />
 
 						<!-- Redemption Preview -->
 						<div v-if="pointsToRedeem > 0" class="mt-3 pa-3 redemption-preview">
@@ -369,13 +293,8 @@
 					<v-btn color="error" variant="text" @click="showLoyaltyDialog = false">
 						{{ __("Cancel") }}
 					</v-btn>
-					<v-btn
-						color="purple"
-						variant="flat"
-						:disabled="!isValidRedemption || redeemLoading"
-						:loading="redeemLoading"
-						@click="handleRedeemPoints"
-					>
+					<v-btn color="purple" variant="flat" :disabled="!isValidRedemption || redeemLoading"
+						:loading="redeemLoading" @click="handleRedeemPoints">
 						<v-icon left>mdi-check</v-icon>
 						{{ __("Apply Redemption") }}
 					</v-btn>
@@ -407,12 +326,8 @@
 						</p>
 
 						<!-- Loading State -->
-						<v-progress-linear
-							v-if="loadingFrequentCards"
-							indeterminate
-							color="orange"
-							class="mb-3"
-						></v-progress-linear>
+						<v-progress-linear v-if="loadingFrequentCards" indeterminate color="orange"
+							class="mb-3"></v-progress-linear>
 
 						<!-- Empty State -->
 						<div v-else-if="frequentCards.length === 0" class="text-center py-8">
@@ -428,34 +343,27 @@
 						<!-- Cards Grid -->
 						<v-row v-else dense>
 							<v-col v-for="card in frequentCards" :key="card.name" cols="12">
-								<v-card
-									:class="[
+								<v-card :class="[
 										'frequent-card',
 										card.is_expired ? 'expired-card' : '',
 										card.visits >= card.required_visits ? 'completed-card' : '',
-									]"
-									:elevation="card.visits >= card.required_visits ? 4 : 2"
-									@click="handleCardClick(card)"
-									:disabled="card.is_expired || applyingCard"
-								>
+									]" :elevation="card.visits >= card.required_visits ? 4 : 2" @click="handleCardClick(card)"
+									:disabled="card.is_expired || applyingCard">
 									<v-card-text class="pa-4">
 										<v-row align="center" no-gutters>
 											<v-col cols="auto" class="mr-3">
-												<v-avatar
-													:color="
+												<v-avatar :color="
 														card.is_expired
 															? 'grey'
 															: card.visits >= card.required_visits
 																? 'success'
 																: 'orange'
-													"
-													size="56"
-												>
+													" size="56">
 													<v-icon color="white" size="28">
 														{{
-															card.visits >= card.required_visits
-																? "mdi-gift"
-																: "mdi-cards"
+														card.visits >= card.required_visits
+														? "mdi-gift"
+														: "mdi-cards"
 														}}
 													</v-icon>
 												</v-avatar>
@@ -472,61 +380,40 @@
 												<div class="visit-progress mb-2">
 													<v-row dense align="center">
 														<v-col cols="auto">
-															<v-chip
-																size="small"
-																:color="
+															<v-chip size="small" :color="
 																	card.visits >= card.required_visits
 																		? 'success'
 																		: 'orange'
-																"
-															>
+																">
 																{{ card.visits }}/{{ card.required_visits }}
 																visits
 															</v-chip>
 														</v-col>
 														<v-col>
-															<v-progress-linear
-																:model-value="
+															<v-progress-linear :model-value="
 																	(card.visits / card.required_visits) * 100
-																"
-																:color="
+																" :color="
 																	card.visits >= card.required_visits
 																		? 'success'
 																		: 'orange'
-																"
-																height="6"
-																rounded
-															></v-progress-linear>
+																" height="6" rounded></v-progress-linear>
 														</v-col>
 													</v-row>
 												</div>
 
 												<!-- Status & Expiry -->
 												<div>
-													<v-chip
-														v-if="card.is_expired"
-														size="small"
-														color="error"
-														variant="flat"
-													>
+													<v-chip v-if="card.is_expired" size="small" color="error"
+														variant="flat">
 														<v-icon size="small" left>mdi-clock-alert</v-icon>
 														{{ __("Expired") }}
 													</v-chip>
-													<v-chip
-														v-else-if="card.visits >= card.required_visits"
-														size="small"
-														color="success"
-														variant="flat"
-													>
+													<v-chip v-else-if="card.visits >= card.required_visits" size="small"
+														color="success" variant="flat">
 														<v-icon size="small" left>mdi-gift</v-icon>
 														{{ __("Free Service Available!") }}
 													</v-chip>
-													<v-chip
-														v-else
-														size="small"
-														color="grey"
-														variant="outlined"
-													>
+													<v-chip v-else size="small" color="grey" variant="outlined">
 														<v-icon size="small" left>mdi-calendar</v-icon>
 														{{ __("Expires") }}:
 														{{ formatDate(card.expiry_date) }}
@@ -540,18 +427,12 @@
 						</v-row>
 
 						<!-- Auto-apply notification -->
-						<v-alert
-							v-if="hasCompletedCards"
-							type="success"
-							variant="tonal"
-							density="compact"
-							class="mt-4"
-							icon="mdi-information"
-						>
+						<v-alert v-if="hasCompletedCards" type="success" variant="tonal" density="compact" class="mt-4"
+							icon="mdi-information">
 							{{
-								__(
-									"Click on a completed card to add the free service to your invoice automatically",
-								)
+							__(
+							"Click on a completed card to add the free service to your invoice automatically",
+							)
 							}}
 						</v-alert>
 					</div>
@@ -612,6 +493,11 @@ export default {
 			applyingCard: false,
 			showFrequentCardsDialog: false,
 			frequentCardsLoading: false,
+
+			employees: [],
+            selectedEmployee: null,
+            loadingEmployees: false,
+            showEmployeeSelection: false,
 		};
 	},
 	emits: [
@@ -705,6 +591,14 @@ export default {
 		},
 
 		async handleSaveAndClear() {
+			 //  MANDATORY EMPLOYEE VALIDATION FOR CAR WASH SERVICE
+			if (this.showEmployeeSelection && !this.selectedEmployee) {
+				frappe.show_alert({
+					message: this.__("Please select a service employee before saving."),
+					indicator: "red",
+				});
+				return;
+			}
 			this.saveLoading = true;
 			try {
 				this.$emit("save-and-clear");
@@ -975,7 +869,7 @@ export default {
 					});
 
 					frappe.show_alert({
-						message: this.__("🎉 Free service added to invoice!"),
+						message: this.__(" Free service added to invoice!"),
 						indicator: "green",
 					});
 
@@ -1005,6 +899,185 @@ export default {
 			if (!dateStr) return "";
 			const date = new Date(dateStr);
 			return date.toLocaleDateString();
+		},
+
+		employeeFilter(value, query, item) {
+			if (!query) return true;
+
+			const searchTerm = query.toLowerCase();
+			const employeeName = (item.raw.employee_name || '').toLowerCase();
+			const employeeCode = (item.raw.name || '').toLowerCase();
+			const designation = (item.raw.designation || '').toLowerCase();
+
+			// Extract just the number from employee code (e.g., "HR-EMP-00001" -> "00001" or "1")
+			const codeNumber = employeeCode.replace(/[^0-9]/g, '');
+			const queryNumber = searchTerm.replace(/[^0-9]/g, '');
+
+			return employeeName.includes(searchTerm) ||
+				employeeCode.includes(searchTerm) ||
+				designation.includes(searchTerm) ||
+				(queryNumber && codeNumber.includes(queryNumber));
+		},
+
+		async fetchEmployees() {
+			if (!this.pos_profile?.company) {
+				console.warn("[InvoiceSummary] No company in POS profile");
+				return;
+			}
+
+			this.loadingEmployees = true;
+			try {
+				console.log("[InvoiceSummary] Fetching employees for company:", this.pos_profile.company);
+
+				const response = await frappe.call({
+					method: "posawesome.posawesome.api.employees.get_active_employees",
+					args: {
+						company: this.pos_profile.company,
+					},
+				});
+
+				if (response?.message) {
+					this.employees = response.message;
+					console.log("[InvoiceSummary] Employees loaded:", this.employees.length);
+				} else {
+					console.warn("[InvoiceSummary] No employees returned from API");
+					this.employees = [];
+				}
+			} catch (error) {
+				console.error("[InvoiceSummary] Failed to fetch employees:", error);
+				frappe.show_alert({
+					message: this.__("Failed to load employees. Please try again."),
+					indicator: "red",
+				});
+				this.employees = [];
+			} finally {
+				this.loadingEmployees = false;
+			}
+		},
+
+		handleEmployeeChange(employeeId) {
+			console.log("[InvoiceSummary] Employee selected:", employeeId);
+
+			if (!employeeId) {
+				// Employee cleared
+				this.selectedEmployee = null;
+				this.eventBus.emit("employee_selected", {
+					employee_id: null,
+					employee_name: null,
+				});
+				return;
+			}
+
+			// Find selected employee details
+			const employee = this.employees.find(e => e.name === employeeId);
+
+			if (!employee) {
+				console.warn("[InvoiceSummary] Selected employee not found in list:", employeeId);
+				return;
+			}
+
+			console.log("[InvoiceSummary] Employee details:", employee);
+
+			// Emit event to parent component to attach employee to invoice
+			this.eventBus.emit("employee_selected", {
+				employee_id: employee.name,
+				employee_name: employee.employee_name,
+				designation: employee.designation,
+				department: employee.department,
+			});
+
+			// Show confirmation message
+			frappe.show_alert({
+				message: this.__(`Service employee set to: ${employee.employee_name}`),
+				indicator: "green",
+			});
+		},
+
+		checkIfCarWashService() {
+			console.log("[InvoiceSummary] Checking for car wash services");
+
+			// Emit event to parent to check items
+			this.eventBus.emit("check_items_for_service", {
+				callback: (hasCarWashService) => {
+					console.log("[InvoiceSummary] Has car wash service:", hasCarWashService);
+					this.showEmployeeSelection = hasCarWashService;
+
+					// Fetch employees if needed and not already loaded
+					if (hasCarWashService && this.employees.length === 0) {
+						this.fetchEmployees();
+					}
+
+					// Clear selection if no longer needed
+					if (!hasCarWashService && this.selectedEmployee) {
+						this.selectedEmployee = null;
+						this.handleEmployeeChange(null);
+					}
+				}
+			});
+		},
+
+		async handleExternalEmployeeSelected(payload) {
+			// payload may be { employee_id, employee_name } or just employee_id (string)
+			if (!payload) {
+				this.selectedEmployee = null;
+				this.showEmployeeSelection = false;
+				return;
+			}
+
+			const empId = payload.employee_id || payload;
+			const empNameProvided = payload.employee_name || null;
+
+			// show selector
+			this.showEmployeeSelection = true;
+
+			// if we already have employees loaded, set selection directly
+			if (empNameProvided) {
+				// if server gave friendly name, create/ensure employees array entry to show chip
+				// (we keep a minimal object, fetchEmployees will refresh full list eventually)
+				const exists = this.employees.find(e => e.name === empId);
+				if (!exists) {
+					this.employees.unshift({
+						name: empId,
+						employee_name: empNameProvided,
+					});
+				}
+				this.selectedEmployee = empId;
+				return;
+			}
+
+			// No friendly name provided — ensure list loaded then set selection
+			if (this.employees.length === 0) {
+				await this.fetchEmployees();
+			}
+
+			// if still not found, try to fetch the single employee explicitly
+			let found = this.employees.find(e => e.name === empId);
+			if (!found) {
+				try {
+					const resp = await frappe.call({
+						method: "frappe.client.get",
+						args: { doctype: "Employee", name: empId },
+					});
+					if (resp && resp.message) {
+						this.employees.unshift(resp.message);
+						found = resp.message;
+					}
+				} catch (err) {
+					console.warn("[InvoiceSummary] Employee single fetch failed", err);
+				}
+			}
+
+			if (found) {
+				this.selectedEmployee = found.name;
+				// show toast
+				frappe.show_alert({
+					message: this.__(`Service employee set to: ${found.employee_name || found.name}`),
+					indicator: "green",
+				});
+			} else {
+				// fallback: set id anyway so value exists and user can see placeholder
+				this.selectedEmployee = empId;
+			}
 		},
 
 		async handleCancelSale() {
@@ -1101,9 +1174,37 @@ export default {
 
 		// Listen for item additions to check for auto-apply
 		this.eventBus.on("item_added_to_invoice", this.checkAutoApplyCard);
+
+		// EMPLOYEE SELECTION LISTENERS
+		this.eventBus.on("show_employee_selection", (shouldShow) => {
+			console.log("[InvoiceSummary] show_employee_selection event:", shouldShow);
+			this.showEmployeeSelection = shouldShow;
+
+			if (shouldShow && this.employees.length === 0) {
+				console.log("[InvoiceSummary] Fetching employees...");
+				this.fetchEmployees();
+			}
+		});
+
+		// Listen for clear employee selection event
+		this.eventBus.on("clear_employee_selection", () => {
+			console.log("[InvoiceSummary] Clearing employee selection from event");
+			this.selectedEmployee = null;
+			this.showEmployeeSelection = false;
+		});
+
+		// Check initially if we should show employee selection
+		this.checkIfCarWashService();
+
+		this.eventBus.on("employee_selected", this.handleExternalEmployeeSelected);
+
 	},
 	beforeUnmount() {
 		this.eventBus.off("item_added_to_invoice", this.checkAutoApplyCard);
+		this.eventBus.off("show_employee_selection");
+		this.eventBus.off("clear_employee_selection");
+		this.eventBus.off("employee_selected", this.handleExternalEmployeeSelected);
+
 	},
 };
 </script>

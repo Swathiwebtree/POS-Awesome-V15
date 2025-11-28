@@ -375,6 +375,10 @@ export default {
 			discount_amount: 0,
 			additional_discount: 0,
 			additional_discount_percentage: 0,
+			service_employee: null,
+		    service_employee_name: null,
+		    service_employee_designation: null,
+	     	service_employee_department: null,
 			total_tax: 0,
 			items: [], // List of invoice items
 			packed_items: [], // Packed items for bundles
@@ -540,6 +544,96 @@ export default {
 				});
 			}
 		},
+
+		checkForCarWashServices() {
+			if (!this.items || this.items.length === 0) {
+				return false;
+			}
+
+			// Check if any item is a car wash service
+			const hasCarWashService = this.items.some(item => {
+				// Check item group
+				const itemGroupMatch = item.item_group &&
+					(item.item_group.toLowerCase().includes('car wash') ||
+						item.item_group.toLowerCase().includes('Carwash') ||
+						item.item_group.toLowerCase().includes('wash'));
+
+				// Check item code
+				const itemCodeMatch = item.item_code &&
+					(item.item_code.toLowerCase().includes('wash') ||
+						item.item_code.toLowerCase().includes('service'));
+
+				// Check if item has service_item flag
+				const serviceItemFlag = item.service_item === 1 || item.is_service_item === 1;
+
+				// Check item name
+				const itemNameMatch = item.item_name &&
+					item.item_name.toLowerCase().includes('wash');
+
+				return itemGroupMatch || itemCodeMatch || serviceItemFlag || itemNameMatch;
+			});
+
+			console.log("[Invoice] checkForCarWashServices result:", hasCarWashService);
+			return hasCarWashService;
+		},
+	
+		updateServiceEmployeeInDoc() {
+			// Ensure invoice_doc exists - create if it doesn't
+			if (!this.invoice_doc) {
+				console.log("[Invoice] Creating invoice_doc for employee update");
+				this.invoice_doc = {
+					doctype: "Sales Invoice",
+					customer: this.customer || "",
+					posting_date: this.posting_date || frappe.datetime.nowdate(),
+					items: this.items || [],
+					pos_profile: this.pos_profile?.name || "",
+					company: this.pos_profile?.company || "",
+				};
+			}
+
+			if (!this.service_employee) {
+				console.warn("[Invoice] No service employee to update");
+				return;
+			}
+
+			console.log("[Invoice] Updating invoice_doc with employee:", this.service_employee);
+
+			// Add custom fields for service employee
+			this.invoice_doc.custom_service_employee = this.service_employee;
+			this.invoice_doc.custom_service_employee_name = this.service_employee_name;
+
+			// Optional: store additional employee details
+			if (this.service_employee_designation) {
+				this.invoice_doc.custom_service_employee_designation = this.service_employee_designation;
+			}
+			if (this.service_employee_department) {
+				this.invoice_doc.custom_service_employee_department = this.service_employee_department;
+			}
+
+			console.log("[Invoice] Invoice doc updated with employee:", {
+				employee_id: this.invoice_doc.custom_service_employee,
+				employee_name: this.invoice_doc.custom_service_employee_name,
+			});
+
+			// Force update
+			this.$forceUpdate();
+		},
+	
+		clearServiceEmployee() {
+			console.log("[Invoice] Clearing service employee");
+			this.service_employee = null;
+			this.service_employee_name = null;
+			this.service_employee_designation = null;
+			this.service_employee_department = null;
+
+			if (this.invoice_doc) {
+				this.invoice_doc.custom_service_employee = null;
+				this.invoice_doc.custom_service_employee_name = null;
+				this.invoice_doc.custom_service_employee_designation = null;
+				this.invoice_doc.custom_service_employee_department = null;
+			}
+		},
+
 
 		apply_additional_discount() {
 			console.log("[Invoice] apply_additional_discount called");
@@ -1196,12 +1290,24 @@ export default {
 			this.invoice_doc.pos_profile = this.pos_profile?.name || "";
 			this.invoice_doc.company = this.pos_profile?.company || "";
 
+			if (this.service_employee) {
+				this.invoice_doc.custom_service_employee = this.service_employee;
+				this.invoice_doc.custom_service_employee_name = this.service_employee_name;
+				if (this.service_employee_designation) {
+					this.invoice_doc.custom_service_employee_designation = this.service_employee_designation;
+				}
+				if (this.service_employee_department) {
+					this.invoice_doc.custom_service_employee_department = this.service_employee_department;
+				}
+			}
+
 			console.log("[Invoice] get_invoice_doc returning:", {
 				items: (this.invoice_doc.items || []).length,
 				net_total: this.invoice_doc.net_total,
 				discount: this.invoice_doc.discount_amount,
 				grand_total: this.invoice_doc.grand_total,
 				rounded_total: this.invoice_doc.rounded_total,
+				employee: this.invoice_doc.custom_service_employee,
 			});
 
 			return this.invoice_doc;
@@ -1468,6 +1574,16 @@ export default {
 				return null;
 			}
 
+			// Validate employee for car wash services
+			const hasCarWashService = this.checkForCarWashServices();
+			if (hasCarWashService && !this.service_employee) {
+				frappe.show_alert({
+					message: this.__("Please select a service employee for car wash services"),
+					indicator: "warning",
+				});
+				return null;
+			}
+
 			// Ensure invoice_doc exists
 			if (!this.invoice_doc) {
 				this.invoice_doc = {};
@@ -1490,6 +1606,13 @@ export default {
 			this.invoice_doc.pos_profile = this.pos_profile && this.pos_profile.name;
 			this.invoice_doc.company = this.pos_profile && this.pos_profile.company;
 
+			// EMPLOYEE FIELDS TO INVOICE
+			if (this.service_employee) {
+				this.invoice_doc.custom_service_employee = this.service_employee;
+				this.invoice_doc.custom_service_employee_name = this.service_employee_name;
+				console.log("[Invoice] Employee added to invoice:", this.service_employee);
+			}
+
 			// Required: ensure parent doctype is set for insert
 			this.invoice_doc.doctype = "Sales Invoice";
 
@@ -1508,10 +1631,11 @@ export default {
 				items_count: this.invoice_doc.items.length,
 				grand_total: this.invoice_doc.grand_total,
 				currency: this.invoice_doc.currency,
+				employee: this.invoice_doc.custom_service_employee,
 			});
 
 			try {
-				// 1) Ensure customer exists (as before)
+				// 1) Ensure customer exists
 				const customer_name = this.invoice_doc.customer;
 				if (customer_name) {
 					const existsResp = await frappe.call({
@@ -1543,7 +1667,7 @@ export default {
 					}
 				}
 
-				// ---------- NEW: Resolve and validate POS Opening Shift ----------
+				// 2) Resolve and validate POS Opening Shift
 				let openingShiftName = null;
 
 				if (this.pos_opening_shift) {
@@ -1605,15 +1729,14 @@ export default {
 					});
 					return null;
 				}
-				// ----------------------------------------------------------------
 
-				// Resolve draft name to update (prefer loaded_draft_name then invoice_doc.name)
+				// 3) Resolve draft name to update
 				const draft_name_to_update =
 					this.loaded_draft_name || (this.invoice_doc && this.invoice_doc.name) || null;
 				console.log("[Invoice] resolved draft_name_to_update:", draft_name_to_update);
 
 				if (draft_name_to_update) {
-					// Update existing draft
+					// UPDATE EXISTING DRAFT
 					console.log("[Invoice] Updating existing draft:", draft_name_to_update);
 
 					const field_map = {
@@ -1633,6 +1756,9 @@ export default {
 						pos_profile: this.invoice_doc.pos_profile,
 						company: this.invoice_doc.company,
 						posa_pos_opening_shift: this.invoice_doc.posa_pos_opening_shift,
+						// EMPLOYEE FIELDS TO UPDATE
+						custom_service_employee: this.invoice_doc.custom_service_employee,
+						custom_service_employee_name: this.invoice_doc.custom_service_employee_name,
 					};
 
 					const updResp = await frappe.call({
@@ -1654,7 +1780,7 @@ export default {
 						this.invoice_doc.name = draft_name_to_update;
 						this.eventBus.emit("invoice_saved_successfully", { name: draft_name_to_update });
 
-						// --- NEW: emit draft_saved for fast auto-refresh (merge into drafts list) ---
+						// Emit draft_saved for fast auto-refresh
 						try {
 							const savedDraft = {
 								name: draft_name_to_update,
@@ -1663,6 +1789,7 @@ export default {
 								posting_time: this.invoice_doc.posting_time || null,
 								grand_total: this.invoice_doc.grand_total,
 								currency: this.invoice_doc.currency,
+								custom_service_employee: this.invoice_doc.custom_service_employee,
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
 							console.log(
@@ -1673,12 +1800,25 @@ export default {
 							console.warn("[Invoice] Failed to emit draft_saved for update", e);
 						}
 
+						// CLEAR EMPLOYEE SELECTION AFTER SUCCESSFUL SAVE
+						this.service_employee = null;
+						this.service_employee_name = null;
+						this.service_employee_designation = null;
+						this.service_employee_department = null;
+						console.log("[Invoice] Employee selection cleared after save");
+
+						// Emit event to clear employee in UI
+						this.eventBus.emit("clear_employee_selection");
+
+						// CLEAR ALL INVOICE DATA
+						this.clear_invoice();
+
 						return updResp.message;
 					} else {
 						throw new Error("Failed to update draft: " + (updResp.exc || ""));
 					}
 				} else {
-					// Create new Sales Invoice draft
+					// CREATE NEW DRAFT
 					console.log("[Invoice] Creating new draft (no existing draft loaded)");
 
 					const insertResp = await frappe.call({
@@ -1703,9 +1843,8 @@ export default {
 
 						this.eventBus.emit("invoice_saved_successfully", { name: saved_name });
 
-						// --- NEW: emit draft_saved for fast auto-refresh (merge into drafts list) ---
+						// Emit draft_saved for fast auto-refresh
 						try {
-							// saved_doc likely has fields; build minimal object for drafts table
 							const savedDraft = {
 								name: saved_doc.name,
 								customer: saved_doc.customer || this.invoice_doc.customer,
@@ -1716,12 +1855,26 @@ export default {
 										? saved_doc.grand_total
 										: this.invoice_doc.grand_total,
 								currency: saved_doc.currency || this.invoice_doc.currency,
+								custom_service_employee: saved_doc.custom_service_employee || this.invoice_doc.custom_service_employee,
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
 							console.log("[Invoice] Emitted draft_saved for new draft:", saved_doc.name);
 						} catch (e) {
 							console.warn("[Invoice] Failed to emit draft_saved for create", e);
 						}
+
+						// CLEAR EMPLOYEE SELECTION AFTER SUCCESSFUL SAVE
+						this.service_employee = null;
+						this.service_employee_name = null;
+						this.service_employee_designation = null;
+						this.service_employee_department = null;
+						console.log("[Invoice] Employee selection cleared after save");
+
+						// Emit event to clear employee in UI
+						this.eventBus.emit("clear_employee_selection");
+
+						// CLEAR ALL INVOICE DATA
+						this.clear_invoice();
 
 						return saved_doc;
 					} else {
@@ -1760,7 +1913,6 @@ export default {
 				this.$nextTick(() => this.$forceUpdate && this.$forceUpdate());
 			}
 		},
-
 		async save_invoice() {
 			console.log("[Invoice] save_invoice() called");
 
@@ -1789,19 +1941,34 @@ export default {
 			// Reset all data
 			this.invoice_doc = null;
 			this.customer = "";
+			this.customer_name = "";
+			this.vehicle_number = "";
 			this.items = [];
 			this.additional_discount = 0;
 			this.additional_discount_percentage = 0;
 			this.discount_amount = 0;
 			this.total_tax = 0;
+			this.subtotal = 0;
+			this.grand_total = 0;
+			this.rounded_total = 0;
+			this.total_qty = 0;
 			this.loaded_draft_name = null;
 
-			// Emit event
+			// Clear employee fields
+			this.service_employee = null;
+			this.service_employee_name = null;
+			this.service_employee_designation = null;
+			this.service_employee_department = null;
+
+			// Emit events to clear UI components
 			this.eventBus.emit("invoice_cleared");
+			this.eventBus.emit("clear_employee_selection");
+			this.eventBus.emit("clear_customer");
+			this.eventBus.emit("clear_vehicle_number");
+			this.eventBus.emit("clear_all_fields");
 
 			console.log("[Invoice] Invoice cleared successfully");
 		},
-
 		// Handle item reordering from drag and drop
 		handleItemReorder(reorderData) {
 			const { fromIndex, toIndex } = reorderData;
@@ -1869,6 +2036,51 @@ export default {
 				});
 			}
 		});
+
+
+		this.eventBus.on("employee_selected", (data) => {
+			console.log("[Invoice] employee_selected event received:", data);
+
+			if (!data || !data.employee_id) {
+				// Employee cleared
+				this.clearServiceEmployee();
+				return;
+			}
+
+			// Update employee data
+			this.service_employee = data.employee_id;
+			this.service_employee_name = data.employee_name;
+			this.service_employee_designation = data.designation || null;
+			this.service_employee_department = data.department || null;
+
+			// Update invoice document
+			this.updateServiceEmployeeInDoc();
+
+			console.log("[Invoice] Service employee set:", {
+				id: this.service_employee,
+				name: this.service_employee_name,
+			});
+		});
+
+
+		this.eventBus.on("check_items_for_service", (data) => {
+			console.log("[Invoice] check_items_for_service event received");
+
+			const hasCarWashService = this.checkForCarWashServices();
+
+			if (data && typeof data.callback === 'function') {
+				data.callback(hasCarWashService);
+			}
+		});
+
+		this.$nextTick(() => {
+			const hasCarWashService = this.checkForCarWashServices();
+			if (hasCarWashService) {
+				console.log("[Invoice] Car wash service detected on mount");
+				this.eventBus.emit("show_employee_selection", true);
+			}
+		});
+
 		// ADD THESE NEW EVENT LISTENERS
 		this.eventBus.on("get_current_invoice_from_component", () => {
 			console.log("[Invoice] get_current_invoice_from_component event received");
@@ -2088,6 +2300,12 @@ export default {
 
 		this.eventBus.off("get_current_invoice_from_component");
 		this.eventBus.off("prepare_invoice_for_payment");
+
+		// Clean up employee selection event listeners
+		this.eventBus.off("employee_selected");
+		this.eventBus.off("check_items_for_service");
+
+		console.log("[Invoice] Employee event listeners cleaned up");
 	},
 
 	// Register global keyboard shortcuts when component is created
@@ -2196,6 +2414,40 @@ export default {
 		items_view(newVal) {
 			console.log("[Invoice] Items view changed to:", newVal);
 			this.eventBus.emit("update_items_view", newVal);
+		},
+
+		items: {
+			handler(newItems, oldItems) {
+				console.log("[Invoice] Items changed, checking for car wash services");
+
+				// Check if we need to show employee selection
+				const hasCarWashService = this.checkForCarWashServices();
+
+				// Emit event to show/hide employee selection in summary
+				this.eventBus.emit("show_employee_selection", hasCarWashService);
+
+				// If no car wash services, clear any selected employee
+				if (!hasCarWashService && this.service_employee) {
+					this.clearServiceEmployee();
+				}
+
+				// Update invoice doc
+				if (this.invoice_doc) {
+					this.invoice_doc.items = newItems;
+				}
+			},
+			deep: true,
+			immediate: false,
+		},
+
+		service_employee: {
+			handler(newVal) {
+				if (newVal) {
+					console.log("[Invoice] Service employee changed:", newVal);
+					this.updateServiceEmployeeInDoc();
+				}
+			},
+			immediate: false,
 		},
 	},
 };

@@ -1390,7 +1390,36 @@ export default {
 				}
 			}
 		}, 500);
+	
+	   // ADD THESE EVENT LISTENERS FOR CLEARING FIELDS
+		this.eventBus.on("clear_customer", () => {
+			console.log("[Customer] Clearing customer from event");
+			this.selectedCustomer = null;
+			this.customer = "";
+			this.internalCustomer = null;
+			this.tempSelectedCustomer = null;
+		});
 
+		this.eventBus.on("clear_vehicle_number", () => {
+			console.log("[Vehicle] Clearing vehicle number from event");
+			this.vehicles = [];
+			this.selectedVehicle = null;
+			this.vehicle_no = "";
+		});
+
+		this.eventBus.on("clear_all_fields", () => {
+			console.log("[Customer & Vehicle] Clearing all fields");
+			// Clear customer
+			this.selectedCustomer = null;
+			this.customer = "";
+			this.internalCustomer = null;
+			this.tempSelectedCustomer = null;
+
+			// Clear vehicle
+			this.vehicles = [];
+			this.selectedVehicle = null;
+			this.vehicle_no = "";
+		});
 		this.effectiveReadonly = this.readonly && navigator.onLine;
 
 		this.$nextTick(() => {
@@ -1507,6 +1536,23 @@ export default {
 		if (this.customer) {
 			this.fetchVehiclesForCustomer(this.customer);
 		}
+	},
+	beforeUnmount() {
+		// Clean up event listeners
+		this.eventBus.off("clear_customer");
+		this.eventBus.off("clear_vehicle_number");
+		this.eventBus.off("clear_all_fields");
+		this.eventBus.off("load_invoice_customer");
+		this.eventBus.off("register_pos_profile");
+		this.eventBus.off("payments_register_pos_profile");
+		this.eventBus.off("set_customer");
+		this.eventBus.off("add_customer_to_list");
+		this.eventBus.off("set_customer_readonly");
+		this.eventBus.off("set_customer_info_to_edit");
+		this.eventBus.off("fetch_customer_details");
+		this.eventBus.off("add_vehicle_to_list");
+		this.eventBus.off("set_vehicle");
+		this.eventBus.off("set_customer_from_vehicle");
 	},
 };
 </script>

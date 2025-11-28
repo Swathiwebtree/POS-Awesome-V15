@@ -1098,6 +1098,18 @@ export default {
 		},
 		// Highlight and focus the submit button when payment screen opens
 		handleShowPayment(data) {
+
+			// If employee selection is required, prevent proceeding
+			if (this.showEmployeeSelection && !this.selectedEmployee) {
+				// friendlier message and sound
+				frappe.show_alert({
+					message: this.__("Please select a service employee before proceeding to payment."),
+					indicator: "red",
+				});
+				frappe.utils.play_sound && frappe.utils.play_sound("error");
+				return;
+			}
+
 			if (data === "true") {
 				this.$nextTick(() => {
 					setTimeout(() => {
@@ -1997,6 +2009,7 @@ export default {
 	mounted() {
 		// ADD THESE EVENT LISTENERS
 		this.eventBus.on("show_payment", (data) => {
+			
 			if (data === "true") {
 				console.log("[Payment] show_payment triggered");
 				// Get invoice data from Invoice component

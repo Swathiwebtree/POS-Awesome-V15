@@ -423,7 +423,6 @@ export default {
 
 				if (!this.pos_profile || !this.pos_profile.name) {
 					if (this.pos_profile === null) return;
-
 					this.eventBus.emit("show_message", {
 						title: __("POS Profile not loaded. Please refresh the page."),
 						color: "error",
@@ -448,6 +447,8 @@ export default {
 							"posting_time",
 							"grand_total",
 							"currency",
+							// Request these so frontend can show employee
+							"custom_service_employee",
 						],
 						limit_page_length: 500,
 						order_by: "modified desc",
@@ -469,6 +470,7 @@ export default {
 				this.loadDraftsLoading = false;
 			}
 		},
+
 
 		get_items_groups() {
 			if (!this.pos_profile) {
@@ -505,6 +507,15 @@ export default {
 
 				if (r.message) {
 					this.eventBus.emit("load_invoice", r.message);
+
+					// If the loaded invoice has a service employee, tell other components.
+					if (r.message.custom_service_employee) {
+						// If server included a helper name (custom_service_employee_name) prefer that
+						this.eventBus.emit("employee_selected", {
+							employee_id: r.message.custom_service_employee,
+							employee_name: r.message.custom_service_employee_name || null,
+						});
+					}
 
 					this.eventBus.emit("show_message", {
 						title: __("Draft invoice {0} loaded successfully", [draft_name]),
