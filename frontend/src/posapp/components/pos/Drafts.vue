@@ -459,12 +459,12 @@ export default {
 		},
 	},
 
-  created() {
-    // Parent can emit open_drafts with data array — prefer that when present
-    this.eventBus.on("open_drafts", async (data) => {
-      if (Array.isArray(data) && data.length) {
-        // Normalize and attempt to resolve employee ids in that array
-        const normalized = this._normalizeAndSort(data);
+	created() {
+		// Parent can emit open_drafts with data array — prefer that when present
+		this.eventBus.on("open_drafts", async (data) => {
+			if (Array.isArray(data) && data.length) {
+				// Normalize and attempt to resolve employee ids in that array
+				const normalized = this._normalizeAndSort(data);
 
 				if (employeeIdsToResolve.length) {
 					await this._resolveEmployeeNames(employeeIdsToResolve);
