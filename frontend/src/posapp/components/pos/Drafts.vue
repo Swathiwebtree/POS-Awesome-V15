@@ -459,7 +459,7 @@ export default {
 		},
 	},
 
-  created() {
+	created() {
 		// Parent can emit open_drafts with data array — prefer that when present
 		this.eventBus.on("open_drafts", async (data) => {
 			if (Array.isArray(data) && data.length) {
@@ -471,8 +471,8 @@ export default {
 					new Set(
 						normalized
 							.map((d) => d.custom_service_employee)
-							.filter((v) => v && !this._employeeNameCache[v])
-					)
+							.filter((v) => v && !this._employeeNameCache[v]),
+					),
 				);
 
 				if (employeeIdsToResolve.length) {
