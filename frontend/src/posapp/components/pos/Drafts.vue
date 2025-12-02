@@ -459,12 +459,25 @@ export default {
 		},
 	},
 
+<<<<<<< HEAD
 	created() {
+=======
+  created() {
+>>>>>>> 9f51950 (Fixed the loading drafts issue)
 		// Parent can emit open_drafts with data array — prefer that when present
 		this.eventBus.on("open_drafts", async (data) => {
 			if (Array.isArray(data) && data.length) {
 				// Normalize and attempt to resolve employee ids in that array
 				const normalized = this._normalizeAndSort(data);
+
+				// Collect employee IDs that need resolution
+				const employeeIdsToResolve = Array.from(
+					new Set(
+						normalized
+							.map((d) => d.custom_service_employee)
+							.filter((v) => v && !this._employeeNameCache[v])
+					)
+				);
 
 				if (employeeIdsToResolve.length) {
 					await this._resolveEmployeeNames(employeeIdsToResolve);
