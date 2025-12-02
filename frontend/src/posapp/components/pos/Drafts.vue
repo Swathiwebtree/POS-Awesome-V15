@@ -459,11 +459,7 @@ export default {
 		},
 	},
 
-<<<<<<< HEAD
-	created() {
-=======
   created() {
->>>>>>> 9f51950 (Fixed the loading drafts issue)
 		// Parent can emit open_drafts with data array — prefer that when present
 		this.eventBus.on("open_drafts", async (data) => {
 			if (Array.isArray(data) && data.length) {
