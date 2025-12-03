@@ -60,7 +60,15 @@ def _apply_item_name_overrides(invoice_doc, overrides=None):
 
 
 def _get_available_stock(item):
-    """Return available stock qty for an item row."""
+    """Return available stock qty for an item row.
+
+    If item is explicitly non-stock/service, return 0 (so validation won't block because we will skip such items
+    in _collect_stock_errors). Otherwise query batch or stock availability.
+    """
+    # respect explicit flags to avoid querying stock for service items
+    if item.get("is_service_item") == 1 or item.get("update_stock") == 0 or item.get("is_stock_item") == 0:
+        return 0
+
     warehouse = item.get("warehouse")
     batch_no = item.get("batch_no")
     item_code = item.get("item_code")
@@ -71,14 +79,26 @@ def _get_available_stock(item):
     return get_stock_availability(item_code, warehouse)
 
 
+
 def _collect_stock_errors(items):
-    """Return list of items exceeding available stock."""
+    """Return list of items exceeding available stock.
+
+    Skip service/non-stock items (is_service_item == 1 or update_stock == 0 or is_stock_item == 0).
+    """
     errors = []
     for d in items:
-        if flt(d.get("qty")) < 0:
+        # skip negative quantities (returns) or clearly non-stock/service items
+        if flt(d.get("qty") or d.get("stock_qty") or 0) < 0:
             continue
+
+        # If front-end marked the item as service or to skip stock updates, ignore it
+        if d.get("is_service_item") == 1 or d.get("update_stock") == 0 or d.get("is_stock_item") == 0:
+            continue
+
         available = _get_available_stock(d)
-        requested = flt(d.get("stock_qty") or (flt(d.get("qty")) * flt(d.get("conversion_factor") or 1)))
+        # requested should be stock_qty if provided, otherwise qty * conversion_factor
+        requested = flt(d.get("stock_qty") or (flt(d.get("qty") or 0) * flt(d.get("conversion_factor") or 1)))
+
         if requested > available:
             errors.append(
                 {
@@ -88,7 +108,9 @@ def _collect_stock_errors(items):
                     "available_qty": available,
                 }
             )
-        return errors
+
+    return errors
+
 
 
 def _merge_duplicate_taxes(invoice_doc):
@@ -118,12 +140,17 @@ def _should_block(pos_profile):
 
 
 def _validate_stock_on_invoice(invoice_doc):
+    # If doc explicitly disables update_stock
+    if invoice_doc.get("update_stock") == 0:
+        return
+
     items_to_check = [d.as_dict() for d in invoice_doc.items if d.get("is_stock_item")]
     if hasattr(invoice_doc, "packed_items"):
         items_to_check.extend([d.as_dict() for d in invoice_doc.packed_items])
     errors = _collect_stock_errors(items_to_check)
     if errors and _should_block(invoice_doc.pos_profile):
         frappe.throw(frappe.as_json({"errors": errors}), frappe.ValidationError)
+
 
 
 def _auto_set_return_batches(invoice_doc):

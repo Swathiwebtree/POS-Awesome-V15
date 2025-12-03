@@ -21,12 +21,54 @@ const { updateDiscountAmount, calcPrices, calcItemPrice } = useDiscounts();
 const { removeItem, addItem, getNewItem, clearInvoice } = useItemAddition();
 const { calcUom, calcStockQty } = useStockUtils();
 
+// --- SERVICE ITEM HELPER ---
+const isServiceItem = (item) => {
+  if (!item) return false;
+  const ig = (item.item_group || "").toString().toLowerCase();
+  const name = (item.item_name || "").toString().toLowerCase();
+  const code = (item.item_code || item.code || "").toString().toLowerCase();
+
+  // keywords commonly used for car/bike washes or generic service items
+  const keywords = ["Carwash", "car wash", "bikewash", "bike wash", "wash", "service"];
+
+  for (let k of keywords) {
+    if (ig.includes(k) || name.includes(k) || code.includes(k)) return true;
+  }
+
+  // fallback: treat explicitly non-stock as service
+  if (item.is_stock_item === 0 || item.update_stock === 0) return true;
+
+  return false;
+};
+
+// Alias so older code that expects the other name still works
+const isCarWashOrService = isServiceItem;
+
 export default {
+	isCarWashItem(item) {
+		return isServiceItem(item);
+	},
+
 	remove_item(item) {
 		return removeItem(item, this);
 	},
 
 	async add_item(item) {
+		try {
+			if (isServiceItem(item)) {
+				item.qty = Number(item.qty || 1); // <-- one-line change for service items
+				item.rate = Number(item.rate || 0);
+				item.amount = Math.round((item.qty || 0) * (item.rate || 0));
+			} else {
+				// Non-service: also default to at least 1
+				item.qty = Math.max(1, Math.round(Number(item.qty || 1))); // <-- ensure >= 1
+				item.rate = Number(item.rate || 0);
+				item.amount = Math.round(item.qty * item.rate);
+			}
+		} catch (e) {
+			console.warn("add_item normalization failed", e);
+		}
+
 		const res = await addItem(item, this);
 		const target = this.items.find(
 			(it) =>
@@ -34,12 +76,20 @@ export default {
 				it.uom === (item.uom || it.uom) &&
 				(!it.batch_no || it.batch_no === item.batch_no),
 		);
+
+		// IMPORTANT: skip fetching available qty for service items to avoid clamp/alert
 		if (target && this.fetch_available_qty) {
-			this.fetch_available_qty(target);
+			if (!isServiceItem(target)) {
+				this.fetch_available_qty(target);
+			} else {
+				// keep numeric fields consistent but do not fetch or clamp
+				target.qty = Number(target.qty || 1); // also default target to 1
+				target.rate = Number(target.rate || 0);
+				target.amount = Math.round((target.qty || 0) * (target.rate || 0));
+			}
 		}
 		return res;
 	},
-
 	// Create a new item object with default and calculated fields
 	get_new_item(item) {
 		return getNewItem(item, this);
@@ -382,6 +432,8 @@ export default {
 		// Calculate amounts in selected currency
 		const items = this.get_invoice_items();
 		doc.items = items;
+
+		// preserve packed items mapping as before
 		doc.packed_items = (this.packed_items || []).map((pi) => ({
 			parent_item: pi.parent_item,
 			item_code: pi.item_code,
@@ -393,6 +445,30 @@ export default {
 			serial_no: pi.serial_no,
 			rate: flt(pi.rate),
 		}));
+
+		// --- If all lines are service items, disable stock update for doc + items ---
+		// (prevents server-side stock validation / "Insufficient stock" errors)
+		const allService = (this.items || []).length > 0 && (this.items || []).every((i) => isServiceItem(i));
+		if (allService) {
+			doc.update_stock = 0;
+
+			// mark invoice items explicitly
+			doc.items = (doc.items || []).map((it) => ({
+				...it,
+				update_stock: 0,
+				is_stock_item: 0,
+				qty: flt(it.qty),
+				amount: flt(it.amount),
+			}));
+
+			// also mark packed_items if present
+			(doc.packed_items || []).forEach((pi) => {
+				pi.update_stock = 0;
+				pi.is_stock_item = 0;
+				pi.qty = flt(pi.qty);
+				pi.rate = flt(pi.rate);
+			});
+		}
 
 		// Calculate totals in selected currency ensuring negative values for returns
 		let total = this.Total;
@@ -646,7 +722,22 @@ export default {
 			}
 		});
 		doc.items = newItems;
-		doc.update_stock = 1;
+		const allServiceFromOrder = (doc.items || []).length > 0 && (doc.items || []).every((i) => isServiceItem(i));
+
+		if (allServiceFromOrder) {
+			doc.update_stock = 0;
+			doc.items = (doc.items || []).map((it) => ({
+				...it,
+				update_stock: 0,
+				is_stock_item: 0,
+				is_service_item: 1,
+				qty: flt(it.qty),
+				amount: flt(it.amount),
+				base_amount: flt(it.base_amount || 0),
+			}));
+		} else {
+			doc.update_stock = 1;
+		}
 		doc.is_pos = 1;
 		doc.payments = this.get_payments();
 		return doc;
@@ -780,45 +871,51 @@ export default {
 	// Prepare payments array for invoice doc
 	get_payments() {
 		const payments = [];
-		// Use this.subtotal which is already in selected currency and includes all calculations
-		const total_amount = this.subtotal;
-		let remaining_amount = total_amount;
+		// Use grand total (selected currency). If you prefer subtotal, swap below.
+		const total_amount = this.rounded_total !== undefined ? this.rounded_total : this.subtotal;
+		let remaining_amount = this.flt(total_amount, this.currency_precision);
 
-		this.pos_profile.payments.forEach((payment, index) => {
-			// For the first payment method, assign the full remaining amount
-			const payment_amount = index === 0 ? remaining_amount : payment.amount || 0;
+		// Defensive: ensure pos_profile.payments exists
+		const methods = Array.isArray(this.pos_profile?.payments) ? this.pos_profile.payments : [];
 
-			// For return invoices, ensure payment amounts are negative
+		const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+		const exchange = this.exchange_rate || 1;
+
+		methods.forEach((paymentMethod, index) => {
+			// For first method assign whole remaining (common POS behavior)
+			const payment_amount = index === 0 ? remaining_amount : paymentMethod.amount || 0;
+
+			// For return invoices, amounts must be negative
 			const adjusted_amount = this.isReturnInvoice ? -Math.abs(payment_amount) : payment_amount;
 
-			// Handle currency conversion
-			// If selected_currency is USD and base is PKR:
-			// amount is in USD (e.g. 10 USD)
-			// base_amount should be in PKR (e.g. 3000 PKR)
-			// So multiply by exchange rate to get base_amount
-			const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+			// Convert selected currency -> base currency:
+			// base_amount = selected_amount * exchange_rate
 			const base_amount =
 				this.selected_currency !== baseCurrency
-					? this.flt(adjusted_amount / (this.exchange_rate || 1), this.currency_precision)
-					: adjusted_amount;
+					? this.flt(adjusted_amount * exchange, this.currency_precision)
+					: this.flt(adjusted_amount, this.currency_precision);
 
 			payments.push({
-				amount: adjusted_amount, // Keep in selected currency (e.g. USD)
-				base_amount: base_amount, // Convert to base currency (e.g. PKR)
-				mode_of_payment: payment.mode_of_payment,
-				default: payment.default,
-				account: payment.account || "",
-				type: payment.type || "Cash",
-				currency: this.selected_currency || this.pos_profile.currency,
+				name: paymentMethod.name || "",
+				amount: this.flt(adjusted_amount, this.currency_precision),
+				base_amount: base_amount,
+				mode_of_payment: paymentMethod.mode_of_payment || paymentMethod.name || "",
+				default: paymentMethod.default || 0,
+				account: paymentMethod.account || "",
+				type: paymentMethod.type || "Cash",
+				currency: this.selected_currency || baseCurrency,
 				conversion_rate: this.conversion_rate || 1,
+				idx: index + 1,
 			});
 
-			remaining_amount -= payment_amount;
+			remaining_amount = this.flt(remaining_amount - payment_amount, this.currency_precision);
 		});
 
+		// Debug log
 		console.log("Generated payments:", {
-			currency: this.selected_currency,
-			exchange_rate: this.exchange_rate,
+			selected_currency: this.selected_currency,
+			baseCurrency,
+			exchange_rate: exchange,
 			payments: payments.map((p) => ({
 				mode: p.mode_of_payment,
 				amount: p.amount,
@@ -921,6 +1018,18 @@ export default {
 	// Process and save invoice (handles update or create)
 	process_invoice() {
 		const doc = this.get_invoice_doc();
+
+		// Defensive: ensure doc.update_stock is disabled for service-only invoices
+		const allService = (this.items || []).length > 0 && (this.items || []).every((i) => isServiceItem(i));
+		if (allService) {
+			doc.update_stock = 0;
+			(doc.items || []).forEach((it) => {
+				it.update_stock = 0;
+				it.is_stock_item = 0;
+				it.is_service_item = 1;
+			});
+		}
+
 		try {
 			const updated_doc = this.update_invoice(doc);
 			if (updated_doc && updated_doc.posting_date) {
@@ -934,6 +1043,31 @@ export default {
 				color: "error",
 			});
 			return false;
+		}
+	},
+
+	update_items_details(items = []) {
+		try {
+			if (!Array.isArray(items)) return;
+			items.forEach((item) => {
+				if (!item.posa_row_id) item.posa_row_id = this.makeid ? this.makeid(20) : Date.now().toString(36);
+
+				if (isServiceItem(item)) {
+					item.qty = Number(item.qty || 1);
+					item.rate = Number(item.rate || 0);
+					item.amount = this.flt ? this.flt(item.qty * item.rate, this.currency_precision || 2) : item.qty * item.rate;
+					item.update_stock = 0;
+					item.is_stock_item = 0;
+					item.is_service_item = 1;
+				} else {
+					if (this.update_item_detail) {
+						this.update_item_detail(item, false);
+					}
+				}
+			});
+			this.$forceUpdate && this.$forceUpdate();
+		} catch (e) {
+			console.error("update_items_details failed", e);
 		}
 	},
 
@@ -1021,25 +1155,6 @@ export default {
 			// the values returned from the server instead of recalculating them on
 			// the client side.
 
-			// Update totals on the client has been disabled. The original code is
-			// kept below for reference and is intentionally commented out to avoid
-			// overriding the server calculated values.
-			// invoice_doc.total = this.Total;
-			// invoice_doc.grand_total = this.subtotal;
-
-			// if (this.pos_profile.disable_rounded_total) {
-			//   invoice_doc.rounded_total = flt(this.subtotal, this.currency_precision);
-			// } else {
-			//   invoice_doc.rounded_total = this.roundAmount(this.subtotal);
-			// }
-			// invoice_doc.base_total = this.Total * (1 / this.exchange_rate || 1);
-			// invoice_doc.base_grand_total = this.subtotal * (1 / this.exchange_rate || 1);
-			// if (this.pos_profile.disable_rounded_total) {
-			//   invoice_doc.base_rounded_total = flt(invoice_doc.base_grand_total, this.currency_precision);
-			// } else {
-			//   invoice_doc.base_rounded_total = this.roundAmount(invoice_doc.base_grand_total);
-			// }
-
 			// Check if this is a return invoice
 			if (this.isReturnInvoice || invoice_doc.is_return) {
 				console.log("Preparing RETURN invoice for payment with:", {
@@ -1074,6 +1189,15 @@ export default {
 
 			// Get payments with correct sign (positive/negative)
 			invoice_doc.payments = this.get_payments();
+			// Ensure totals present
+			invoice_doc.grand_total = invoice_doc.grand_total ?? this.rounded_total ?? this.subtotal;
+			invoice_doc.rounded_total =
+				invoice_doc.rounded_total ?? this.rounded_total ?? invoice_doc.grand_total;
+			invoice_doc.total = invoice_doc.total ?? this.Total ?? this.subtotal;
+
+			// Emit to Payment component
+			this.eventBus.emit("show_payment", "true");
+			this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
 			console.log("Final payment data:", invoice_doc.payments);
 
 			// Double-check return invoice payments are negative
@@ -1298,80 +1422,109 @@ export default {
 		this.eventBus.emit("show_payment", "false");
 	},
 
-	// Update details for all items (fetch from backend)
-	async update_items_details(items) {
-		if (!items?.length) return;
-		if (!this.pos_profile) return;
+	isCarWashOrService(item) {
+		// defensive: accept null/undefined
+		if (!item) return false;
 
-		try {
-			const response = await frappe.call({
-				method: "posawesome.posawesome.api.items.get_items_details",
-				args: {
-					pos_profile: JSON.stringify(this.pos_profile),
-					items_data: JSON.stringify(items),
-					price_list: this.selected_price_list || this.pos_profile.selling_price_list,
-				},
-			});
+		// prefer explicit flags
+		if (item.is_service_item === 1 || item.service_item === 1) return true;
 
-			if (response?.message) {
-				items.forEach((item) => {
-					const updated_item = response.message.find(
-						(element) => element.posa_row_id == item.posa_row_id,
-					);
-					if (updated_item) {
-						item.actual_qty = updated_item.actual_qty;
-						item.item_uoms = updated_item.item_uoms;
-						item.has_batch_no = updated_item.has_batch_no;
-						item.has_serial_no = updated_item.has_serial_no;
-						item.batch_no_data = updated_item.batch_no_data;
-						item.serial_no_data = updated_item.serial_no_data;
-						if (updated_item.rate !== undefined) {
-							if (!item.locked_price && !item.posa_offer_applied) {
-								if (updated_item.rate !== 0 || !item.rate) {
-									item.rate = updated_item.rate;
-									item.price_list_rate = updated_item.price_list_rate || updated_item.rate;
-								}
-							} else if (!item.price_list_rate) {
-								item.price_list_rate = updated_item.price_list_rate || updated_item.rate;
-							}
-						}
-						if (updated_item.currency) {
-							item.currency = updated_item.currency;
-						}
-					}
-				});
-			}
-		} catch (error) {
-			console.error("Error updating items:", error);
-			this.eventBus.emit("show_message", {
-				title: __("Error updating item details"),
-				color: "error",
-			});
+		// normalized checks on group, code, name
+		const group = (item.item_group || "").toString().toLowerCase();
+		const name = (item.item_name || "").toString().toLowerCase();
+		const code = (item.item_code || item.code || "").toString().toLowerCase();
+
+		// keywords commonly used for car/bike washes or generic service items
+		const keywords = ["carwash", "car wash", "bikewash", "bike wash", "wash", "service"];
+
+		for (let k of keywords) {
+			if (group.includes(k) || name.includes(k) || code.includes(k)) return true;
 		}
+
+		// fallback: if item explicitly marked as non-stock and no stock fields, treat as service
+		if (item.is_stock_item === 0 || item.update_stock === 0) return true;
+
+		return false;
 	},
 
-	// Update details for a single item (fetch from backend)
+	// This version preserves service/carwash item qty/rate and skips server call for them.
 	update_item_detail(item, force_update = false) {
 		console.log("update_item_detail request", {
-			code: item.item_code,
+			code: item && (item.item_code || item.code),
 			force_update,
+			qtyBefore: item && item.qty,
 		});
+
+		// defensive: ensure object
+		item = item || {};
+
+		// Normalize flags
+		item.is_service_item = item.is_service_item ? 1 : 0;
+
+		// Use robust helper (alias ensures compatibility)
+		const isCarWash =
+			(typeof isCarWashOrService !== "undefined" && isCarWashOrService(item)) ||
+			(typeof isServiceItem !== "undefined" && isServiceItem(item)) ||
+			(this.isCarWashItem && this.isCarWashItem(item));
+
+		// EARLY RETURN FOR SERVICE / CARWASH ITEMS:
+		if (isCarWash) {
+			console.log(
+				`[ItemsTable] CarWash/service detected for ${item.item_name || item.item_code}. Preserving qty and seeding rates.`,
+			);
+
+			// Ensure qty numeric and default to 1 for service items
+			const parsed = Number(item.qty);
+			item.qty = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+
+			// Mirror qty into actual_qty/stock fields so other code sees 1
+			item.actual_qty = item.actual_qty ?? item.qty;
+			item.stock_qty = item.stock_qty ?? item.qty;
+
+			// Mark flags: service items shouldn't update stock
+			item.is_service_item = 1;
+			item.update_stock = 0;
+			item.is_stock_item = 0;
+
+			// Ensure numeric rate and amount (don't rely on server)
+			item.rate = Number(item.rate ?? item.price ?? 0);
+			item.price_list_rate = Number(item.price_list_rate ?? item.rate ?? 0);
+			item.amount = this.flt
+				? this.flt(item.qty * item.rate, this.currency_precision || 2)
+				: item.qty * item.rate;
+
+			// Seed base rates and currency fields so conversion logic later has values
+			item.base_rate = item.base_rate ?? item.rate;
+			item.base_price_list_rate = item.base_price_list_rate ?? item.price_list_rate ?? item.base_rate;
+			item.base_discount_amount = item.base_discount_amount ?? Number(item.discount_amount || 0);
+			item.original_currency =
+				item.original_currency ??
+				(this.price_list_currency || (this.pos_profile && this.pos_profile.currency));
+			item.original_rate = item.original_rate ?? item.rate;
+
+			console.log("update_item_detail result (service):", {
+				code: item.item_code,
+				qtyAfter: item.qty,
+				rate: item.rate,
+				base_rate: item.base_rate,
+				amount: item.amount,
+			});
+
+			// Do NOT call server for service items
+			this.$forceUpdate && this.$forceUpdate();
+			return;
+		}
+
+		// --- Non-service: continue with existing server fetch logic ---
 		if (!item.item_code) {
 			return;
 		}
 		var vm = this;
 
-		// If a manual rate was set (e.g. via explicit UOM pricing), don't
-		// overwrite it on expand unless explicitly forced.
+		// If a manual rate was set (e.g. via explicit UOM pricing), don't overwrite it on expand unless explicitly forced.
 		if (item._manual_rate_set && !force_update) {
 			return;
 		}
-
-		// Remove this block which was causing the issue - rates should persist regardless of currency
-		// if (item.price_list_rate && !item.posa_offer_applied) {
-		//   item.rate = item.price_list_rate;
-		//   this.$forceUpdate();
-		// }
 
 		const currentDoc = this.get_invoice_doc();
 		frappe.call({
@@ -1411,7 +1564,6 @@ export default {
 					if (!item.warehouse) {
 						item.warehouse = vm.pos_profile.warehouse;
 					}
-					// Ensure price list currency is synced from server response
 					if (data.price_list_currency) {
 						vm.price_list_currency = data.price_list_currency;
 					}
@@ -1437,26 +1589,29 @@ export default {
 						data.batch_no_data.length > 0
 					) {
 						item.batch_no_data = data.batch_no_data;
-						// Pass null instead of undefined to avoid console warning
 						vm.set_batch_qty(item, null, false);
 					}
 
 					if (!item.locked_price) {
-						// First save base rates if not exists or when force update is requested
-						// Avoid overriding existing base rates when the selected currency
-						// matches the POS Profile currency. This prevents manual or offer
-						// adjusted rates from being reset whenever an item row is expanded.
 						if (force_update || !item.base_rate) {
-							// Always store base rates from server in base currency
-							if (data.price_list_rate !== 0 || !item.base_price_list_rate) {
+							if (
+								data.price_list_rate !== 0 &&
+								data.price_list_rate !== null &&
+								typeof data.price_list_rate !== "undefined"
+							) {
 								item.base_price_list_rate = data.price_list_rate;
 								if (!item.posa_offer_applied) {
 									item.base_rate = data.price_list_rate;
 								}
+							} else if (force_update) {
+								item.base_price_list_rate =
+									data.price_list_rate || item.base_price_list_rate || item.rate || 0;
+								if (!item.posa_offer_applied) {
+									item.base_rate = data.price_list_rate || item.base_rate || item.rate || 0;
+								}
 							}
 						}
 
-						// Only update rates if no offer is applied
 						if (!item.posa_offer_applied) {
 							const companyCurrency = vm.pos_profile.currency;
 							const baseCurrency = companyCurrency;
@@ -1490,8 +1645,6 @@ export default {
 								}
 							}
 						} else {
-							// Preserve discounted price when an offer is applied so the
-							// rate doesn't revert to the original price list value.
 							const baseCurrency = vm.price_list_currency || vm.pos_profile.currency;
 							if (vm.selected_currency !== baseCurrency) {
 								item.price_list_rate = vm.flt(
@@ -1503,7 +1656,6 @@ export default {
 							}
 						}
 
-						// Handle customer discount only if no offer is applied
 						if (
 							!item.posa_offer_applied &&
 							vm.pos_profile.posa_apply_customer_discount &&
@@ -1519,20 +1671,17 @@ export default {
 
 							item.discount_percentage = discount_percent;
 
-							// Calculate discount in selected currency
 							const discount_amount = vm.flt(
 								(item.price_list_rate * discount_percent) / 100,
 								vm.currency_precision,
 							);
 							item.discount_amount = discount_amount;
 
-							// Also store base discount amount
 							item.base_discount_amount = vm.flt(
 								(item.base_price_list_rate * discount_percent) / 100,
 								vm.currency_precision,
 							);
 
-							// Update rates with discount
 							item.rate = vm.flt(item.price_list_rate - discount_amount, vm.currency_precision);
 							item.base_rate = vm.flt(
 								item.base_price_list_rate - item.base_discount_amount,
@@ -1541,22 +1690,22 @@ export default {
 						}
 					}
 
-					// Update other item details
 					item.last_purchase_rate = data.last_purchase_rate;
 					item.projected_qty = data.projected_qty;
 					item.reserved_qty = data.reserved_qty;
 					item.conversion_factor = data.conversion_factor;
 					item.stock_qty = data.stock_qty;
-					item.actual_qty = data.actual_qty;
+					// For service items, we intentionally do not set actual_qty to avoid clamping behavior
+					if (!isServiceItem(item)) {
+						item.actual_qty = data.actual_qty;
+					}
 					item.stock_uom = data.stock_uom;
 					item.has_serial_no = data.has_serial_no;
 					item.has_batch_no = data.has_batch_no;
 
-					// Calculate final amount
 					item.amount = vm.flt(item.qty * item.rate, vm.currency_precision);
 					item.base_amount = vm.flt(item.qty * item.base_rate, vm.currency_precision);
 
-					// Log updated rates for debugging
 					console.log(`Updated rates for ${item.item_code} on expand:`, {
 						base_rate: item.base_rate,
 						rate: item.rate,
@@ -1567,7 +1716,6 @@ export default {
 						default_currency: vm.pos_profile.currency,
 					});
 
-					// Force update UI immediately
 					vm.$forceUpdate();
 				}
 			},
@@ -1758,6 +1906,16 @@ export default {
 
 	// Calculate stock quantity for an item with stock validation
 	calc_stock_qty(item, value) {
+		// Short-circuit stock calculations for service items (do not clamp)
+		if (isServiceItem(item)) {
+			// keep UI qty as-is (0 allowed) but ensure numeric calculations safe
+			item.qty = Number(item.qty || value || 0);
+			item.rate = Number(item.rate || 0);
+			item.amount = this.flt(item.qty * item.rate, this.currency_precision);
+			return;
+		}
+
+		// existing behavior for stock-tracked items
 		calcStockQty(item, value, this);
 		if (this.update_qty_limits) {
 			this.update_qty_limits(item);
@@ -1787,6 +1945,14 @@ export default {
 
 	// Update quantity limits based on available stock
 	update_qty_limits(item) {
+		// Do not apply stock limits to service items
+		if (isServiceItem(item)) {
+			item.max_qty = undefined;
+			item.available_qty = undefined;
+			item.disable_increment = false;
+			return;
+		}
+
 		if (item && item.available_qty !== undefined) {
 			item.max_qty = flt(item.available_qty / (item.conversion_factor || 1));
 
@@ -1821,6 +1987,15 @@ export default {
 
 	// Fetch available stock for an item and cache it
 	async fetch_available_qty(item) {
+		// Do not fetch or apply available qty for service items
+		if (isServiceItem(item)) {
+			// keep available_qty undefined and avoid clamping
+			item.available_qty = undefined;
+			item.max_qty = undefined;
+			item.disable_increment = false;
+			return;
+		}
+
 		if (!item || !item.item_code || !item.warehouse) return;
 		const key = `${item.item_code}:${item.warehouse}:${item.batch_no || ""}:${item.uom}`;
 		const cached = this.available_stock_cache[key];

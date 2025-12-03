@@ -301,7 +301,7 @@
 													</span>
 												</div>
 											</div>
-											<div class="card-item-stock">
+											<!-- <div class="card-item-stock">
 												<v-icon size="small" class="stock-icon"
 													>mdi-package-variant</v-icon
 												>
@@ -319,7 +319,7 @@
 													}}
 												</span>
 												<span class="stock-uom">{{ item.stock_uom || "" }}</span>
-											</div>
+											</div> -->
 										</div>
 									</div>
 								</div>
@@ -1717,7 +1717,7 @@ export default {
 					key: "item_code",
 				},
 				{ title: __("Rate"), key: "rate", align: "start" },
-				{ title: __("Available QTY"), key: "actual_qty", align: "start" },
+				// { title: __("Available QTY"), key: "actual_qty", align: "start" },
 				{ title: __("UOM"), key: "stock_uom", align: "start" },
 			];
 			if (!this.pos_profile.posa_display_item_code) {
@@ -1777,54 +1777,56 @@ export default {
 
 			item = { ...item };
 
-			if (item.has_variants) {
-				let variants = this.items.filter((it) => it.variant_of == item.item_code);
-				let attrsMeta = {};
-				if (!variants.length) {
-					try {
-						const res = await frappe.call({
-							method: "posawesome.posawesome.api.items.get_item_variants",
-							args: {
-								pos_profile: JSON.stringify(this.pos_profile),
-								parent_item_code: item.item_code,
-								price_list: this.active_price_list,
-								customer: this.customer,
-							},
-						});
-						if (res.message) {
-							variants = res.message.variants || res.message;
-							attrsMeta = res.message.attributes_meta || {};
-							this.items.push(...variants);
-						}
-					} catch (e) {
-						console.error("Failed to fetch variants", e);
-					}
-				}
-				this.eventBus.emit("show_message", {
-					title: __("This is an item template. Please choose a variant."),
-					color: "warning",
-				});
-				console.log("sending profile", this.pos_profile);
-				attrsMeta = attrsMeta || {};
-				this.eventBus.emit("open_variants_model", item, variants, this.pos_profile, attrsMeta);
-				return;
-			}
+			// ===== CARWASH SPECIFIC LOGIC =====
+			const isCarWash = item.item_group &&
+				(item.item_group.toLowerCase().includes('car wash') ||
+					item.item_group.toLowerCase().includes('carwash'));
 
-			if (item.actual_qty === 0 && this.pos_profile.posa_display_items_in_stock) {
-				this.eventBus.emit("show_message", {
-					title: `No stock available for ${item.item_name}`,
-					color: "warning",
+			if (isCarWash) {
+				console.log("[ItemsSelector] CarWash item detected, forcing qty to 1");
+				// Ensure qty is a number (never string or undefined)
+				item.qty = Number(item.qty) || 1;
+				// Mark as service item and avoid stock update
+				item.is_service_item = 1;
+				item.update_stock = 0;
+
+				// If there is any local property that other code uses to detect qty changes,
+				// update it too (defensive).
+				if (typeof item._barcode_qty !== 'undefined') {
+					item._barcode_qty = false;
+				}
+
+				// Debug: show prepared carwash item (do NOT reference payload here)
+				console.log("[ItemsSelector] Prepared carwash item (no emitted payload yet):", {
+					item_name: item.item_name,
+					qty: item.qty,
+					is_service_item: item.is_service_item
 				});
-				await this.update_items_details([item]);
-				return;
+
+				// Set quantity for regular items (keeps your existing logic)
+				const hasBarcodeQty = item._barcode_qty;
+				if (!item.qty || (item.qty === 1 && !hasBarcodeQty)) {
+					let qtyVal = this.qty != null ? this.qty : 1;
+					qtyVal = Math.abs(qtyVal);
+					if (this.hide_qty_decimals) {
+						qtyVal = Math.trunc(qtyVal);
+					}
+					item.qty = qtyVal;
+				}
 			}
 
 			// Ensure UOMs are initialized
 			if (!item.item_uoms || item.item_uoms.length === 0) {
 				await this.update_items_details([item]);
 				if (!item.item_uoms || item.item_uoms.length === 0) {
-					item.item_uoms = [{ uom: item.stock_uom, conversion_factor: 1.0 }];
+					item.item_uoms = [{ uom: item.stock_uom || "Nos", conversion_factor: 1.0 }];
 				}
+			}
+
+			// For CarWash, ensure UOM is set to "Nos"
+			if (isCarWash && !item.uom) {
+				item.uom = "Nos";
+				item.stock_uom = "Nos";
 			}
 
 			// Apply currency conversion
@@ -1838,34 +1840,55 @@ export default {
 				item.base_price_list_rate = base_rate;
 			}
 
-			// Set quantity
-			const hasBarcodeQty = item._barcode_qty;
-			if (!item.qty || (item.qty === 1 && !hasBarcodeQty)) {
-				let qtyVal = this.qty != null ? this.qty : 1;
-				qtyVal = Math.abs(qtyVal);
-				if (this.hide_qty_decimals) {
-					qtyVal = Math.trunc(qtyVal);
-				}
-				item.qty = qtyVal;
-			}
-
+			// Prepare the payload
 			const payload = { ...item };
 			delete payload._barcode_qty;
 
-			console.log("[ItemsSelector] Emitting add_item event:", payload.item_name);
+			console.log("[ItemsSelector] Emitting add_item event:", {
+				item_name: payload.item_name,
+				qty: payload.qty,
+				isCarWash: isCarWash,
+				is_service_item: payload.is_service_item,
+			});
+
+			// Emit the item to the invoice component
 			this.eventBus.emit("add_item", payload);
 
 			// Show success feedback
+			const message = isCarWash
+				? `Added: ${item.item_name} (Service)`
+				: `Added: ${item.item_name}`;
 			frappe.show_alert(
 				{
-					message: `Added: ${item.item_name}`,
+					message: message,
 					indicator: "green",
 				},
 				2,
 			);
 
+			// Auto-clear search after adding item
+			this.first_search = "";
+			this.search = "";
+
+			// Reset quantity to 1 (not this.qty) for CarWash, or back to 1 for regular items
 			this.qty = 1;
+
+			// Refocus search input
+			this.$nextTick(() => {
+				if (this.$refs.debounce_search) {
+					this.$refs.debounce_search.focus();
+				}
+			});
 		},
+
+
+		// ===== HELPER METHOD: Check if item is CarWash =====
+		isCarWashItem(item) {
+			if (!item) return false;
+			return item.item_group === 'Carwash';
+		},
+
+		// ===== UPDATE: enter_event method to handle CarWash in barcode scanning =====
 		async enter_event() {
 			if (!this.filtered_items.length || !this.first_search) {
 				return;
@@ -1880,9 +1903,20 @@ export default {
 
 			const qty = parseFloat(this.get_item_qty(this.first_search));
 			const new_item = { ...this.filtered_items[0] };
-			new_item.qty = flt(qty);
-			if (isScaleBarcode) {
-				new_item._barcode_qty = true;
+
+			// ===== CARWASH HANDLING IN BARCODE SCAN =====
+			const isCarWash = this.isCarWashItem(new_item);
+			if (isCarWash) {
+				// Force qty to 1 for CarWash regardless of barcode
+				new_item.qty = 1;
+				new_item.is_service_item = 1;
+				new_item.update_stock = 0;
+				console.log("[ItemsSelector] CarWash item from barcode, qty forced to 1");
+			} else {
+				new_item.qty = flt(qty);
+				if (isScaleBarcode) {
+					new_item._barcode_qty = true;
+				}
 			}
 
 			let match = false;
@@ -1908,7 +1942,7 @@ export default {
 				new_item.to_set_batch_no = this.flags.batch_no;
 			}
 
-			if (match) {
+			if (match || isCarWash) {
 				await this.add_item(new_item);
 				this.flags.serial_no = null;
 				this.flags.batch_no = null;
@@ -2517,50 +2551,62 @@ export default {
 			// Clone the item to avoid mutating list data
 			const newItem = { ...item };
 
-			// If the scanned barcode has a specific UOM, apply it
-			if (Array.isArray(newItem.item_barcode)) {
-				const barcodeMatch = newItem.item_barcode.find((b) => b.barcode === scannedCode);
-				if (barcodeMatch && barcodeMatch.posa_uom) {
-					newItem.uom = barcodeMatch.posa_uom;
+			// ===== CARWASH HANDLING =====
+			const isCarWash = this.isCarWashItem(newItem);
+			if (isCarWash) {
+				console.log("[ItemsSelector] CarWash item detected in scan, forcing qty to 1");
+				newItem.qty = 1;
+				newItem.is_service_item = 1;
+				newItem.update_stock = 0;
+			} else {
+				// For non-CarWash items, apply barcode quantity if available
+				if (Array.isArray(newItem.item_barcode)) {
+					const barcodeMatch = newItem.item_barcode.find((b) => b.barcode === scannedCode);
+					if (barcodeMatch && barcodeMatch.posa_uom) {
+						newItem.uom = barcodeMatch.posa_uom;
 
-					// Try fetching the rate for this UOM from the active price list
-					try {
-						const res = await frappe.call({
-							method: "posawesome.posawesome.api.items.get_price_for_uom",
-							args: {
-								item_code: newItem.item_code,
-								price_list: this.active_price_list,
-								uom: barcodeMatch.posa_uom,
-							},
-						});
-						if (res.message) {
-							const price = parseFloat(res.message);
-							newItem.rate = price;
-							newItem.price_list_rate = price;
-							newItem.base_rate = price;
-							newItem.base_price_list_rate = price;
-							newItem._manual_rate_set = true;
-							newItem.skip_force_update = true;
+						// Try fetching the rate for this UOM from the active price list
+						try {
+							const res = await frappe.call({
+								method: "posawesome.posawesome.api.items.get_price_for_uom",
+								args: {
+									item_code: newItem.item_code,
+									price_list: this.active_price_list,
+									uom: barcodeMatch.posa_uom,
+								},
+							});
+							if (res.message) {
+								const price = parseFloat(res.message);
+								newItem.rate = price;
+								newItem.price_list_rate = price;
+								newItem.base_rate = price;
+								newItem.base_price_list_rate = price;
+								newItem._manual_rate_set = true;
+								newItem.skip_force_update = true;
+							}
+						} catch (e) {
+							console.error("Failed to fetch UOM price", e);
 						}
-					} catch (e) {
-						console.error("Failed to fetch UOM price", e);
 					}
 				}
-			}
 
-			// Apply quantity from scale barcode if available
-			if (qtyFromBarcode !== null && !isNaN(qtyFromBarcode)) {
-				newItem.qty = qtyFromBarcode;
-				newItem._barcode_qty = true;
+				// Apply quantity from scale barcode if available (only for non-CarWash)
+				if (qtyFromBarcode !== null && !isNaN(qtyFromBarcode)) {
+					newItem.qty = qtyFromBarcode;
+					newItem._barcode_qty = true;
+				}
 			}
 
 			// Use existing add_item method with enhanced feedback
 			await this.add_item(newItem);
 
 			// Show success message
+			const successMsg = isCarWash
+				? `Added: ${item.item_name} (Service)`
+				: `Added: ${item.item_name}`;
 			frappe.show_alert(
 				{
-					message: `Added: ${item.item_name}`,
+					message: successMsg,
 					indicator: "green",
 				},
 				3,
@@ -2820,6 +2866,8 @@ export default {
 	},
 
 	computed: {
+
+		
 		headers() {
 			return this.getItemsHeaders();
 		},

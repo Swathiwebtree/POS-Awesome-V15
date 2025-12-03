@@ -218,6 +218,7 @@
 							:toggleOffer="toggleOffer"
 							:changePriceListRate="change_price_list_rate"
 							:isNegative="isNegative"
+							:shouldHidePricing="shouldHidePricing"
 							@update:expanded="handleExpandedUpdate"
 							@reorder-items="handleItemReorder"
 							@add-item-from-drag="handleItemDrop"
@@ -451,6 +452,15 @@ export default {
 	},
 	computed: {
 		...invoiceComputed,
+		// Check if pricing should be hidden
+		shouldHidePricing() {
+			if (!this.items || this.items.length === 0) return false;
+
+			return this.items.some(item => {
+				return item.item_group === "Engine Oil";
+			});
+		},
+
 	},
 
 	methods: {
@@ -652,7 +662,7 @@ export default {
 			}
 
 			// Update discount_amount (this triggers grand_total recalculation)
-			this.discount_amount = this.flt(discountAmount);
+			this.discount_amount = Math.round(discountAmount);
 
 			console.log("[Invoice] Discount calculated:", {
 				subtotal: totalBeforeDiscount,
@@ -1065,95 +1075,122 @@ export default {
 			console.log("Updating item rates with exchange rate:", this.exchange_rate);
 
 			this.items.forEach((item) => {
-				// Set skip flag to avoid double calculations
-				item._skip_calc = true;
+				try {
+					// ===== DEFENSIVE: ensure item object exists =====
+					if (!item) return;
 
-				// First ensure base rates exist for all items
-				if (!item.base_rate) {
-					console.log(`Setting base rates for ${item.item_code} for the first time`);
+					// Set skip flag to avoid double calculations
+					item._skip_calc = true;
+
+					// ===== DEFENSIVE: ensure qty is numeric and service items keep qty=1 =====
+					const parsedQty = Number(item.qty);
+					const looksLikeService = item.is_service_item === 1 || item.service_item === 1
+						|| /Carwash|car wash|bike wash|bikewash/i.test(item.item_group || item.item_name || '');
+					if (looksLikeService) {
+						item.qty = (Number.isFinite(parsedQty) && parsedQty > 0) ? parsedQty : 1;
+						item.is_service_item = 1;
+						item.update_stock = 0;
+					} else {
+						item.qty = Number.isFinite(parsedQty) ? parsedQty : 0;
+					}
+
+					// First ensure base rates exist for all items
+					if (!item.base_rate) {
+						console.log(`Setting base rates for ${item.item_code} for the first time`);
+						const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+						if (this.selected_currency === baseCurrency) {
+							// When in base currency, base rates = displayed rates
+							item.base_rate = Number(item.rate) || 0;
+							item.base_price_list_rate = Number(item.price_list_rate) || 0;
+							item.base_discount_amount = Number(item.discount_amount || 0);
+						} else {
+							// When in another currency, calculate base rates (avoid divide by zero)
+							const ex = this.exchange_rate || 1;
+							item.base_rate = (Number(item.rate) || 0) / ex;
+							item.base_price_list_rate = (Number(item.price_list_rate) || 0) / ex;
+							item.base_discount_amount = (Number(item.discount_amount || 0)) / ex;
+						}
+					}
+
+					// Currency conversion logic
 					const baseCurrency = this.price_list_currency || this.pos_profile.currency;
 					if (this.selected_currency === baseCurrency) {
-						// When in base currency, base rates = displayed rates
-						item.base_rate = item.rate;
-						item.base_price_list_rate = item.price_list_rate;
-						item.base_discount_amount = item.discount_amount || 0;
+						// When switching back to default currency, restore from base rates
+						console.log(`Restoring rates for ${item.item_code} from base rates`);
+						item.price_list_rate = Number(item.base_price_list_rate) || 0;
+						item.rate = Number(item.base_rate) || 0;
+						item.discount_amount = Number(item.base_discount_amount || 0);
+					} else if (item.original_currency === this.selected_currency) {
+						// When selected currency matches the price list currency,
+						// no conversion should be applied
+						console.log(`Using original currency rates for ${item.item_code}`);
+						item.price_list_rate = Number(item.base_price_list_rate) || 0;
+						item.rate = Number(item.base_rate) || 0;
+						item.discount_amount = Number(item.base_discount_amount || 0);
 					} else {
-						// When in another currency, calculate base rates
-						item.base_rate = item.rate / this.exchange_rate;
-						item.base_price_list_rate = item.price_list_rate / this.exchange_rate;
-						item.base_discount_amount = (item.discount_amount || 0) / this.exchange_rate;
+						// When switching to another currency, convert from base rates
+						console.log(`Converting rates for ${item.item_code} to ${this.selected_currency}`);
+
+						const ex = this.exchange_rate || 1;
+
+						// Convert base currency values to the selected currency
+						const converted_price = this.flt((Number(item.base_price_list_rate) || 0) * ex, this.currency_precision);
+						const converted_rate = this.flt((Number(item.base_rate) || 0) * ex, this.currency_precision);
+						const converted_discount = this.flt((Number(item.base_discount_amount) || 0) * ex, this.currency_precision);
+
+						// Preserve previous non-zero values if conversion results in tiny noise
+						const prev_price = Number(item.price_list_rate) || 0;
+						const prev_rate = Number(item.rate) || 0;
+						const prev_discount = Number(item.discount_amount) || 0;
+
+						const tinyThreshold = 0.000001;
+
+						item.price_list_rate = (Math.abs(converted_price) < tinyThreshold) ? prev_price : converted_price;
+						item.rate = (Math.abs(converted_rate) < tinyThreshold) ? prev_rate : converted_rate;
+						item.discount_amount = (Math.abs(converted_discount) < tinyThreshold) ? prev_discount : converted_discount;
 					}
+
+					// Always recalculate final amounts (use numeric values)
+					const qtyNum = Number(item.qty) || 0;
+					const rateNum = Number(item.rate) || 0;
+					const baseRateNum = Number(item.base_rate) || 0;
+
+					item.amount = this.flt(qtyNum * rateNum, this.currency_precision);
+					item.base_amount = this.flt(qtyNum * baseRateNum, this.currency_precision);
+
+					console.log(`Updated rates for ${item.item_code}:`, {
+						price_list_rate: item.price_list_rate,
+						base_price_list_rate: item.base_price_list_rate,
+						rate: item.rate,
+						base_rate: item.base_rate,
+						discount: item.discount_amount,
+						base_discount: item.base_discount_amount,
+						amount: item.amount,
+						base_amount: item.base_amount,
+						qty: item.qty
+					});
+
+					// Apply any other pricing rules if needed
+					this.calc_item_price && this.calc_item_price(item);
+				} catch (e) {
+					console.warn("[update_item_rates] error processing item", item && item.item_name, e);
+				} finally {
+					// Clear skip flag
+					if (item) item._skip_calc = false;
 				}
-
-				// Currency conversion logic
-				const baseCurrency = this.price_list_currency || this.pos_profile.currency;
-				if (this.selected_currency === baseCurrency) {
-					// When switching back to default currency, restore from base rates
-					console.log(`Restoring rates for ${item.item_code} from base rates`);
-					item.price_list_rate = item.base_price_list_rate;
-					item.rate = item.base_rate;
-					item.discount_amount = item.base_discount_amount;
-				} else if (item.original_currency === this.selected_currency) {
-					// When selected currency matches the price list currency,
-					// no conversion should be applied
-					console.log(`Using original currency rates for ${item.item_code}`);
-					item.price_list_rate = item.base_price_list_rate;
-					item.rate = item.base_rate;
-					item.discount_amount = item.base_discount_amount;
-				} else {
-					// When switching to another currency, convert from base rates
-					console.log(`Converting rates for ${item.item_code} to ${this.selected_currency}`);
-
-					// Convert base currency values to the selected currency
-					const converted_price = this.flt(
-						item.base_price_list_rate * this.exchange_rate,
-						this.currency_precision,
-					);
-					const converted_rate = this.flt(
-						item.base_rate * this.exchange_rate,
-						this.currency_precision,
-					);
-					const converted_discount = this.flt(
-						item.base_discount_amount * this.exchange_rate,
-						this.currency_precision,
-					);
-
-					// Ensure we don't set values to 0 if they're just very small
-					item.price_list_rate = converted_price < 0.000001 ? 0 : converted_price;
-					item.rate = converted_rate < 0.000001 ? 0 : converted_rate;
-					item.discount_amount = converted_discount < 0.000001 ? 0 : converted_discount;
-				}
-
-				// Always recalculate final amounts
-				item.amount = this.flt(item.qty * item.rate, this.currency_precision);
-				item.base_amount = this.flt(item.qty * item.base_rate, this.currency_precision);
-
-				console.log(`Updated rates for ${item.item_code}:`, {
-					price_list_rate: item.price_list_rate,
-					base_price_list_rate: item.base_price_list_rate,
-					rate: item.rate,
-					base_rate: item.base_rate,
-					discount: item.discount_amount,
-					base_discount: item.base_discount_amount,
-					amount: item.amount,
-					base_amount: item.base_amount,
-				});
-
-				// Apply any other pricing rules if needed
-				this.calc_item_price(item);
 			});
 
 			// Force UI update after all calculations
-			this.$forceUpdate();
+			this.$forceUpdate && this.$forceUpdate();
 
-			this.apply_additional_discount();
+			this.apply_additional_discount && this.apply_additional_discount();
 		},
 
 		formatCurrency(value, precision = null) {
-			const prec = precision != null ? precision : this.currency_precision;
-			return this.$options.mixins[0].methods.formatCurrency.call(this, value, prec);
+			// Force integer formatting for pricing
+			const val = parseFloat(value) || 0;
+			return Math.round(val).toString();
 		},
-
 		flt(value, precision = null) {
 			// Enhanced float handling for small numbers
 			if (precision === null) {
@@ -1268,20 +1305,156 @@ export default {
 				};
 			}
 
-			// CRITICAL: Sync ALL values
-			this.invoice_doc.items = this.items || [];
+			// Defensive: Ensure this.items is an array
+			this.items = Array.isArray(this.items) ? this.items : [];
+
+			// DEFENSE 0: Protect service items in-place BEFORE any processing
+			// This prevents other code (rate updates, expands) from accidentally zeroing qty
+			try {
+				this.items.forEach(it => {
+					if (!it) return;
+					const looksLikeService = (it.is_service_item || it.service_item) || /carwash|car wash|bike wash|bikewash/i.test(it.item_group || it.item_name || '');
+					if (looksLikeService) {
+						const q = Number(it.qty);
+						if (!Number.isFinite(q) || q <= 0) {
+							console.log("[DEFENSE] fixing service item qty (in-place) for", it.item_name, "from", it.qty, "to 1");
+							it.qty = 1;
+						}
+						// enforce service flags
+						it.is_service_item = 1;
+						it.update_stock = 0;
+					} else {
+						// ensure numeric qty for non-service items (do not force it to 0 if it's valid)
+						const q = Number(it.qty);
+						it.qty = Number.isFinite(q) ? q : 0;
+					}
+				});
+			} catch (e) {
+				console.warn("[Invoice] error in initial service-item defense:", e);
+			}
+
+			// If invoice contains ONLY service items, disable stock updates/validation
+			try {
+				// Use current items list (this.items) or fallback to invoice_doc.items
+				const itemsForCheck = this.items.length ? this.items : (this.invoice_doc && this.invoice_doc.items) || [];
+
+				const allService = itemsForCheck.length > 0 && itemsForCheck.every(function (it) {
+					const ig = (it.item_group || "").toString().toLowerCase();
+					const name = (it.item_name || "").toString().toLowerCase();
+					const code = (it.item_code || "").toString().toLowerCase();
+					return (
+						ig.includes("carwash") ||
+						ig.includes("car wash") ||
+						ig.includes("bike wash") ||
+						ig.includes("bikewash") ||
+						name.includes("wash") ||
+						code.includes("wash") ||
+						it.service_item === 1 ||
+						it.is_service_item === 1
+					);
+				});
+
+				if (allService) {
+					// Prevent server from doing stock validation / stock ledger updates on document
+					this.invoice_doc.update_stock = 0;
+
+					// Ensure we operate on the array that will be sent to server
+					this.invoice_doc.items = (itemsForCheck || []).map((it) => {
+						const itemRow = { ...it };
+						try {
+							// Mark line as non-stock and prevent stock ledger updates
+							itemRow.update_stock = 0;
+							itemRow.is_stock_item = 0;
+							// Remove warehouse reference to avoid server trying to consume stock
+							if (itemRow.warehouse) itemRow.warehouse = null;
+							// ensure doctype is still correct
+							itemRow.doctype = itemRow.doctype || "Sales Invoice Item";
+
+							// Defensive: ensure qty for service rows is valid
+							const q = Number(itemRow.qty);
+							if (!Number.isFinite(q) || q <= 0) {
+								itemRow.qty = 1;
+							} else {
+								itemRow.qty = q;
+							}
+
+							// Defensive: normalize rate to number
+							itemRow.rate = Number.isFinite(Number(itemRow.rate ?? itemRow.price ?? 0)) ? Number(itemRow.rate ?? itemRow.price ?? 0) : 0;
+
+							// ensure flags numeric
+							itemRow.is_service_item = itemRow.is_service_item ? 1 : 0;
+							itemRow.update_stock = 0;
+						} catch (e) {
+							console.warn("[Invoice] mark service item non-stock error:", e);
+						}
+						return itemRow;
+					});
+					console.log("[Invoice] All lines are detected as service items - disabled update_stock for doc and lines");
+				}
+			} catch (e) {
+				console.warn("[Invoice] Error while disabling stock update for service-only invoice:", e);
+			}
+
+			// CRITICAL: Sync ALL values (defensive normalization of items)
+			console.log("[Invoice] get_invoice_doc - syncing items (pre-normalize):", (this.items || []).map(i => ({ code: i.item_code, qty: i.qty, is_service_item: i.is_service_item })));
+
+			// Normalize items into invoice_doc.items (do not completely replace source item objects)
+			try {
+				this.invoice_doc.items = (this.items || []).map(it => {
+					const row = { ...it };
+
+					// Parse numeric fields defensively
+					const qty = Number(row.qty);
+					const rate = Number(row.rate ?? row.price ?? 0);
+
+					// If item marked as service (or looks like carwash), default invalid qty -> 1
+					const looksLikeService = row.is_service_item || row.service_item || /carwash|car wash|bike wash|bikewash/i.test(row.item_group || row.item_name || '');
+					if (looksLikeService) {
+						row.qty = (Number.isFinite(qty) && qty > 0) ? qty : 1;
+					} else {
+						row.qty = (Number.isFinite(qty) && qty > 0) ? qty : 0;
+					}
+
+					row.rate = Number.isFinite(rate) ? rate : 0;
+
+					// flags
+					row.is_service_item = row.is_service_item ? 1 : 0;
+					row.update_stock = typeof row.update_stock !== 'undefined' ? row.update_stock : (row.is_service_item ? 0 : 1);
+
+					return row;
+				});
+			} catch (e) {
+				console.warn("[Invoice] error normalizing items into invoice_doc.items:", e);
+				// fallback: copy items as-is
+				this.invoice_doc.items = this.items || [];
+			}
+
+			console.log("[Invoice] get_invoice_doc - items after normalize:", (this.invoice_doc.items || []).map(i => ({ code: i.item_code, qty: i.qty, rate: i.rate, is_service_item: i.is_service_item })));
+
+			// SYNC other fields
 			this.invoice_doc.customer = this.customer || "";
 			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
 			this.invoice_doc.currency = this.selected_currency || this.pos_profile?.currency || "USD";
 
-			// SYNC TOTALS - THIS IS THE KEY PART
-			this.invoice_doc.net_total = this.flt(this.subtotal || 0);
+			// SYNC TOTALS (defensive)
+			this.invoice_doc.net_total = (this.invoice_doc.items || []).reduce((sum, line) => {
+				const q = Number(line.qty);
+				const r = Number(line.rate);
+				const safeQ = (Number.isFinite(q) && q > 0) ? q : 0;
+				const safeR = Number.isFinite(r) ? r : 0;
+				return sum + safeQ * safeR;
+			}, 0);
+
+			this.invoice_doc.total_qty = (this.invoice_doc.items || []).reduce((sum, line) => {
+				const q = Number(line.qty);
+				return sum + ((Number.isFinite(q) && q > 0) ? q : 0);
+			}, 0);
+
+			// Keep rest of totals/fields
 			this.invoice_doc.total_taxes_and_charges = this.flt(this.total_tax || 0);
 			this.invoice_doc.discount_amount = this.flt(this.discount_amount || 0);
 			this.invoice_doc.additional_discount = this.flt(this.additional_discount || 0);
-			this.invoice_doc.additional_discount_percentage = this.flt(
-				this.additional_discount_percentage || 0,
-			);
+			this.invoice_doc.additional_discount_percentage = this.flt(this.additional_discount_percentage || 0);
 			this.invoice_doc.grand_total = this.flt(this.grand_total || 0);
 			this.invoice_doc.rounded_total = this.flt(this.rounded_total || this.grand_total || 0);
 
@@ -1312,6 +1485,7 @@ export default {
 
 			return this.invoice_doc;
 		},
+
 		// Alternative method name for compatibility
 		getInvoiceDoc() {
 			return this.get_invoice_doc();
@@ -1561,6 +1735,7 @@ export default {
 			});
 		},
 
+		// UPDATE: save_and_clear_invoice method - CORRECTED VERSION
 		async save_and_clear_invoice() {
 			console.log("[Invoice] save_and_clear_invoice() called");
 			console.log("[Invoice] loaded_draft_name:", this.loaded_draft_name);
@@ -1574,6 +1749,35 @@ export default {
 				return null;
 			}
 
+			// ===== FIX: CARWASH QTY VALIDATION =====
+			console.log("[Invoice] Validating CarWash items...");
+			this.items.forEach((item, idx) => {
+				if (this.isCarWashItem(item)) {
+					console.log(`[Invoice] CarWash item detected at idx ${idx}: ${item.item_name}`);
+
+					// CRITICAL: Force qty to 1 for CarWash items
+					if (item.qty === null || item.qty === undefined || item.qty === 0) {
+						console.log(
+							`[Invoice] AUTO-FIXING qty for ${item.item_name} from ${item.qty} to 1`
+						);
+						item.qty = 1;
+						item.amount = item.rate * 1; // Recalculate amount
+						item.is_service_item = 1;
+						item.update_stock = 0;
+					}
+
+					// Ensure these flags are set
+					item.is_service_item = 1;
+					item.update_stock = 0;
+				}
+			});
+			// ===== END FIX =====
+
+			// Check if all items are Carwash items (service items only)
+			const hasOnlyServiceItems = this.items.every(item => {
+				return this.isCarWashItem(item);
+			});
+
 			// Validate employee for car wash services
 			const hasCarWashService = this.checkForCarWashServices();
 			if (hasCarWashService && !this.service_employee) {
@@ -1584,10 +1788,47 @@ export default {
 				return null;
 			}
 
+			if (!hasOnlyServiceItems) {
+				// Validate stock for non-service items
+				const insufficientStockItems = this.items.filter(item => {
+					// Only check stock for non-carwash items
+					return !this.isCarWashItem(item) && (item.actual_qty < item.qty);
+				});
+
+				if (insufficientStockItems.length > 0) {
+					const itemNames = insufficientStockItems.map(i => i.item_name).join(', ');
+					frappe.show_alert({
+						message: this.__("Insufficient stock for: {0}", [itemNames]),
+						indicator: "error",
+					});
+					return null;
+				}
+			}
+
 			// Ensure invoice_doc exists
 			if (!this.invoice_doc) {
 				this.invoice_doc = {};
 			}
+
+			// ===== CRITICAL: APPLY CARWASH FIXES TO ITEMS BEFORE SAVE =====
+			let itemsToSave = this.items.map(it => {
+				const row = { ...it };
+
+				// For CarWash items, FORCE qty to 1
+				if (this.isCarWashItem(row)) {
+					console.log(`[Invoice] Applying CarWash fix to ${row.item_code}`);
+					row.qty = 1;
+					row.amount = row.rate * 1;
+					row.is_service_item = 1;
+					row.update_stock = 0;
+				}
+
+				return row;
+			});
+
+			// Update items to save with fixed CarWash quantities
+			this.invoice_doc.items = itemsToSave;
+			// ===== END CRITICAL FIX =====
 
 			// Populate/sync fields from UI into invoice_doc
 			this.invoice_doc.customer = this.customer;
@@ -1618,11 +1859,21 @@ export default {
 
 			// Ensure items exist and each child row has proper doctype
 			if (!Array.isArray(this.invoice_doc.items)) {
-				this.invoice_doc.items = this.items || [];
+				this.invoice_doc.items = itemsToSave || [];
 			}
+
 			this.invoice_doc.items = this.invoice_doc.items.map((it) => {
 				const itemRow = Object.assign({}, it);
 				itemRow.doctype = "Sales Invoice Item";
+
+				// FINAL CHECK: Force CarWash qty to 1
+				if (this.isCarWashItem(itemRow)) {
+					itemRow.qty = 1;
+					itemRow.amount = itemRow.rate * 1;
+					itemRow.is_service_item = 1;
+					itemRow.update_stock = 0;
+				}
+
 				return itemRow;
 			});
 
@@ -1632,6 +1883,11 @@ export default {
 				grand_total: this.invoice_doc.grand_total,
 				currency: this.invoice_doc.currency,
 				employee: this.invoice_doc.custom_service_employee,
+				items: this.invoice_doc.items.map(i => ({
+					code: i.item_code,
+					qty: i.qty,
+					is_carwash: this.isCarWashItem(i),
+				})),
 			});
 
 			try {
@@ -1730,7 +1986,7 @@ export default {
 					return null;
 				}
 
-				// 3) Resolve draft name to update
+				// -------- Resolve draft name to update
 				const draft_name_to_update =
 					this.loaded_draft_name || (this.invoice_doc && this.invoice_doc.name) || null;
 				console.log("[Invoice] resolved draft_name_to_update:", draft_name_to_update);
@@ -1756,7 +2012,6 @@ export default {
 						pos_profile: this.invoice_doc.pos_profile,
 						company: this.invoice_doc.company,
 						posa_pos_opening_shift: this.invoice_doc.posa_pos_opening_shift,
-						// EMPLOYEE FIELDS TO UPDATE
 						custom_service_employee: this.invoice_doc.custom_service_employee,
 						custom_service_employee_name: this.invoice_doc.custom_service_employee_name,
 					};
@@ -1780,7 +2035,6 @@ export default {
 						this.invoice_doc.name = draft_name_to_update;
 						this.eventBus.emit("invoice_saved_successfully", { name: draft_name_to_update });
 
-						// Emit draft_saved for fast auto-refresh
 						try {
 							const savedDraft = {
 								name: draft_name_to_update,
@@ -1800,17 +2054,13 @@ export default {
 							console.warn("[Invoice] Failed to emit draft_saved for update", e);
 						}
 
-						// CLEAR EMPLOYEE SELECTION AFTER SUCCESSFUL SAVE
 						this.service_employee = null;
 						this.service_employee_name = null;
 						this.service_employee_designation = null;
 						this.service_employee_department = null;
 						console.log("[Invoice] Employee selection cleared after save");
 
-						// Emit event to clear employee in UI
 						this.eventBus.emit("clear_employee_selection");
-
-						// CLEAR ALL INVOICE DATA
 						this.clear_invoice();
 
 						return updResp.message;
@@ -1843,7 +2093,6 @@ export default {
 
 						this.eventBus.emit("invoice_saved_successfully", { name: saved_name });
 
-						// Emit draft_saved for fast auto-refresh
 						try {
 							const savedDraft = {
 								name: saved_doc.name,
@@ -1865,17 +2114,13 @@ export default {
 							console.warn("[Invoice] Failed to emit draft_saved for create", e);
 						}
 
-						// CLEAR EMPLOYEE SELECTION AFTER SUCCESSFUL SAVE
 						this.service_employee = null;
 						this.service_employee_name = null;
 						this.service_employee_designation = null;
 						this.service_employee_department = null;
 						console.log("[Invoice] Employee selection cleared after save");
 
-						// Emit event to clear employee in UI
 						this.eventBus.emit("clear_employee_selection");
-
-						// CLEAR ALL INVOICE DATA
 						this.clear_invoice();
 
 						return saved_doc;
@@ -1885,7 +2130,6 @@ export default {
 				}
 			} catch (error) {
 				console.error("[Invoice] Error saving invoice:", error);
-				// If the server returned _server_messages (frappe throws) show that
 				if (error && error._server_messages) {
 					try {
 						const msgs = JSON.parse(error._server_messages);

@@ -1,60 +1,33 @@
 <template>
-	<div
-		class="my-0 py-0 overflow-y-auto items-table-container"
+	<div class="my-0 py-0 overflow-y-auto items-table-container"
 		:style="{ height: 'calc(100% - 80px)', maxHeight: 'calc(100% - 80px)' }"
-		@dragover="onDragOverFromSelector($event)"
-		@drop="onDropFromSelector($event)"
-		@dragenter="onDragEnterFromSelector"
-		@dragleave="onDragLeaveFromSelector"
-	>
-		<v-data-table-virtual
-			:headers="headers"
-			:items="items"
-			:theme="$theme.current"
-			:expanded="expanded"
-			show-expand
-			item-value="posa_row_id"
-			class="modern-items-table elevation-2"
-			:items-per-page="itemsPerPage"
-			expand-on-click
-			density="compact"
-			hide-default-footer
-			:single-expand="true"
-			:header-props="headerProps"
-			:no-data-text="__('No items in cart')"
-			@update:expanded="
+		@dragover="onDragOverFromSelector($event)" @drop="onDropFromSelector($event)"
+		@dragenter="onDragEnterFromSelector" @dragleave="onDragLeaveFromSelector">
+		<v-data-table-virtual :headers="headers" :items="items" :theme="$theme.current" :expanded="expanded" show-expand
+			item-value="posa_row_id" class="modern-items-table elevation-2" :items-per-page="itemsPerPage"
+			expand-on-click density="compact" hide-default-footer :single-expand="true" :header-props="headerProps"
+			:no-data-text="__('No items in cart')" @update:expanded="
 				(val) =>
 					$emit(
 						'update:expanded',
 						val.map((v) => (typeof v === 'object' ? v.posa_row_id : v)),
 					)
-			"
-			:search="itemSearch"
-		>
+			" :search="itemSearch">
 			<!-- Item name column -->
 			<template v-slot:item.item_name="{ item }">
 				<div class="d-flex align-center">
 					<span>{{ item.item_name }}</span>
 					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">{{
 						__("Bundle")
-					}}</v-chip>
+						}}</v-chip>
 					<v-chip v-if="item.name_overridden" color="primary" size="x-small" class="ml-1">{{
 						__("Edited")
-					}}</v-chip>
-					<v-icon
-						v-if="pos_profile.posa_allow_line_item_name_override && !item.posa_is_replace"
-						size="x-small"
-						class="ml-1"
-						@click.stop="openNameDialog(item)"
-					>
+						}}</v-chip>
+					<v-icon v-if="pos_profile.posa_allow_line_item_name_override && !item.posa_is_replace"
+						size="x-small" class="ml-1" @click.stop="openNameDialog(item)">
 						mdi-pencil
 					</v-icon>
-					<v-icon
-						v-if="item.name_overridden"
-						size="x-small"
-						class="ml-1"
-						@click.stop="resetItemName(item)"
-					>
+					<v-icon v-if="item.name_overridden" size="x-small" class="ml-1" @click.stop="resetItemName(item)">
 						mdi-undo
 					</v-icon>
 				</div>
@@ -62,22 +35,11 @@
 
 			<!-- Quantity column -->
 			<template v-slot:item.qty="{ item }">
-				<div
-					class="qty-control"
-					:class="{ 'negative-number': isNegative(item.qty) }"
-					role="group"
-					:aria-label="__('Quantity controls')"
-				>
+				<div class="qty-control" :class="{ 'negative-number': isNegative(item.qty) }" role="group"
+					:aria-label="__('Quantity controls')">
 					<!-- Decrease -->
-					<v-btn
-						class="qty-btn qty-decrease"
-						icon
-						size="small"
-						:disabled="!!item.posa_is_replace"
-						@click.stop="subtractOne(item)"
-						:aria-label="__('Decrease quantity')"
-						title="Decrease"
-					>
+					<v-btn class="qty-btn qty-decrease" icon size="small" :disabled="!!item.posa_is_replace"
+						@click.stop="subtractOne(item)" :aria-label="__('Decrease quantity')" title="Decrease">
 						<v-icon size="18">mdi-minus</v-icon>
 					</v-btn>
 
@@ -87,33 +49,25 @@
 					</div>
 
 					<!-- Increase -->
-					<v-btn
-						class="qty-btn qty-increase"
-						icon
-						size="small"
-						:disabled="
+					<v-btn class="qty-btn qty-increase" icon size="small" :disabled="
 							!!item.posa_is_replace ||
 							((!stock_settings.allow_negative_stock ||
 								pos_profile.posa_block_sale_beyond_available_qty) &&
 								item.max_qty !== undefined &&
 								item.qty >= item.max_qty)
-						"
-						@click.stop="addOne(item)"
-						:aria-label="__('Increase quantity')"
-						title="Increase"
-					>
+						" @click.stop="addOne(item)" :aria-label="__('Increase quantity')" title="Increase">
 						<v-icon size="18">mdi-plus</v-icon>
 					</v-btn>
 				</div>
 			</template>
 
-			<!-- Rate column -->
-			<template v-slot:item.rate="{ item }">
+			<!-- Rate column (hidden if shouldHidePricing is true) -->
+			<template v-if="!shouldHidePricing" v-slot:item.rate="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span class="amount-value" :class="{ 'negative-number': isNegative(item.rate) }">{{
 						formatCurrency(item.rate)
-					}}</span>
+						}}</span>
 				</div>
 			</template>
 
@@ -121,10 +75,8 @@
 			<template v-slot:item.amount="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
-					<span
-						class="amount-value"
-						:class="{ 'negative-number': isNegative(item.qty * item.rate) }"
-						>{{ formatCurrency(item.qty * item.rate) }}
+					<span class="amount-value" :class="{ 'negative-number': isNegative(item.qty * item.rate) }">{{
+						formatCurrency(item.qty * item.rate) }}
 					</span>
 				</div>
 			</template>
@@ -135,83 +87,39 @@
 					<div class="actions-center" role="group" :aria-label="__('Item Actions')">
 						<v-tooltip location="top">
 							<template #activator="{ props }">
-								<v-btn
-									v-bind="props"
-									:disabled="!!item.posa_is_replace"
-									class="action-btn action-delete"
-									variant="tonal"
-									size="small"
-									@click.stop="removeItem(item)"
-									:aria-label="__('Remove item')"
-									title="Remove"
-								>
+								<v-btn v-bind="props" :disabled="!!item.posa_is_replace"
+									class="action-btn action-delete" variant="tonal" size="small"
+									@click.stop="removeItem(item)" :aria-label="__('Remove item')" title="Remove">
 									<v-icon size="18">mdi-trash-can-outline</v-icon>
 								</v-btn>
 							</template>
 							<span>{{ __("Remove") }}</span>
 						</v-tooltip>
-
-						<!-- <v-tooltip location="top">
-							<template #activator="{ props }">
-								<v-btn v-bind="props" :disabled="!!item.posa_is_replace" class="action-btn action-minus"
-									variant="tonal" size="small" @click.stop="subtractOne(item)"
-									:aria-label="__('Decrease quantity')" title="Decrease">
-									<v-icon size="18">mdi-minus-circle-outline</v-icon>
-								</v-btn>
-							</template>
-							<span>{{ __('Decrease') }}</span>
-						</v-tooltip> -->
-
-						<!-- <v-tooltip location="top">
-							<template #activator="{ props }">
-								<v-btn v-bind="props" :disabled="!!item.posa_is_replace ||
-									((!stock_settings.allow_negative_stock || pos_profile.posa_block_sale_beyond_available_qty) &&
-										item.max_qty !== undefined &&
-										item.qty >= item.max_qty)
-									" class="action-btn action-plus" variant="tonal" size="small" @click.stop="addOne(item)"
-									:aria-label="__('Increase quantity')" title="Increase">
-									<v-icon size="18">mdi-plus-circle-outline</v-icon>
-								</v-btn>
-							</template>
-							<span>{{ __('Increase') }}</span>
-						</v-tooltip> -->
 					</div>
 				</div>
 			</template>
 
-			<!-- Discount amount column -->
-			<template v-slot:item.discount_amount="{ item }">
+			<!-- Discount amount column (hidden if shouldHidePricing is true) -->
+			<template v-if="!shouldHidePricing" v-slot:item.discount_amount="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
-					<span
-						class="amount-value"
-						:class="{ 'negative-number': isNegative(item.discount_amount || 0) }"
-						>{{ formatCurrency(item.discount_amount || 0) }}</span
-					>
+					<span class="amount-value" :class="{ 'negative-number': isNegative(item.discount_amount || 0) }">{{
+						formatCurrency(item.discount_amount || 0) }}</span>
 				</div>
 			</template>
 
-			<!-- Price list rate column -->
-			<template v-slot:item.price_list_rate="{ item }">
+			<!-- Price list rate column (hidden if shouldHidePricing is true) -->
+			<template v-if="!shouldHidePricing" v-slot:item.price_list_rate="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
-					<span
-						class="amount-value"
-						:class="{ 'negative-number': isNegative(item.price_list_rate) }"
-						>{{ formatCurrency(item.price_list_rate) }}</span
-					>
+					<span class="amount-value" :class="{ 'negative-number': isNegative(item.price_list_rate) }">{{
+						formatCurrency(item.price_list_rate) }}</span>
 				</div>
 			</template>
 
-			<!-- Offer toggle button column -->
-			<template v-slot:item.posa_is_offer="{ item }">
-				<v-btn
-					size="x-small"
-					color="primary"
-					variant="tonal"
-					class="ma-0 pa-0"
-					@click.stop="toggleOffer(item)"
-				>
+			<!-- Offer toggle button column (hidden if shouldHidePricing is true) -->
+			<template v-if="!shouldHidePricing" v-slot:item.posa_is_offer="{ item }">
+				<v-btn size="x-small" color="primary" variant="tonal" class="ma-0 pa-0" @click.stop="toggleOffer(item)">
 					{{ item.posa_offer_applied ? __("Remove Offer") : __("Apply Offer") }}
 				</v-btn>
 			</template>
@@ -230,114 +138,69 @@
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('Item Code')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.item_code"
-											disabled
-											prepend-inner-icon="mdi-barcode"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('Item Code')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details v-model="item.item_code" disabled
+											prepend-inner-icon="mdi-barcode"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('QTY')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('QTY')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details :model-value="
 												formatFloat(item.qty, hide_qty_decimals ? 0 : undefined)
-											"
-											@change="
+											" @change="
 												setFormatedQty(item, 'qty', null, false, $event.target.value)
-											"
-											:rules="[isNumber]"
-											:disabled="!!item.posa_is_replace"
-											prepend-inner-icon="mdi-numeric"
-										></v-text-field>
+											" :rules="[isNumber]" :disabled="!!item.posa_is_replace" prepend-inner-icon="mdi-numeric"></v-text-field>
 										<div v-if="item.max_qty !== undefined" class="text-caption mt-1">
 											{{
-												__("In stock: {0}", [
-													formatFloat(
-														item.max_qty,
-														hide_qty_decimals ? 0 : undefined,
-													),
-												])
+											__("In stock: {0}", [
+											formatFloat(
+											item.max_qty,
+											hide_qty_decimals ? 0 : undefined,
+											),
+											])
 											}}
 										</div>
 									</div>
 									<div class="form-field">
-										<v-select
-											density="compact"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											:label="frappe._('UOM')"
-											v-model="item.uom"
-											:items="item.item_uoms"
-											variant="outlined"
-											item-title="uom"
-											item-value="uom"
-											hide-details
-											@update:model-value="calcUom(item, $event)"
-											:disabled="
+										<v-select density="compact" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" :label="frappe._('UOM')" v-model="item.uom"
+											:items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom"
+											hide-details @update:model-value="calcUom(item, $event)" :disabled="
 												!!item.posa_is_replace ||
 												(isReturnInvoice && invoice_doc.return_against)
-											"
-											prepend-inner-icon="mdi-weight"
-										></v-select>
+											" prepend-inner-icon="mdi-weight"></v-select>
 									</div>
 								</div>
 							</div>
 
-							<!-- Pricing Section -->
-							<div class="form-section">
+							<!-- Pricing Section (hidden when parent requests pricing hide) -->
+							<div v-if="!shouldHidePricing" class="form-section">
 								<div class="section-header">
 									<v-icon size="small" class="section-icon">mdi-currency-usd</v-icon>
 									<span class="section-title">{{ __("Pricing & Discounts") }}</span>
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											id="rate"
-											:label="frappe._('Rate')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatCurrency(item.rate)"
-											@change="[
+										<v-text-field density="compact" variant="outlined" color="primary" id="rate"
+											:label="frappe._('Rate')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details :model-value="Math.round(item.rate || 0)"
+											type="number" step="1" @change="[ 
+												item.rate = Math.round($event.target.value || 0),
 												setFormatedCurrency(item, 'rate', null, false, $event),
 												calcPrices(item, $event.target.value, $event),
-											]"
-											:disabled="
-												!pos_profile.posa_allow_user_to_edit_rate ||
+											]" :disabled="!pos_profile.posa_allow_user_to_edit_rate ||
 												!!item.posa_is_replace ||
 												!!item.posa_offer_applied
-											"
-											prepend-inner-icon="mdi-currency-usd"
-										></v-text-field>
+												" prepend-inner-icon="mdi-currency-usd"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											id="discount_percentage"
-											:label="frappe._('Discount %')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatFloat(item.discount_percentage || 0)"
-											@change="[
+										<v-text-field density="compact" variant="outlined" color="primary"
+											id="discount_percentage" :label="frappe._('Discount %')"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="Math.round(item.discount_percentage || 0)"
+											type="number" step="1" @change="[ 
+												item.discount_percentage = Math.round($event.target.value || 0),
 												setFormatedCurrency(
 													item,
 													'discount_percentage',
@@ -346,27 +209,18 @@
 													$event,
 												),
 												calcPrices(item, $event.target.value, $event),
-											]"
-											:disabled="
-												!pos_profile.posa_allow_user_to_edit_item_discount ||
+											]" :disabled="!pos_profile.posa_allow_user_to_edit_item_discount ||
 												!!item.posa_is_replace ||
 												!!item.posa_offer_applied
-											"
-											prepend-inner-icon="mdi-percent"
-										></v-text-field>
+												" prepend-inner-icon="mdi-percent"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											id="discount_amount"
-											:label="frappe._('Discount Amount')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatCurrency(item.discount_amount || 0)"
-											@change="[
+										<v-text-field density="compact" variant="outlined" color="primary"
+											id="discount_amount" :label="frappe._('Discount Amount')"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="Math.round(item.discount_amount || 0)"
+											type="number" step="1" @change="[ 
+												item.discount_amount = Math.round($event.target.value || 0),
 												setFormatedCurrency(
 													item,
 													'discount_amount',
@@ -375,58 +229,34 @@
 													$event,
 												),
 												calcPrices(item, $event.target.value, $event),
-											]"
-											:disabled="
-												!pos_profile.posa_allow_user_to_edit_item_discount ||
+											]" :disabled="!pos_profile.posa_allow_user_to_edit_item_discount ||
 												!!item.posa_is_replace ||
 												!!item.posa_offer_applied
-											"
-											prepend-inner-icon="mdi-tag-minus"
-										></v-text-field>
+												" prepend-inner-icon="mdi-tag-minus"></v-text-field>
 									</div>
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Price List Rate')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatCurrency(item.price_list_rate || 0)"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="Math.round(item.price_list_rate || 0)"
+											type="number" step="1"
 											:disabled="!pos_profile.posa_allow_price_list_rate_change"
 											prepend-inner-icon="mdi-format-list-numbered"
 											:prefix="currencySymbol(pos_profile.currency)"
-											@change="changePriceListRate(item)"
-										></v-text-field>
+											@change="changePriceListRate(item)"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Total Amount')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatCurrency(item.qty * item.rate)"
-											disabled
-											prepend-inner-icon="mdi-calculator"
-										></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="formatCurrency(item.qty * item.rate)" disabled
+											prepend-inner-icon="mdi-calculator"></v-text-field>
 									</div>
-									<div
-										class="form-field"
-										v-if="pos_profile.posa_allow_price_list_rate_change"
-									>
-										<v-btn
-											size="small"
-											color="primary"
-											variant="outlined"
-											class="change-price-btn"
-											@click.stop="changePriceListRate(item)"
-										>
+									<div class="form-field" v-if="pos_profile.posa_allow_price_list_rate_change">
+										<v-btn size="small" color="primary" variant="outlined" class="change-price-btn"
+											@click.stop="changePriceListRate(item)">
 											<v-icon size="small" class="mr-1">mdi-pencil</v-icon>
 											{{ __("Change Price") }}
 										</v-btn>
@@ -442,87 +272,42 @@
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Available QTY')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatFloat(item.actual_qty)"
-											disabled
-											prepend-inner-icon="mdi-package-variant"
-										></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="formatFloat(item.actual_qty)" disabled
+											prepend-inner-icon="mdi-package-variant"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('Stock QTY')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatFloat(item.stock_qty)"
-											disabled
-											prepend-inner-icon="mdi-scale-balance"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('Stock QTY')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details :model-value="formatFloat(item.stock_qty)"
+											disabled prepend-inner-icon="mdi-scale-balance"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('Stock UOM')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.stock_uom"
-											disabled
-											prepend-inner-icon="mdi-weight-pound"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('Stock UOM')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details v-model="item.stock_uom" disabled
+											prepend-inner-icon="mdi-weight-pound"></v-text-field>
 									</div>
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('Warehouse')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.warehouse"
-											disabled
-											prepend-inner-icon="mdi-warehouse"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('Warehouse')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details v-model="item.warehouse" disabled
+											prepend-inner-icon="mdi-warehouse"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('Group')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.item_group"
-											disabled
-											prepend-inner-icon="mdi-folder-outline"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('Group')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details v-model="item.item_group" disabled
+											prepend-inner-icon="mdi-folder-outline"></v-text-field>
 									</div>
 									<div class="form-field" v-if="item.posa_offer_applied">
-										<v-checkbox
-											density="compact"
-											:label="frappe._('Offer Applied')"
-											v-model="item.posa_offer_applied"
-											readonly
-											hide-details
-											class="mt-1"
-											color="success"
-										></v-checkbox>
+										<v-checkbox density="compact" :label="frappe._('Offer Applied')"
+											v-model="item.posa_offer_applied" readonly hide-details class="mt-1"
+											color="success"></v-checkbox>
 									</div>
 								</div>
 							</div>
@@ -535,39 +320,22 @@
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Serial No QTY')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.serial_no_selected_count"
-											type="number"
-											disabled
-											prepend-inner-icon="mdi-counter"
-										></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details v-model="item.serial_no_selected_count" type="number" disabled
+											prepend-inner-icon="mdi-counter"></v-text-field>
 									</div>
 								</div>
 								<div class="form-row">
 									<div class="form-field full-width">
-										<v-autocomplete
-											v-model="item.serial_no_selected"
-											:items="item.serial_no_data"
-											item-title="serial_no"
-											item-value="serial_no"
-											variant="outlined"
-											density="compact"
-											chips
-											color="primary"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											:label="frappe._('Serial No')"
-											multiple
+										<v-autocomplete v-model="item.serial_no_selected" :items="item.serial_no_data"
+											item-title="serial_no" item-value="serial_no" variant="outlined"
+											density="compact" chips color="primary"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											:label="frappe._('Serial No')" multiple
 											@update:model-value="setSerialNo(item)"
-											prepend-inner-icon="mdi-barcode"
-										></v-autocomplete>
+											prepend-inner-icon="mdi-barcode"></v-autocomplete>
 									</div>
 								</div>
 							</div>
@@ -575,65 +343,37 @@
 							<!-- Batch Number Section -->
 							<div class="form-section" v-if="item.has_batch_no || item.batch_no">
 								<div class="section-header">
-									<v-icon size="small" class="section-icon"
-										>mdi-package-variant-closed</v-icon
-									>
+									<v-icon size="small" class="section-icon">mdi-package-variant-closed</v-icon>
 									<span class="section-title">{{ __("Batch Information") }}</span>
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Batch No. Available QTY')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatFloat(item.actual_batch_qty)"
-											disabled
-											prepend-inner-icon="mdi-package-variant"
-										></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="formatFloat(item.actual_batch_qty)" disabled
+											prepend-inner-icon="mdi-package-variant"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Batch No Expiry Date')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.batch_no_expiry_date"
-											disabled
-											prepend-inner-icon="mdi-calendar-clock"
-										></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details v-model="item.batch_no_expiry_date" disabled
+											prepend-inner-icon="mdi-calendar-clock"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-autocomplete
-											v-model="item.batch_no"
-											:items="item.batch_no_data"
-											item-title="batch_no"
-											variant="outlined"
-											density="compact"
-											color="primary"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
+										<v-autocomplete v-model="item.batch_no" :items="item.batch_no_data"
+											item-title="batch_no" variant="outlined" density="compact" color="primary"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
 											:label="frappe._('Batch No')"
-											@update:model-value="setBatchQty(item, $event)"
-											hide-details
-											prepend-inner-icon="mdi-package-variant-closed"
-										>
+											@update:model-value="setBatchQty(item, $event)" hide-details
+											prepend-inner-icon="mdi-package-variant-closed">
 											<template v-slot:item="{ props, item }">
 												<v-list-item v-bind="props">
-													<v-list-item-title
-														v-html="item.raw.batch_no"
-													></v-list-item-title>
-													<v-list-item-subtitle
-														v-html="
-															`Available QTY  '${item.raw.batch_qty}' - Expiry Date ${item.raw.expiry_date}`
-														"
-													></v-list-item-subtitle>
+													<v-list-item-title v-html="item.raw.batch_no"></v-list-item-title>
+													<v-list-item-subtitle v-html="
+															`Available QTY  '${item.raw.batch_qty}' - Expiry Date ${item.raw.expiry_date}`"
+														"></v-list-item-subtitle>
 												</v-list-item>
 											</template>
 										</v-autocomplete>
@@ -642,25 +382,17 @@
 							</div>
 
 							<!-- Delivery Date Section -->
-							<div
-								class="form-section"
-								v-if="pos_profile.posa_allow_sales_order && invoiceType == 'Order'"
-							>
+							<div class="form-section"
+								v-if="pos_profile.posa_allow_sales_order && invoiceType == 'Order'">
 								<div class="section-header">
 									<v-icon size="small" class="section-icon">mdi-calendar-check</v-icon>
 									<span class="section-title">{{ __("Delivery Information") }}</span>
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<VueDatePicker
-											v-model="item.posa_delivery_date"
-											model-type="format"
-											format="dd-MM-yyyy"
-											:min-date="new Date()"
-											auto-apply
-											:dark="isDarkTheme"
-											@update:model-value="validateDueDate(item)"
-										/>
+										<VueDatePicker v-model="item.posa_delivery_date" model-type="format"
+											format="dd-MM-yyyy" :min-date="new Date()" auto-apply :dark="isDarkTheme"
+											@update:model-value="validateDueDate(item)" />
 									</div>
 								</div>
 							</div>
@@ -676,12 +408,8 @@
 					<v-text-field v-model="editedName" :maxlength="140" />
 				</v-card-text>
 				<v-card-actions>
-					<v-btn
-						v-if="editNameTarget && editNameTarget.name_overridden"
-						variant="text"
-						@click="resetItemName(editNameTarget)"
-						>{{ __("Reset") }}</v-btn
-					>
+					<v-btn v-if="editNameTarget && editNameTarget.name_overridden" variant="text"
+						@click="resetItemName(editNameTarget)">{{ __("Reset") }}</v-btn>
 					<v-spacer></v-spacer>
 					<v-btn variant="text" @click="editNameDialog = false">{{ __("Cancel") }}</v-btn>
 					<v-btn color="primary" variant="text" @click="saveItemName">{{ __("Save") }}</v-btn>
@@ -724,6 +452,11 @@ export default {
 		toggleOffer: Function,
 		changePriceListRate: Function,
 		isNegative: Function,
+		// NEW prop - parent decides when to hide pricing
+		shouldHidePricing: {
+			type: Boolean,
+			default: false,
+		},
 	},
 	data() {
 		return {
@@ -758,6 +491,140 @@ export default {
 		},
 	},
 	methods: {
+
+		isCarWashItem(item) {
+			if (!item) return false;
+
+			const ig = item.item_group || '';
+			const name = item.item_name || '';
+			const code = item.item_code || '';
+
+			return (
+				ig.includes('Carwash') ||
+				ig.includes('Car wash') ||
+				name.includes('Carwash') ||
+				name.includes('Car wash') ||
+				code.includes('Carwash') ||
+				code.includes('Car wash')
+			);
+		},
+
+		// === SAFE: applyRatesToItem ===
+		// Call this whenever you update rates from server so qty is preserved.
+		applyRatesToItem(item, rates) {
+			try {
+				const existingQty = Number(item.qty);
+
+				// update numeric rate fields only (do NOT overwrite qty)
+				item.base_rate = Number(rates.base_rate ?? item.base_rate ?? 0);
+				item.rate = Number(rates.rate ?? item.rate ?? 0);
+				item.base_price_list_rate = Number(rates.base_price_list_rate ?? item.base_price_list_rate ?? 0);
+				item.price_list_rate = Number(rates.price_list_rate ?? item.price_list_rate ?? 0);
+				item.exchange_rate = Number(rates.exchange_rate ?? item.exchange_rate ?? 1);
+
+				// detect service (Carwash) - adjust regex if you use strict case-sensitive matching
+				const looksLikeService = item.is_service_item === 1 || item.service_item === 1
+					|| /Carwash|car wash|bike wash|bikewash/i.test(item.item_group || item.item_name || '');
+
+				if (looksLikeService) {
+					// restore/ensure qty >= 1 for service items
+					item.qty = (Number.isFinite(existingQty) && existingQty > 0) ? existingQty : 1;
+					item.is_service_item = 1;
+					item.update_stock = 0;
+				} else {
+					// for stock items keep numeric qty (don't implicitly zero valid qty)
+					item.qty = Number.isFinite(existingQty) ? existingQty : (Number(rates.qty) || 0);
+				}
+
+				console.log('[applyRatesToItem] applied rates to', item.item_name, { qty: item.qty, rate: item.rate });
+			} catch (e) {
+				console.warn('[applyRatesToItem] error applying rates to', item && item.item_name, e);
+			}
+		},
+
+
+		async update_item_detail(item, force_update = false) {
+			console.log('update_item_detail request', { code: item.item_code, force_update, qtyBefore: item.qty });
+
+			// Defensive: ensure object
+			item = item || {};
+
+			// Normalize flags
+			item.is_service_item = item.is_service_item ? 1 : 0;
+
+			// If CarWash/service item -> protect qty and skip server normalization
+			const isCarWash = this.isCarWashItem ? this.isCarWashItem(item) : (item.is_service_item === 1);
+			if (isCarWash || item.is_service_item) {
+				console.log(`[ItemsTable] CarWash/service detected for ${item.item_name}. Preserving qty.`);
+
+				// Ensure qty numeric and default to 1 for service items
+				item.qty = Number(item.qty);
+				if (!Number.isFinite(item.qty) || item.qty <= 0) {
+					console.log(`[ItemsTable] AUTO-FIX CarWash qty from ${item.qty} -> 1`);
+					item.qty = 1;
+				}
+
+				item.actual_qty = item.qty;
+				item.is_service_item = 1;
+				item.update_stock = 0;
+
+				console.log('update_item_detail result (service):', { code: item.item_code, qtyAfter: item.qty });
+				return; // do not call server update that might overwrite qty
+			}
+
+			// Non-service items: coerce qty to numeric (default 0)
+			item.qty = Number(item.qty);
+			if (!Number.isFinite(item.qty)) item.qty = 0;
+
+			// Continue your existing stock/rate update logic here for stock items.
+			try {
+				// If you have a helper that fetches rates/stock, call it (keeps existing behavior).
+				if (typeof this._fetchAndUpdateStockAndRate === 'function') {
+					await this._fetchAndUpdateStockAndRate(item, force_update);
+				} else {
+					// Insert your original server call / logic here
+					console.log('[ItemsTable] No stock fetch helper: skipping server update for stock item in this snippet.');
+				}
+			} catch (e) {
+				console.warn('[ItemsTable] update_item_detail error for stock item:', e);
+			}
+
+			console.log('update_item_detail result (stock):', { code: item.item_code, qtyAfter: item.qty });
+		},
+		calc_stock_qty(item, qty) {
+			// ===== CARWASH PROTECTION =====
+			if (this.isCarWashItem(item)) {
+				console.log(`[ItemsTable] calc_stock_qty called for CarWash ${item.item_name}, forcing qty=1`);
+				item.qty = 1;
+				item.stock_qty = 1;
+				return;
+			}
+			// ===== END PROTECTION =====
+
+			// Regular stock calculation for non-CarWash items
+			const stock_qty = parseFloat(qty);
+			item.stock_qty = this.flt(stock_qty);
+		},
+
+		setFormatedQty(item, field_name, precision, no_negative, value) {
+			// ===== CARWASH PROTECTION: Don't allow qty changes for CarWash =====
+			if (this.isCarWashItem(item)) {
+				console.log(`[ItemsTable] setFormatedQty called for CarWash ${item.item_name}, keeping qty=1`);
+				item.qty = 1;
+				item.stock_qty = 1;
+				return 1;
+			}
+			// ===== END PROTECTION =====
+
+			// For regular items - call the parent's setFormatedQty if it exists
+			if (this.setFormatedQty) {
+				return this.setFormatedQty(item, field_name, precision, no_negative, value);
+			}
+
+			// Fallback: just set the value directly
+			item[field_name] = value;
+			return value;
+		},
 		onDragOverFromSelector(event) {
 			// Check if drag data is from item selector
 			const dragData = event.dataTransfer.types.includes("application/json");
@@ -793,21 +660,48 @@ export default {
 			}
 		},
 		addItem(newItem) {
-			// Find a matching item (by item_code, uom, and rate)
+			// safe merge: match by item_code + uom + rate if possible
 			const match = this.items.find(
 				(item) =>
 					item.item_code === newItem.item_code &&
 					item.uom === newItem.uom &&
 					item.rate === newItem.rate,
 			);
+
 			if (match) {
-				// If found, increment quantity
-				match.qty += newItem.qty || 1;
-				match.amount = match.qty * match.rate;
-				this.$forceUpdate();
-			} else {
-				this.items.push({ ...newItem });
+				// If found, increment quantity (ensure numeric)
+				match.qty = Number(match.qty) + (Number(newItem.qty) || 1);
+				match.amount = Number(match.qty) * Number(match.rate || 0);
+				this.$forceUpdate && this.$forceUpdate();
+				return;
 			}
+
+			// If no exact match, attempt to find by item_code and merge safely
+			const idx = this.items.findIndex(i => i.item_code === newItem.item_code);
+			if (idx !== -1) {
+				// merge rates safely using helper if rates present on newItem
+				if (newItem.rate !== undefined || newItem.base_rate !== undefined) {
+					this.applyRatesToItem(this.items[idx], newItem);
+					// merge non-rate fields carefully
+					this.items[idx].description = newItem.description ?? this.items[idx].description;
+					this.items[idx].price_list_rate = newItem.price_list_rate ?? this.items[idx].price_list_rate;
+					this.$forceUpdate && this.$forceUpdate();
+				} else {
+					// just update qty if that's the purpose
+					this.items[idx].qty = (Number(this.items[idx].qty) || 0) + (Number(newItem.qty) || 1);
+				}
+				return;
+			}
+
+			// If genuinely a new item: ensure qty is correct (service->1 else numeric)
+			const newItemCopy = { ...newItem };
+			const isService = newItemCopy.is_service_item === 1 || /carwash|car wash|bike wash|bikewash/i.test(newItemCopy.item_group || newItemCopy.item_name || '');
+			newItemCopy.qty = isService ? (Number(newItemCopy.qty) || 1) : (Number(newItemCopy.qty) || 0);
+			newItemCopy.is_service_item = isService ? 1 : (newItemCopy.is_service_item ? 1 : 0);
+			newItemCopy.update_stock = isService ? 0 : (typeof newItemCopy.update_stock !== 'undefined' ? newItemCopy.update_stock : 1);
+
+			this.items.push(newItemCopy);
+			this.$forceUpdate && this.$forceUpdate();
 		},
 		addItemDebounced: _.debounce(function (item) {
 			this.addItem(item);
