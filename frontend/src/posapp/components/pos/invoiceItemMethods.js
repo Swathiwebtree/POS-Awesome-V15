@@ -279,6 +279,28 @@ export default {
 			this.eventBus.emit("set_pos_coupons", data.posa_coupons);
 		}
 
+
+		this.custom_has_oil_item = !!data.custom_has_oil_item;
+		this.custom_odometer_reading = data.custom_odometer_reading || null;
+		this.contact_mobile = data.contact_mobile || "";
+		this.custom_vehicle_no = data.custom_vehicle_no || "";
+
+		console.log("Odometer/vehicle data loaded:", {
+			custom_has_oil_item: this.custom_has_oil_item,
+			custom_odometer_reading: this.custom_odometer_reading,
+			contact_mobile: this.contact_mobile,
+			custom_vehicle_no: this.custom_vehicle_no,
+		});
+
+		// If the invoice includes the oil item flag, notify InvoiceSummary (or other listeners)
+		if (data.custom_has_oil_item) {
+			this.eventBus.emit("load_odometer_data", {
+				custom_has_oil_item: data.custom_has_oil_item,
+				custom_odometer_reading: data.custom_odometer_reading,
+				contact_mobile: data.contact_mobile,
+				custom_vehicle_no: data.custom_vehicle_no,
+			});
+		}
 		console.log("load_invoice completed, invoice state:", {
 			invoiceType: this.invoiceType,
 			is_return: this.invoice_doc.is_return,

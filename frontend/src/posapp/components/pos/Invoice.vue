@@ -380,6 +380,9 @@ export default {
 			service_employee_name: null,
 			service_employee_designation: null,
 			service_employee_department: null,
+			custom_odometer_reading: null,
+			contact_mobile: "",
+			custom_vehicle_no: "",
 			total_tax: 0,
 			items: [], // List of invoice items
 			packed_items: [], // Packed items for bundles
@@ -553,6 +556,22 @@ export default {
 					indicator: "red",
 				});
 			}
+		},
+
+		checkForEngineOilItem() {
+			console.log("[Invoice] Checking for Engine Oil items");
+
+			if (!this.items || this.items.length === 0) {
+				return false;
+			}
+
+			const hasOilItem = this.items.some((item) => {
+				return (item.item_group || "").trim() === "Engine Oil";
+			});
+
+
+			console.log("[Invoice] Has Engine Oil item:", hasOilItem);
+			return hasOilItem;
 		},
 
 		checkForCarWashServices() {
@@ -1474,6 +1493,27 @@ export default {
 				}
 			}
 
+			//ODOMETER FIELDS
+			const hasOilItem = this.checkForEngineOilItem();
+			this.invoice_doc.custom_has_oil_item = hasOilItem ? 1 : 0;
+
+			if (hasOilItem && this.custom_odometer_reading) {
+				this.invoice_doc.custom_odometer_reading = this.custom_odometer_reading;
+			} else {
+				this.invoice_doc.custom_odometer_reading = null;
+			}
+
+			// Always sync mobile and vehicle (fetched from customer)
+			this.invoice_doc.contact_mobile = this.contact_mobile || "";
+			this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no || "";
+
+			console.log("[Invoice] Synced odometer fields:", {
+				has_oil: hasOilItem,
+				odometer: this.custom_odometer_reading,
+				mobile: this.contact_mobile,
+				vehicle: this.custom_vehicle_no,
+			});
+
 			console.log("[Invoice] get_invoice_doc returning:", {
 				items: (this.invoice_doc.items || []).length,
 				net_total: this.invoice_doc.net_total,
@@ -1481,6 +1521,9 @@ export default {
 				grand_total: this.invoice_doc.grand_total,
 				rounded_total: this.invoice_doc.rounded_total,
 				employee: this.invoice_doc.custom_service_employee,
+				odometer: this.invoice_doc.custom_odometer_reading,
+				mobile: this.invoice_doc.contact_mobile,
+				vehicle: this.invoice_doc.custom_vehicle_no,
 			});
 
 			return this.invoice_doc;
@@ -1847,12 +1890,44 @@ export default {
 			this.invoice_doc.pos_profile = this.pos_profile && this.pos_profile.name;
 			this.invoice_doc.company = this.pos_profile && this.pos_profile.company;
 
-			// EMPLOYEE FIELDS TO INVOICE
+			// ===== NEW: ADD ODOMETER, MOBILE, VEHICLE FIELDS =====
+			// Employee fields
 			if (this.service_employee) {
 				this.invoice_doc.custom_service_employee = this.service_employee;
 				this.invoice_doc.custom_service_employee_name = this.service_employee_name;
 				console.log("[Invoice] Employee added to invoice:", this.service_employee);
 			}
+
+			// Mobile number
+			if (this.contact_mobile) {
+				this.invoice_doc.contact_mobile = this.contact_mobile;
+				console.log("[Invoice] Mobile added to invoice:", this.contact_mobile);
+			}
+
+			// Vehicle number
+			if (this.custom_vehicle_no) {
+				this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no;
+				console.log("[Invoice] Vehicle added to invoice:", this.custom_vehicle_no);
+			}
+
+			// Odometer reading and oil item flag
+			if (this.custom_odometer_reading) {
+				this.invoice_doc.custom_odometer_reading = this.custom_odometer_reading;
+				console.log("[Invoice] Odometer added to invoice:", this.custom_odometer_reading);
+			}
+
+			// Set oil item flag based on items
+			const hasOilItem = this.items.some(item =>
+				item.item_code && (
+					item.item_code.toLowerCase().includes('engine oil') ||
+					item.item_code.toLowerCase().includes('oil change') ||
+					item.item_name?.toLowerCase().includes('engine oil') ||
+					item.item_name?.toLowerCase().includes('oil change')
+				)
+			);
+			this.invoice_doc.custom_has_oil_item = hasOilItem ? 1 : 0;
+			console.log("[Invoice] Has oil item:", hasOilItem);
+			// ===== END NEW FIELDS =====
 
 			// Required: ensure parent doctype is set for insert
 			this.invoice_doc.doctype = "Sales Invoice";
@@ -1883,6 +1958,10 @@ export default {
 				grand_total: this.invoice_doc.grand_total,
 				currency: this.invoice_doc.currency,
 				employee: this.invoice_doc.custom_service_employee,
+				mobile: this.invoice_doc.contact_mobile,
+				vehicle: this.invoice_doc.custom_vehicle_no,
+				odometer: this.invoice_doc.custom_odometer_reading,
+				has_oil: this.invoice_doc.custom_has_oil_item,
 				items: this.invoice_doc.items.map(i => ({
 					code: i.item_code,
 					qty: i.qty,
@@ -2014,6 +2093,12 @@ export default {
 						posa_pos_opening_shift: this.invoice_doc.posa_pos_opening_shift,
 						custom_service_employee: this.invoice_doc.custom_service_employee,
 						custom_service_employee_name: this.invoice_doc.custom_service_employee_name,
+						// ===== NEW: ADD TO UPDATE =====
+						contact_mobile: this.invoice_doc.contact_mobile,
+						custom_vehicle_no: this.invoice_doc.custom_vehicle_no,
+						custom_odometer_reading: this.invoice_doc.custom_odometer_reading,
+						custom_has_oil_item: this.invoice_doc.custom_has_oil_item,
+						// ===== END NEW =====
 					};
 
 					const updResp = await frappe.call({
@@ -2044,6 +2129,12 @@ export default {
 								grand_total: this.invoice_doc.grand_total,
 								currency: this.invoice_doc.currency,
 								custom_service_employee: this.invoice_doc.custom_service_employee,
+								// ===== NEW: ADD TO EVENT =====
+								contact_mobile: this.invoice_doc.contact_mobile,
+								custom_vehicle_no: this.invoice_doc.custom_vehicle_no,
+								custom_odometer_reading: this.invoice_doc.custom_odometer_reading,
+								custom_has_oil_item: this.invoice_doc.custom_has_oil_item,
+								// ===== END NEW =====
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
 							console.log(
@@ -2107,6 +2198,12 @@ export default {
 								custom_service_employee:
 									saved_doc.custom_service_employee ||
 									this.invoice_doc.custom_service_employee,
+								// ===== NEW: ADD TO EVENT =====
+								contact_mobile: saved_doc.contact_mobile || this.invoice_doc.contact_mobile,
+								custom_vehicle_no: saved_doc.custom_vehicle_no || this.invoice_doc.custom_vehicle_no,
+								custom_odometer_reading: saved_doc.custom_odometer_reading || this.invoice_doc.custom_odometer_reading,
+								custom_has_oil_item: saved_doc.custom_has_oil_item || this.invoice_doc.custom_has_oil_item,
+								// ===== END NEW =====
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
 							console.log("[Invoice] Emitted draft_saved for new draft:", saved_doc.name);
@@ -2280,6 +2377,43 @@ export default {
 					message: this.__("Error loading draft invoice: ") + (error.message || error),
 					indicator: "red",
 				});
+			}
+		});
+
+		// Listen for odometer data updates from InvoiceSummary
+		this.eventBus.on("update_odometer_data", (data) => {
+			console.log("[Invoice] Odometer data received:", data);
+
+			this.custom_odometer_reading = data.custom_odometer_reading;
+			this.contact_mobile = data.contact_mobile || "";
+			this.custom_vehicle_no = data.custom_vehicle_no || "";
+
+			// Update invoice_doc immediately
+			if (this.invoice_doc) {
+				this.invoice_doc.custom_has_oil_item = data.custom_has_oil_item || 0;
+				this.invoice_doc.custom_odometer_reading = data.custom_odometer_reading;
+				this.invoice_doc.contact_mobile = data.contact_mobile || "";
+				this.invoice_doc.custom_vehicle_no = data.custom_vehicle_no || "";
+
+				console.log("[Invoice] invoice_doc updated with odometer data");
+			}
+
+			// Broadcast update
+			this.broadcastInvoiceUpdate();
+		});
+
+		// Listen for customer details from Customer component
+		this.eventBus.on("update_customer_details", (data) => {
+			console.log("[Invoice] Customer details received:", data);
+
+			// Store customer mobile and vehicle
+			this.contact_mobile = data.contact_mobile || "";
+			this.custom_vehicle_no = data.custom_vehicle_no || "";
+
+			// Update invoice_doc
+			if (this.invoice_doc) {
+				this.invoice_doc.contact_mobile = data.contact_mobile || "";
+				this.invoice_doc.custom_vehicle_no = data.custom_vehicle_no || "";
 			}
 		});
 
@@ -2550,6 +2684,9 @@ export default {
 		this.eventBus.off("check_items_for_service");
 
 		console.log("[Invoice] Employee event listeners cleaned up");
+
+		this.eventBus.off("update_odometer_data");
+        this.eventBus.off("update_customer_details");
 	},
 
 	// Register global keyboard shortcuts when component is created
@@ -2570,6 +2707,7 @@ export default {
 
 	watch: {
 		...invoiceWatchers,
+
 		// Watch invoice_doc changes and broadcast them
 		invoice_doc: {
 			handler(newVal) {
@@ -2581,20 +2719,52 @@ export default {
 			deep: true,
 		},
 
-		// Watch items changes and update invoice_doc
+		// Watch items changes and update invoice_doc (single consolidated watcher)
 		items: {
-			handler(newVal, oldVal) {
+			handler(newItems, oldItems) {
 				console.log("[Invoice] Items changed:", {
-					count: newVal.length,
-					oldCount: oldVal ? oldVal.length : 0,
+					count: newItems.length,
+					oldCount: oldItems ? oldItems.length : 0,
 				});
 
-				// Update invoice_doc items
+				// Update invoice_doc items (keep invoice_doc in sync)
 				if (this.invoice_doc) {
-					this.invoice_doc.items = newVal;
+					this.invoice_doc.items = newItems;
 				}
 
-				// Force Vue to recalculate computed properties
+				// --- Engine oil / odometer handling ---
+				console.log("[Invoice] Items changed, checking for Engine Oil");
+				const hasOilItem = this.checkForEngineOilItem();
+				// Notify InvoiceSummary (or other listeners) whether to show odometer
+				this.eventBus.emit("show_odometer_field", hasOilItem);
+
+				// If no engine-oil items, clear only the odometer reading (keep mobile/vehicle)
+				if (!hasOilItem) {
+					this.custom_odometer_reading = null;
+					if (this.invoice_doc) {
+						// use 0/false depending what backend expects
+						this.invoice_doc.custom_has_oil_item = 0;
+						this.invoice_doc.custom_odometer_reading = null;
+					}
+				} else {
+					// if has oil, ensure invoice_doc flag is set so load/save knows about it
+					if (this.invoice_doc) {
+						this.invoice_doc.custom_has_oil_item = 1;
+					}
+				}
+
+				// --- Car wash / employee handling ---
+				console.log("[Invoice] Items changed, checking for car wash services");
+				const hasCarWashService = this.checkForCarWashServices();
+				// Emit event to show/hide employee selection in summary
+				this.eventBus.emit("show_employee_selection", hasCarWashService);
+
+				// If no car wash services, clear any selected employee
+				if (!hasCarWashService && this.service_employee) {
+					this.clearServiceEmployee();
+				}
+
+				// --- Force Vue to recalculate computed properties and re-sync totals ---
 				this.$nextTick(() => {
 					// Sync all computed totals to invoice_doc
 					if (this.invoice_doc) {
@@ -2602,6 +2772,12 @@ export default {
 						this.invoice_doc.grand_total = this.grand_total;
 						this.invoice_doc.rounded_total = this.rounded_total;
 						this.invoice_doc.total_qty = this.total_qty;
+
+						// Also keep odometer/mobile/vehicle in invoice_doc if present in component state
+						// (do not overwrite mobile/vehicle when odometer cleared earlier)
+						this.invoice_doc.custom_odometer_reading = this.custom_odometer_reading || this.invoice_doc.custom_odometer_reading || null;
+						this.invoice_doc.contact_mobile = this.contact_mobile || this.invoice_doc.contact_mobile || "";
+						this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no || this.invoice_doc.custom_vehicle_no || "";
 					}
 
 					// Force UI update
@@ -2660,30 +2836,6 @@ export default {
 			this.eventBus.emit("update_items_view", newVal);
 		},
 
-		items: {
-			handler(newItems, oldItems) {
-				console.log("[Invoice] Items changed, checking for car wash services");
-
-				// Check if we need to show employee selection
-				const hasCarWashService = this.checkForCarWashServices();
-
-				// Emit event to show/hide employee selection in summary
-				this.eventBus.emit("show_employee_selection", hasCarWashService);
-
-				// If no car wash services, clear any selected employee
-				if (!hasCarWashService && this.service_employee) {
-					this.clearServiceEmployee();
-				}
-
-				// Update invoice doc
-				if (this.invoice_doc) {
-					this.invoice_doc.items = newItems;
-				}
-			},
-			deep: true,
-			immediate: false,
-		},
-
 		service_employee: {
 			handler(newVal) {
 				if (newVal) {
@@ -2694,6 +2846,7 @@ export default {
 			immediate: false,
 		},
 	},
+
 };
 </script>
 

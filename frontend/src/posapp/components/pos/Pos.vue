@@ -449,6 +449,10 @@ export default {
 							"currency",
 							// Request these so frontend can show employee
 							"custom_service_employee",
+							"custom_has_oil_item",
+							"custom_odometer_reading",
+							"custom_vehicle_no",
+							"contact_mobile",
 						],
 						limit_page_length: 500,
 						order_by: "modified desc",
@@ -515,6 +519,17 @@ export default {
 							employee_name: r.message.custom_service_employee_name || null,
 						});
 					}
+
+					// --- NEW: emit explicit custom field events so children can populate reliably ---
+					this.eventBus.emit("set_contact_mobile", r.message.contact_mobile || "");
+					this.eventBus.emit("set_custom_vehicle_no", r.message.custom_vehicle_no || "");
+					// keep odometer as string if present
+					this.eventBus.emit("set_custom_odometer_reading", r.message.custom_odometer_reading || "");
+					// coerce has_oil_item to boolean (1/"1" => true)
+					this.eventBus.emit(
+						"set_custom_has_oil_item",
+						Boolean(Number(r.message.custom_has_oil_item)) || false,
+					);
 
 					this.eventBus.emit("show_message", {
 						title: __("Draft invoice {0} loaded successfully", [draft_name]),

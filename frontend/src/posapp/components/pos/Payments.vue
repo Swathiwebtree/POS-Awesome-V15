@@ -1098,9 +1098,8 @@ export default {
 		},
 		// Highlight and focus the submit button when payment screen opens
 		handleShowPayment(data) {
-			// If employee selection is required, prevent proceeding
+			// 1. EMPLOYEE VALIDATION (existing)
 			if (this.showEmployeeSelection && !this.selectedEmployee) {
-				// friendlier message and sound
 				frappe.show_alert({
 					message: this.__("Please select a service employee before proceeding to payment."),
 					indicator: "red",
@@ -1109,6 +1108,19 @@ export default {
 				return;
 			}
 
+			// 2. ODOMETER VALIDATION (new)
+			if (this.showOdometerField) {
+				if (!this.odometerValue || isNaN(this.odometerValue) || Number(this.odometerValue) <= 0) {
+					frappe.show_alert({
+						message: this.__("Please enter a valid odometer reading before proceeding to payment."),
+						indicator: "red",
+					});
+					frappe.utils.play_sound && frappe.utils.play_sound("error");
+					return;
+				}
+			}
+
+			// 3. Continue as normal
 			if (data === "true") {
 				this.$nextTick(() => {
 					setTimeout(() => {

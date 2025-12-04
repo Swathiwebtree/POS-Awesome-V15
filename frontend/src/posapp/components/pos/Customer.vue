@@ -399,6 +399,50 @@ export default {
 			}
 		},
 
+		async fetchAndEmitCustomerDetails(customerName) {
+			if (!customerName) {
+				return;
+			}
+
+			try {
+				console.log("[Customer] Fetching customer details for:", customerName);
+
+				const response = await frappe.call({
+					method: "posawesome.posawesome.api.customers.get_customer_info",
+					args: {
+						customer: customerName,
+					},
+				});
+
+				if (response && response.message) {
+					const customerData = response.message;
+
+					console.log("[Customer] Customer data fetched:", customerData);
+
+					// Extract mobile and vehicle number
+					const mobile = customerData.mobile_no || "";
+					const vehicleNo = customerData.vehicle_no ||
+						(customerData.vehicles && customerData.vehicles.length > 0
+							? customerData.vehicles[0].vehicle_no
+							: "");
+
+					console.log("[Customer] Emitting customer details:", {
+						contact_mobile: mobile,
+						custom_vehicle_no: vehicleNo,
+					});
+
+					//  EMIT CUSTOMER DETAILS TO INVOICE SUMMARY
+					this.eventBus.emit("update_customer_details", {
+						contact_mobile: mobile,
+						custom_vehicle_no: vehicleNo,
+					});
+				}
+			} catch (error) {
+				console.error("[Customer] Failed to fetch customer details:", error);
+				// Don't show error to user, just log it
+			}
+		},
+
 		onCustomerChange(val) {
 			if (val && val === this.customer) {
 				this.internalCustomer = this.customer;
@@ -414,6 +458,7 @@ export default {
 			if (!this.isMenuOpen && val) {
 				this.customer = val;
 				this.eventBus.emit("update_customer", val);
+				this.fetchAndEmitCustomerDetails(val);
 				this.fetchVehiclesForCustomer(val);
 				this.selectedVehicle = null;
 			}
@@ -426,6 +471,11 @@ export default {
 				this.vehicle_no = "";
 				this.eventBus.emit("update_customer", null);
 				this.eventBus.emit("vehicle_selected", null);
+				// EMIT EMPTY CUSTOMER DETAILS
+				this.eventBus.emit("update_customer_details", {
+					contact_mobile: "",
+					custom_vehicle_no: "",
+				});
 			}
 		},
 
@@ -452,6 +502,7 @@ export default {
 				this.internalCustomer = matched.name;
 				this.customer = matched.name;
 				this.eventBus.emit("update_customer", matched.name);
+				this.fetchAndEmitCustomerDetails(matched.name);
 				this.fetchVehiclesForCustomer(matched.name);
 				this.selectedVehicle = null;
 				this.isMenuOpen = false;
@@ -1348,6 +1399,11 @@ export default {
 				this.internalCustomer = null;
 				this.vehicles = [];
 				this.selectedVehicle = null;
+				//  CLEAR CUSTOMER DETAILS
+				this.eventBus.emit("update_customer_details", {
+					contact_mobile: "",
+					custom_vehicle_no: "",
+				});
 				return;
 			}
 
@@ -1356,6 +1412,9 @@ export default {
 			this.internalCustomer = customerName;
 
 			console.log("[Customer] Customer set to:", customerName);
+
+			// FETCH AND EMIT CUSTOMER DETAILS
+			await this.fetchAndEmitCustomerDetails(customerName);
 
 			// Fetch vehicles for this customer
 			await this.fetchVehiclesForCustomer(customerName);
@@ -1385,6 +1444,7 @@ export default {
 					this.customer = matched.name;
 					this.internalCustomer = matched.name;
 					this.eventBus.emit("update_customer", matched.name);
+					await this.fetchAndEmitCustomerDetails(matched.name);
 					await this.fetchVehiclesForCustomer(matched.name);
 					this.selectedVehicle = null;
 				}
