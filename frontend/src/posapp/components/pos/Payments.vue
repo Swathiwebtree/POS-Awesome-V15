@@ -1690,34 +1690,127 @@ export default {
 			}
 			this.eventBus.emit("open_new_address", this.invoice_doc.customer);
 		},
-		// Get sales person names from API/localStorage
+		// helper: convert report-style message (keys + values) to objects
+		convertReportRowsToObjects(msg) {
+			// msg.keys = [...], msg.values = [[row], [row]...]
+			if (!msg || !msg.keys || !msg.values) return [];
+
+			const keyIndex = (keyName) => {
+				const idx = msg.keys.findIndex((k) => {
+					// keys in your debug were like "`tabSales Person`.`sales_person_name`"
+					// normalize by checking endsWith field name
+					return String(k).replace(/`/g, "").endsWith(`.${keyName}`);
+				});
+				return idx;
+			};
+
+			const idx_name = keyIndex("name"); // docname
+			const idx_sales_person_name = keyIndex("sales_person_name");
+			const idx_parent_sales_person = keyIndex("parent_sales_person");
+			const idx_is_group = keyIndex("is_group");
+			const idx_enabled = keyIndex("enabled");
+
+			return msg.values.map((row) => {
+				const name = idx_name >= 0 ? row[idx_name] : row[0];
+				const sales_person_name =
+					(idx_sales_person_name >= 0 && row[idx_sales_person_name]) || name;
+				const parent = idx_parent_sales_person >= 0 ? row[idx_parent_sales_person] : null;
+				const is_group = idx_is_group >= 0 ? Number(row[idx_is_group]) : 0;
+				const enabled = idx_enabled >= 0 ? Number(row[idx_enabled]) : 1;
+
+				return {
+					value: name,
+					title: sales_person_name,
+					name,
+					sales_person_name,
+					parent,
+					is_group,
+					enabled,
+				};
+			});
+		},
+
+		// robust sales person loader
 		get_sales_person_names() {
 			const vm = this;
-			if (vm.pos_profile.posa_local_storage && getSalesPersonsStorage().length) {
+
+			// Try local cache if enabled
+			if (vm.pos_profile && vm.pos_profile.posa_local_storage) {
 				try {
-					vm.sales_persons = getSalesPersonsStorage();
+					const cached = getSalesPersonsStorage(); // your helper
+					if (cached && Array.isArray(cached) && cached.length) {
+						vm.sales_persons = cached;
+					}
 				} catch (e) {
-					console.error(e);
+					console.warn("Could not load cached sales persons", e);
 				}
 			}
-			frappe.call({
-				method: "posawesome.posawesome.api.utilities.get_sales_person_names",
-				callback: function (r) {
-					if (r.message && r.message.length > 0) {
-						vm.sales_persons = r.message.map((sp) => ({
-							value: sp.name,
-							title: sp.sales_person_name,
-							sales_person_name: sp.sales_person_name,
-							name: sp.name,
-						}));
-						if (vm.pos_profile.posa_local_storage) {
-							setSalesPersonsStorage(vm.sales_persons);
+
+			// Call server method (your existing API)
+			frappe
+				.call({
+					method: "posawesome.posawesome.api.utilities.get_sales_person_names",
+					callback: function (r) {
+						// r.message might be either:
+						// - array of objects [{name, sales_person_name}, ...] OR
+						// - report style { keys: [...], values: [[...], ...] }
+						if (!r || r.exc) {
+							vm.sales_persons = vm.sales_persons || [];
+							return;
 						}
-					} else {
-						vm.sales_persons = [];
-					}
-				},
-			});
+
+						let items = [];
+
+						if (Array.isArray(r.message)) {
+							// already array of objects (preferred)
+							items = r.message.map((sp) => ({
+								value: sp.name,
+								title: sp.sales_person_name || sp.name,
+								...sp,
+							}));
+						} else if (r.message && r.message.keys && r.message.values) {
+							items = vm.convertReportRowsToObjects(r.message);
+						} else {
+							// fallback: try to map any array-like response
+							try {
+								items = (r.message || []).map((sp) => {
+									if (typeof sp === "string") {
+										return { value: sp, title: sp, name: sp };
+									} else if (sp && sp.name) {
+										return { value: sp.name, title: sp.sales_person_name || sp.name, ...sp };
+									} else {
+										return null;
+									}
+								}).filter(Boolean);
+							} catch (e) {
+								items = [];
+							}
+						}
+
+						// filter out group rows (is_group === 1) and disabled (enabled === 0)
+						items = items.filter((it) => {
+							const notGroup = it.is_group === undefined ? true : Number(it.is_group) === 0;
+							const enabled = it.enabled === undefined ? true : Number(it.enabled) !== 0;
+							return notGroup && enabled;
+						});
+
+						vm.sales_persons = items;
+
+						// save cache if allowed
+						if (vm.pos_profile && vm.pos_profile.posa_local_storage) {
+							try {
+								setSalesPersonsStorage(vm.sales_persons);
+							} catch (e) {
+								console.warn("Failed to save sales persons to storage", e);
+							}
+						}
+
+						console.log("[Payment] Loaded sales_persons:", vm.sales_persons);
+					},
+				})
+				.fail(function (err) {
+					console.error("Failed to fetch sales person names:", err);
+				});
 		},
 		// Request payment for phone type
 		request_payment() {
@@ -2194,6 +2287,7 @@ export default {
 				this.pos_profile = data.pos_profile;
 				this.stock_settings = data.stock_settings || {};
 				this.get_mpesa_modes();
+				this.get_sales_person_names();
 			});
 			this.eventBus.on("add_the_new_address", (data) => {
 				this.addresses.push(data);
