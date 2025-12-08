@@ -1,767 +1,507 @@
 <template>
-	<div class="pa-0">
-		<v-card
-			:class="['selection mx-auto pa-1 my-0 mt-3', isDarkTheme ? '' : 'bg-grey-lighten-5']"
-			:style="isDarkTheme ? 'background-color:#1E1E1E' : ''"
-			style="max-height: 68vh; height: 68vh"
-		>
-			<v-progress-linear
-				:active="loading"
-				:indeterminate="loading"
-				absolute
-				location="top"
-				color="info"
-			></v-progress-linear>
-			<div ref="paymentContainer" class="overflow-y-auto pa-2" style="max-height: 67vh">
-				<!-- Payment Summary (Paid, To Be Paid, Change) -->
-				<v-row v-if="invoice_doc" class="pa-1" dense>
-					<v-col cols="7">
-						<v-text-field
-							variant="solo"
-							color="primary"
-							:label="frappe._('Paid Amount')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							v-model="total_payments_display"
-							readonly
-							:prefix="currencySymbol(invoice_doc.currency)"
-							density="compact"
-							@click="showPaidAmount"
-						></v-text-field>
-					</v-col>
-					<v-col cols="5">
-						<v-text-field
-							variant="solo"
-							color="primary"
-							label="To Be Paid"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							v-model="diff_payment_display"
-							:prefix="currencySymbol(invoice_doc.currency)"
-							density="compact"
-							@focus="showDiffPayment"
-							persistent-placeholder
-						></v-text-field>
-					</v-col>
+	<v-dialog v-model="showDialog" max-width="1000px" persistent transition="dialog-bottom-transition"
+		overlay-opacity="0.5">
 
-					<!-- Paid Change (if applicable) -->
-					<v-col cols="7" v-if="credit_change > 0 && !invoice_doc.is_return">
-						<v-text-field
-							variant="solo"
-							color="primary"
-							:label="frappe._('Paid Change')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							:model-value="formatCurrency(paid_change)"
-							:prefix="currencySymbol(invoice_doc.currency)"
-							:rules="paid_change_rules"
-							density="compact"
-							readonly
-							type="text"
-							@click="showPaidChange"
-						></v-text-field>
-					</v-col>
+		<div class="payment-modal-container">
+			<div class="payment-content">
+				<div class="payment-card-wrapper">
+					<!-- MAIN CARD -->
+					<v-card :class="['selection mx-auto pa-0 my-0 mt-0', isDarkTheme ? '' : 'bg-grey-lighten-5']"
+						:style="isDarkTheme ? 'background-color:#1E1E1E' : ''">
+						<!-- Header inside the card -->
+						<div class="payments-header">
+							<div class="payments-header-left">
+								<v-icon class="ml-2 white--text" large>mdi-cash-register</v-icon>
+							</div>
 
-					<!-- Credit Change (if applicable) -->
-					<v-col cols="5" v-if="credit_change > 0 && !invoice_doc.is_return">
-						<v-text-field
-							variant="solo"
-							color="primary"
-							:label="frappe._('Credit Change')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							:model-value="formatCurrency(credit_change)"
-							:prefix="currencySymbol(invoice_doc.currency)"
-							density="compact"
-							type="text"
-							@change="
-								setFormatedCurrency(this, 'credit_change', null, false, $event);
-								updateCreditChange(this.credit_change);
-							"
-						></v-text-field>
-					</v-col>
-				</v-row>
+							<div class="payments-header-title">
+								<div class="text-h6 font-weight-bold white--text">{{ __("Payment") }}</div>
+							</div>
 
-				<v-divider></v-divider>
+							<div class="payments-header-right">
+								<v-btn icon @click="closeDialog" class="white--text" aria-label="Close payments dialog">
+									<v-icon class="white--text">mdi-close</v-icon>
+								</v-btn>
+							</div>
+						</div>
 
-				<!-- Payment Inputs (All Payment Methods) -->
-				<div v-if="is_cashback">
-					<v-row class="payments pa-1" v-for="payment in invoice_doc.payments" :key="payment.name">
-						<v-col cols="6" v-if="!is_mpesa_c2b_payment(payment)">
-							<v-text-field
-								density="compact"
-								variant="solo"
-								color="primary"
-								:label="frappe._(payment.mode_of_payment)"
-								:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-								class="dark-field sleek-field"
-								hide-details
-								:model-value="formatCurrency(payment.amount)"
-								@change="setFormatedCurrency(payment, 'amount', null, false, $event)"
-								:rules="[
-									isNumber,
-									(v) =>
-										!payment.mode_of_payment.toLowerCase().includes('cash') ||
-										this.is_credit_sale ||
-										v >=
-											(this.invoice_doc.rounded_total ||
-												this.invoice_doc.grand_total) ||
-										'Cash payment cannot be less than invoice total when credit sale is off',
-								]"
-								:prefix="currencySymbol(invoice_doc.currency)"
-								@focus="set_rest_amount(payment.idx)"
-								:readonly="invoice_doc.is_return"
-							></v-text-field>
-						</v-col>
-						<v-col cols="6" v-if="!is_mpesa_c2b_payment(payment)">
-							<v-btn block color="primary" theme="dark" @click="set_full_amount(payment.idx)">
-								{{ payment.mode_of_payment }}
-							</v-btn>
-						</v-col>
+						<!-- progress bar (absolute at top of card) -->
+						<v-progress-linear :active="loading" :indeterminate="loading" absolute location="top"
+							color="info"></v-progress-linear>
 
-						<!-- M-Pesa Payment Button (if payment is M-Pesa) -->
-						<v-col cols="12" v-if="is_mpesa_c2b_payment(payment)" class="pl-3">
-							<v-btn block color="success" theme="dark" @click="mpesa_c2b_dialog(payment)">
-								{{ __("Get Payments") }} {{ payment.mode_of_payment }}
-							</v-btn>
-						</v-col>
+						<!-- Scrollable content -->
+						<div ref="paymentContainer" class="overflow-y-auto pa-2">
+							<!-- Payment Summary (Paid, To Be Paid, Change) -->
+							<v-row v-if="invoice_doc" class="pa-1" dense>
+								<v-col cols="7">
+									<v-text-field variant="solo" color="primary" :label="frappe._('Paid Amount')"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										hide-details v-model="total_payments_display" readonly
+										:prefix="currencySymbol(invoice_doc.currency)" density="compact"
+										@click="showPaidAmount"></v-text-field>
+								</v-col>
+								<v-col cols="5">
+									<v-text-field variant="solo" color="primary" label="To Be Paid"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										hide-details v-model="diff_payment_display"
+										:prefix="currencySymbol(invoice_doc.currency)" density="compact"
+										@focus="showDiffPayment" persistent-placeholder></v-text-field>
+								</v-col>
 
-						<!-- Request Payment for Phone Type -->
-						<v-col
-							cols="3"
-							v-if="payment.type === 'Phone' && payment.amount > 0 && request_payment_field"
-							class="pl-1"
-						>
-							<v-btn
-								block
-								color="success"
-								theme="dark"
-								:disabled="payment.amount === 0"
-								@click="request_payment(payment)"
-							>
-								{{ __("Request") }}
-							</v-btn>
-						</v-col>
-					</v-row>
-				</div>
+								<!-- Paid Change (if applicable) -->
+								<v-col cols="7" v-if="credit_change > 0 && !invoice_doc.is_return">
+									<v-text-field variant="solo" color="primary" :label="frappe._('Paid Change')"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										:model-value="formatCurrency(paid_change)"
+										:prefix="currencySymbol(invoice_doc.currency)" :rules="paid_change_rules"
+										density="compact" readonly type="text" @click="showPaidChange"></v-text-field>
+								</v-col>
 
-				<!-- Loyalty Points Redemption -->
-				<v-row
-					class="payments pa-1"
-					v-if="invoice_doc && available_points_amount > 0 && !invoice_doc.is_return"
-				>
-					<v-col cols="7">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('Redeem Loyalty Points')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							:model-value="formatCurrency(loyalty_amount)"
-							type="text"
-							@change="setFormatedCurrency(this, 'loyalty_amount', null, false, $event)"
-							:prefix="currencySymbol(invoice_doc.currency)"
-						></v-text-field>
-					</v-col>
-					<v-col cols="5">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('You can redeem up to')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							:model-value="formatFloat(available_points_amount)"
-							:prefix="currencySymbol(invoice_doc.currency)"
-							readonly
-						></v-text-field>
-					</v-col>
-				</v-row>
+								<!-- Credit Change (if applicable) -->
+								<v-col cols="5" v-if="credit_change > 0 && !invoice_doc.is_return">
+									<v-text-field variant="solo" color="primary" :label="frappe._('Credit Change')"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										:model-value="formatCurrency(credit_change)"
+										:prefix="currencySymbol(invoice_doc.currency)" density="compact" type="text"
+										@change="
+									setFormatedCurrency(this, 'credit_change', null, false, $event);
+									updateCreditChange(this.credit_change);
+								"></v-text-field>
+								</v-col>
+							</v-row>
 
-				<!-- Customer Credit Redemption -->
-				<v-row
-					class="payments pa-1"
-					v-if="
-						invoice_doc &&
-						available_customer_credit > 0 &&
-						!invoice_doc.is_return &&
-						redeem_customer_credit
-					"
-				>
-					<v-col cols="7">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('Redeemed Customer Credit')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							:model-value="formatCurrency(redeemed_customer_credit)"
-							type="text"
-							@change="
-								setFormatedCurrency(this, 'redeemed_customer_credit', null, false, $event)
-							"
-							:prefix="currencySymbol(invoice_doc.currency)"
-							readonly
-						></v-text-field>
-					</v-col>
-					<v-col cols="5">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('You can redeem credit up to')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							:model-value="formatCurrency(available_customer_credit)"
-							:prefix="currencySymbol(invoice_doc.currency)"
-							readonly
-						></v-text-field>
-					</v-col>
-				</v-row>
+							<v-divider></v-divider>
 
-				<v-divider></v-divider>
+							<!-- Payment Inputs (All Payment Methods) -->
+							<div v-if="is_cashback">
+								<v-row class="payments pa-1" v-for="payment in invoice_doc.payments"
+									:key="payment.name">
+									<v-col cols="6" v-if="!is_mpesa_c2b_payment(payment)">
+										<v-text-field density="compact" variant="solo" color="primary"
+											:label="frappe._(payment.mode_of_payment)"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+											hide-details :model-value="formatCurrency(payment.amount)"
+											@change="setFormatedCurrency(payment, 'amount', null, false, $event)"
+											:rules="[
+										isNumber,
+										(v) =>
+											!payment.mode_of_payment.toLowerCase().includes('cash') ||
+											this.is_credit_sale ||
+											v >=
+												(this.invoice_doc.rounded_total ||
+													this.invoice_doc.grand_total) ||
+											'Cash payment cannot be less than invoice total when credit sale is off',
+									]" :prefix="currencySymbol(invoice_doc.currency)" @focus="set_rest_amount(payment.idx)"
+											:readonly="invoice_doc.is_return"></v-text-field>
+									</v-col>
+									<v-col cols="6" v-if="!is_mpesa_c2b_payment(payment)">
+										<v-btn block color="primary" theme="dark" @click="set_full_amount(payment.idx)">
+											{{ payment.mode_of_payment }}
+										</v-btn>
+									</v-col>
 
-				<!-- Invoice Totals (Net, Tax, Total, Discount, Grand, Rounded) -->
-				<v-row class="pa-1">
-					<v-col cols="6">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('Net Total')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							:model-value="formatCurrency(invoice_doc.net_total, displayCurrency)"
-							readonly
-							:prefix="currencySymbol()"
-							persistent-placeholder
-						></v-text-field>
-					</v-col>
-					<v-col cols="6">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('Tax and Charges')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							:model-value="
-								formatCurrency(invoice_doc.total_taxes_and_charges, displayCurrency)
-							"
-							readonly
-							:prefix="currencySymbol()"
-							persistent-placeholder
-						></v-text-field>
-					</v-col>
-					<v-col cols="6">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('Total Amount')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							:model-value="formatCurrency(invoice_doc.total, displayCurrency)"
-							readonly
-							:prefix="currencySymbol()"
-							persistent-placeholder
-						></v-text-field>
-					</v-col>
-					<v-col cols="6">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="diff_label"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							:model-value="formatCurrency(diff_payment, displayCurrency)"
-							readonly
-							:prefix="currencySymbol()"
-							persistent-placeholder
-						></v-text-field>
-					</v-col>
-					<v-col cols="6">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('Discount Amount')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							:model-value="formatCurrency(invoice_doc.discount_amount)"
-							readonly
-							:prefix="currencySymbol(invoice_doc.currency)"
-							persistent-placeholder
-						></v-text-field>
-					</v-col>
-					<v-col cols="6">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('Grand Total')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							:model-value="formatCurrency(invoice_doc.grand_total)"
-							readonly
-							:prefix="currencySymbol(invoice_doc.currency)"
-							persistent-placeholder
-						></v-text-field>
-					</v-col>
-					<v-col v-if="invoice_doc.rounded_total" cols="6">
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('Rounded Total')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							:model-value="formatCurrency(invoice_doc.rounded_total)"
-							readonly
-							:prefix="currencySymbol(invoice_doc.currency)"
-							persistent-placeholder
-						></v-text-field>
-					</v-col>
+									<!-- M-Pesa Payment Button (if payment is M-Pesa) -->
+									<v-col cols="12" v-if="is_mpesa_c2b_payment(payment)" class="pl-3">
+										<v-btn block color="success" theme="dark" @click="mpesa_c2b_dialog(payment)">
+											{{ __("Get Payments") }} {{ payment.mode_of_payment }}
+										</v-btn>
+									</v-col>
 
-					<!-- Delivery Date and Address (if applicable) -->
-					<v-col cols="6" v-if="pos_profile.posa_allow_sales_order && invoiceType === 'Order'">
-						<VueDatePicker
-							v-model="new_delivery_date"
-							model-type="format"
-							format="dd-MM-yyyy"
-							:min-date="new Date()"
-							auto-apply
-							:dark="isDarkTheme"
-							class="dark-field sleek-field"
-							@update:model-value="update_delivery_date()"
-						/>
-					</v-col>
-					<!-- Shipping Address Selection (if delivery date is set) -->
-					<v-col cols="12" v-if="invoice_doc.posa_delivery_date">
-						<v-autocomplete
-							density="compact"
-							clearable
-							auto-select-first
-							variant="solo"
-							color="primary"
-							:label="frappe._('Address')"
-							v-model="invoice_doc.shipping_address_name"
-							:items="addresses"
-							item-title="address_title"
-							item-value="name"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							:no-data-text="__('Address not found')"
-							hide-details
-							:customFilter="addressFilter"
-							append-icon="mdi-plus"
-							@click:append="new_address"
-						>
-							<template v-slot:item="{ item }">
-								<v-list-item>
-									<v-list-item-title class="text-primary text-subtitle-1">
-										<div v-html="item.address_title"></div>
-									</v-list-item-title>
-									<v-list-item-subtitle>
-										<div v-html="item.address_line1"></div>
-									</v-list-item-subtitle>
-									<v-list-item-subtitle v-if="item.address_line2">
-										<div v-html="item.address_line2"></div>
-									</v-list-item-subtitle>
-									<v-list-item-subtitle v-if="item.city">
-										<div v-html="item.city"></div>
-									</v-list-item-subtitle>
-									<v-list-item-subtitle v-if="item.state">
-										<div v-html="item.state"></div>
-									</v-list-item-subtitle>
-									<v-list-item-subtitle v-if="item.country">
-										<div v-html="item.country"></div>
-									</v-list-item-subtitle>
-									<v-list-item-subtitle v-if="item.mobile_no">
-										<div v-html="item.mobile_no"></div>
-									</v-list-item-subtitle>
-									<v-list-item-subtitle v-if="item.address_type">
-										<div v-html="item.address_type"></div>
-									</v-list-item-subtitle>
-								</v-list-item>
-							</template>
-						</v-autocomplete>
-					</v-col>
+									<!-- Request Payment for Phone Type -->
+									<v-col cols="3"
+										v-if="payment.type === 'Phone' && payment.amount > 0 && request_payment_field"
+										class="pl-1">
+										<v-btn block color="success" theme="dark" :disabled="payment.amount === 0"
+											@click="request_payment(payment)">
+											{{ __("Request") }}
+										</v-btn>
+									</v-col>
+								</v-row>
+							</div>
 
-					<!-- Additional Notes (if enabled in POS profile) -->
-					<v-col cols="12" v-if="pos_profile.posa_display_additional_notes">
-						<v-textarea
-							class="pa-0 dark-field sleek-field"
-							variant="solo"
-							density="compact"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							clearable
-							color="primary"
-							auto-grow
-							rows="2"
-							:label="frappe._('Additional Notes')"
-							v-model="invoice_doc.posa_notes"
-						></v-textarea>
-					</v-col>
-				</v-row>
+							<!-- Loyalty Points Redemption -->
+							<v-row class="payments pa-1"
+								v-if="invoice_doc && available_points_amount > 0 && !invoice_doc.is_return">
+								<v-col cols="7">
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('Redeem Loyalty Points')"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										hide-details :model-value="formatCurrency(loyalty_amount)" type="text"
+										@change="setFormatedCurrency(this, 'loyalty_amount', null, false, $event)"
+										:prefix="currencySymbol(invoice_doc.currency)"></v-text-field>
+								</v-col>
+								<v-col cols="5">
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('You can redeem up to')"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										hide-details :model-value="formatFloat(available_points_amount)"
+										:prefix="currencySymbol(invoice_doc.currency)" readonly></v-text-field>
+								</v-col>
+							</v-row>
 
-				<!-- Customer Purchase Order (if enabled in POS profile) -->
-				<div v-if="pos_profile.posa_allow_customer_purchase_order">
-					<v-divider></v-divider>
-					<v-row class="pa-1" justify="center" align="start">
-						<v-col cols="6">
-							<v-text-field
-								v-model="invoice_doc.po_no"
-								:label="frappe._('Purchase Order')"
-								variant="solo"
-								density="compact"
-								:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-								class="dark-field sleek-field"
-								clearable
-								color="primary"
-								hide-details
-							></v-text-field>
-						</v-col>
-						<v-col cols="6">
-							<VueDatePicker
-								v-model="new_po_date"
-								model-type="format"
-								format="dd-MM-yyyy"
-								:min-date="new Date()"
-								auto-apply
-								:dark="isDarkTheme"
-								class="dark-field sleek-field"
-								@update:model-value="update_po_date()"
-							/>
-							<v-text-field
-								v-model="invoice_doc.po_date"
-								:label="frappe._('Purchase Order Date')"
-								readonly
-								variant="solo"
-								density="compact"
-								hide-details
-								color="primary"
-							></v-text-field>
-						</v-col>
-					</v-row>
-				</div>
+							<!-- Customer Credit Redemption -->
+							<v-row class="payments pa-1" v-if="
+							invoice_doc &&
+							available_customer_credit > 0 &&
+							!invoice_doc.is_return &&
+							redeem_customer_credit
+						">
+								<v-col cols="7">
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('Redeemed Customer Credit')"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										hide-details :model-value="formatCurrency(redeemed_customer_credit)" type="text"
+										@change="
+									setFormatedCurrency(this, 'redeemed_customer_credit', null, false, $event)
+								" :prefix="currencySymbol(invoice_doc.currency)" readonly></v-text-field>
+								</v-col>
+								<v-col cols="5">
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('You can redeem credit up to')"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										hide-details :model-value="formatCurrency(available_customer_credit)"
+										:prefix="currencySymbol(invoice_doc.currency)" readonly></v-text-field>
+								</v-col>
+							</v-row>
 
-				<v-divider></v-divider>
+							<v-divider></v-divider>
 
-				<!-- Switches for Write Off and Credit Sale -->
-				<v-row class="pa-1" align="start" no-gutters>
-					<v-col
-						cols="6"
-						v-if="
+							<!-- Invoice Totals (Net, Tax, Total, Discount, Grand, Rounded) -->
+							<v-row class="pa-1">
+								<v-col cols="6">
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('Net Total')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+										class="dark-field sleek-field"
+										:model-value="formatCurrency(invoice_doc.net_total, displayCurrency)" readonly
+										:prefix="currencySymbol()" persistent-placeholder></v-text-field>
+								</v-col>
+								<v-col cols="6">
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('Tax and Charges')"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										hide-details :model-value="
+									formatCurrency(invoice_doc.total_taxes_and_charges, displayCurrency)
+								" readonly :prefix="currencySymbol()" persistent-placeholder></v-text-field>
+								</v-col>
+								<v-col cols="6">
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('Total Amount')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+										class="dark-field sleek-field" hide-details
+										:model-value="formatCurrency(invoice_doc.total, displayCurrency)" readonly
+										:prefix="currencySymbol()" persistent-placeholder></v-text-field>
+								</v-col>
+								<v-col cols="6">
+									<v-text-field density="compact" variant="solo" color="primary" :label="diff_label"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										hide-details :model-value="formatCurrency(diff_payment, displayCurrency)"
+										readonly :prefix="currencySymbol()" persistent-placeholder></v-text-field>
+								</v-col>
+								<v-col cols="6">
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('Discount Amount')"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										hide-details :model-value="formatCurrency(invoice_doc.discount_amount)" readonly
+										:prefix="currencySymbol(invoice_doc.currency)"
+										persistent-placeholder></v-text-field>
+								</v-col>
+								<v-col cols="6">
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('Grand Total')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+										class="dark-field sleek-field" hide-details
+										:model-value="formatCurrency(invoice_doc.grand_total)" readonly
+										:prefix="currencySymbol(invoice_doc.currency)"
+										persistent-placeholder></v-text-field>
+								</v-col>
+								<v-col v-if="invoice_doc.rounded_total" cols="6">
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('Rounded Total')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+										class="dark-field sleek-field" hide-details
+										:model-value="formatCurrency(invoice_doc.rounded_total)" readonly
+										:prefix="currencySymbol(invoice_doc.currency)"
+										persistent-placeholder></v-text-field>
+								</v-col>
+
+								<!-- Delivery Date and Address (if applicable) -->
+								<v-col cols="6" v-if="pos_profile.posa_allow_sales_order && invoiceType === 'Order'">
+									<VueDatePicker v-model="new_delivery_date" model-type="format" format="dd-MM-yyyy"
+										:min-date="new Date()" auto-apply :dark="isDarkTheme"
+										class="dark-field sleek-field" @update:model-value="update_delivery_date()" />
+								</v-col>
+								<!-- Shipping Address Selection (if delivery date is set) -->
+								<v-col cols="12" v-if="invoice_doc.posa_delivery_date">
+									<v-autocomplete density="compact" clearable auto-select-first variant="solo"
+										color="primary" :label="frappe._('Address')"
+										v-model="invoice_doc.shipping_address_name" :items="addresses"
+										item-title="address_title" item-value="name"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										:no-data-text="__('Address not found')" hide-details
+										:customFilter="addressFilter" append-icon="mdi-plus"
+										@click:append="new_address">
+										<template v-slot:item="{ item }">
+											<v-list-item>
+												<v-list-item-title class="text-primary text-subtitle-1">
+													<div v-html="item.address_title"></div>
+												</v-list-item-title>
+												<v-list-item-subtitle>
+													<div v-html="item.address_line1"></div>
+												</v-list-item-subtitle>
+												<v-list-item-subtitle v-if="item.address_line2">
+													<div v-html="item.address_line2"></div>
+												</v-list-item-subtitle>
+												<v-list-item-subtitle v-if="item.city">
+													<div v-html="item.city"></div>
+												</v-list-item-subtitle>
+												<v-list-item-subtitle v-if="item.state">
+													<div v-html="item.state"></div>
+												</v-list-item-subtitle>
+												<v-list-item-subtitle v-if="item.country">
+													<div v-html="item.country"></div>
+												</v-list-item-subtitle>
+												<v-list-item-subtitle v-if="item.mobile_no">
+													<div v-html="item.mobile_no"></div>
+												</v-list-item-subtitle>
+												<v-list-item-subtitle v-if="item.address_type">
+													<div v-html="item.address_type"></div>
+												</v-list-item-subtitle>
+											</v-list-item>
+										</template>
+									</v-autocomplete>
+								</v-col>
+
+								<!-- Additional Notes (if enabled in POS profile) -->
+								<v-col cols="12" v-if="pos_profile.posa_display_additional_notes">
+									<v-textarea class="pa-0 dark-field sleek-field" variant="solo" density="compact"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" clearable color="primary"
+										auto-grow rows="2" :label="frappe._('Additional Notes')"
+										v-model="invoice_doc.posa_notes"></v-textarea>
+								</v-col>
+							</v-row>
+
+							<!-- Customer Purchase Order (if enabled in POS profile) -->
+							<div v-if="pos_profile.posa_allow_customer_purchase_order">
+								<v-divider></v-divider>
+								<v-row class="pa-1" justify="center" align="start">
+									<v-col cols="6">
+										<v-text-field v-model="invoice_doc.po_no" :label="frappe._('Purchase Order')"
+											variant="solo" density="compact"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+											clearable color="primary" hide-details></v-text-field>
+									</v-col>
+									<v-col cols="6">
+										<VueDatePicker v-model="new_po_date" model-type="format" format="dd-MM-yyyy"
+											:min-date="new Date()" auto-apply :dark="isDarkTheme"
+											class="dark-field sleek-field" @update:model-value="update_po_date()" />
+										<v-text-field v-model="invoice_doc.po_date"
+											:label="frappe._('Purchase Order Date')" readonly variant="solo"
+											density="compact" hide-details color="primary"></v-text-field>
+									</v-col>
+								</v-row>
+							</div>
+
+							<v-divider></v-divider>
+
+							<!-- Switches for Write Off and Credit Sale -->
+							<v-row class="pa-1" align="start" no-gutters>
+								<v-col cols="6" v-if="
 							pos_profile.posa_allow_write_off_change &&
 							credit_change > 0 &&
 							!invoice_doc.is_return
-						"
-					>
-						<v-switch
-							v-model="is_write_off_change"
-							flat
-							:label="frappe._('Write Off Difference Amount')"
-							class="my-0 pa-1"
-						></v-switch>
-					</v-col>
-					<v-col cols="6" v-if="pos_profile.posa_allow_credit_sale && !invoice_doc.is_return">
-						<v-switch v-model="is_credit_sale" :label="frappe._('Credit Sale?')"></v-switch>
-					</v-col>
-					<v-col cols="6" v-if="invoice_doc.is_return && pos_profile.use_cashback">
-						<v-switch
-							v-model="is_cashback"
-							flat
-							:label="frappe._('Cashback?')"
-							class="my-0 pa-1"
-						></v-switch>
-					</v-col>
-					<v-col cols="6" v-if="invoice_doc.is_return">
-						<v-switch
-							v-model="is_credit_return"
-							flat
-							:label="frappe._('Credit Return?')"
-							class="my-0 pa-1"
-						></v-switch>
-					</v-col>
-					<v-col cols="6" v-if="is_credit_sale">
-						<VueDatePicker
-							v-model="new_credit_due_date"
-							model-type="format"
-							format="dd-MM-yyyy"
-							:min-date="new Date()"
-							auto-apply
-							:dark="isDarkTheme"
-							class="dark-field sleek-field"
-							@update:model-value="update_credit_due_date()"
-						/>
-						<v-text-field
-							class="mt-2 dark-field sleek-field"
-							density="compact"
-							variant="solo"
-							type="number"
-							min="0"
-							max="365"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							v-model.number="credit_due_days"
-							:label="frappe._('Days until due')"
-							hide-details
-							@change="applyDuePreset(credit_due_days)"
-						></v-text-field>
-						<div class="mt-1">
-							<v-chip
-								v-for="d in credit_due_presets"
-								:key="d"
-								size="small"
-								class="ma-1"
-								variant="solo"
-								color="primary"
-								@click="applyDuePreset(d)"
-							>
-								{{ d }} {{ frappe._("days") }}
-							</v-chip>
-						</div>
-					</v-col>
-					<v-col cols="6" v-if="!invoice_doc.is_return && pos_profile.use_customer_credit">
-						<v-switch
-							v-model="redeem_customer_credit"
-							flat
-							:label="frappe._('Use Customer Credit')"
-							class="my-0 pa-1"
-							@update:model-value="get_available_credit(redeem_customer_credit)"
-						></v-switch>
-					</v-col>
-				</v-row>
+						">
+									<v-switch v-model="is_write_off_change" flat
+										:label="frappe._('Write Off Difference Amount')" class="my-0 pa-1"></v-switch>
+								</v-col>
+								<v-col cols="6" v-if="pos_profile.posa_allow_credit_sale && !invoice_doc.is_return">
+									<v-switch v-model="is_credit_sale" :label="frappe._('Credit Sale?')"></v-switch>
+								</v-col>
+								<v-col cols="6" v-if="invoice_doc.is_return && pos_profile.use_cashback">
+									<v-switch v-model="is_cashback" flat :label="frappe._('Cashback?')"
+										class="my-0 pa-1"></v-switch>
+								</v-col>
+								<v-col cols="6" v-if="invoice_doc.is_return">
+									<v-switch v-model="is_credit_return" flat :label="frappe._('Credit Return?')"
+										class="my-0 pa-1"></v-switch>
+								</v-col>
+								<v-col cols="6" v-if="is_credit_sale">
+									<VueDatePicker v-model="new_credit_due_date" model-type="format" format="dd-MM-yyyy"
+										:min-date="new Date()" auto-apply :dark="isDarkTheme"
+										class="dark-field sleek-field" @update:model-value="update_credit_due_date()" />
+									<v-text-field class="mt-2 dark-field sleek-field" density="compact" variant="solo"
+										type="number" min="0" max="365" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+										v-model.number="credit_due_days" :label="frappe._('Days until due')"
+										hide-details @change="applyDuePreset(credit_due_days)"></v-text-field>
+									<div class="mt-1">
+										<v-chip v-for="d in credit_due_presets" :key="d" size="small" class="ma-1"
+											variant="solo" color="primary" @click="applyDuePreset(d)">
+											{{ d }} {{ frappe._("days") }}
+										</v-chip>
+									</div>
+								</v-col>
+								<v-col cols="6" v-if="!invoice_doc.is_return && pos_profile.use_customer_credit">
+									<v-switch v-model="redeem_customer_credit" flat
+										:label="frappe._('Use Customer Credit')" class="my-0 pa-1"
+										@update:model-value="get_available_credit(redeem_customer_credit)"></v-switch>
+								</v-col>
+							</v-row>
 
-				<!-- Customer Credit Details -->
-				<div
-					v-if="
+							<!-- Customer Credit Details -->
+							<div v-if="
 						invoice_doc &&
 						available_customer_credit > 0 &&
 						!invoice_doc.is_return &&
 						redeem_customer_credit
-					"
-				>
-					<v-row v-for="(row, idx) in customer_credit_dict" :key="idx">
-						<v-col cols="4">
-							<div class="pa-2 py-3">{{ row.credit_origin }}</div>
-						</v-col>
-						<v-col cols="4">
-							<v-text-field
-								density="compact"
-								variant="solo"
-								color="primary"
-								:label="frappe._('Available Credit')"
-								:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-								class="dark-field sleek-field"
-								hide-details
-								:model-value="formatCurrency(row.total_credit)"
-								readonly
-								:prefix="currencySymbol(invoice_doc.currency)"
-							></v-text-field>
-						</v-col>
-						<v-col cols="4">
-							<v-text-field
-								density="compact"
-								variant="solo"
-								color="primary"
-								:label="frappe._('Redeem Credit')"
-								:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-								class="dark-field sleek-field"
-								hide-details
-								type="text"
-								:model-value="formatCurrency(row.credit_to_redeem)"
-								@change="setFormatedCurrency(row, 'credit_to_redeem', null, false, $event)"
-								:prefix="currencySymbol(invoice_doc.currency)"
-							></v-text-field>
-						</v-col>
-					</v-row>
-				</div>
+					">
+								<v-row v-for="(row, idx) in customer_credit_dict" :key="idx">
+									<v-col cols="4">
+										<div class="pa-2 py-3">{{ row.credit_origin }}</div>
+									</v-col>
+									<v-col cols="4">
+										<v-text-field density="compact" variant="solo" color="primary"
+											:label="frappe._('Available Credit')"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+											hide-details :model-value="formatCurrency(row.total_credit)" readonly
+											:prefix="currencySymbol(invoice_doc.currency)"></v-text-field>
+									</v-col>
+									<v-col cols="4">
+										<v-text-field density="compact" variant="solo" color="primary"
+											:label="frappe._('Redeem Credit')"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+											hide-details type="text" :model-value="formatCurrency(row.credit_to_redeem)"
+											@change="setFormatedCurrency(row, 'credit_to_redeem', null, false, $event)"
+											:prefix="currencySymbol(invoice_doc.currency)"></v-text-field>
+									</v-col>
+								</v-row>
+							</div>
 
-				<v-divider></v-divider>
-
-				<!-- Sales Person Selection -->
-				<v-row class="pb-0 mb-2" align="start">
-					<v-col cols="12">
-						<p v-if="sales_persons && sales_persons.length > 0" class="mt-1 mb-1 text-subtitle-2">
-							{{ sales_persons.length }} sales persons found
-						</p>
-						<p v-else class="mt-1 mb-1 text-subtitle-2 text-red">No sales persons found</p>
-						<v-select
-							density="compact"
-							clearable
-							variant="solo"
-							color="primary"
-							:label="frappe._('Sales Person')"
-							v-model="sales_person"
-							:items="sales_persons"
-							item-title="title"
-							item-value="value"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							:no-data-text="__('Sales Person not found')"
-							hide-details
-							:disabled="readonly"
-						></v-select>
-					</v-col>
-				</v-row>
-			</div>
-		</v-card>
-
-		<!-- Action Buttons -->
-		<v-card flat class="cards mb-0 mt-3 pa-0" style="position: relative; overflow: visible">
-			<v-row align="start" no-gutters class="button-row">
-				<!-- Submit Dropdown Button -->
-				<v-col cols="12" class="mb-2">
-					<v-menu
-						offset-y
-						:close-on-content-click="true"
-						location="top"
-						transition="slide-y-reverse-transition"
-					>
-						<template v-slot:activator="{ props }">
-							<v-btn
-								ref="submitButton"
-								block
-								size="x-large"
-								color="primary"
-								theme="dark"
-								v-bind="props"
-								:loading="loading"
-								:disabled="loading || vaildatPayment"
-								:class="['submit-btn-main', { 'submit-highlight': highlightSubmit }]"
-								elevation="4"
-							>
-								<v-icon left size="24">mdi-check-circle</v-icon>
-								<span class="submit-text">{{ __("SUBMIT") }}</span>
-								<v-icon right size="20">mdi-chevron-up</v-icon>
-							</v-btn>
-						</template>
-						<v-list class="submit-menu" elevation="8" density="compact">
-							<v-list-item @click="submit" class="menu-item" prepend-icon="mdi-check">
-								<v-list-item-title class="menu-title">
-									{{ __("Submit Only") }}
-								</v-list-item-title>
-								<v-list-item-subtitle class="menu-subtitle">
-									{{ __("Save invoice without printing") }}
-								</v-list-item-subtitle>
-							</v-list-item>
 							<v-divider></v-divider>
-							<v-list-item
-								@click="submit(undefined, false, true)"
-								class="menu-item"
-								prepend-icon="mdi-printer-check"
-							>
-								<v-list-item-title class="menu-title">
-									{{ __("Submit & Print") }}
-								</v-list-item-title>
-								<v-list-item-subtitle class="menu-subtitle">
-									{{ __("Save and print receipt") }}
-								</v-list-item-subtitle>
-							</v-list-item>
-						</v-list>
-					</v-menu>
-				</v-col>
 
-				<!-- Cancel Payment Button -->
-				<v-col cols="12">
-					<v-btn
-						block
-						size="large"
-						color="error"
-						theme="dark"
-						@click="back_to_invoice"
-						class="cancel-btn"
-						elevation="2"
-					>
-						<v-icon left size="20">mdi-close-circle</v-icon>
-						{{ __("Cancel Payment") }}
-					</v-btn>
-				</v-col>
-			</v-row>
-		</v-card>
-		<!-- Custom Days Dialog -->
-		<v-dialog v-model="custom_days_dialog" max-width="300px">
-			<v-card>
-				<v-card-title class="text-h6">
-					{{ __("Custom Due Days") }}
-				</v-card-title>
-				<v-card-text class="pa-0">
-					<v-container>
-						<v-text-field
-							density="compact"
-							variant="solo"
-							type="number"
-							min="0"
-							max="365"
-							class="dark-field sleek-field"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							v-model.number="custom_days_value"
-							:label="frappe._('Days')"
-							hide-details
-						></v-text-field>
-					</v-container>
-				</v-card-text>
-				<v-card-actions>
-					<v-spacer></v-spacer>
-					<v-btn color="error" theme="dark" @click="custom_days_dialog = false">
-						{{ __("Close") }}
-					</v-btn>
-					<v-btn color="primary" theme="dark" @click="applyCustomDays">
-						{{ __("Apply") }}
-					</v-btn>
-				</v-card-actions>
-			</v-card>
-		</v-dialog>
+							<!-- Sales Person Selection -->
+							<v-row class="pb-0 mb-2" align="start">
+								<v-col cols="12">
+									<p v-if="sales_persons && sales_persons.length > 0"
+										class="mt-1 mb-1 text-subtitle-2">
+										{{ sales_persons.length }} sales persons found
+									</p>
+									<p v-else class="mt-1 mb-1 text-subtitle-2 text-red">No sales persons found</p>
+									<v-select density="compact" clearable variant="solo" color="primary"
+										:label="frappe._('Sales Person')" v-model="sales_person" :items="sales_persons"
+										item-title="title" item-value="value"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
+										:no-data-text="__('Sales Person not found')" hide-details
+										:disabled="readonly"></v-select>
+								</v-col>
+							</v-row>
+						</div>
 
-		<!-- Phone Payment Dialog -->
-		<v-dialog v-model="phone_dialog" max-width="400px">
-			<v-card>
-				<v-card-title>
-					<span class="text-h5 text-primary">{{ __("Confirm Mobile Number") }}</span>
-				</v-card-title>
-				<v-card-text class="pa-0">
-					<v-container>
-						<v-text-field
-							density="compact"
-							variant="solo"
-							color="primary"
-							:label="frappe._('Mobile Number')"
-							:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-							class="dark-field sleek-field"
-							hide-details
-							v-model="invoice_doc.contact_mobile"
-							type="number"
-						></v-text-field>
-					</v-container>
-				</v-card-text>
-				<v-card-actions>
-					<v-spacer></v-spacer>
-					<v-btn color="error" theme="dark" @click="phone_dialog = false">
-						{{ __("Close") }}
-					</v-btn>
-					<v-btn color="primary" theme="dark" @click="request_payment">
-						{{ __("Request") }}
-					</v-btn>
-				</v-card-actions>
-			</v-card>
-		</v-dialog>
-	</div>
+						<!-- ================= FOOTER MOVED INSIDE CARD ================= -->
+						<div class="card-footer">
+							<v-row align="start" no-gutters class="button-row">
+								<!-- Submit Dropdown Button -->
+								<v-col cols="12" class="mb-2">
+									<v-menu :teleport="{ to: 'body' }" offset-y :close-on-content-click="true"
+										location="top" transition="slide-y-reverse-transition">
+										<template v-slot:activator="{ props }">
+											<v-btn ref="submitButton" block size="x-large" color="primary" theme="dark"
+												v-bind="props" :loading="loading" :disabled="loading || vaildatPayment"
+												:class="['submit-btn-main', { 'submit-highlight': highlightSubmit }]"
+												elevation="4">
+												<v-icon left size="24">mdi-check-circle</v-icon>
+												<span class="submit-text">{{ __("SUBMIT") }}</span>
+												<v-icon right size="20">mdi-chevron-up</v-icon>
+											</v-btn>
+										</template>
+										<v-list class="submit-menu" elevation="8" density="compact">
+											<v-list-item @click="submit" class="menu-item" prepend-icon="mdi-check">
+												<v-list-item-title class="menu-title">
+													{{ __("Submit Only") }}
+												</v-list-item-title>
+												<v-list-item-subtitle class="menu-subtitle">
+													{{ __("Save invoice without printing") }}
+												</v-list-item-subtitle>
+											</v-list-item>
+											<v-divider></v-divider>
+											<v-list-item @click="submit(undefined, false, true)" class="menu-item"
+												prepend-icon="mdi-printer-check">
+												<v-list-item-title class="menu-title">
+													{{ __("Submit & Print") }}
+												</v-list-item-title>
+												<v-list-item-subtitle class="menu-subtitle">
+													{{ __("Save and print receipt") }}
+												</v-list-item-subtitle>
+											</v-list-item>
+										</v-list>
+									</v-menu>
+								</v-col>
+
+								<!-- Cancel Payment Button -->
+								<v-col cols="12">
+									<v-btn block size="large" color="error" theme="dark" @click="back_to_invoice"
+										class="cancel-btn" elevation="2">
+										<v-icon left size="20">mdi-close-circle</v-icon>
+										{{ __("Cancel Payment") }}
+									</v-btn>
+								</v-col>
+							</v-row>
+						</div>
+						<!-- ================= END FOOTER ================= -->
+
+					</v-card>
+
+					<!-- Custom Days Dialog -->
+					<v-dialog v-model="custom_days_dialog" max-width="300px">
+						<v-card>
+							<v-card-title class="text-h6">
+								{{ __("Custom Due Days") }}
+							</v-card-title>
+							<v-card-text class="pa-0">
+								<v-container>
+									<v-text-field density="compact" variant="solo" type="number" min="0" max="365"
+										class="dark-field sleek-field" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+										v-model.number="custom_days_value" :label="frappe._('Days')"
+										hide-details></v-text-field>
+								</v-container>
+							</v-card-text>
+							<v-card-actions>
+								<v-spacer></v-spacer>
+								<v-btn color="error" theme="dark" @click="custom_days_dialog = false">
+									{{ __("Close") }}
+								</v-btn>
+								<v-btn color="primary" theme="dark" @click="applyCustomDays">
+									{{ __("Apply") }}
+								</v-btn>
+							</v-card-actions>
+						</v-card>
+					</v-dialog>
+
+					<!-- Phone Payment Dialog -->
+					<v-dialog v-model="phone_dialog" max-width="400px">
+						<v-card>
+							<v-card-title>
+								<span class="text-h5 text-primary">{{ __("Confirm Mobile Number") }}</span>
+							</v-card-title>
+							<v-card-text class="pa-0">
+								<v-container>
+									<v-text-field density="compact" variant="solo" color="primary"
+										:label="frappe._('Mobile Number')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+										class="dark-field sleek-field" hide-details v-model="invoice_doc.contact_mobile"
+										type="number"></v-text-field>
+								</v-container>
+							</v-card-text>
+							<v-card-actions>
+								<v-spacer></v-spacer>
+								<v-btn color="error" theme="dark" @click="phone_dialog = false">
+									{{ __("Close") }}
+								</v-btn>
+								<v-btn color="primary" theme="dark" @click="request_payment">
+									{{ __("Request") }}
+								</v-btn>
+							</v-card-actions>
+						</v-card>
+					</v-dialog>
+
+				</div>
+			</div>
+		</div>
+	</v-dialog>
 </template>
 
 <script>
@@ -786,6 +526,7 @@ export default {
 	mixins: [format],
 	data() {
 		return {
+			showDialog: false,
 			loading: false, // UI loading state
 			pos_profile: "", // POS profile settings
 			pos_settings: "", // POS settings
@@ -1093,8 +834,14 @@ export default {
 	methods: {
 		// Go back to invoice view and reset customer readonly
 		back_to_invoice() {
+			this.showDialog = false;
 			this.eventBus.emit("show_payment", "false");
 			this.eventBus.emit("set_customer_readonly", false);
+		},
+		// ADD THIS NEW METHOD
+		closeDialog() {
+			this.showDialog = false;
+			this.back_to_invoice();
 		},
 		// Highlight and focus the submit button when payment screen opens
 		handleShowPayment(data) {
@@ -2336,7 +2083,15 @@ export default {
 				this.is_credit_return = false;
 			});
 			// Scroll to top when payment view is shown
-			this.eventBus.on("show_payment", this.handleShowPayment);
+			this.eventBus.on("show_payment", (data) => {
+				if (data === "true") {
+					this.showDialog = true; // ADD THIS
+					this.handleShowPayment(data);
+				} else {
+					this.showDialog = false; // ADD THIS
+					this.highlightSubmit = false;
+				}
+			});
 		});
 	},
 	// Lifecycle hook: beforeUnmount
@@ -2625,4 +2380,369 @@ export default {
 ::v-deep(.v-theme--dark) .dark-field .v-field__overlay {
 	background-color: #1e1e1e !important;
 }
+
+
+:deep(.v-overlay__content),
+.v-overlay__content,
+.v-dialog__content,
+.v-dialog__content > .v-overlay__content {
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex;
+  align-items: flex-start; 
+  box-sizing: border-box;
+}
+
+.payment-modal-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 8px 8px 12px; 
+  box-sizing: border-box;
+  background: transparent !important;
+}
+
+.payment-content {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  box-sizing: border-box;
+}
+
+.payment-card-wrapper {
+  width: 100%;
+  max-width: 1000px !important; 
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+
+.payment-card-wrapper .v-card,
+.payment-card-wrapper > .v-card,
+.payment-card-wrapper .v-card.selection {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 75vh !important;        
+  max-height: 75vh !important;
+  overflow: hidden !important;   
+  border-radius: 8px !important;
+  margin: 0 !important;          
+  padding: 0 !important;         
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08) !important;
+  box-sizing: border-box;
+}
+
+.payments-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px; 
+  background: linear-gradient(90deg,#00897b,#00796b) !important; 
+  color: #fff;
+  min-height: 52px;
+  box-sizing: border-box;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  width: 100%;
+  z-index: 50;
+  position: relative;
+}
+
+.payments-header-left {
+  width: 44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 0;
+  margin: 0;
+}
+.payments-header-title {
+  flex: 1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 0;
+  margin: 0;
+}
+.payments-header-right {
+  width: 48px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding-right: 6px;
+  margin: 0;
+}
+
+.payments-header .text-h6 {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.payments-header-right .v-btn,
+.payments-header-right v-btn {
+  margin: 0 !important;
+  padding: 6px !important;
+  min-width: 36px !important;
+  background: transparent !important;
+}
+.payments-header-right .v-icon {
+  color: #fff !important;
+}
+
+.v-progress-linear[location="top"] {
+  top: 0 !important;
+  left: 0;
+  right: 0;
+  position: absolute !important;
+  z-index: 60;
+}
+
+.payment-card-wrapper .overflow-y-auto,
+.payment-card-wrapper .v-card .overflow-y-auto {
+  flex: 1 1 auto;
+  overflow-y: auto !important;
+  padding: 12px !important;
+  max-height: none !important;
+  box-sizing: border-box;
+  padding-bottom: 140px; 
+}
+
+.payment-card-wrapper .overflow-y-auto .pa-1 {
+  margin-bottom: 6px;
+}
+
+.card-footer {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: inherit;
+  padding: 12px 16px;
+  box-shadow: 0 -6px 14px rgba(0,0,0,0.06);
+  z-index: 25;
+}
+
+.footer-actions,
+.v-card.footer-actions,
+.v-card.footer-actions .button-row {
+  max-width: 1000px;
+  width: calc(100% - 24px);
+  margin: 10px auto 0 !important;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 55;
+}
+
+.submit-menu {
+  border-radius: 8px !important;
+  z-index: 1100 !important;
+}
+
+::deep .submit-menu,
+:root .submit-menu {
+  position: absolute !important;
+}
+
+.submit-btn-main {
+  font-weight: 700 !important;
+  font-size: 1.2rem !important;
+  height: 64px !important;
+}
+.cancel-btn {
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  height: 52px !important;
+}
+
+@media (max-width: 760px) {
+  .payment-card-wrapper .v-card { height: 78vh !important; max-height: 78vh !important; }
+  .payment-card-wrapper .overflow-y-auto { padding-bottom: 180px !important; }
+  .payments-header { padding: 6px 10px !important; min-height: 48px; }
+  .payment-modal-container { padding: 6px; }
+  .footer-actions { width: calc(100% - 12px); max-width: 720px; }
+}
+
+.v-dialog__content,
+.v-overlay__content,
+.v-dialog__content > .v-overlay__content,
+.v-overlay__content > .v-dialog__content {
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: flex-start !important;   
+  justify-content: center !important;
+  box-sizing: border-box !important;
+}
+
+.v-dialog__content > * ,
+.v-overlay__content > * {
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.payment-modal-container,
+.payment-content,
+.payment-card-wrapper {
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.payment-card-wrapper .v-card,
+.payment-card-wrapper > .v-card,
+.payment-card-wrapper .v-card.selection,
+div.v-card.selection {
+  margin: 0 !important;             
+  margin-top: 0 !important;
+  padding: 0 !important;
+  padding-top: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.payment-card-wrapper .v-card::before,
+.payment-card-wrapper .v-card::after,
+.v-card.selection::before,
+.v-card.selection::after {
+  display: none !important;
+  content: none !important;
+}
+
+.payments-header {
+  margin: 0 !important;
+  padding-top: 8px !important;   
+  padding-bottom: 8px !important;
+  box-sizing: border-box !important;
+  position: relative !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  border-top-left-radius: 8px !important;
+  border-top-right-radius: 8px !important;
+}
+
+.v-progress-linear[location="top"],
+.v-progress-linear[location="top"][absolute] {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  margin: 0 !important;
+  z-index: 999 !important;
+}
+
+.v-overlay__content > .payment-modal-container,
+.v-overlay__content > .payment-content,
+.v-overlay__content > .payment-card-wrapper,
+.v-overlay__content > .v-card {
+  align-self: flex-start !important;
+}
+
+.v-dialog__content,
+.v-overlay__content {
+  transform: none !important;
+}
+
+.payment-card-wrapper > .v-card,
+.payment-card-wrapper .v-card.selection {
+  overflow: visible !important;
+}
+
+.submit-menu,
+::v-deep .submit-menu,
+:root .submit-menu {
+  position: absolute !important;
+  z-index: 9000 !important;
+}
+
+.v-overlay__content {
+  overflow: visible !important;
+}
+
+.v-menu > .v-overlay__content > .v-card,
+.v-menu > .v-overlay__content > .v-list,
+.v-menu > .v-overlay__content > .v-sheet {
+  height: auto !important;       
+  max-height: none !important;
+  overflow: visible !important;   
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.v-menu__content,
+.v-menu__content--active,
+.v-overlay__panel,
+.submit-menu,
+.v-overlay__content .v-list,
+.v-overlay__panel .v-list {
+  position: fixed !important;    
+  left: 50% !important;
+  transform: translateX(-50%) !important; 
+  z-index: 14000 !important;      
+  width: min(920px, 92%) !important; 
+  min-width: 360px !important;
+  max-width: 920px !important;
+  background: transparent !important;
+  overflow: visible !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.16) !important;
+  border-radius: 10px !important;
+}
+
+.v-menu__content .v-list,
+.submit-menu .v-list,
+.v-overlay__panel .v-list {
+  background: #fff !important;
+  border-radius: 10px !important;
+  padding: 8px !important;
+  margin: 0 !important;
+  max-height: 420px !important;   
+  overflow-y: auto !important;    
+  overflow-x: hidden !important;
+}
+
+.v-menu__content .v-list-item,
+.submit-menu .v-list-item {
+  min-height: 64px !important;
+  padding: 12px 18px !important;
+}
+
+.v-overlay__content,
+.v-overlay__panel,
+.v-dialog__content {
+  overflow: visible !important;
+}
+
+@media (max-width: 760px) {
+  .v-menu__content,
+  .submit-menu {
+    left: 8px !important;
+    right: 8px !important;
+    transform: none !important;
+    width: calc(100% - 16px) !important;
+  }
+  .v-menu__content .v-list,
+  .submit-menu .v-list {
+    max-height: 70vh !important;
+  }
+}
+
+.v-menu__content {
+  background: #ffffff !important;
+}
+
+.v-menu__content > .v-overlay__content,
+.v-menu__content .v-sheet,
+.v-menu__content .v-card,
+.v-menu__content .v-list {
+  background: #ffffff !important;
+}
+
+
+
 </style>

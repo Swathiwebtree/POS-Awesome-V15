@@ -19,7 +19,7 @@
 			<div v-show="!dialog" class="pos-layout">
 				<!-- Left Column: Drafts (25% width) -->
 				<div class="pos-column drafts-column">
-					<div v-show="!showOffers && !coupons && !payment" class="column-card drafts-card">
+					<div v-show="!showOffers && !coupons" class="column-card drafts-card">
 						<div class="column-header">
 							<v-icon left color="primary">mdi-file-document</v-icon>
 							<span>{{ __("Job orders") }}</span>
@@ -47,9 +47,6 @@
 					</div>
 					<div v-show="coupons" class="column-card offers-coupons-card">
 						<PosCoupons></PosCoupons>
-					</div>
-					<div v-show="payment" class="column-card payment-card">
-						<Payments></Payments>
 					</div>
 				</div>
 
@@ -199,6 +196,7 @@
 			</div>
 		</div>
 
+		<Payments></Payments>
 		<!-- dialogs omitted -->
 	</div>
 </template>
@@ -328,13 +326,11 @@ export default {
 		handleShowOffers() {
 			this.showOffers = true;
 			this.coupons = false;
-			this.payment = false;
 			this.eventBus.emit("show_offers", "true");
 		},
 		handleShowCoupons() {
 			this.coupons = true;
 			this.showOffers = false;
-			this.payment = false;
 			this.eventBus.emit("show_coupons", "true");
 		},
 
@@ -347,14 +343,12 @@ export default {
 		show_offers() {
 			this.showOffers = !this.showOffers;
 			this.coupons = false;
-			this.payment = false;
 			this.eventBus.emit("show_offers", this.showOffers ? "true" : "false");
 		},
 
 		show_coupons() {
 			this.coupons = !this.coupons;
 			this.showOffers = false;
-			this.payment = false;
 			this.eventBus.emit("show_coupons", this.coupons ? "true" : "false");
 		},
 
@@ -576,21 +570,14 @@ export default {
 				this.active_price_list = this.pos_profile.selling_price_list;
 			});
 
-			this.eventBus.on("show_payment", (data) => {
-				this.payment = data === "true";
-				this.showOffers = false;
-				this.coupons = false;
-			});
 
 			this.eventBus.on("show_offers", (data) => {
 				this.showOffers = data === "true";
-				this.payment = false;
 				this.coupons = false;
 			});
 
 			this.eventBus.on("show_coupons", (data) => {
 				this.coupons = data === "true";
-				this.showOffers = false;
 				this.payment = false;
 			});
 
@@ -623,7 +610,6 @@ export default {
 		this.eventBus.off("close_opening_dialog");
 		this.eventBus.off("register_pos_data");
 		this.eventBus.off("register_pos_profile");
-		this.eventBus.off("show_payment");
 		this.eventBus.off("show_offers");
 		this.eventBus.off("show_coupons");
 		this.eventBus.off("items_loaded");
