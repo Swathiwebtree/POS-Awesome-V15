@@ -119,6 +119,28 @@
 								</v-row>
 							</div>
 
+							<v-divider></v-divider>
+
+							<!-- Credit Sale Button - Compact Right-Aligned -->
+							<v-row class="pa-1" align="center"
+								v-if="pos_profile.posa_allow_credit_sale && !invoice_doc.is_return && selected_customer_is_corporate">
+								<v-col cols="6">
+									<div class="text-subtitle-1 font-weight-medium pa-2">
+										Credit Sale
+									</div>
+								</v-col>
+								<v-col cols="6">
+									<v-btn block size="large" :color="is_credit_sale ? 'success' : 'grey'"
+										:variant="is_credit_sale ? 'elevated' : 'outlined'" theme="dark"
+										@click="toggleCreditSale" class="credit-sale-btn-compact" elevation="2">
+										<v-icon left size="20">mdi-credit-card-clock</v-icon>
+										<span>{{ is_credit_sale ? 'CREDIT SALE ✓' : 'CREDIT SALE' }}</span>
+									</v-btn>
+								</v-col>
+							</v-row>
+
+							<v-divider></v-divider>
+
 							<!-- Loyalty Points Redemption -->
 							<v-row class="payments pa-1"
 								v-if="invoice_doc && available_points_amount > 0 && !invoice_doc.is_return">
@@ -310,9 +332,14 @@
 									<v-switch v-model="is_write_off_change" flat
 										:label="frappe._('Write Off Difference Amount')" class="my-0 pa-1"></v-switch>
 								</v-col>
-								<v-col cols="6" v-if="pos_profile.posa_allow_credit_sale && !invoice_doc.is_return">
-									<v-switch v-model="is_credit_sale" :label="frappe._('Credit Sale?')"></v-switch>
-								</v-col>
+								<!-- <v-col cols="6"
+									v-if="pos_profile.posa_allow_credit_sale && !invoice_doc.is_return && selected_customer_is_corporate">
+									<v-chip color="green" class="ma-2" size="large" text-color="white">
+										{{ __('CREDIT SALE') }}
+									</v-chip>
+								</v-col> -->
+
+
 								<v-col cols="6" v-if="invoice_doc.is_return && pos_profile.use_cashback">
 									<v-switch v-model="is_cashback" flat :label="frappe._('Cashback?')"
 										class="my-0 pa-1"></v-switch>
@@ -321,7 +348,7 @@
 									<v-switch v-model="is_credit_return" flat :label="frappe._('Credit Return?')"
 										class="my-0 pa-1"></v-switch>
 								</v-col>
-								<v-col cols="6" v-if="is_credit_sale">
+								<v-col cols="6" v-if="is_credit_sale && false">
 									<VueDatePicker v-model="new_credit_due_date" model-type="format" format="dd-MM-yyyy"
 										:min-date="new Date()" auto-apply :dark="isDarkTheme"
 										class="dark-field sleek-field" @update:model-value="update_credit_due_date()" />
@@ -527,6 +554,7 @@ export default {
 	data() {
 		return {
 			showDialog: false,
+			selected_customer_is_corporate:false,
 			loading: false, // UI loading state
 			pos_profile: "", // POS profile settings
 			pos_settings: "", // POS settings
@@ -789,25 +817,35 @@ export default {
 						allocated_percentage: 100,
 					},
 				];
-				console.log("Updated sales_team with sales_person:", newVal);
 			} else {
 				this.invoice_doc.sales_team = [];
-				console.log("Cleared sales_team");
+			}
+		},
+		selected_customer_is_corporate(newVal) {
+			if (newVal) {
+				this.is_credit_sale = true;
+				this.$nextTick(() => {
+					this.reset_cash_payments();
+				});
+			} else {
+				this.is_credit_sale = false;
 			}
 		},
 		// Watch is_credit_sale to reset cash payments
 		is_credit_sale(newVal) {
+			if (!this.invoice_doc || !this.invoice_doc.payments) return;
+
 			if (newVal) {
 				// If credit sale is enabled, set cash payment to 0
 				this.invoice_doc.payments.forEach((payment) => {
-					if (payment.mode_of_payment.toLowerCase() === "cash") {
+					if (payment.mode_of_payment && payment.mode_of_payment.toLowerCase() === "cash") {
 						payment.amount = 0;
 					}
 				});
 			} else {
 				// If credit sale is disabled, set cash payment to invoice total
 				this.invoice_doc.payments.forEach((payment) => {
-					if (payment.mode_of_payment.toLowerCase() === "cash") {
+					if (payment.mode_of_payment && payment.mode_of_payment.toLowerCase() === "cash") {
 						payment.amount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
 					}
 				});
@@ -832,6 +870,29 @@ export default {
 		},
 	},
 	methods: {
+		toggleCreditSale() {
+			this.is_credit_sale = !this.is_credit_sale;
+
+			if (this.is_credit_sale) {
+				// Credit sale activated
+
+				// Set due date automatically (30 days from now)
+				this.applyDuePreset(30);
+
+				// Show confirmation message
+				this.eventBus.emit("show_message", {
+					title: "Credit Sale Activated - Payment will be recorded as credit",
+					color: "success",
+				});
+			} else {
+				// Credit sale deactivated
+
+				this.eventBus.emit("show_message", {
+					title: "Credit Sale Deactivated - Normal payment mode",
+					color: "info",
+				});
+			}
+		},
 		// Go back to invoice view and reset customer readonly
 		back_to_invoice() {
 			this.showDialog = false;
@@ -886,8 +947,13 @@ export default {
 		},
 		// Reset all cash payments to zero
 		reset_cash_payments() {
+			if (!this.invoice_doc || !this.invoice_doc.payments) {
+				console.warn("[Payment] Cannot reset cash payments - invoice_doc not ready");
+				return;
+			}
+
 			this.invoice_doc.payments.forEach((payment) => {
-				if (payment.mode_of_payment.toLowerCase() === "cash") {
+				if (payment.mode_of_payment && payment.mode_of_payment.toLowerCase() === "cash") {
 					payment.amount = 0;
 				}
 			});
@@ -1126,9 +1192,9 @@ export default {
 				redeemed_customer_credit: this.redeemed_customer_credit,
 				customer_credit_dict: this.customer_credit_dict,
 				is_cashback: this.is_cashback,
-				due_date: this.invoice_doc.due_date, // ADD THIS LINE
+				due_date: this.invoice_doc.due_date,
+				is_credit_sale: this.is_credit_sale,
 			};
-			// ========================================================
 
 			const vm = this;
 
@@ -1188,7 +1254,6 @@ export default {
 								}
 							});
 							// Retry submission once
-							console.log("Retrying submission with fixed payment amounts");
 							setTimeout(() => {
 								vm.submit_invoice(print);
 							}, 500);
@@ -1242,9 +1307,6 @@ export default {
 			const isReturn = this.invoice_doc.is_return || this.invoiceType === "Return";
 			let totalAmount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
 
-			console.log("Setting full amount for payment method idx:", idx);
-			console.log("Current payments:", JSON.stringify(this.invoice_doc.payments));
-
 			// Reset all payment amounts first
 			this.invoice_doc.payments.forEach((payment) => {
 				payment.amount = 0;
@@ -1255,7 +1317,6 @@ export default {
 
 			// Get the clicked payment method's name from the button text
 			const clickedButton = event?.target?.textContent?.trim();
-			console.log("Clicked button text:", clickedButton);
 
 			// Set amount only for clicked payment method
 			const clickedPayment = this.invoice_doc.payments.find(
@@ -1263,13 +1324,11 @@ export default {
 			);
 
 			if (clickedPayment) {
-				console.log("Found clicked payment:", clickedPayment.mode_of_payment);
 				let amount = isReturn ? -Math.abs(totalAmount) : totalAmount;
 				clickedPayment.amount = amount;
 				if (clickedPayment.base_amount !== undefined) {
 					clickedPayment.base_amount = isReturn ? -Math.abs(amount) : amount;
 				}
-				console.log("Set amount for payment:", clickedPayment.mode_of_payment, "amount:", amount);
 			} else {
 				console.log("No payment found for button text:", clickedButton);
 			}
@@ -1487,6 +1546,7 @@ export default {
 					const cached = getSalesPersonsStorage(); // your helper
 					if (cached && Array.isArray(cached) && cached.length) {
 						vm.sales_persons = cached;
+						vm.autoSelectSalesPerson();
 					}
 				} catch (e) {
 					console.warn("Could not load cached sales persons", e);
@@ -1543,6 +1603,8 @@ export default {
 
 						vm.sales_persons = items;
 
+						vm.autoSelectSalesPerson();
+
 						// save cache if allowed
 						if (vm.pos_profile && vm.pos_profile.posa_local_storage) {
 							try {
@@ -1551,8 +1613,6 @@ export default {
 								console.warn("Failed to save sales persons to storage", e);
 							}
 						}
-
-						console.log("[Payment] Loaded sales_persons:", vm.sales_persons);
 					},
 				})
 				.fail(function (err) {
@@ -1647,6 +1707,41 @@ export default {
 							}, 30000);
 						});
 				});
+		},
+
+		// Auto-select sales person based on various criteria
+		autoSelectSalesPerson() {
+			// If already selected, don't override
+			if (this.sales_person) {
+				return;
+			}
+
+			// Try to select from POS Profile
+			if (this.pos_profile && this.pos_profile.posa_default_sales_person) {
+				const defaultSP = this.pos_profile.posa_default_sales_person;
+				const exists = this.sales_persons.find(sp => sp.value === defaultSP || sp.name === defaultSP);
+				if (exists) {
+					this.sales_person = exists.value;
+					return;
+				}
+			}
+
+			// If only one sales person available, select it
+			if (this.sales_persons.length === 1) {
+				this.sales_person = this.sales_persons[0].value;
+				return;
+			}
+
+			// Try to select current user
+			const currentUser = frappe.session.user;
+			const userSP = this.sales_persons.find(sp =>
+				sp.value === currentUser ||
+				sp.name === currentUser ||
+				sp.title === currentUser
+			);
+			if (userSP) {
+				this.sales_person = userSP.value;
+			}
 		},
 		// Get M-Pesa payment modes from backend
 		get_mpesa_modes() {
@@ -1858,16 +1953,58 @@ export default {
 	},
 	// Lifecycle hook: mounted
 	mounted() {
+		// Initialize corporate flag
+		this.selected_customer_is_corporate = false;
+
+		// Listen for explicit customer detail updates
+		this.eventBus.on("update_customer_details", (payload) => {
+			this.selected_customer_is_corporate = !!(
+				payload &&
+				(payload.is_corporate || payload.is_company)
+			);
+		});
+
+		// When the invoice data is provided, try to resolve corporate flag
+		this.eventBus.on("send_invoice_doc_payment", (invoice_doc) => {
+			// existing code...
+
+			// ADD THIS BLOCK:
+			if (invoice_doc && invoice_doc.customer) {
+				// 1) if invoice_doc contains the flag already
+				if (invoice_doc.is_corporate !== undefined || invoice_doc.is_company !== undefined) {
+					this.selected_customer_is_corporate = !!(invoice_doc.is_corporate || invoice_doc.is_company);
+				} else {
+					// 2) fetch from server
+					frappe
+						.call({
+							method: "posawesome.posawesome.api.customers.get_customer_info",
+							args: { customer: invoice_doc.customer },
+						})
+						.then((r) => {
+							if (r && r.message) {
+								this.selected_customer_is_corporate = !!(r.message.is_corporate || r.message.is_company);
+							} else {
+								this.selected_customer_is_corporate = false;
+							}
+						})
+						.catch((err) => {
+							console.warn("[Payment] could not fetch customer info:", err);
+							this.selected_customer_is_corporate = false;
+						});
+				}
+			} else {
+				this.selected_customer_is_corporate = false;
+			}
+		});
+
 		// ADD THESE EVENT LISTENERS
 		this.eventBus.on("show_payment", (data) => {
 			if (data === "true") {
-				console.log("[Payment] show_payment triggered");
 				// Get invoice data from Invoice component
 				this.eventBus.emit("get_current_invoice_from_component");
 			}
 		});
 		this.eventBus.on("current_invoice_data", (invoiceData) => {
-			console.log("[Payment] Received invoice data:", invoiceData);
 
 			// Ensure payments array exists
 			if (!invoiceData.payments) {
@@ -1878,14 +2015,12 @@ export default {
 			if (invoiceData.payments.length === 0) {
 				console.log("[Payment] Loading payment methods from POS Profile");
 
-				// Check if POS Profile has payment methods configured
 				if (this.pos_profile && this.pos_profile.payments && this.pos_profile.payments.length > 0) {
-					// Loop through all payment methods in POS Profile
 					invoiceData.payments = this.pos_profile.payments.map((payment, index) => {
 						return {
 							name: "",
 							mode_of_payment: payment.mode_of_payment,
-							account: payment.custom_account || "",
+							account: payment.custom_account || payment.default_account || "",
 							amount: 0,
 							base_amount: 0,
 							type: payment.type || "Cash",
@@ -1893,17 +2028,42 @@ export default {
 							default: payment.default || 0,
 						};
 					});
-					if (this.customer == "corporate")
-						invoiceData.payments.append({
-							name: "",
-							mode_of_payment: "Credit",
-							account: "",
-							amount: 0,
-							base_amount: 0,
-							type: "Credit",
-							idx: invoiceData.payments.length + 1,
-							default: 0,
-						});
+
+					// Detect corporate (treat Customer Type "Company" as corporate)
+					const isCorporateFromInvoice = !!(
+						invoiceData.is_corporate ||
+						invoiceData.is_company ||
+						invoiceData.customer_type === "Company" ||
+						invoiceData.customer_type === "Corporate" ||
+						invoiceData.customer_group === "Commercial"
+					);
+					const isCorporateFromComponent = !!(
+						this.selected_customer_is_corporate ||
+						(this.customer && (
+							this.customer.is_corporate ||
+							this.customer.is_company ||
+							this.customer.customer_type === "Company" ||
+							this.customer.customer_type === "Corporate" ||
+							this.customer.customer_group === "Comercial"
+						))
+					);
+
+					// Add Credit method if not present and customer is corporate
+					if (!invoiceData.payments.some(p => (p.type || '').toLowerCase() === 'credit' || (p.mode_of_payment || '').toLowerCase() === 'credit')) {
+						if (isCorporateFromInvoice || isCorporateFromComponent) {
+							invoiceData.payments.push({
+								name: "",
+								mode_of_payment: "Credit",
+								account: "",
+								amount: 0,
+								base_amount: 0,
+								type: "Credit",
+								idx: invoiceData.payments.length + 1,
+								default: 0,
+							});
+						}
+					}
+
 					console.log("[Payment] Loaded payment methods:", invoiceData.payments);
 				} else {
 					// Fallback if POS Profile is not loaded yet
@@ -1923,14 +2083,65 @@ export default {
 				}
 			}
 
+			// Assign invoice and totals
 			this.invoice_doc = invoiceData;
 			this.grand_total = invoiceData.grand_total || 0;
 			this.rounded_total = invoiceData.rounded_total || invoiceData.grand_total || 0;
 			this.customer = invoiceData.customer || "";
 
+			// Set selected_customer_is_corporate immediately if flags present or if customer_type indicates Company
+			this.selected_customer_is_corporate = !!(
+				invoiceData.is_corporate ||
+				invoiceData.is_company ||
+				invoiceData.customer_type === "Company" ||
+				invoiceData.customer_type === "Corporate" ||
+				invoiceData.customer_group === "Comercial"
+			);
+
+			// If we still don't know and invoice has customer id, fetch backend customer info (optional)
+			if (!this.selected_customer_is_corporate && invoiceData.customer) {
+				frappe
+					.call({
+						method: "posawesome.posawesome.api.customers.get_customer_info",
+						args: { customer: invoiceData.customer },
+					})
+					.then((r) => {
+						if (r && r.message) {
+							const msg = r.message;
+							this.selected_customer_is_corporate = !!(
+								msg.is_corporate ||
+								msg.is_company ||
+								msg.customer_type === "Company" ||
+								msg.customer_type === "Corporate" ||
+								msg.customer_group === "Comercial"
+							);
+
+							// If we discovered corporate after fetching, ensure Credit exists
+							if (this.selected_customer_is_corporate && Array.isArray(this.invoice_doc.payments)) {
+								if (!this.invoice_doc.payments.some(p => (p.type || '').toLowerCase() === 'credit' || (p.mode_of_payment || '').toLowerCase() === 'credit')) {
+									this.invoice_doc.payments.push({
+										name: "",
+										mode_of_payment: "Credit",
+										account: "",
+										amount: 0,
+										base_amount: 0,
+										type: "Credit",
+										idx: this.invoice_doc.payments.length + 1,
+										default: 0,
+									});
+									this.$forceUpdate && this.$forceUpdate();
+									console.log("[Payment] Added Credit payment after fetching customer info");
+								}
+							}
+						}
+					})
+					.catch((err) => {
+						console.warn("[Payment] could not fetch customer info:", err);
+					});
+			}
+
 			// Set payment amount
 			this.payment_amount = this.rounded_total;
-
 			console.log("[Payment] Payment amount set to:", this.payment_amount);
 
 			// Force UI update
@@ -1938,6 +2149,8 @@ export default {
 				this.$forceUpdate();
 			});
 		});
+
+
 		this.$nextTick(() => {
 			// Listen to various event bus events for POS actions
 			this.eventBus.on("send_invoice_doc_payment", (invoice_doc) => {
@@ -2035,6 +2248,14 @@ export default {
 				this.stock_settings = data.stock_settings || {};
 				this.get_mpesa_modes();
 				this.get_sales_person_names();
+
+				// AUTO-SELECT SALES PERSON from POS Profile
+				this.$nextTick(() => {
+					if (this.pos_profile && this.pos_profile.posa_default_sales_person) {
+						this.sales_person = this.pos_profile.posa_default_sales_person;
+						console.log("[Payment] Auto-selected sales person:", this.sales_person);
+					}
+				});
 			});
 			this.eventBus.on("add_the_new_address", (data) => {
 				this.addresses.push(data);
@@ -2060,13 +2281,35 @@ export default {
 				}
 			});
 			this.eventBus.on("update_customer", (customer) => {
+				// Preserve existing reset behavior
 				if (this.customer !== customer) {
 					this.customer_credit_dict = [];
 					this.redeem_customer_credit = false;
 					this.is_cashback = true;
 					this.is_credit_return = false;
 				}
+
+				// Normalize and store customer reference
+				this.customer = customer;
+
+				// Determine corporate flag (treat Customer Type === "Company" as corporate)
+				if (customer && typeof customer === "object") {
+					this.selected_customer_is_corporate = !!(
+						customer.is_corporate ||
+						customer.is_company ||
+						customer.customer_type === "Company" ||
+						customer.customer_type === "Corporate" ||
+						customer.customer_group === "Commercial"
+					);
+				} else {
+					// If only a string id/name was passed, clear and optionally fetch later
+					this.selected_customer_is_corporate = false;
+					// Optionally: fetch customer info from server here to resolve flags
+				}
+
+				console.log("[Payment] update_customer set selected_customer_is_corporate:", this.selected_customer_is_corporate);
 			});
+
 			this.eventBus.on("set_pos_settings", (data) => {
 				this.pos_settings = data;
 			});
@@ -2119,9 +2362,6 @@ export default {
 </script>
 
 <style scoped>
-.v-text-field {
-	composes: pos-form-field;
-}
 
 /* Remove readonly styling */
 .v-text-field--readonly {
@@ -2443,8 +2683,8 @@ export default {
   color: #fff;
   min-height: 52px;
   box-sizing: border-box;
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
+  border-top-left-radius: 0px;
+  border-top-right-radius: 0px;
   width: 100%;
   z-index: 50;
   position: relative;
@@ -2694,6 +2934,7 @@ div.v-card.selection {
   border-radius: 10px !important;
 }
 
+
 .v-menu__content .v-list,
 .submit-menu .v-list,
 .v-overlay__panel .v-list {
@@ -2743,6 +2984,27 @@ div.v-card.selection {
   background: #ffffff !important;
 }
 
+/* Credit Sale Button - Compact Style */
+.credit-sale-btn-compact {
+	font-weight: 600 !important;
+	letter-spacing: 0.3px !important;
+	height: 48px !important;
+	transition: all 0.3s ease !important;
+	font-size: 0.95rem !important;
+}
 
+.credit-sale-btn-compact:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 3px 10px rgba(76, 175, 80, 0.3) !important;
+}
+
+.credit-sale-btn-compact .v-icon {
+	margin-right: 6px !important;
+}
+
+:deep([data-theme="dark"]) .credit-sale-btn-compact,
+:deep(.v-theme--dark) .credit-sale-btn-compact {
+	border-width: 2px !important;
+}
 
 </style>

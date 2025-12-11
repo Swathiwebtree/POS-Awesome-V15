@@ -18,6 +18,7 @@ from decimal import Decimal, InvalidOperation
 VEHICLE_DOCTYPE = "Vehicle"  # ERPNext Vehicle doctype
 VM_DOCTYPE = "Vehicle Master"  # Your custom Vehicle Master doctype (linked to Vehicle)
 
+
 # ---------------- LOYALTY POINTS FUNCTIONS ----------------
 
 
@@ -247,17 +248,28 @@ def get_customer_names(pos_profile=None, limit=200, start_after=None, modified_a
         if start_after:
             filters["name"] = [">", start_after]
 
+        # Build a safe fields list — include is_company only if the DB actually has that column.
+        base_fields = [
+            "name",
+            "mobile_no",
+            "email_id",
+            "tax_id",
+            "customer_name",
+            "primary_address",
+        ]
+
+        try:
+            # check for actual DB column. Use table name 'tabCustomer'
+            if frappe.db.has_column("tabCustomer", "is_company"):
+                base_fields.append("is_company")
+        except Exception:
+            # If has_column fails for any reason, skip is_company (fail-safe)
+            pass
+
         customers = frappe.get_all(
             "Customer",
             filters=filters,
-            fields=[
-                "name",
-                "mobile_no",
-                "email_id",
-                "tax_id",
-                "customer_name",
-                "primary_address",
-            ],
+            fields=base_fields,
             order_by="name",
             limit_page_length=limit,
         )
@@ -328,6 +340,9 @@ def get_customer_info(customer):
     res["customer_group"] = getattr(customer_doc, "customer_group", None)
     res["customer_type"] = getattr(customer_doc, "customer_type", None)
     res["territory"] = getattr(customer_doc, "territory", None)
+    is_company_val = getattr(customer_doc, "is_company", 0)
+    res["is_corporate"] = bool(is_company_val)
+    res["is_company"] = bool(is_company_val)
     res["birthday"] = getattr(customer_doc, "posa_birthday", None)
     res["gender"] = getattr(customer_doc, "gender", None)
     res["tax_id"] = getattr(customer_doc, "tax_id", None)
@@ -512,6 +527,7 @@ def _build_customer_info(customer_name):
     # res["customer_group"] = customer_doc.customer_group
     res["customer_type"] = customer_doc.customer_type
     res["territory"] = customer_doc.territory
+    res["is_corporate"] = bool(getattr(customer_doc, "is_company", False))
     # res["birthday"] = customer_doc.posa_birthday
     # res["gender"] = customer_doc.gender
     # res["tax_id"] = customer_doc.tax_id
@@ -619,6 +635,7 @@ def get_customer_by_mobile(mobile_no):
             "mobile_no": customer_doc.mobile_no,
             "email_id": customer_doc.email_id,
             "tax_id": customer_doc.tax_id,
+            "is_corporate": bool(getattr(customer_doc, "is_company", False)),
         }
 
     return None
@@ -667,6 +684,7 @@ def get_customer_by_vehicle(vehicle_no):
                     "customer_group": cust_doc.customer_group,
                     "territory": cust_doc.territory,
                     "posa_discount": cust_doc.posa_discount,
+                    "is_corporate": bool(getattr(cust_doc, "is_company", False)),
                 },
             }
         except frappe.DoesNotExistError:
@@ -742,6 +760,63 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         customer_data = json.loads(customer) if isinstance(customer, str) else (customer or {})
         vehicle_data = json.loads(vehicle) if isinstance(vehicle, str) else (vehicle or {})
 
+        # ------------------ Defensive sanitization & autoname pre-check ------------------
+        try:
+            # ensure dicts
+            customer_data = customer_data or {}
+            vehicle_data = vehicle_data or {}
+
+            # Log incoming payload for debugging (won't expose in production logs beyond configured logging)
+            frappe.logger().debug(f"POS Awesome create_customer_with_vehicle - payload customer: {customer_data}, vehicle: {vehicle_data}")
+
+            # If frontend accidentally sends vehicle_no as the customer name/id, remove it.
+            v_no = vehicle_data.get("vehicle_no")
+            for suspect_key in ("name", "customer_id", "customer"):
+                if suspect_key in customer_data and v_no and str(customer_data.get(suspect_key)) == str(v_no):
+                    customer_data.pop(suspect_key, None)
+                    frappe.logger().info(f"Removed suspicious customer field '{suspect_key}' equal to vehicle_no to avoid naming collision")
+
+            # Remove vehicle fields accidentally attached to customer payload (they shouldn't determine customer name)
+            for k in ("vehicle_no", "license_plate", "plate", "plate_no"):
+                if k in customer_data:
+                    customer_data.pop(k, None)
+
+            # Validate Customer.autoname if it requires a field
+            try:
+                meta = frappe.get_meta("Customer")
+                autoname = getattr(meta, "autoname", "") or ""
+                if autoname.startswith("field:"):
+                    name_field = autoname.split(":", 1)[1]
+                    # check payload first
+                    name_value = customer_data.get(name_field) or None
+                    if not name_value or str(name_value).strip() == "":
+                        # fallback: try to pick a safe candidate from payload (mobile/email/vehicle)
+                        candidate = (
+                            customer_data.get(name_field)
+                            or customer_data.get("customer_name")
+                            or customer_data.get("mobile_no")
+                            or customer_data.get("email_id")
+                            or v_no
+                        )
+                        if candidate:
+                            # sanitize simple dangerous chars and trim
+                            safe_candidate = str(candidate).strip()[:140].replace("/", "-").replace("\\", "-")
+                            customer_data[name_field] = safe_candidate
+                            frappe.logger().info("Autoname required field '%s' missing — assigned fallback value '%s'" % (name_field, safe_candidate))
+                        else:
+                            # no sensible fallback — raise clear error
+                            frappe.log_error(
+                                "Autoname requires field '%s' but payload is missing/empty. payload: %s" % (name_field, cstr(customer_data)),
+                                "POS Awesome - Customer create autoname validation",
+                            )
+                            frappe.throw(_("Cannot create Customer: required field '{0}' is missing or empty").format(name_field))
+            except Exception:
+                # If meta lookup fails, let Frappe attempt insert and produce its normal error
+                frappe.log_error(frappe.get_traceback(), "POS Awesome - autoname pre-check error")
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "POS Awesome - pre-insert sanitization error")
+        # -------------------------------------------------------------------------------
+
         method = (customer_data.get("method") or "create").lower()
         customer_id = customer_data.get("customer_id") or None
         vehicle_no_from_payload = (vehicle_data or {}).get("vehicle_no") or None
@@ -801,12 +876,28 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                     customer_doc.posa_birthday = cd.get("birthday")
                 except Exception:
                     pass
+
+            # --- Fallback ensure: if autoname requires customer_name and it's still empty, inject safe fallback ---
+            try:
+                if not customer_doc.customer_name or not str(customer_doc.customer_name).strip():
+                    candidate = cd.get("customer_name") or cd.get("mobile_no") or cd.get("email_id") or (vehicle_data.get("vehicle_no") if vehicle_data else None)
+                    if candidate:
+                        safe_candidate = str(candidate).strip()[:140].replace("/", "-").replace("\\", "-")
+                        customer_doc.customer_name = safe_candidate
+                        frappe.logger().info("Assigned fallback customer_name '%s' to avoid naming issues" % safe_candidate)
+                    else:
+                        # last resort: generate a short safe id
+                        customer_doc.customer_name = "POS-CUST-" + frappe.generate_hash(length=6)
+                        frappe.logger().info("Assigned generated fallback customer_name for POS customer creation")
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "POS Awesome - fallback customer_name assignment error")
+
             try:
                 customer_doc.insert(ignore_permissions=True)
                 frappe.db.commit()
-            except Exception:
-                frappe.log_error(frappe.get_traceback(), "Customer create error")
-                raise
+            except Exception as e:
+                frappe.log_error(frappe.get_traceback(), "POS Awesome - Customer create error")
+                frappe.throw(_("Failed to create Customer: {0}").format(cstr(e)))
 
         # ---------- VEHICLE (existing or create) ----------
         vehicle_doc = None
@@ -1051,25 +1142,6 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "create_customer_with_vehicle - Unexpected")
         frappe.throw(_("Failed to create/update customer: {0}").format(str(e)))
-
-
-@frappe.whitelist()
-def update_customer_api(customer, vehicle=None, pos_profile_doc=None):
-    """
-    Simple wrapper to call create_customer_with_vehicle with method=update.
-    """
-    try:
-        c = json.loads(customer) if isinstance(customer, str) else (customer or {})
-        c["method"] = "update"
-        # ensure there is an identifier: accept customer_id or name
-        if not (c.get("customer_id") or c.get("name") or c.get("customer")):
-            frappe.throw(_("customer_id (existing Customer.name) is required for update"))
-        return create_customer_with_vehicle(
-            json.dumps(c), json.dumps(vehicle or {}), "", pos_profile_doc or "{}"
-        )
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "update_customer_api error")
-        return {"error": True, "message": str(e)}
 
 
 @frappe.whitelist()
@@ -1416,12 +1488,6 @@ def get_sales_person_names():
         return []
 
 
-# ==============================================================================
-# FILE 1: posawesome/posawesome/api/customers.py
-# ==============================================================================
-# Add this new function after the existing search_customers function
-
-
 @frappe.whitelist()
 def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
     """
@@ -1461,6 +1527,7 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
             c.mobile_no,
             c.email_id,
             c.tax_id,
+            COALESCE(c.is_company, 0) as is_corporate,
             NULL as vehicle_no,
             NULL as vehicle_model,
             NULL as vehicle_make,
@@ -1525,6 +1592,7 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
                             "vehicle_no": vehicle.vehicle_no,
                             "vehicle_model": vehicle.model or "",
                             "vehicle_make": vehicle.make or "",
+                            "is_corporate": bool(customer_data.get("is_company") or customer_data.get("is_corporate") or 0),
                             "match_source": "vehicle",
                         }
                     )
@@ -1560,24 +1628,12 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
     return final_results[:limit]
 
 
-# ==============================================================================
-# ALSO UPDATE THE EXISTING search_customers FUNCTION
-# Replace the existing search_customers function with this enhanced version:
-# ==============================================================================
-
-
 @frappe.whitelist()
 def search_customers(search_term="", pos_profile=None, limit=20):
     """
     ENHANCED: Now calls search_customers_with_vehicles for unified search
     """
     return search_customers_with_vehicles(search_term, pos_profile, limit)
-
-
-# ==============================================================================
-# FILE 2: posawesome/posawesome/api/vehicles.py
-# ==============================================================================
-# Add this new function to vehicles.py
 
 
 @frappe.whitelist()

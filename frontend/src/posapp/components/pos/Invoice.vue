@@ -472,7 +472,6 @@ export default {
 		...invoiceItemMethods,
 
 		handleItemGroupUpdate(newGroup) {
-			console.log("[Invoice] Item group updated:", newGroup);
 			this.item_group = newGroup;
 		},
 
@@ -513,7 +512,6 @@ export default {
 
 		// Add this NEW method to handle frequent card application
 		handleApplyFrequentCard(cardData) {
-			console.log("[Invoice] Applying frequent card:", cardData);
 
 			try {
 				// Create free item object with all required fields
@@ -559,7 +557,6 @@ export default {
 		},
 
 		checkForEngineOilItem() {
-			console.log("[Invoice] Checking for Engine Oil items");
 
 			if (!this.items || this.items.length === 0) {
 				return false;
@@ -570,7 +567,6 @@ export default {
 			});
 
 
-			console.log("[Invoice] Has Engine Oil item:", hasOilItem);
 			return hasOilItem;
 		},
 
@@ -603,14 +599,12 @@ export default {
 				return itemGroupMatch || itemCodeMatch || serviceItemFlag || itemNameMatch;
 			});
 
-			console.log("[Invoice] checkForCarWashServices result:", hasCarWashService);
 			return hasCarWashService;
 		},
 
 		updateServiceEmployeeInDoc() {
 			// Ensure invoice_doc exists - create if it doesn't
 			if (!this.invoice_doc) {
-				console.log("[Invoice] Creating invoice_doc for employee update");
 				this.invoice_doc = {
 					doctype: "Sales Invoice",
 					customer: this.customer || "",
@@ -626,7 +620,6 @@ export default {
 				return;
 			}
 
-			console.log("[Invoice] Updating invoice_doc with employee:", this.service_employee);
 
 			// Add custom fields for service employee
 			this.invoice_doc.custom_service_employee = this.service_employee;
@@ -640,17 +633,12 @@ export default {
 				this.invoice_doc.custom_service_employee_department = this.service_employee_department;
 			}
 
-			console.log("[Invoice] Invoice doc updated with employee:", {
-				employee_id: this.invoice_doc.custom_service_employee,
-				employee_name: this.invoice_doc.custom_service_employee_name,
-			});
 
 			// Force update
 			this.$forceUpdate();
 		},
 
 		clearServiceEmployee() {
-			console.log("[Invoice] Clearing service employee");
 			this.service_employee = null;
 			this.service_employee_name = null;
 			this.service_employee_designation = null;
@@ -665,7 +653,6 @@ export default {
 		},
 
 		apply_additional_discount() {
-			console.log("[Invoice] apply_additional_discount called");
 
 			// Get subtotal from computed property (already calculated)
 			const totalBeforeDiscount = this.subtotal;
@@ -683,14 +670,6 @@ export default {
 			// Update discount_amount (this triggers grand_total recalculation)
 			this.discount_amount = Math.round(discountAmount);
 
-			console.log("[Invoice] Discount calculated:", {
-				subtotal: totalBeforeDiscount,
-				discount_percentage: this.additional_discount_percentage,
-				discount_amount: this.additional_discount,
-				calculated_discount: discountAmount,
-				grand_total: this.grand_total,
-				rounded_total: this.rounded_total,
-			});
 
 			// Sync to invoice_doc
 			if (this.invoice_doc) {
@@ -716,7 +695,6 @@ export default {
 
 		// Handle item dropped from ItemsSelector to ItemsTable
 		handleItemDrop(item) {
-			console.log("Item dropped:", item);
 
 			// Use the existing add_item method to add the dropped item
 			this.add_item(item);
@@ -729,12 +707,10 @@ export default {
 		},
 
 		handleShowOffers() {
-			console.log("[Invoice] handleShowOffers called");
 			this.eventBus.emit("show_offers", "true");
 		},
 
 		handleShowCoupons() {
-			console.log("[Invoice] handleShowCoupons called");
 			this.eventBus.emit("show_coupons", "true");
 		},
 
@@ -751,7 +727,6 @@ export default {
 		},
 
 		show_payment() {
-			console.log("[Invoice] show_payment called");
 			const invoice = this.prepareForPayment();
 			if (invoice && invoice.items && invoice.items.length > 0) {
 				this.eventBus.emit("payment_ready", invoice);
@@ -896,7 +871,6 @@ export default {
 					},
 				});
 				if (r.message && r.message.length) {
-					console.log(r.message);
 					vm.delivery_charges = r.message;
 				}
 			} catch (error) {
@@ -906,7 +880,6 @@ export default {
 
 		deliveryChargesFilter(itemText, queryText, itemRow) {
 			const item = itemRow.raw;
-			console.log("dl charges", item);
 			const textOne = item.name.toLowerCase();
 			const searchText = queryText.toLowerCase();
 			return textOne.indexOf(searchText) > -1;
@@ -974,13 +947,11 @@ export default {
 
 		async fetch_available_currencies() {
 			try {
-				console.log("Fetching available currencies...");
 				const r = await frappe.call({
 					method: "posawesome.posawesome.api.invoices.get_available_currencies",
 				});
 
 				if (r.message) {
-					console.log("Received currencies:", r.message);
 
 					// Get base currency for reference
 					const baseCurrency = this.pos_profile.currency;
@@ -1091,7 +1062,6 @@ export default {
 		},
 
 		update_item_rates() {
-			console.log("Updating item rates with exchange rate:", this.exchange_rate);
 
 			this.items.forEach((item) => {
 				try {
@@ -1115,7 +1085,6 @@ export default {
 
 					// First ensure base rates exist for all items
 					if (!item.base_rate) {
-						console.log(`Setting base rates for ${item.item_code} for the first time`);
 						const baseCurrency = this.price_list_currency || this.pos_profile.currency;
 						if (this.selected_currency === baseCurrency) {
 							// When in base currency, base rates = displayed rates
@@ -1135,20 +1104,17 @@ export default {
 					const baseCurrency = this.price_list_currency || this.pos_profile.currency;
 					if (this.selected_currency === baseCurrency) {
 						// When switching back to default currency, restore from base rates
-						console.log(`Restoring rates for ${item.item_code} from base rates`);
 						item.price_list_rate = Number(item.base_price_list_rate) || 0;
 						item.rate = Number(item.base_rate) || 0;
 						item.discount_amount = Number(item.base_discount_amount || 0);
 					} else if (item.original_currency === this.selected_currency) {
 						// When selected currency matches the price list currency,
 						// no conversion should be applied
-						console.log(`Using original currency rates for ${item.item_code}`);
 						item.price_list_rate = Number(item.base_price_list_rate) || 0;
 						item.rate = Number(item.base_rate) || 0;
 						item.discount_amount = Number(item.base_discount_amount || 0);
 					} else {
 						// When switching to another currency, convert from base rates
-						console.log(`Converting rates for ${item.item_code} to ${this.selected_currency}`);
 
 						const ex = this.exchange_rate || 1;
 
@@ -1176,18 +1142,6 @@ export default {
 
 					item.amount = this.flt(qtyNum * rateNum, this.currency_precision);
 					item.base_amount = this.flt(qtyNum * baseRateNum, this.currency_precision);
-
-					console.log(`Updated rates for ${item.item_code}:`, {
-						price_list_rate: item.price_list_rate,
-						base_price_list_rate: item.base_price_list_rate,
-						rate: item.rate,
-						base_rate: item.base_rate,
-						discount: item.discount_amount,
-						base_discount: item.base_discount_amount,
-						amount: item.amount,
-						base_amount: item.base_amount,
-						qty: item.qty
-					});
 
 					// Apply any other pricing rules if needed
 					this.calc_item_price && this.calc_item_price(item);
@@ -1314,7 +1268,6 @@ export default {
 		},
 
 		get_invoice_doc() {
-			console.log("[Invoice] get_invoice_doc() called");
 
 			if (!this.invoice_doc) {
 				this.invoice_doc = {
@@ -1336,7 +1289,6 @@ export default {
 					if (looksLikeService) {
 						const q = Number(it.qty);
 						if (!Number.isFinite(q) || q <= 0) {
-							console.log("[DEFENSE] fixing service item qty (in-place) for", it.item_name, "from", it.qty, "to 1");
 							it.qty = 1;
 						}
 						// enforce service flags
@@ -1408,14 +1360,11 @@ export default {
 						}
 						return itemRow;
 					});
-					console.log("[Invoice] All lines are detected as service items - disabled update_stock for doc and lines");
 				}
 			} catch (e) {
 				console.warn("[Invoice] Error while disabling stock update for service-only invoice:", e);
 			}
 
-			// CRITICAL: Sync ALL values (defensive normalization of items)
-			console.log("[Invoice] get_invoice_doc - syncing items (pre-normalize):", (this.items || []).map(i => ({ code: i.item_code, qty: i.qty, is_service_item: i.is_service_item })));
 
 			// Normalize items into invoice_doc.items (do not completely replace source item objects)
 			try {
@@ -1447,8 +1396,6 @@ export default {
 				// fallback: copy items as-is
 				this.invoice_doc.items = this.items || [];
 			}
-
-			console.log("[Invoice] get_invoice_doc - items after normalize:", (this.invoice_doc.items || []).map(i => ({ code: i.item_code, qty: i.qty, rate: i.rate, is_service_item: i.is_service_item })));
 
 			// SYNC other fields
 			this.invoice_doc.customer = this.customer || "";
@@ -1507,25 +1454,6 @@ export default {
 			this.invoice_doc.contact_mobile = this.contact_mobile || "";
 			this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no || "";
 
-			console.log("[Invoice] Synced odometer fields:", {
-				has_oil: hasOilItem,
-				odometer: this.custom_odometer_reading,
-				mobile: this.contact_mobile,
-				vehicle: this.custom_vehicle_no,
-			});
-
-			console.log("[Invoice] get_invoice_doc returning:", {
-				items: (this.invoice_doc.items || []).length,
-				net_total: this.invoice_doc.net_total,
-				discount: this.invoice_doc.discount_amount,
-				grand_total: this.invoice_doc.grand_total,
-				rounded_total: this.invoice_doc.rounded_total,
-				employee: this.invoice_doc.custom_service_employee,
-				odometer: this.invoice_doc.custom_odometer_reading,
-				mobile: this.invoice_doc.contact_mobile,
-				vehicle: this.invoice_doc.custom_vehicle_no,
-			});
-
 			return this.invoice_doc;
 		},
 
@@ -1537,14 +1465,12 @@ export default {
 		// Broadcast invoice updates to parent/sibling components
 		broadcastInvoiceUpdate() {
 			if (this.invoice_doc && this.eventBus) {
-				console.log("[Invoice] Broadcasting invoice update");
 				this.eventBus.emit("invoice_updated", this.invoice_doc);
 			}
 		},
 
 		// Get full invoice with all calculated values
 		getFullInvoiceData() {
-			console.log("[Invoice] getFullInvoiceData() called");
 
 			const invoiceData = {
 				// Basic info
@@ -1585,26 +1511,14 @@ export default {
 				...this.invoice_doc,
 			};
 
-			console.log("[Invoice] Full invoice data:", invoiceData);
 			return invoiceData;
 		},
 
 		// Ensure invoice_doc is updated before payment
 		prepareForPayment() {
-			console.log("[Invoice] prepareForPayment() called");
 
 			// Call get_invoice_doc to ensure sync
 			const invoiceData = this.get_invoice_doc();
-
-			console.log("[Invoice] prepareForPayment result:", {
-				items_count: (invoiceData.items || []).length,
-				subtotal: invoiceData.net_total,
-				tax: invoiceData.total_taxes_and_charges,
-				discount: invoiceData.discount_amount,
-				grand_total: invoiceData.grand_total,
-				rounded_total: invoiceData.rounded_total,
-				currency: invoiceData.currency,
-			});
 
 			return invoiceData;
 		},
@@ -1780,8 +1694,6 @@ export default {
 
 		// UPDATE: save_and_clear_invoice method - CORRECTED VERSION
 		async save_and_clear_invoice() {
-			console.log("[Invoice] save_and_clear_invoice() called");
-			console.log("[Invoice] loaded_draft_name:", this.loaded_draft_name);
 
 			// Basic validations
 			if (!this.items || this.items.length === 0) {
@@ -1793,16 +1705,11 @@ export default {
 			}
 
 			// ===== FIX: CARWASH QTY VALIDATION =====
-			console.log("[Invoice] Validating CarWash items...");
 			this.items.forEach((item, idx) => {
 				if (this.isCarWashItem(item)) {
-					console.log(`[Invoice] CarWash item detected at idx ${idx}: ${item.item_name}`);
 
 					// CRITICAL: Force qty to 1 for CarWash items
 					if (item.qty === null || item.qty === undefined || item.qty === 0) {
-						console.log(
-							`[Invoice] AUTO-FIXING qty for ${item.item_name} from ${item.qty} to 1`
-						);
 						item.qty = 1;
 						item.amount = item.rate * 1; // Recalculate amount
 						item.is_service_item = 1;
@@ -1859,7 +1766,6 @@ export default {
 
 				// For CarWash items, FORCE qty to 1
 				if (this.isCarWashItem(row)) {
-					console.log(`[Invoice] Applying CarWash fix to ${row.item_code}`);
 					row.qty = 1;
 					row.amount = row.rate * 1;
 					row.is_service_item = 1;
@@ -1895,25 +1801,21 @@ export default {
 			if (this.service_employee) {
 				this.invoice_doc.custom_service_employee = this.service_employee;
 				this.invoice_doc.custom_service_employee_name = this.service_employee_name;
-				console.log("[Invoice] Employee added to invoice:", this.service_employee);
 			}
 
 			// Mobile number
 			if (this.contact_mobile) {
 				this.invoice_doc.contact_mobile = this.contact_mobile;
-				console.log("[Invoice] Mobile added to invoice:", this.contact_mobile);
 			}
 
 			// Vehicle number
 			if (this.custom_vehicle_no) {
 				this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no;
-				console.log("[Invoice] Vehicle added to invoice:", this.custom_vehicle_no);
 			}
 
 			// Odometer reading and oil item flag
 			if (this.custom_odometer_reading) {
 				this.invoice_doc.custom_odometer_reading = this.custom_odometer_reading;
-				console.log("[Invoice] Odometer added to invoice:", this.custom_odometer_reading);
 			}
 
 			// Set oil item flag based on items
@@ -1926,8 +1828,7 @@ export default {
 				)
 			);
 			this.invoice_doc.custom_has_oil_item = hasOilItem ? 1 : 0;
-			console.log("[Invoice] Has oil item:", hasOilItem);
-			// ===== END NEW FIELDS =====
+			
 
 			// Required: ensure parent doctype is set for insert
 			this.invoice_doc.doctype = "Sales Invoice";
@@ -1952,23 +1853,6 @@ export default {
 				return itemRow;
 			});
 
-			console.log("[Invoice] Invoice ready to save:", {
-				customer: this.invoice_doc.customer,
-				items_count: this.invoice_doc.items.length,
-				grand_total: this.invoice_doc.grand_total,
-				currency: this.invoice_doc.currency,
-				employee: this.invoice_doc.custom_service_employee,
-				mobile: this.invoice_doc.contact_mobile,
-				vehicle: this.invoice_doc.custom_vehicle_no,
-				odometer: this.invoice_doc.custom_odometer_reading,
-				has_oil: this.invoice_doc.custom_has_oil_item,
-				items: this.invoice_doc.items.map(i => ({
-					code: i.item_code,
-					qty: i.qty,
-					is_carwash: this.isCarWashItem(i),
-				})),
-			});
-
 			try {
 				// 1) Ensure customer exists
 				const customer_name = this.invoice_doc.customer;
@@ -1984,7 +1868,6 @@ export default {
 					});
 					const exists = Array.isArray(existsResp.message) && existsResp.message.length > 0;
 					if (!exists) {
-						console.log("[Invoice] Customer does not exist, creating Customer:", customer_name);
 						const newCustomerResp = await frappe.call({
 							method: "frappe.client.insert",
 							args: {
@@ -1998,7 +1881,6 @@ export default {
 						if (!newCustomerResp.message) {
 							throw new Error("Failed to create Customer: " + (newCustomerResp.exc || ""));
 						}
-						console.log("[Invoice] Customer created:", newCustomerResp.message.name);
 					}
 				}
 
@@ -2024,7 +1906,6 @@ export default {
 					openingShiftName = String(this.invoice_doc.posa_pos_opening_shift);
 				}
 
-				console.log("[Invoice] Resolved openingShiftName:", openingShiftName);
 
 				if (openingShiftName) {
 					const shiftResp = await frappe.call({
@@ -2068,11 +1949,9 @@ export default {
 				// -------- Resolve draft name to update
 				const draft_name_to_update =
 					this.loaded_draft_name || (this.invoice_doc && this.invoice_doc.name) || null;
-				console.log("[Invoice] resolved draft_name_to_update:", draft_name_to_update);
 
 				if (draft_name_to_update) {
 					// UPDATE EXISTING DRAFT
-					console.log("[Invoice] Updating existing draft:", draft_name_to_update);
 
 					const field_map = {
 						items: this.invoice_doc.items,
@@ -2111,7 +1990,6 @@ export default {
 					});
 
 					if (updResp.message) {
-						console.log("[Invoice] Existing draft updated successfully:", draft_name_to_update);
 						frappe.show_alert({
 							message: this.__("Draft invoice updated: {0}", [draft_name_to_update]),
 							indicator: "green",
@@ -2137,10 +2015,6 @@ export default {
 								// ===== END NEW =====
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
-							console.log(
-								"[Invoice] Emitted draft_saved for updated draft:",
-								draft_name_to_update,
-							);
 						} catch (e) {
 							console.warn("[Invoice] Failed to emit draft_saved for update", e);
 						}
@@ -2149,7 +2023,6 @@ export default {
 						this.service_employee_name = null;
 						this.service_employee_designation = null;
 						this.service_employee_department = null;
-						console.log("[Invoice] Employee selection cleared after save");
 
 						this.eventBus.emit("clear_employee_selection");
 						this.clear_invoice();
@@ -2160,7 +2033,6 @@ export default {
 					}
 				} else {
 					// CREATE NEW DRAFT
-					console.log("[Invoice] Creating new draft (no existing draft loaded)");
 
 					const insertResp = await frappe.call({
 						method: "frappe.client.insert",
@@ -2172,7 +2044,6 @@ export default {
 					if (insertResp.message) {
 						const saved_doc = insertResp.message;
 						const saved_name = saved_doc.name;
-						console.log("[Invoice] Invoice saved as new draft:", saved_name);
 
 						this.loaded_draft_name = saved_name;
 						this.invoice_doc.name = saved_name;
@@ -2206,7 +2077,6 @@ export default {
 								// ===== END NEW =====
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
-							console.log("[Invoice] Emitted draft_saved for new draft:", saved_doc.name);
 						} catch (e) {
 							console.warn("[Invoice] Failed to emit draft_saved for create", e);
 						}
@@ -2215,7 +2085,6 @@ export default {
 						this.service_employee_name = null;
 						this.service_employee_designation = null;
 						this.service_employee_department = null;
-						console.log("[Invoice] Employee selection cleared after save");
 
 						this.eventBus.emit("clear_employee_selection");
 						this.clear_invoice();
@@ -2257,7 +2126,6 @@ export default {
 			}
 		},
 		async save_invoice() {
-			console.log("[Invoice] save_invoice() called");
 
 			let invoice = this.get_invoice_doc();
 
@@ -2268,7 +2136,6 @@ export default {
 			return new Promise((resolve, reject) => {
 				invoice
 					.save("Save", function () {
-						console.log("[Invoice] Invoice saved via frappe.db.save");
 						resolve(invoice);
 					})
 					.catch((error) => {
@@ -2279,7 +2146,6 @@ export default {
 		},
 
 		clear_invoice() {
-			console.log("[Invoice] Clearing invoice");
 
 			// Reset all data
 			this.invoice_doc = null;
@@ -2310,7 +2176,6 @@ export default {
 			this.eventBus.emit("clear_vehicle_number");
 			this.eventBus.emit("clear_all_fields");
 
-			console.log("[Invoice] Invoice cleared successfully");
 		},
 		// Handle item reordering from drag and drop
 		handleItemReorder(reorderData) {
@@ -2345,7 +2210,6 @@ export default {
 
 	mounted() {
 		this.eventBus.on("draft_selected", async (draftName) => {
-			console.log("[Invoice] Draft selected:", draftName);
 
 			try {
 				// Fetch the full draft invoice document
@@ -2358,7 +2222,6 @@ export default {
 				});
 
 				if (response.message) {
-					console.log("[Invoice] Draft data received:", response.message);
 
 					// IMPORTANT: Store the draft name before loading
 					this.loaded_draft_name = draftName;
@@ -2382,7 +2245,6 @@ export default {
 
 		// Listen for odometer data updates from InvoiceSummary
 		this.eventBus.on("update_odometer_data", (data) => {
-			console.log("[Invoice] Odometer data received:", data);
 
 			this.custom_odometer_reading = data.custom_odometer_reading;
 			this.contact_mobile = data.contact_mobile || "";
@@ -2395,7 +2257,6 @@ export default {
 				this.invoice_doc.contact_mobile = data.contact_mobile || "";
 				this.invoice_doc.custom_vehicle_no = data.custom_vehicle_no || "";
 
-				console.log("[Invoice] invoice_doc updated with odometer data");
 			}
 
 			// Broadcast update
@@ -2404,7 +2265,6 @@ export default {
 
 		// Listen for customer details from Customer component
 		this.eventBus.on("update_customer_details", (data) => {
-			console.log("[Invoice] Customer details received:", data);
 
 			// Store customer mobile and vehicle
 			this.contact_mobile = data.contact_mobile || "";
@@ -2418,7 +2278,6 @@ export default {
 		});
 
 		this.eventBus.on("employee_selected", (data) => {
-			console.log("[Invoice] employee_selected event received:", data);
 
 			if (!data || !data.employee_id) {
 				// Employee cleared
@@ -2434,15 +2293,9 @@ export default {
 
 			// Update invoice document
 			this.updateServiceEmployeeInDoc();
-
-			console.log("[Invoice] Service employee set:", {
-				id: this.service_employee,
-				name: this.service_employee_name,
-			});
 		});
 
 		this.eventBus.on("check_items_for_service", (data) => {
-			console.log("[Invoice] check_items_for_service event received");
 
 			const hasCarWashService = this.checkForCarWashServices();
 
@@ -2454,14 +2307,12 @@ export default {
 		this.$nextTick(() => {
 			const hasCarWashService = this.checkForCarWashServices();
 			if (hasCarWashService) {
-				console.log("[Invoice] Car wash service detected on mount");
 				this.eventBus.emit("show_employee_selection", true);
 			}
 		});
 
 		// ADD THESE NEW EVENT LISTENERS
 		this.eventBus.on("get_current_invoice_from_component", () => {
-			console.log("[Invoice] get_current_invoice_from_component event received");
 			const invoiceData = this.prepareForPayment();
 			if (invoiceData) {
 				this.eventBus.emit("current_invoice_data", invoiceData);
@@ -2469,28 +2320,23 @@ export default {
 		});
 
 		this.eventBus.on("prepare_invoice_for_payment", () => {
-			console.log("[Invoice] prepare_invoice_for_payment event received");
 			const invoice = this.prepareForPayment();
 			this.eventBus.emit("invoice_prepared", invoice);
 		});
 
 		this.eventBus.on("show_payment_modal", () => {
-			console.log("[Invoice] show_payment_modal event received");
 			this.show_payment();
 		});
 		this.eventBus.on("update_offers_counters", (data) => {
-			console.log("[Invoice] Offers counter updated:", data);
 			this.offersCount = data.offersCount || 0;
 		});
 
 		this.eventBus.on("update_coupons_counters", (data) => {
-			console.log("[Invoice] Coupons counter updated:", data);
 			this.couponsCount = data.couponsCount || 0;
 		});
 
 		// FIXED: Listen for item groups registration
 		this.eventBus.on("register_item_groups", (groups) => {
-			console.log("[Invoice] Item groups registered:", groups);
 			this.items_group = ["ALL", ...groups];
 		});
 
@@ -2538,7 +2384,6 @@ export default {
 			this.add_item(item);
 		});
 		this.eventBus.on("update_customer", (customer) => {
-			console.log("[Invoice] update_customer event received:", customer);
 			this.customer = customer;
 
 			// Sync to invoice_doc
@@ -2580,7 +2425,6 @@ export default {
 			});
 		});
 		this.eventBus.on("load_return_invoice", (data) => {
-			console.log("Invoice component received load_return_invoice event with data:", data);
 			this.load_invoice(data.invoice_doc);
 			this.loaded_draft_name = null;
 			// Explicitly mark as return invoice
@@ -2596,30 +2440,21 @@ export default {
 				});
 			}
 			if (data.return_doc) {
-				console.log("Return against existing invoice:", data.return_doc.name);
 				this.discount_amount = data.return_doc.discount_amount || 0;
 				this.additional_discount = data.return_doc.discount_amount || 0;
 				this.return_doc = data.return_doc;
 				// Set return_against reference
 				this.invoice_doc.return_against = data.return_doc.name;
 			} else {
-				console.log("Return without invoice reference");
 				// For return without invoice, reset discount values
 				this.discount_amount = 0;
 				this.additional_discount = 0;
 				this.additional_discount_percentage = 0;
 			}
-			console.log("Invoice state after loading return:", {
-				invoiceType: this.invoiceType,
-				is_return: this.invoice_doc.is_return,
-				items: this.items.length,
-				customer: this.customer,
-			});
 		});
 
 		// Listener to get current invoice on demand
 		this.eventBus.on("get_current_invoice_from_component", () => {
-			console.log("[Invoice] get_current_invoice_from_component event received");
 			const invoiceData = this.prepareForPayment();
 			if (invoiceData) {
 				this.eventBus.emit("current_invoice_data", invoiceData);
@@ -2628,7 +2463,6 @@ export default {
 
 		// Listener to prepare invoice for payment
 		this.eventBus.on("prepare_invoice_for_payment", () => {
-			console.log("[Invoice] prepare_invoice_for_payment event received");
 			this.prepareForPayment();
 			this.eventBus.emit("invoice_prepared", this.invoice_doc);
 		});
@@ -2683,7 +2517,6 @@ export default {
 		this.eventBus.off("employee_selected");
 		this.eventBus.off("check_items_for_service");
 
-		console.log("[Invoice] Employee event listeners cleaned up");
 
 		this.eventBus.off("update_odometer_data");
         this.eventBus.off("update_customer_details");
@@ -2712,7 +2545,6 @@ export default {
 		invoice_doc: {
 			handler(newVal) {
 				if (newVal) {
-					console.log("[Invoice] invoice_doc changed, broadcasting update");
 					this.broadcastInvoiceUpdate();
 				}
 			},
@@ -2722,10 +2554,6 @@ export default {
 		// Watch items changes and update invoice_doc (single consolidated watcher)
 		items: {
 			handler(newItems, oldItems) {
-				console.log("[Invoice] Items changed:", {
-					count: newItems.length,
-					oldCount: oldItems ? oldItems.length : 0,
-				});
 
 				// Update invoice_doc items (keep invoice_doc in sync)
 				if (this.invoice_doc) {
@@ -2733,7 +2561,6 @@ export default {
 				}
 
 				// --- Engine oil / odometer handling ---
-				console.log("[Invoice] Items changed, checking for Engine Oil");
 				const hasOilItem = this.checkForEngineOilItem();
 				// Notify InvoiceSummary (or other listeners) whether to show odometer
 				this.eventBus.emit("show_odometer_field", hasOilItem);
@@ -2754,7 +2581,6 @@ export default {
 				}
 
 				// --- Car wash / employee handling ---
-				console.log("[Invoice] Items changed, checking for car wash services");
 				const hasCarWashService = this.checkForCarWashServices();
 				// Emit event to show/hide employee selection in summary
 				this.eventBus.emit("show_employee_selection", hasCarWashService);
@@ -2793,7 +2619,6 @@ export default {
 
 		// Watch totals and sync to invoice_doc
 		grand_total(newVal) {
-			console.log("[Invoice] grand_total changed:", newVal);
 			if (this.invoice_doc) {
 				this.invoice_doc.grand_total = newVal;
 				this.invoice_doc.rounded_total = this.rounded_total;
@@ -2801,11 +2626,9 @@ export default {
 		},
 
 		total_qty(newVal) {
-			console.log("[Invoice] total_qty computed changed:", newVal);
 		},
 
 		subtotal(newVal) {
-			console.log("[Invoice] subtotal computed changed:", newVal);
 			if (this.invoice_doc) {
 				this.invoice_doc.net_total = newVal;
 			}
@@ -2813,33 +2636,28 @@ export default {
 
 		// WATCH DISCOUNT
 		discount_amount(newVal) {
-			console.log("[Invoice] discount_amount changed:", newVal);
 			if (this.invoice_doc) {
 				this.invoice_doc.discount_amount = newVal;
 			}
 		},
 
 		customer(newVal) {
-			console.log("[Invoice] customer changed:", newVal);
 			if (this.invoice_doc) {
 				this.invoice_doc.customer = newVal;
 			}
 		},
 
 		item_group(newVal) {
-			console.log("[Invoice] Item group changed to:", newVal);
 			this.eventBus.emit("update_item_group", newVal);
 		},
 
 		items_view(newVal) {
-			console.log("[Invoice] Items view changed to:", newVal);
 			this.eventBus.emit("update_items_view", newVal);
 		},
 
 		service_employee: {
 			handler(newVal) {
 				if (newVal) {
-					console.log("[Invoice] Service employee changed:", newVal);
 					this.updateServiceEmployeeInDoc();
 				}
 			},

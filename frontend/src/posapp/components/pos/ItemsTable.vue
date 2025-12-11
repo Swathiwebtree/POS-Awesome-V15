@@ -536,7 +536,6 @@ export default {
 					item.qty = Number.isFinite(existingQty) ? existingQty : (Number(rates.qty) || 0);
 				}
 
-				console.log('[applyRatesToItem] applied rates to', item.item_name, { qty: item.qty, rate: item.rate });
 			} catch (e) {
 				console.warn('[applyRatesToItem] error applying rates to', item && item.item_name, e);
 			}
@@ -544,8 +543,6 @@ export default {
 
 
 		async update_item_detail(item, force_update = false) {
-			console.log('update_item_detail request', { code: item.item_code, force_update, qtyBefore: item.qty });
-
 			// Defensive: ensure object
 			item = item || {};
 
@@ -555,12 +552,10 @@ export default {
 			// If CarWash/service item -> protect qty and skip server normalization
 			const isCarWash = this.isCarWashItem ? this.isCarWashItem(item) : (item.is_service_item === 1);
 			if (isCarWash || item.is_service_item) {
-				console.log(`[ItemsTable] CarWash/service detected for ${item.item_name}. Preserving qty.`);
 
 				// Ensure qty numeric and default to 1 for service items
 				item.qty = Number(item.qty);
 				if (!Number.isFinite(item.qty) || item.qty <= 0) {
-					console.log(`[ItemsTable] AUTO-FIX CarWash qty from ${item.qty} -> 1`);
 					item.qty = 1;
 				}
 
@@ -568,7 +563,6 @@ export default {
 				item.is_service_item = 1;
 				item.update_stock = 0;
 
-				console.log('update_item_detail result (service):', { code: item.item_code, qtyAfter: item.qty });
 				return; // do not call server update that might overwrite qty
 			}
 
@@ -583,18 +577,15 @@ export default {
 					await this._fetchAndUpdateStockAndRate(item, force_update);
 				} else {
 					// Insert your original server call / logic here
-					console.log('[ItemsTable] No stock fetch helper: skipping server update for stock item in this snippet.');
 				}
 			} catch (e) {
 				console.warn('[ItemsTable] update_item_detail error for stock item:', e);
 			}
 
-			console.log('update_item_detail result (stock):', { code: item.item_code, qtyAfter: item.qty });
 		},
 		calc_stock_qty(item, qty) {
 			// ===== CARWASH PROTECTION =====
 			if (this.isCarWashItem(item)) {
-				console.log(`[ItemsTable] calc_stock_qty called for CarWash ${item.item_name}, forcing qty=1`);
 				item.qty = 1;
 				item.stock_qty = 1;
 				return;
@@ -609,7 +600,6 @@ export default {
 		setFormatedQty(item, field_name, precision, no_negative, value) {
 			// ===== CARWASH PROTECTION: Don't allow qty changes for CarWash =====
 			if (this.isCarWashItem(item)) {
-				console.log(`[ItemsTable] setFormatedQty called for CarWash ${item.item_name}, keeping qty=1`);
 				item.qty = 1;
 				item.stock_qty = 1;
 				return 1;

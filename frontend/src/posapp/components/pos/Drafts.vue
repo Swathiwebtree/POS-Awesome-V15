@@ -285,7 +285,6 @@ export default {
 
 			try {
 				this.refreshing = true;
-				console.log("[Drafts] Fetching with fields:", args.fields);
 
 				const r = await frappe.call({
 					method: "frappe.client.get_list",
@@ -293,7 +292,6 @@ export default {
 				});
 
 				const list = r && r.message ? r.message : [];
-				console.log("[Drafts] Raw response:", list);
 
 				let drafts = (list || []).map((i) => this._normalizeSingle(i));
 
@@ -322,7 +320,6 @@ export default {
 					return d;
 				});
 
-				console.log("[Drafts] Processed drafts:", drafts);
 				this.dialog_data = this._sortByDateTime(drafts);
 			} catch (err) {
 				console.error("[Drafts] fetchDrafts error:", err);
@@ -382,13 +379,6 @@ export default {
 				typeof item.posting_time !== "undefined" && item.posting_time !== null
 					? String(item.posting_time)
 					: "";
-			
-			console.log("[Drafts] Normalizing item:", item.name, {
-				contact_mobile: item.contact_mobile,
-				custom_vehicle_no: item.custom_vehicle_no,
-				custom_odometer_reading: item.custom_odometer_reading,
-				custom_has_oil_item: item.custom_has_oil_item
-			});
 
 			return {
 				name: item.name,

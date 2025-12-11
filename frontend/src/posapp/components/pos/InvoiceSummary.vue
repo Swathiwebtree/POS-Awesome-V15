@@ -587,7 +587,6 @@ export default {
 		},
 		total_qty: {
 			handler(newVal) {
-				console.log("[InvoiceSummary] total_qty changed:", newVal);
 				this.$forceUpdate();
 			},
 			immediate: true,
@@ -610,12 +609,10 @@ export default {
 				custom_vehicle_no: this.vehicleNumber,
 			};
 
-			console.log("[InvoiceSummary] Emitted odometer data:", odometerData);
 			this.eventBus.emit("update_odometer_data", odometerData);
 		},
 
 		clearOdometerFields() {
-			console.log("[InvoiceSummary] Clearing odometer fields");
 			this.odometerReading = null;
 			this.vehicleNumber = "";
 			this.mobileNumber = "";
@@ -721,47 +718,6 @@ export default {
 				}
 			} catch (err) {
 				console.error("Failed to fetch frequent cards:", err);
-
-				// TEMPORARY: Use mock data for testing
-				console.warn("Using mock data for testing frequent cards");
-				this.frequentCards = [
-					{
-						name: "FC-TEST-001",
-						card_name: "Haircut Frequent Card",
-						service_item: "ITEM-001",
-						service_item_name: "Basic Haircut",
-						visits: 2,
-						required_visits: 3,
-						issue_date: "2024-10-01",
-						expiry_date: "2025-04-01",
-						status: "Active",
-						is_expired: false,
-					},
-					{
-						name: "FC-TEST-002",
-						card_name: "Spa Treatment Card",
-						service_item: "ITEM-002",
-						service_item_name: "Full Body Massage",
-						visits: 3,
-						required_visits: 3,
-						issue_date: "2024-09-15",
-						expiry_date: "2025-03-15",
-						status: "Completed",
-						is_expired: false,
-					},
-					{
-						name: "FC-TEST-003",
-						card_name: "Expired Card",
-						service_item: "ITEM-003",
-						service_item_name: "Manicure",
-						visits: 1,
-						required_visits: 3,
-						issue_date: "2024-01-01",
-						expiry_date: "2024-07-01",
-						status: "Expired",
-						is_expired: true,
-					},
-				];
 			} finally {
 				this.loadingFrequentCards = false;
 			}
@@ -975,8 +931,6 @@ export default {
 
 			this.loadingEmployees = true;
 			try {
-				console.log("[InvoiceSummary] Fetching employees for company:", this.pos_profile.company);
-
 				const response = await frappe.call({
 					method: "posawesome.posawesome.api.employees.get_active_employees",
 					args: {
@@ -986,7 +940,6 @@ export default {
 
 				if (response?.message) {
 					this.employees = response.message;
-					console.log("[InvoiceSummary] Employees loaded:", this.employees.length);
 				} else {
 					console.warn("[InvoiceSummary] No employees returned from API");
 					this.employees = [];
@@ -1004,8 +957,6 @@ export default {
 		},
 
 		handleEmployeeChange(employeeId) {
-			console.log("[InvoiceSummary] Employee selected:", employeeId);
-
 			if (!employeeId) {
 				// Employee cleared
 				this.selectedEmployee = null;
@@ -1024,8 +975,6 @@ export default {
 				return;
 			}
 
-			console.log("[InvoiceSummary] Employee details:", employee);
-
 			// Emit event to parent component to attach employee to invoice
 			this.eventBus.emit("employee_selected", {
 				employee_id: employee.name,
@@ -1042,12 +991,10 @@ export default {
 		},
 
 		checkIfCarWashService() {
-			console.log("[InvoiceSummary] Checking for car wash services");
 
 			// Emit event to parent to check items
 			this.eventBus.emit("check_items_for_service", {
 				callback: (hasCarWashService) => {
-					console.log("[InvoiceSummary] Has car wash service:", hasCarWashService);
 					this.showEmployeeSelection = hasCarWashService;
 
 					// Fetch employees if needed and not already loaded
@@ -1162,7 +1109,6 @@ export default {
 		},
 
 		async handleShowPayment() {
-			console.log("[InvoiceSummary] PAY button clicked");
 
 			if (!this.selectedCustomerId) {
 				frappe.show_alert({
@@ -1174,12 +1120,10 @@ export default {
 
 			this.paymentLoading = true;
 			try {
-				console.log("[InvoiceSummary] Requesting invoice from parent");
 				this.eventBus.emit("get_current_invoice_from_component");
 
 				await new Promise((resolve) => {
 					const handler = (data) => {
-						console.log("[InvoiceSummary] Invoice received:", data.grand_total);
 						this.eventBus.off("current_invoice_data", handler);
 						resolve();
 					};
@@ -1190,7 +1134,6 @@ export default {
 					}, 2000);
 				});
 
-				console.log("[InvoiceSummary] Emitting show_payment");
 				this.eventBus.emit("show_payment", "true");
 			} catch (error) {
 				console.error("[InvoiceSummary] Error:", error);
@@ -1204,17 +1147,14 @@ export default {
 		},
 
 		handleShowOffers() {
-			console.log("[InvoiceSummary] Show offers clicked");
 			this.$emit("show-offers");
 		},
 
 		handleShowCoupons() {
-			console.log("[InvoiceSummary] Show coupons clicked");
 			this.$emit("show-coupons");
 		},
 	},
 	mounted() {
-		console.log("[InvoiceSummary] Mounted");
 		if (this.selectedCustomerId) {
 			this.fetchLoyaltyPoints();
 			this.fetchFrequentCards();
@@ -1222,7 +1162,6 @@ export default {
 
 		// Listen for odometer field visibility
 		this.eventBus.on("show_odometer_field", (shouldShow) => {
-			console.log("[InvoiceSummary] show_odometer_field event:", shouldShow);
 			this.showOdometerField = shouldShow;
 
 			if (!shouldShow) {
@@ -1232,7 +1171,6 @@ export default {
 
 		// Listen for odometer data from parent (when loading draft)
 		this.eventBus.on("load_odometer_data", (data) => {
-			console.log("[InvoiceSummary] Loading odometer data:", data);
 
 			if (data) {
 				this.showOdometerField = data.custom_has_oil_item === 1;
@@ -1244,7 +1182,6 @@ export default {
 
 		// Listen for customer details from Customer component (AUTO-FETCH)
 		this.eventBus.on("update_customer_details", (data) => {
-			console.log("[InvoiceSummary] Customer details received:", data);
 
 			// Auto-populate mobile and vehicle from customer
 			this.mobileNumber = data.contact_mobile || "";
@@ -1261,18 +1198,15 @@ export default {
 
 		// EMPLOYEE SELECTION LISTENERS
 		this.eventBus.on("show_employee_selection", (shouldShow) => {
-			console.log("[InvoiceSummary] show_employee_selection event:", shouldShow);
 			this.showEmployeeSelection = shouldShow;
 
 			if (shouldShow && this.employees.length === 0) {
-				console.log("[InvoiceSummary] Fetching employees...");
 				this.fetchEmployees();
 			}
 		});
 
 		// Listen for clear employee selection event
 		this.eventBus.on("clear_employee_selection", () => {
-			console.log("[InvoiceSummary] Clearing employee selection from event");
 			this.selectedEmployee = null;
 			this.showEmployeeSelection = false;
 		});

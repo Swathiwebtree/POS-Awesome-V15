@@ -279,8 +279,6 @@
 
 <script>
 /* global frappe __ */
-// import UpdateCustomer from "./UpdateCustomer.vue";
-// import UpdateVehicle from "./UpdateVehicle.vue";
 import Skeleton from "../ui/Skeleton.vue";
 import {
 	db,
@@ -328,11 +326,19 @@ export default {
 		selectedVehicle: null,
 		vehicle_no: "",
 		loadingVehicles: false,
+		selected_customer_is_corporate: false,
+
+		// vehicle search state
+		vehicleSearchTerm: "",
+		vehiclePage: 0,
+		vehicleSearchResults: [],
+		vehicleHasMore: false,
+
+		// invoice doc placeholder used in some methods (should be provided by parent normally)
+		invoice_doc: {},
 	}),
 
 	components: {
-		// UpdateCustomer,
-		// UpdateVehicle,
 		Skeleton,
 	},
 
@@ -358,6 +364,19 @@ export default {
 	},
 
 	methods: {
+		// --- Helper to normalize customer rows --
+		_normalizeCustomerRow(r) {
+			// Ensure we always have is_corporate boolean present in each customer row
+			if (!r) return r;
+			// Accept either is_corporate or is_company from server/local storage
+			const isCorporate = !!(r.is_corporate || r.is_company);
+			return {
+				...r,
+				is_corporate: isCorporate,
+				is_company: r.is_company || isCorporate,
+			};
+		},
+
 		// --- Customer Methods ---
 		onCustomerMenuToggle(isOpen) {
 			this.isMenuOpen = isOpen;
@@ -405,7 +424,6 @@ export default {
 			}
 
 			try {
-				console.log("[Customer] Fetching customer details for:", customerName);
 
 				const response = await frappe.call({
 					method: "posawesome.posawesome.api.customers.get_customer_info",
@@ -417,7 +435,6 @@ export default {
 				if (response && response.message) {
 					const customerData = response.message;
 
-					console.log("[Customer] Customer data fetched:", customerData);
 
 					// Extract mobile and vehicle number
 					const mobile = customerData.mobile_no || "";
@@ -426,20 +443,19 @@ export default {
 							? customerData.vehicles[0].vehicle_no
 							: "");
 
-					console.log("[Customer] Emitting customer details:", {
-						contact_mobile: mobile,
-						custom_vehicle_no: vehicleNo,
-					});
+					// Normalize corporate flag and set component state
+					const isCorporate = !!(customerData.is_corporate || customerData.is_company);
+					this.selected_customer_is_corporate = isCorporate;
 
-					//  EMIT CUSTOMER DETAILS TO INVOICE SUMMARY
+					//  EMIT CUSTOMER DETAILS TO INVOICE SUMMARY (and other listeners)
 					this.eventBus.emit("update_customer_details", {
 						contact_mobile: mobile,
 						custom_vehicle_no: vehicleNo,
+						is_corporate: isCorporate,
 					});
 				}
 			} catch (error) {
 				console.error("[Customer] Failed to fetch customer details:", error);
-				// Don't show error to user, just log it
 			}
 		},
 
@@ -471,10 +487,12 @@ export default {
 				this.vehicle_no = "";
 				this.eventBus.emit("update_customer", null);
 				this.eventBus.emit("vehicle_selected", null);
+				this.selected_customer_is_corporate = false;
 				// EMIT EMPTY CUSTOMER DETAILS
 				this.eventBus.emit("update_customer_details", {
 					contact_mobile: "",
 					custom_vehicle_no: "",
+					is_corporate: false,
 				});
 			}
 		},
@@ -511,10 +529,6 @@ export default {
 		},
 
 		async searchVehiclesByNumber(term, append = false) {
-			/**
-			 * Search vehicles in local IndexedDB first, then server fallback.
-			 * Similar to searchCustomers() but for vehicles.
-			 */
 			try {
 				await checkDbHealth();
 				if (!db.isOpen()) await db.open();
@@ -612,10 +626,6 @@ export default {
 		},
 
 		onVehicleSearch: _.debounce(function (val) {
-			/**
-			 * Debounced vehicle search - called when user types in vehicle field.
-			 * Updates the dropdown list and searches by vehicle number/make/model.
-			 */
 			this.vehicleSearchTerm = val || "";
 			this.vehiclePage = 0;
 			this.vehicleSearchResults = [];
@@ -627,10 +637,6 @@ export default {
 		}, 500),
 
 		onVehicleSelect(val) {
-			/**
-			 * Called when user selects a vehicle from the dropdown.
-			 * Updates vehicle info and associated customer if needed.
-			 */
 			if (!val) {
 				this.selectedVehicle = null;
 				this.vehicle_no = "";
@@ -649,15 +655,13 @@ export default {
 					this.customer = vehicle.customer;
 					this.internalCustomer = vehicle.customer;
 					this.eventBus.emit("update_customer", vehicle.customer);
+					// ensure corporate flag is fetched/emitted
+					this.fetchAndEmitCustomerDetails(vehicle.customer);
 				}
 			}
 		},
 
 		async onVehicleNoEnter() {
-			/**
-			 * Called when user presses Enter in the vehicle number input field.
-			 * Searches for vehicle and auto-loads associated customer.
-			 */
 			const vehicleNo = (this.vehicle_no || "").trim();
 			if (!vehicleNo) return;
 
@@ -720,6 +724,10 @@ export default {
 						this.selectedVehicle = null;
 						this.eventBus.emit("vehicle_selected", null);
 					}
+
+					// ensure we fetch and emit the corporate flag as well
+					await this.fetchAndEmitCustomerDetails(customerName);
+
 				} else {
 					frappe.show_alert({
 						message: __("No customer found for vehicle: " + vehicleNo),
@@ -739,6 +747,27 @@ export default {
 			}
 		},
 
+		edit_vehicle() {
+			const vehicle_to_edit =
+				this.vehicles.find((v) => v.name === this.selectedVehicle) ||
+				(this.vehicles.length === 1 && this.vehicles[0].name ? this.vehicles[0] : null);
+
+			if (vehicle_to_edit) {
+				this.eventBus.emit("open_update_vehicle", vehicle_to_edit);
+			} else {
+				frappe.msgprint(__("Please select a vehicle or add one first."), __("Error"));
+			}
+		},
+
+		new_vehicle() {
+			const payload = {
+				customer: this.customer,
+				vehicle_no: this.vehicles.length === 0 ? this.vehicle_no : null,
+			};
+
+			this.eventBus.emit("open_update_vehicle", payload);
+		},
+
 		async searchCustomerByMobile(mobile) {
 			// normalize
 			const mobile_no = (mobile || "").toString().trim();
@@ -747,30 +776,38 @@ export default {
 				return;
 			}
 
-			// show loading UI if you want
 			this.searchingCustomer = true;
 			this.customerNotFound = false;
 
 			try {
-				// frappe.call style (ERPNext frontend)
 				frappe.call({
 					method: "posawesome.posawesome.api.customers.get_customer_by_mobile",
 					args: { mobile_no },
 					callback: (r) => {
 						const msg = r?.message ?? null;
 						if (msg) {
-							// populate invoice_doc (adapt field names you use)
 							this.invoice_doc.customer = msg.name || msg.customer_name || "";
 							this.invoice_doc.customer_name = msg.customer_name || msg.name || "";
 							this.invoice_doc.mobile_no = msg.mobile_no || mobile_no;
-							// clear not-found state
 							this.customerNotFound = false;
-						} else {
-							// nothing returned -> not found
-							this.customerNotFound = true;
-							// optional: clear any previous customer selection
-							this.invoice_doc.customer = null;
-							this.invoice_doc.customer_name = null;
+
+							// If the server returned a summary with is_corporate included, use it.
+							if (msg.is_corporate !== undefined || msg.is_company !== undefined) {
+								const isCorp = !!(msg.is_corporate || msg.is_company);
+								this.selected_customer_is_corporate = isCorp;
+								this.eventBus.emit("update_customer_details", {
+									contact_mobile: msg.mobile_no || "",
+									custom_vehicle_no: msg.vehicle_no || "",
+									is_corporate: isCorp,
+								});
+								// If we only got summary and need full info for vehicles, fetch it
+								if (msg.name) {
+									this.fetchAndEmitCustomerDetails(msg.name);
+								}
+							} else if (msg.name) {
+								// If server returned only a reference, fetch full details
+								this.fetchAndEmitCustomerDetails(msg.name);
+							}
 						}
 						this.searchingCustomer = false;
 					},
@@ -792,22 +829,16 @@ export default {
 				await checkDbHealth();
 				if (!db.isOpen()) await db.open();
 
-				// If this is a "new" term (user typed new text), and page wasn't reset elsewhere,
-				// ensure page starts at 0 for fresh results.
-				// (Your searchDebounce already sets this.page = 0, but this is a safety net.)
 				if (term && this.searchTerm !== term) {
 					this.page = 0;
 				}
 
 				let results = [];
 
-				// If there's a search term, do a robust "contains" search in local IndexedDB.
-				// If no term, fall back to paginated read of the customers table.
 				if (term) {
 					const q = term.toString().toLowerCase();
 
 					// Load all local customers (we filter in-memory for reliable substring search).
-					// Note: for very large datasets this is slower; we have a server fallback below.
 					const all = await db.table("customers").toArray();
 
 					const filtered = all.filter((c) => {
@@ -848,10 +879,10 @@ export default {
 									email_id: c.email_id || "",
 									vehicle_no: c.vehicle_no || "",
 									tax_id: c.tax_id || "",
+									is_corporate: !!(c.is_corporate || c.is_company),
 								}));
 							}
 						} catch (err) {
-							// swallow server error, fallback to local behavior (empty results)
 							console.error("Server fallback search failed:", err);
 						}
 					}
@@ -859,22 +890,25 @@ export default {
 					// Choose data source: prefer server results if present, otherwise use local filtered + pagination
 					let slice = [];
 					if (serverResults && serverResults.length) {
-						// server returned limited results, use those directly
 						slice = serverResults;
 					} else {
 						const startIndex = (this.page || 0) * this.pageSize;
 						slice = filtered.slice(startIndex, startIndex + this.pageSize);
 					}
 
-					// Normalize the shape that the UI expects
-					results = slice.map((r) => ({
-						name: r.name,
-						customer_name: r.customer_name,
-						mobile_no: r.mobile_no || "",
-						email_id: r.email_id || "",
-						vehicle_no: r.vehicle_no || "",
-						tax_id: r.tax_id || "",
-					}));
+					// Normalize the shape that the UI expects (and ensure is_corporate exists)
+					results = slice.map((r) => {
+						const norm = this._normalizeCustomerRow(r);
+						return {
+							name: norm.name,
+							customer_name: norm.customer_name,
+							mobile_no: norm.mobile_no || "",
+							email_id: norm.email_id || "",
+							vehicle_no: norm.vehicle_no || "",
+							tax_id: norm.tax_id || "",
+							is_corporate: !!norm.is_corporate,
+						};
+					});
 				} else {
 					// No search term — just read the paginated table rows
 					const collection = db.table("customers");
@@ -882,6 +916,14 @@ export default {
 						.offset((this.page || 0) * this.pageSize)
 						.limit(this.pageSize)
 						.toArray();
+
+					// Normalize any rows from local DB (may not have is_corporate)
+					results = (results || []).map((r) => {
+						const norm = this._normalizeCustomerRow(r);
+						return {
+							...norm,
+						};
+					});
 				}
 
 				// assign results to component state (append vs replace)
@@ -921,7 +963,12 @@ export default {
 				let cursor = startAfter;
 				while (cursor) {
 					const rows = await this.fetchCustomerPage(cursor, syncSince, limit);
-					await setCustomerStorage(rows);
+					// normalize rows before storing
+					const normalized = (rows || []).map((r) => ({
+						...r,
+						is_corporate: !!(r.is_corporate || r.is_company),
+					}));
+					await setCustomerStorage(normalized);
 					this.loadedCustomerCount += rows.length;
 					if (this.totalCustomerCount) {
 						const progress = Math.min(
@@ -977,7 +1024,12 @@ export default {
 					if (serverCount > localCount) {
 						const syncSince = getCustomersLastSync();
 						const rows = await this.fetchCustomerPage(null, syncSince, this.pageSize);
-						await setCustomerStorage(rows);
+						// normalize rows before storing
+						const normalized = (rows || []).map((r) => ({
+							...r,
+							is_corporate: !!(r.is_corporate || r.is_company),
+						}));
+						await setCustomerStorage(normalized);
 						this.loadedCustomerCount += rows.length;
 						if (this.totalCustomerCount) {
 							this.loadProgress = Math.round(
@@ -1055,7 +1107,12 @@ export default {
 				}
 
 				const rows = await this.fetchCustomerPage(null, syncSince, this.pageSize);
-				await setCustomerStorage(rows);
+				// normalize rows before storing them locally
+				const normalized = (rows || []).map((r) => ({
+					...r,
+					is_corporate: !!(r.is_corporate || r.is_company),
+				}));
+				await setCustomerStorage(normalized);
 				this.loadedCustomerCount = rows.length;
 				if (this.totalCustomerCount) {
 					this.loadProgress = Math.round(
@@ -1086,7 +1143,6 @@ export default {
 		},
 
 		new_customer() {
-			// Ensure UpdateCustomer is ready to handle vehicle data passed back
 			this.eventBus.emit("open_update_customer", { withVehicle: true });
 		},
 
@@ -1110,7 +1166,7 @@ export default {
 					return;
 				}
 
-				// Try to get vehicles for this customer (server method used in parent component)
+				// Try to get vehicles for this customer
 				let vehicles = [];
 				try {
 					const vResp = await frappe.call({
@@ -1119,11 +1175,9 @@ export default {
 					});
 					vehicles = vResp?.message || [];
 				} catch (e) {
-					// swallow — not critical, we'll still open the dialog
 					console.warn("Failed to fetch vehicles for customer", e);
 				}
 
-				// Attach vehicles (even if empty) so the dialog can decide to show fields
 				payload.vehicles = vehicles;
 
 				this.eventBus.emit("open_update_customer", {
@@ -1137,8 +1191,6 @@ export default {
 		},
 
 		async submitUpdatedCustomer(customerPayload, vehiclePayload = null) {
-			// Accepts the shape produced by the UpdateCustomer dialog (plain JS objects)
-			// Calls backend update endpoint and then emits add_customer_to_list with response.
 			try {
 				const res = await frappe.call({
 					method: "posawesome.posawesome.api.update_customer_api",
@@ -1157,9 +1209,7 @@ export default {
 					return null;
 				}
 
-				// Update the frontend list via existing listener expectations
 				this.eventBus.emit("add_customer_to_list", { customer: msg.customer, vehicle: msg.vehicle });
-				// Close the dialog (UpdateCustomer component should react to eventBus or handle itself)
 				this.eventBus.emit("close_update_customer");
 				return msg;
 			} catch (err) {
@@ -1233,15 +1283,12 @@ export default {
 				this.selectedVehicle = null;
 
 				if (this.vehicles.length === 1) {
-					// Automatically select the single vehicle
 					this.selectedVehicle = this.vehicles[0].name;
 					this.eventBus.emit("vehicle_selected", this.selectedVehicle);
 					this.vehicle_no = this.vehicles[0].vehicle_no;
 				} else if (this.vehicles.length > 1) {
-					// Add placeholder only if multiple vehicles exist
 					this.vehicles.unshift({ name: null, vehicle_no: frappe._("Select Vehicle...") });
 				} else {
-					// No vehicles, clear selection
 					this.eventBus.emit("vehicle_selected", null);
 				}
 			} catch (err) {
@@ -1252,6 +1299,7 @@ export default {
 			}
 		},
 
+		// Duplicate-safe onVehicleSelect for other listeners (kept for compatibility)
 		onVehicleSelect(val) {
 			if (!val) {
 				this.selectedVehicle = null;
@@ -1266,7 +1314,6 @@ export default {
 				this.vehicle_no = vehicle.vehicle_no || "";
 				this.eventBus.emit("vehicle_selected", vehicle.name);
 
-				// Set customer if not already set
 				if (!this.customer && vehicle.customer) {
 					this.customer = vehicle.customer;
 					this.internalCustomer = vehicle.customer;
@@ -1276,113 +1323,8 @@ export default {
 		},
 
 		onVehicleSearch: _.debounce(function (val) {
-			// Search logic here if needed
+			// intentionally left minimal (handled earlier)
 		}, 300),
-
-		async onVehicleNoEnter() {
-			const vehicleNo = (this.vehicle_no || "").trim();
-			if (!vehicleNo) return;
-
-			this.loadingVehicles = true;
-			try {
-				let customerName = null;
-				let vehicleName = null;
-
-				// 1. Local Lookup
-				try {
-					await checkDbHealth();
-					if (!db.isOpen()) await db.open();
-					const local = await db.table("vehicles").where("vehicle_no").equals(vehicleNo).first();
-					if (local) {
-						customerName = local.customer;
-						vehicleName = local.name;
-					}
-				} catch (e) {
-					console.warn("Local vehicle lookup error", e);
-				}
-
-				// 2. Server Lookup if no local match or online
-				if (!customerName && navigator.onLine) {
-					const res = await frappe.call({
-						method: "posawesome.posawesome.api.vehicles.get_customer_by_vehicle",
-						args: { vehicle_no: vehicleNo },
-					});
-					const payload = res?.message || {};
-					if (payload.customer && payload.customer.name) {
-						customerName = payload.customer.name;
-					}
-					if (payload.vehicle && payload.vehicle.name) {
-						vehicleName = payload.vehicle.name;
-					}
-				}
-
-				// Final update logic
-				if (customerName) {
-					this.customer = customerName;
-					this.internalCustomer = customerName;
-					this.eventBus.emit("update_customer", customerName);
-
-					if (vehicleName) {
-						this.selectedVehicle = vehicleName;
-						this.eventBus.emit("vehicle_selected", vehicleName);
-						this.fetchVehiclesForCustomer(customerName);
-					} else {
-						this.selectedVehicle = null;
-						this.eventBus.emit("vehicle_selected", null);
-					}
-
-					// Add vehicle to list if not present
-					if (vehicleName) {
-						const existingVehicle = this.vehicles.find((v) => v.name === vehicleName);
-						if (!existingVehicle) {
-							this.vehicles.push({
-								name: vehicleName,
-								vehicle_no: vehicleNo,
-								model: "",
-								make: "",
-								customer_name: this.internalCustomer,
-								customer: customerName,
-								mobile_no: "",
-							});
-						}
-					}
-				} else {
-					frappe.show_alert({ message: __("No customer found for vehicle"), indicator: "red" });
-					this.selectedVehicle = null;
-					this.eventBus.emit("vehicle_selected", null);
-				}
-			} catch (err) {
-				console.error("Failed to lookup customer by vehicle:", err);
-				frappe.show_alert({ message: __("Error looking up vehicle"), indicator: "red" });
-			} finally {
-				this.loadingVehicles = false;
-			}
-		},
-
-		edit_vehicle() {
-			const vehicle_to_edit =
-				this.vehicles.find((v) => v.name === this.selectedVehicle) ||
-				(this.vehicles.length === 1 && this.vehicles[0].name ? this.vehicles[0] : null);
-
-			if (vehicle_to_edit) {
-				this.eventBus.emit("open_update_vehicle", vehicle_to_edit);
-			} else {
-				frappe.msgprint(__("Please select a vehicle or add one first."), __("Error"));
-			}
-		},
-
-		new_vehicle() {
-			// FIX: Always emit the event to open the dialog.
-			// The UpdateVehicle dialog should handle the case of a missing customer.
-			// If the user is on the text-input field, we can pass the vehicle_no they typed.
-			const payload = {
-				customer: this.customer,
-				vehicle_no: this.vehicles.length === 0 ? this.vehicle_no : null,
-			};
-
-			// This emits the event to open the vehicle creation form
-			this.eventBus.emit("open_update_vehicle", payload);
-		},
 	},
 
 	created() {
@@ -1392,14 +1334,11 @@ export default {
 		});
 
 		this.eventBus.on("load_invoice_customer", async (customerName) => {
-			console.log("[Customer] load_invoice_customer event received:", customerName);
-
 			if (!customerName) {
 				this.customer = null;
 				this.internalCustomer = null;
 				this.vehicles = [];
 				this.selectedVehicle = null;
-				//  CLEAR CUSTOMER DETAILS
 				this.eventBus.emit("update_customer_details", {
 					contact_mobile: "",
 					custom_vehicle_no: "",
@@ -1407,22 +1346,17 @@ export default {
 				return;
 			}
 
-			// Set the customer directly
 			this.customer = customerName;
 			this.internalCustomer = customerName;
 
-			console.log("[Customer] Customer set to:", customerName);
-
-			// FETCH AND EMIT CUSTOMER DETAILS
 			await this.fetchAndEmitCustomerDetails(customerName);
-
-			// Fetch vehicles for this customer
 			await this.fetchVehiclesForCustomer(customerName);
 
 			this.$nextTick(() => {
 				this.$forceUpdate();
 			});
 		});
+
 		this.searchDebounce = _.debounce(async (val) => {
 			this.searchTerm = val || "";
 			this.page = 0;
@@ -1451,9 +1385,8 @@ export default {
 			}
 		}, 500);
 
-		// ADD THESE EVENT LISTENERS FOR CLEARING FIELDS
+		// ADD EVENT LISTENERS
 		this.eventBus.on("clear_customer", () => {
-			console.log("[Customer] Clearing customer from event");
 			this.selectedCustomer = null;
 			this.customer = "";
 			this.internalCustomer = null;
@@ -1461,25 +1394,22 @@ export default {
 		});
 
 		this.eventBus.on("clear_vehicle_number", () => {
-			console.log("[Vehicle] Clearing vehicle number from event");
 			this.vehicles = [];
 			this.selectedVehicle = null;
 			this.vehicle_no = "";
 		});
 
 		this.eventBus.on("clear_all_fields", () => {
-			console.log("[Customer & Vehicle] Clearing all fields");
-			// Clear customer
 			this.selectedCustomer = null;
 			this.customer = "";
 			this.internalCustomer = null;
 			this.tempSelectedCustomer = null;
 
-			// Clear vehicle
 			this.vehicles = [];
 			this.selectedVehicle = null;
 			this.vehicle_no = "";
 		});
+
 		this.effectiveReadonly = this.readonly && navigator.onLine;
 
 		this.$nextTick(() => {
@@ -1508,11 +1438,13 @@ export default {
 					this.fetchVehiclesForCustomer(customer);
 				});
 
-				// MODIFIED: Handle both customer and vehicle data from UpdateCustomer.vue
+				// Handle both customer and vehicle data from UpdateCustomer.vue
 				this.eventBus.on("add_customer_to_list", async (data) => {
-					// Assume data can be a customer object OR { customer: {...}, vehicle: {...} }
 					const customer = data.customer || data;
 					const vehicle = data.vehicle || null;
+
+					// ensure the object has the flag
+					customer.is_corporate = !!(customer.is_corporate || customer.is_company);
 
 					const index = this.customers.findIndex((c) => c.name === customer.name);
 					if (index !== -1) {
@@ -1520,18 +1452,32 @@ export default {
 					} else {
 						this.customers.push(customer);
 					}
-					await setCustomerStorage([customer]);
+
+					// persist to local storage (ensure your storage schema accepts is_corporate)
+					const normalized = {
+						...customer,
+						is_corporate: !!(customer.is_corporate || customer.is_company),
+					};
+					await setCustomerStorage([normalized]);
+
+					// select the new customer
 					this.customer = customer.name;
 					this.internalCustomer = customer.name;
+					this.selected_customer_is_corporate = !!customer.is_corporate;
+
+					// notify other components
 					this.eventBus.emit("update_customer", customer.name);
+					this.eventBus.emit("update_customer_details", {
+						contact_mobile: customer.mobile_no || "",
+						custom_vehicle_no: (vehicle && vehicle.vehicle_no) || "",
+						is_corporate: !!customer.is_corporate,
+					});
 
 					if (vehicle && vehicle.vehicle_no) {
-						// If a vehicle was created, update the vehicle list directly
 						this.eventBus.emit("add_vehicle_to_list", vehicle);
 						this.selectedVehicle = vehicle.name;
 						this.eventBus.emit("vehicle_selected", vehicle.name);
 					} else {
-						// Otherwise, fetch existing vehicles
 						this.fetchVehiclesForCustomer(customer.name);
 					}
 				});
@@ -1550,7 +1496,6 @@ export default {
 
 				this.eventBus.on("add_vehicle_to_list", (vehicle) => {
 					if (vehicle.customer === this.customer) {
-						// Remove placeholder and old entry if updating
 						this.vehicles = this.vehicles.filter((v) => v.name && v.name !== vehicle.name);
 						this.vehicles.push({
 							name: vehicle.name,
@@ -1563,11 +1508,9 @@ export default {
 						});
 
 						if (this.vehicles.length === 1) {
-							// Case: New vehicle is the only vehicle
 							this.selectedVehicle = vehicle.name;
 							this.eventBus.emit("vehicle_selected", vehicle.name);
 						} else {
-							// Case: Vehicle added to a list with other vehicles (re-add placeholder)
 							this.vehicles.unshift({ name: null, vehicle_no: frappe._("Select Vehicle...") });
 							this.selectedVehicle = vehicle.name;
 							this.eventBus.emit("vehicle_selected", vehicle.name);

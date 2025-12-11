@@ -265,8 +265,6 @@ export default {
 			let data = raw && raw.detail ? raw.detail : raw;
 			if (data && data.message && typeof data.message === "object") data = data.message;
 
-			console.log("open_ClosingDialog payload:", data);
-
 			if (!data) {
 				console.warn("open_ClosingDialog called without payload");
 				return;

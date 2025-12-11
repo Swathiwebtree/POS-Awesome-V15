@@ -142,7 +142,6 @@ export default {
 			const moduleName = module.name || module.text;
 			this.activeModule = moduleName;
 
-			console.log("Module selected:", moduleName);
 
 			// If module has no submodules or empty submodules array, navigate directly
 			if (!module.submodules || module.submodules.length === 0) {
@@ -153,7 +152,6 @@ export default {
 		 * Select a submodule and navigate
 		 */
 		selectSubmodule(subName) {
-			console.log("Submodule selected:", subName);
 			this.activeSubmodule = subName;
 			this.navigateToPage(subName);
 		},
@@ -162,7 +160,6 @@ export default {
 		 * Emits the change-page event to parent component
 		 */
 		navigateToPage(pageName) {
-			console.log("Navigating to:", pageName);
 			this.$emit("change-page", pageName);
 
 			// Close drawer on mobile devices

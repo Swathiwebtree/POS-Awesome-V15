@@ -287,7 +287,6 @@ export default {
 					this.serverOnline = true;
 					window.serverOnline = true;
 					this.serverConnecting = false;
-					console.log("Server: Connected via WebSocket");
 					this.$forceUpdate();
 				});
 
@@ -295,7 +294,6 @@ export default {
 					this.serverOnline = false;
 					window.serverOnline = false;
 					this.serverConnecting = false;
-					console.log("Server: Disconnected from WebSocket");
 					// Trigger connectivity check to verify if it's just WebSocket or full network
 					setTimeout(() => {
 						if (!isManualOffline()) {
@@ -306,12 +304,10 @@ export default {
 
 				frappe.realtime.on("connecting", () => {
 					this.serverConnecting = true;
-					console.log("Server: Connecting to WebSocket...");
 					this.$forceUpdate();
 				});
 
 				frappe.realtime.on("reconnect", () => {
-					console.log("Server: Reconnected to WebSocket");
 					window.serverOnline = true;
 					if (!isManualOffline()) {
 						this.checkNetworkConnectivity();

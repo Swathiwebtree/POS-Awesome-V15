@@ -529,7 +529,6 @@ export default {
 		// ADD THIS NEW WATCHER
 		items_view: {
 			handler(newVal) {
-				console.log("[ItemsSelector] items_view changed to:", newVal);
 				this.$nextTick(() => {
 					this.$forceUpdate();
 				});
@@ -753,14 +752,12 @@ export default {
 		},
 
 		handleItemsViewUpdate(newView) {
-			console.log("[POS] Items view updated:", newView);
 			this.items_view = newView;
 			this.$emit("update:items_view", newView);
 			this.eventBus.emit("items_view_changed", newView);
 		},
 
 		updateViewMode(newMode) {
-			console.log("[ItemsSelector] updateViewMode called:", newMode);
 
 			// Update the view mode
 			this.items_view = newMode;
@@ -771,7 +768,6 @@ export default {
 			// Emit to parent
 			this.$emit("update-view-mode", newMode);
 
-			console.log("[ItemsSelector] View mode is now:", this.items_view);
 		},
 
 		handleAddToPOS(event) {
@@ -1201,35 +1197,27 @@ export default {
 			await this.get_items(true);
 		},
 		async forceReloadItems() {
-			console.log("[ItemsSelector] forceReloadItems called");
 			// Clear cached price list items so the reload always
 			// fetches the latest data from the server
 			await clearPriceListCache();
-			console.log("[ItemsSelector] price list cache cleared");
 			await this.ensureStorageHealth();
-			console.log("[ItemsSelector] storage health ensured");
 			this.items_loaded = false;
 
 			// When no search term is entered, reset the search so
 			// we fetch the entire item list from the server.
 			if (!this.first_search || !this.first_search.trim()) {
-				console.log("[ItemsSelector] resetting empty search before reload");
 				this.first_search = "";
 				this.search = "";
 			}
 
-			console.log("[ItemsSelector] loading items from server");
 			await this.get_items(true);
-			console.log("[ItemsSelector] forceReloadItems finished");
 		},
 		async verifyServerItemCount() {
 			if (isOffline()) {
-				console.log("[ItemsSelector] offline, skipping server item count check");
 				return;
 			}
 			try {
 				const localCount = await getStoredItemsCount();
-				console.log("[ItemsSelector] verifying server item count", { localCount });
 				const profileGroups = (this.pos_profile?.item_groups || []).map((g) => g.item_group);
 				const res = await frappe.call({
 					method: "posawesome.posawesome.api.items.get_items_count",
@@ -1239,7 +1227,6 @@ export default {
 					},
 				});
 				const serverCount = res.message || 0;
-				console.log("[ItemsSelector] server item count result", { serverCount });
 				if (typeof serverCount === "number") {
 					this.totalItemCount = serverCount;
 					this.loadProgress = serverCount ? Math.round((localCount / serverCount) * 100) : 0;
@@ -1248,7 +1235,6 @@ export default {
 						const requestToken = ++this.items_request_token;
 						await this.backgroundLoadItems(null, lastSync, false, requestToken, localCount);
 					} else if (serverCount < localCount) {
-						console.log("[ItemsSelector] local cache has extra items, forcing reload");
 						await this.forceReloadItems();
 					}
 				}
@@ -1257,11 +1243,6 @@ export default {
 			}
 		},
 		async get_items(force_server = false) {
-			console.log("[ItemsSelector] get_items called", {
-				force_server,
-				first_search: this.first_search,
-				item_group: this.item_group,
-			});
 			// Ensure POS profile is available
 			if (!this.pos_profile || !this.pos_profile.name) {
 				console.warn("No POS Profile available, attempting to get it...");
@@ -1292,21 +1273,17 @@ export default {
 			const gr = vm.item_group !== "ALL" ? vm.item_group.toLowerCase() : "";
 			const sr = search || "";
 			const profileGroups = (vm.pos_profile?.item_groups || []).map((g) => g.item_group);
-			console.log("[ItemsSelector] prepared fetch params", { search: sr, item_group: gr });
 
 			// Skip if already loading the same data
 			if (!force_server && this.items_loaded && this.items.length > 0) {
-				console.log("[ItemsSelector] items already loaded, skipping fetch");
 				this.loading = false;
 				return;
 			}
 
 			this.loading = true;
 			const requestToken = ++this.items_request_token;
-			console.log("[ItemsSelector] sending request", { requestToken });
 			this.loadProgress = 0;
 			this.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
-			console.log("[ItemsSelector] data-load-progress emitted", { progress: 0 });
 
 			// Fetch total item count to calculate real-time progress
 			try {
@@ -1339,7 +1316,6 @@ export default {
 						item_groups: profileGroups,
 					},
 				});
-				console.log("[ItemsSelector] server responded", { count: response.message?.length });
 
 				const items = response.message || [];
 
@@ -1361,14 +1337,12 @@ export default {
 				vm.items = items;
 				vm.items_loaded = true;
 				vm.eventBus.emit("set_all_items", vm.items);
-				console.log("[ItemsSelector] set_all_items emitted", { itemsLength: vm.items.length });
 
 				const hasMore = !vm.pos_profile.pose_use_limit_search && items.length === vm.itemsPageLimit;
 				vm.loadProgress = vm.totalItemCount
 					? Math.round((items.length / vm.totalItemCount) * 100)
 					: 100;
 				vm.eventBus.emit("data-load-progress", { name: "items", progress: vm.loadProgress });
-				console.log("[ItemsSelector] data-load-progress emitted", { progress: vm.loadProgress });
 
 				if (
 					vm.pos_profile &&
@@ -1378,11 +1352,9 @@ export default {
 				) {
 					try {
 						if (force_server) {
-							console.log("[ItemsSelector] clearing local items before save");
 							await clearStoredItems();
 						}
 						await saveItemsBulk(items);
-						console.log("[ItemsSelector] items persisted locally", { length: items.length });
 					} catch (e) {
 						console.error("Failed to persist items locally", e);
 						vm.markStorageUnavailable();
@@ -1391,10 +1363,6 @@ export default {
 
 				if (hasMore) {
 					const last = items[items.length - 1]?.item_name || null;
-					console.log("[ItemsSelector] more items available, starting background load", {
-						last,
-						requestToken,
-					});
 					this.backgroundLoadItems(last, null, false, requestToken, items.length);
 				}
 			} catch (error) {
@@ -1402,7 +1370,6 @@ export default {
 				frappe.msgprint(__("Failed to load items. Please try again."));
 			} finally {
 				vm.loading = false;
-				console.log("[ItemsSelector] get_items finished");
 			}
 		},
 		finishBackgroundLoad() {
@@ -1418,26 +1385,17 @@ export default {
 		},
 		async backgroundLoadItems(startAfter, syncSince, clearBefore = false, requestToken, loaded = 0) {
 			this.isBackgroundLoading = true;
-			console.log("[ItemsSelector] backgroundLoadItems called", {
-				startAfter,
-				syncSince,
-				clearBefore,
-				requestToken,
-				loaded,
-			});
 			const limit = this.itemsPageLimit;
 			const profileGroups = (this.pos_profile?.item_groups || []).map((g) => g.item_group);
 			// When the limit is extremely high, treat it as
 			// "no incremental loading" and exit early.
 			if (!limit || limit >= 10000) {
-				console.log("[ItemsSelector] background load skipped due to high limit", { limit });
 				if (loaded === 0) {
 					this.finishBackgroundLoad();
 				}
 				return;
 			}
 			if (this.items_request_token !== requestToken) {
-				console.log("[ItemsSelector] background load token mismatch, aborting");
 				if (loaded === 0) {
 					this.finishBackgroundLoad();
 				}
@@ -1462,12 +1420,8 @@ export default {
 						},
 						freeze: false,
 					});
-					console.log("[ItemsSelector] background load server response", {
-						count: res.message?.length,
-					});
 					const text = JSON.stringify(res);
 					if (this.items_request_token !== requestToken) {
-						console.log("[ItemsSelector] background load token mismatch after response");
 						if (loaded === 0) {
 							this.finishBackgroundLoad();
 						}
@@ -1477,9 +1431,6 @@ export default {
 					const count = await new Promise((resolve) => {
 						this.itemWorker.onmessage = async (ev) => {
 							if (this.items_request_token !== requestToken) {
-								console.log(
-									"[ItemsSelector] background load token mismatch during worker message",
-								);
 								if (loaded === 0) {
 									this.finishBackgroundLoad();
 								}
@@ -1495,9 +1446,6 @@ export default {
 								});
 								lastItemName = newItems[newItems.length - 1]?.item_name || null;
 								this.eventBus.emit("set_all_items", this.items);
-								console.log("[ItemsSelector] background load set_all_items emitted", {
-									length: this.items.length,
-								});
 								if (
 									this.pos_profile &&
 									this.pos_profile.posa_local_storage &&
@@ -1510,9 +1458,6 @@ export default {
 											clearBefore = false;
 										}
 										await saveItemsBulk(newItems);
-										console.log("[ItemsSelector] background load items persisted", {
-											length: newItems.length,
-										});
 									} catch (e) {
 										console.error(e);
 										this.markStorageUnavailable();
@@ -1531,7 +1476,6 @@ export default {
 						});
 					});
 					if (this.items_request_token !== requestToken) {
-						console.log("[ItemsSelector] background load token mismatch after worker");
 						if (loaded === 0) {
 							this.finishBackgroundLoad();
 						}
@@ -1543,7 +1487,6 @@ export default {
 						: Math.min(99, Math.round((newLoaded / (newLoaded + limit)) * 100));
 					this.loadProgress = progress;
 					this.eventBus.emit("data-load-progress", { name: "items", progress });
-					console.log("[ItemsSelector] background load progress", { progress });
 					if (count === limit) {
 						await this.backgroundLoadItems(
 							lastItemName,
@@ -1565,7 +1508,6 @@ export default {
 						}
 						this.loadProgress = 100;
 						this.eventBus.emit("data-load-progress", { name: "items", progress: 100 });
-						console.log("[ItemsSelector] background load completed");
 						this.items_loaded = true;
 						this.finishBackgroundLoad();
 					}
@@ -1591,23 +1533,18 @@ export default {
 					},
 					callback: async (r) => {
 						if (this.items_request_token !== requestToken) {
-							console.log("[ItemsSelector] background load token mismatch in callback");
 							if (loaded === 0) {
 								this.finishBackgroundLoad();
 							}
 							return;
 						}
 						const rows = r.message || [];
-						console.log("[ItemsSelector] background load callback items", { count: rows.length });
 						rows.forEach((it) => {
 							const existing = this.items.find((i) => i.item_code === it.item_code);
 							if (existing) Object.assign(existing, it);
 							else this.items.push(it);
 						});
 						this.eventBus.emit("set_all_items", this.items);
-						console.log("[ItemsSelector] background load set_all_items emitted", {
-							length: this.items.length,
-						});
 						if (
 							this.pos_profile &&
 							this.pos_profile.posa_local_storage &&
@@ -1620,9 +1557,6 @@ export default {
 									clearBefore = false;
 								}
 								await saveItemsBulk(rows);
-								console.log("[ItemsSelector] background load items persisted", {
-									length: rows.length,
-								});
 							} catch (e) {
 								console.error(e);
 								this.markStorageUnavailable();
@@ -1634,7 +1568,6 @@ export default {
 							: Math.min(99, Math.round((newLoaded / (newLoaded + limit)) * 100));
 						this.loadProgress = progress;
 						this.eventBus.emit("data-load-progress", { name: "items", progress });
-						console.log("[ItemsSelector] background load progress", { progress });
 						if (rows.length === limit) {
 							const nextStart = rows[rows.length - 1]?.item_name || null;
 							await this.backgroundLoadItems(
@@ -1653,7 +1586,6 @@ export default {
 							}
 							this.loadProgress = 100;
 							this.eventBus.emit("data-load-progress", { name: "items", progress: 100 });
-							console.log("[ItemsSelector] background load completed");
 							this.items_loaded = true;
 							this.finishBackgroundLoad();
 						}
@@ -1666,7 +1598,6 @@ export default {
 		},
 		get_items_groups() {
 			if (!this.pos_profile) {
-				console.log("No POS Profile");
 				return;
 			}
 			this.items_group = ["ALL"];
@@ -1727,7 +1658,6 @@ export default {
 			return items_headers;
 		},
 		select_item(event, item) {
-			console.log("[ItemsSelector] Card clicked:", item.item_name);
 
 			// Add visual feedback
 			const card = event.currentTarget;
@@ -1748,7 +1678,6 @@ export default {
 					this.fly(source, target, this.flyConfig);
 				}
 			} catch (e) {
-				console.log("Animation skipped:", e);
 			}
 
 			// Add the item
@@ -1773,7 +1702,6 @@ export default {
 			await this.add_item(item);
 		},
 		async add_item(item) {
-			console.log("[ItemsSelector] Adding item:", item.item_name);
 
 			item = { ...item };
 
@@ -1783,7 +1711,6 @@ export default {
 					item.item_group.toLowerCase().includes('carwash'));
 
 			if (isCarWash) {
-				console.log("[ItemsSelector] CarWash item detected, forcing qty to 1");
 				// Ensure qty is a number (never string or undefined)
 				item.qty = Number(item.qty) || 1;
 				// Mark as service item and avoid stock update
@@ -1795,13 +1722,7 @@ export default {
 				if (typeof item._barcode_qty !== 'undefined') {
 					item._barcode_qty = false;
 				}
-
-				// Debug: show prepared carwash item (do NOT reference payload here)
-				console.log("[ItemsSelector] Prepared carwash item (no emitted payload yet):", {
-					item_name: item.item_name,
-					qty: item.qty,
-					is_service_item: item.is_service_item
-				});
+			
 
 				// Set quantity for regular items (keeps your existing logic)
 				const hasBarcodeQty = item._barcode_qty;
@@ -1844,12 +1765,6 @@ export default {
 			const payload = { ...item };
 			delete payload._barcode_qty;
 
-			console.log("[ItemsSelector] Emitting add_item event:", {
-				item_name: payload.item_name,
-				qty: payload.qty,
-				isCarWash: isCarWash,
-				is_service_item: payload.is_service_item,
-			});
 
 			// Emit the item to the invoice component
 			this.eventBus.emit("add_item", payload);
@@ -1911,7 +1826,6 @@ export default {
 				new_item.qty = 1;
 				new_item.is_service_item = 1;
 				new_item.update_stock = 0;
-				console.log("[ItemsSelector] CarWash item from barcode, qty forced to 1");
 			} else {
 				new_item.qty = flt(qty);
 				if (isScaleBarcode) {
@@ -2425,7 +2339,6 @@ export default {
 			}
 		},
 		onBarcodeScanned(scannedCode) {
-			console.log("Barcode scanned:", scannedCode);
 
 			// mark this search as coming from a scanner
 			this.search_from_scanner = true;
@@ -2475,7 +2388,6 @@ export default {
 			});
 
 			if (foundItem) {
-				console.log("Found item by processed code:", foundItem);
 				this.addScannedItemToInvoice(foundItem, searchCode, qtyFromBarcode);
 				return;
 			}
@@ -2546,7 +2458,6 @@ export default {
 			});
 		},
 		async addScannedItemToInvoice(item, scannedCode, qtyFromBarcode = null) {
-			console.log("Adding scanned item to invoice:", item, scannedCode);
 
 			// Clone the item to avoid mutating list data
 			const newItem = { ...item };
@@ -2554,7 +2465,6 @@ export default {
 			// ===== CARWASH HANDLING =====
 			const isCarWash = this.isCarWashItem(newItem);
 			if (isCarWash) {
-				console.log("[ItemsSelector] CarWash item detected in scan, forcing qty to 1");
 				newItem.qty = 1;
 				newItem.is_service_item = 1;
 				newItem.update_stock = 0;
@@ -2977,8 +2887,6 @@ export default {
 	},
 
 	created() {
-		console.log("ItemsSelector created - starting initialization");
-
 		// Setup search debounce
 		this.searchDebounce = _.debounce(() => {
 			this.get_items();
@@ -3011,7 +2919,6 @@ export default {
 
 				// Load initial items if we have a profile
 				if (this.pos_profile && this.pos_profile.name) {
-					console.log("Loading items with POS Profile:", this.pos_profile.name);
 					this.get_items_groups();
 					await this.initializeItems();
 				} else {
@@ -3087,7 +2994,6 @@ export default {
 					console.error("Filename:", event.filename);
 					console.error("Line number:", event.lineno);
 				};
-				console.log("Created worker");
 			} catch (e) {
 				console.error("Failed to start item worker", e);
 				this.itemWorker = null;
@@ -3108,7 +3014,6 @@ export default {
 					console.error("Filename:", event.filename);
 					console.error("Line number:", event.lineno);
 				};
-				console.log("Created worker");
 			} catch (e) {
 				console.error("Failed to start item worker", e);
 				this.itemWorker = null;
