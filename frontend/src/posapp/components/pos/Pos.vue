@@ -525,6 +525,12 @@ export default {
 						Boolean(Number(r.message.custom_has_oil_item)) || false,
 					);
 
+					// Emit customer type for corporate detection
+					this.eventBus.emit("customer_selected", {
+						customer: r.message.customer,
+						customer_type: r.message.customer_type || "Individual"
+					});
+
 					this.eventBus.emit("show_message", {
 						title: __("Draft invoice {0} loaded successfully", [draft_name]),
 						color: "success",
@@ -662,8 +668,52 @@ export default {
 	left: 0;
 	right: 0;
 	bottom: 0;
-	z-index: 9999;
+	z-index: 1100; /* Lower z-index - below dialogs but above normal content */
 	background: white;
+	overflow: auto;
+}
+
+/* Ensure all interactive elements work in fullscreen */
+.pos-main-container.fullscreen-mode * {
+	pointer-events: auto !important;
+}
+
+/* Ensure dropdowns and dialogs appear above fullscreen */
+.pos-main-container.fullscreen-mode .v-overlay,
+.pos-main-container.fullscreen-mode .v-menu,
+.pos-main-container.fullscreen-mode .v-dialog,
+.pos-main-container.fullscreen-mode .v-autocomplete__content,
+.pos-main-container.fullscreen-mode .v-select__content {
+	z-index: 9999 !important;
+	position: fixed !important;
+}
+
+/* Ensure invoice content is interactive */
+.pos-main-container.fullscreen-mode .invoice-wrapper,
+.pos-main-container.fullscreen-mode .invoice-card,
+.pos-main-container.fullscreen-mode .invoice-content {
+	pointer-events: auto !important;
+	position: relative;
+	z-index: auto;
+}
+
+/* Ensure input fields are clickable */
+.pos-main-container.fullscreen-mode input,
+.pos-main-container.fullscreen-mode textarea,
+.pos-main-container.fullscreen-mode button,
+.pos-main-container.fullscreen-mode .v-field,
+.pos-main-container.fullscreen-mode .v-input,
+.pos-main-container.fullscreen-mode .v-btn {
+	pointer-events: auto !important;
+	position: relative;
+	z-index: 1;
+}
+
+/* Ensure customer dropdown works */
+.pos-main-container.fullscreen-mode .v-autocomplete,
+.pos-main-container.fullscreen-mode .v-select {
+	pointer-events: auto !important;
+	z-index: 10 !important;
 }
 
 /* Flexbox layout */
@@ -685,6 +735,14 @@ export default {
 	padding: 6px 3px;
 	overflow: hidden;
 	min-width: 0;
+	position: relative; /* Add this */
+	pointer-events: auto; /* Add this */
+}
+
+/* Ensure columns work in fullscreen */
+.fullscreen-mode .pos-column {
+	pointer-events: auto !important;
+	overflow: visible; /* Allow dropdowns to overflow */
 }
 
 .drafts-column {
@@ -692,6 +750,7 @@ export default {
 	padding-left: 1px;
 	padding-right: 2px;
 	flex-shrink: 0;
+	pointer-events: auto; 
 }
 
 .invoice-column {
@@ -699,6 +758,8 @@ export default {
 	padding-left: 3px;
 	padding-right: 3px;
 	flex-shrink: 0;
+	pointer-events: auto;
+	z-index: 2; 
 }
 
 .items-column {
@@ -706,6 +767,7 @@ export default {
 	padding-left: 2px;
 	padding-right: 1px;
 	flex-shrink: 0;
+	pointer-events: auto; 
 }
 
 /* Column Card */
@@ -925,7 +987,7 @@ export default {
 	background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
 	padding: 10px 14px;
 	font-weight: 600;
-	font-size: 0.95rem;
+	font-size: 1.5rem;
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -941,7 +1003,7 @@ export default {
 /* Scrollable Content */
 .column-scroll-content {
 	flex: 1;
-	overflow-y: auto;
+	overflow-y: hidden;
 	overflow-x: hidden;
 	padding: 10px;
 	background-color: #fafafa;
@@ -968,6 +1030,14 @@ export default {
 	flex-direction: column;
 	width: 100%;
 	min-height: 0;
+	position: relative; /* Add this */
+	z-index: 1; /* Add this */
+}
+
+/* Ensure invoice content is scrollable and interactive in fullscreen */
+.fullscreen-mode .invoice-wrapper {
+	overflow: visible; /* Change from hidden */
+	pointer-events: auto !important;
 }
 
 .invoice-wrapper :deep(.invoice-container) {
@@ -975,6 +1045,7 @@ export default {
 	flex-direction: column;
 	height: 100%;
 	width: 100%;
+	pointer-events: auto; /* Add this */
 }
 
 .invoice-wrapper :deep(.invoice-content) {
@@ -984,8 +1055,9 @@ export default {
 	padding: 10px;
 	background-color: #fafafa;
 	min-height: 0;
+	pointer-events: auto; /* Add this */
+	position: relative; /* Add this */
 }
-
 /* Items Footer Filters */
 .items-footer-filters {
 	position: absolute;
@@ -1107,4 +1179,28 @@ invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb:hover),
 		display: none;
 	}
 }
+
+/* New Customer / New Vehicle dialogs not visible in fullscreen */
+
+/* FIX: Add New Customer / Add New Vehicle buttons not clickable in fullscreen */
+.fullscreen-mode .invoice-wrapper :deep(.v-input__append),
+.fullscreen-mode .invoice-wrapper :deep(.v-input__append-inner),
+.fullscreen-mode .invoice-wrapper :deep(.v-field__append-inner) {
+    position: relative !important;
+    z-index: 999999 !important;
+    pointer-events: auto !important;
+}
+
+/* Fix for autocomplete menu overlapping */
+.fullscreen-mode :deep(.v-overlay__content) {
+    z-index: 999999 !important;
+    position: fixed !important;
+}
+
+/* Ensure append icons remain clickable */
+.fullscreen-mode :deep(.v-icon) {
+    pointer-events: auto !important;
+}
+
+
 </style>

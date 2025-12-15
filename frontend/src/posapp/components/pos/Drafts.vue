@@ -22,7 +22,12 @@
 				</template>
 
 				<template v-slot:item.customer="{ item }">
-					<span class="text-caption">{{ item.customer }}</span>
+					<div class="d-flex align-center gap-1">
+						<span class="text-caption">{{ item.customer }}</span>
+						<v-chip v-if="item.is_corporate" color="teal" text="black" size="x-small" variant="flat" class="ml-1">
+							{{ __("Corporate") }}
+						</v-chip>
+					</div>
 				</template>
 
 				<template v-slot:item.name="{ item }">
@@ -219,6 +224,7 @@ export default {
 			{ title: __("Amount"), value: "grand_total", align: "end", sortable: false, width: "120px" },
 		],
 		_employeeNameCache: {},
+	    _customerTypeCache: {},
 	}),
 	computed: {
 		isDarkTheme() {
@@ -306,6 +312,25 @@ export default {
 				if (employeeIdsToResolve.length) {
 					await this._resolveEmployeeNames(employeeIdsToResolve);
 				}
+				// Resolve customer types (to detect corporate/company customers)
+				const customerIdsToResolve = Array.from(
+					new Set(
+						drafts
+							.map((d) => d.customer)
+							.filter((v) => v && !this._customerTypeCache[v])
+					)
+				);
+
+				if (customerIdsToResolve.length) {
+					await this._resolveCustomerTypes(customerIdsToResolve);
+				}
+
+				// Mark is_corporate on drafts based on resolved customer type
+				drafts = drafts.map((d) => {
+					const custType = this._customerTypeCache[d.customer];
+					d.is_corporate = (custType === "Company");
+					return d;
+				});
 
 				drafts = drafts.map((d) => {
 					if (d.custom_service_employee_name) {
@@ -351,6 +376,30 @@ export default {
 			}
 		},
 
+		async _resolveCustomerTypes(customerIds = []) {
+			if (!customerIds || customerIds.length === 0) return;
+			try {
+				const resp = await frappe.call({
+					method: "frappe.client.get_list",
+					args: {
+						doctype: "Customer",
+						filters: [["name", "in", customerIds]],
+						fields: ["name", "customer_type"],
+						limit_page_length: customerIds.length,
+					},
+				});
+
+				const list = resp && resp.message ? resp.message : [];
+
+				(list || []).forEach((rec) => {
+					// store exact customer_type (could be "Individual", "Company", etc.)
+					this._customerTypeCache[rec.name] = rec.customer_type || "";
+				});
+			} catch (err) {
+				console.warn("[Drafts] Customer type lookup failed", err);
+			}
+		},
+
 		async mergeDraft(newDraft) {
 			if (!newDraft || !newDraft.name) return;
 
@@ -367,6 +416,13 @@ export default {
 					nd.custom_service_employee = this._employeeNameCache[empId];
 				}
 			}
+
+			// Resolve customer type
+			if (nd.customer && !this._customerTypeCache[nd.customer]) {
+				await this._resolveCustomerTypes([nd.customer]);
+			}
+			const custType = this._customerTypeCache[nd.customer];
+			nd.is_corporate = (custType === "Company");
 
 			this.dialog_data = this.dialog_data.filter((d) => d.name !== nd.name);
 			this.dialog_data.unshift(nd);
@@ -428,6 +484,7 @@ export default {
 			if (Array.isArray(data) && data.length) {
 				const normalized = this._normalizeAndSort(data);
 
+				// Resolve employee names
 				const employeeIdsToResolve = Array.from(
 					new Set(
 						normalized
@@ -440,7 +497,22 @@ export default {
 					await this._resolveEmployeeNames(employeeIdsToResolve);
 				}
 
+				// Resolve customer types
+				const customerIdsToResolve = Array.from(
+					new Set(
+						normalized
+							.map((d) => d.customer)
+							.filter((v) => v && !this._customerTypeCache[v])
+					)
+				);
+
+				if (customerIdsToResolve.length) {
+					await this._resolveCustomerTypes(customerIdsToResolve);
+				}
+
+				// Map employee names AND set is_corporate flag
 				const drafts = normalized.map((d) => {
+					// Handle employee names
 					if (d.custom_service_employee_name) {
 						d.custom_service_employee = d.custom_service_employee_name;
 					} else if (
@@ -450,6 +522,11 @@ export default {
 						d.custom_service_employee = this._employeeNameCache[d.custom_service_employee];
 					}
 					delete d.custom_service_employee_name;
+
+					// for is_corporate flag
+					const custType = this._customerTypeCache[d.customer];
+					d.is_corporate = (custType === "Company");
+
 					return d;
 				});
 

@@ -3551,7 +3551,6 @@ export default {
 :deep([data-theme="dark"]) .card-item-card:hover,
 :deep(.v-theme--dark) .card-item-card:hover {
 	border-color: var(--primary-color, #90caf9);
-	box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
 }
 
 :deep([data-theme="dark"]) .card-item-image-container,
@@ -3609,10 +3608,10 @@ export default {
 	flex-direction: column;
 	transition: all 0.3s ease;
 }
-
+/* 
 .sleek-data-table:hover {
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-}
+} */
 
 /* Enhanced table header styling with modern gradients and Arabic support */
 .sleek-data-table :deep(th) {
@@ -3630,7 +3629,6 @@ export default {
 	z-index: 10 !important;
 	backdrop-filter: blur(10px);
 	-webkit-backdrop-filter: blur(10px);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 	text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
 	/* Enhanced Arabic number font stack */
 	font-family:
@@ -3652,7 +3650,6 @@ export default {
 	border-bottom: 3px solid #3498db;
 	color: #ecf0f1;
 	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* Table wrapper styling */
@@ -3689,7 +3686,6 @@ export default {
 .sleek-data-table :deep(tr:hover) {
 	background-color: #f0f0f0;
 	transform: translateY(-1px);
-	box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 /* Table cell styling with Arabic number support */
