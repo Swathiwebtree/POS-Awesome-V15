@@ -3195,25 +3195,19 @@ export default {
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
 		sans-serif;
-	/* Force lining numbers for consistent height and alignment */
 	font-variant-numeric: lining-nums tabular-nums;
-	/* Additional OpenType features for better Arabic number rendering */
 	font-feature-settings:
 		"tnum" 1,
 		"lnum" 1,
 		"kern" 1;
-	/* Ensure crisp rendering */
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
-	/* Better number spacing */
 	letter-spacing: 0.02em;
 }
 
-/* Enhanced negative number styling for Arabic context */
 .negative-number {
 	color: #d32f2f !important;
 	font-weight: 600;
-	/* Same enhanced font stack for negative numbers */
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
 		sans-serif;
@@ -3226,11 +3220,9 @@ export default {
 	-moz-osx-font-smoothing: grayscale;
 }
 
-/* Enhanced input fields for Arabic number support */
 .v-text-field :deep(input),
 .v-select :deep(input),
 .v-autocomplete :deep(input) {
-	/* Enhanced Arabic number font stack for input fields */
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
 		sans-serif;
@@ -3244,7 +3236,6 @@ export default {
 	letter-spacing: 0.01em;
 }
 
-/* Enhanced card text for better Arabic number display */
 .dynamic-item-card .v-card-text {
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
@@ -3258,7 +3249,6 @@ export default {
 	-moz-osx-font-smoothing: grayscale;
 }
 
-/* Enhanced Card View Grid Layout - Responsive */
 .items-card-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -3281,6 +3271,29 @@ export default {
 .items-card-grid::-webkit-scrollbar-thumb {
 	background-color: rgba(0, 0, 0, 0.2);
 	border-radius: 4px;
+}
+
+.card-item-card {
+	border-radius: 12px;
+	cursor: pointer;
+	background-color: transparent;
+	transition: background-color 0.15s ease,
+	            transform 0.12s ease;
+}
+
+.sleek-data-table :deep(tbody tr:hover),
+.sleek-data-table :deep(tbody tr:hover td) {
+	background-color: #f1f5ff !important;
+	cursor: pointer;
+}
+
+.sleek-data-table :deep(tbody tr.v-data-table__tr--selected),
+.sleek-data-table :deep(tbody tr.v-data-table__tr--selected td) {
+	background-color: #f1f5ff !important;
+}
+
+.sleek-data-table :deep(tbody tr) {
+	transition: background-color 0.15s ease-in-out;
 }
 
 .card-item-card {
@@ -3735,13 +3748,11 @@ export default {
 	text-overflow: ellipsis;
 }
 
-/* Light mode card backgrounds */
 .selection,
 .cards {
 	background-color: var(--surface-secondary) !important;
 }
 
-/* Consistent spacing with navbar and system */
 .dynamic-spacing-sm {
 	padding: var(--dynamic-sm) !important;
 }
@@ -3757,13 +3768,11 @@ export default {
 	transform: translateY(-1px) !important;
 }
 
-/* Ensure consistent spacing with navbar pattern */
 .cards {
 	margin-top: var(--dynamic-sm) !important;
 	padding: var(--dynamic-sm) !important;
 }
 
-/* Responsive adjustments */
 @media (max-width: 1400px) {
 	.items-card-grid {
 		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

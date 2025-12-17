@@ -1359,6 +1359,13 @@ export default {
 	transform: translateY(-1px);
 }
 
+
+.summary-field :deep(.v-field-label) {
+	font-weight: 600;   
+	font-size: 0.95rem;   
+}
+
+
 /* Dialog Scrolling */
 .dialog-card {
 	display: flex;

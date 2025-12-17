@@ -23,8 +23,8 @@
 
 				<template v-slot:item.customer="{ item }">
 					<div class="d-flex align-center gap-1">
-						<span class="text-caption">{{ item.customer }}</span>
-						<v-chip v-if="item.is_corporate" color="teal" text="black" size="x-small" variant="flat" class="ml-1">
+						<span class="customer-name">{{ item.customer }}</span>
+						<v-chip v-if="item.is_corporate" color="teal" text="black" size="x-small" variant="tonal" class="ml-1">
 							{{ __("Corporate") }}
 						</v-chip>
 					</div>
@@ -69,7 +69,7 @@
 				</template>
 
 				<template v-slot:item.grand_total="{ item }">
-					<span class="text-caption font-weight-bold">
+					<span class="draft-amount">
 						{{ currencySymbol(item.currency) }}
 						{{ formatCurrency(item.grand_total) }}
 					</span>
@@ -77,7 +77,7 @@
 
 				<template v-slot:bottom>
 					<div class="pa-4 text-center text-caption text-medium-emphasis" v-if="dialog_data.length === 0">
-						<v-icon size="large" color="grey" class="mb-2">mdi-file-document-outline</v-icon>
+						<v-icon size="48" color="grey-lighten-1"class="mb-2">mdi-file-document-outline</v-icon>
 						<div>{{ __("No draft invoices found.") }}</div>
 						<div class="text-caption mt-1">{{ __("Create a new sale to get started") }}</div>
 					</div>
@@ -572,7 +572,7 @@ export default {
 	flex-direction: column;
 	height: 100%;
 	width: 100%;
-	background: white;
+	background:#ffffff;
 }
 .drafts-content {
 	flex: 1;
@@ -581,14 +581,49 @@ export default {
 	background-color: #fafafa;
 }
 .drafts-table {
-	background-color: white;
+	background-color:white;
+	border-radius: 8px;
 }
+.customer-name {
+	font-weight: 600;
+	color: #222;
+}
+:deep(.v-data-table td .text-caption) {
+	color: #6b7280;
+}
+.draft-amount {
+	font-weight: 600;
+	color: #111827;
+	font-size: 0.8rem;
+}
+
 :deep(.v-data-table-row td),
 :deep(.v-data-table-row th) {
-	padding: 8px 12px !important;
+	padding: 12px 12px !important;
 }
+:deep(.v-data-table__tr) {
+	border-radius: 8px;
+	transition: background-color 0.15s ease;
+}
+
+:deep(.v-data-table__tr) {
+	border-bottom: 8px solid transparent;
+}
+
+:deep(.v-data-table__tr) {
+	background: #ffffff;
+	border-radius: 10px;
+	box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+	border-bottom: 10px solid transparent;
+}
+
+
+:deep(.v-data-table__tr:hover) {
+	background-color: #f1f5ff;
+}
+
 :deep(.v-data-table) {
-	font-size: 0.875rem;
+	font-size: 0.9rem;
 }
 :deep(.v-data-table__wrapper) {
 	overflow-y: auto;
@@ -596,6 +631,7 @@ export default {
 }
 :deep(.v-data-table__tr--active) {
 	background-color: rgba(76, 175, 80, 0.08) !important;
+	border-left: 4px solid #4caf50;
 }
 :deep(.v-data-table__tr--active:hover) {
 	background-color: rgba(76, 175, 80, 0.12) !important;
@@ -611,6 +647,8 @@ export default {
 	text-transform: uppercase;
 	font-weight: 600;
 	letter-spacing: 0.5px;
+	border-radius: 10px;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 .drafts-content::-webkit-scrollbar {
 	width: 6px;

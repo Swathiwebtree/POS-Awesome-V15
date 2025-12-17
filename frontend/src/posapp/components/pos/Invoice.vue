@@ -30,7 +30,7 @@
 					</v-alert>
 
 					<!-- Top Row: Customer Selection and Invoice Type -->
-					<v-row align="center" class="items px-3 py-2">
+					<v-row align="center" class="items px-3 py-2 invoice-header">
 						<v-col :cols="pos_profile.posa_allow_sales_order ? 9 : 12" class="pb-0 pr-0">
 							<!-- Customer selection component -->
 							<Customer />
@@ -120,7 +120,7 @@
 					/>
 
 					<!-- Items Table Section (Main items list for invoice) -->
-					<div class="items-table-wrapper">
+					<div class="items-table-wrapper modern-items">
 						<!-- Column selector button moved outside the table -->
 						<div class="column-selector-container">
 							<v-btn
@@ -2669,6 +2669,38 @@ export default {
 </script>
 
 <style scoped>
+
+.invoice-header {
+	background: white;
+	border-radius: 14px;
+}
+
+.currency-display {
+	display: flex;
+	gap: 4px;
+	align-items: center;
+}
+
+.currency-symbol {
+	color: #6b7280;
+	font-size: 0.85rem;
+}
+
+.modern-items {
+	border-radius: 14px;
+	background: #ffffff;
+	padding: 6px;
+}
+
+/* table row spacing */
+.modern-items :deep(tr) {
+	transition: background 0.15s ease;
+}
+
+.modern-items :deep(tr:hover) {
+	background: #f1f5f9;
+}
+
 /* Invoice Container - Flex layout for fixed footer */
 .invoice-container {
 	display: flex;
@@ -2799,12 +2831,18 @@ export default {
 }
 
 .column-selector-btn {
-	font-size: 0.875rem;
+	opacity: 0.6;
+	font-size: 0.8rem;
 }
+
+.column-selector-btn:hover {
+	opacity: 1;
+}
+
 
 .items-table-wrapper {
 	position: relative;
-	margin-top: var(--dynamic-xl);
+	margin-top: 15px;
 }
 
 /* New styles for improved column switches */
@@ -2830,12 +2868,17 @@ export default {
 .invoice-controls {
 	flex-shrink: 0;
 	background: white;
-	border-top: 2px solid #e0e0e0;
+	border-top: 1px dashed #e5e7eb;
+	padding-top: 8px;
 	padding: 12px;
 	z-index: 100;
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
+}
+
+.cards {
+	border-radius: 16px;
 }
 
 /* Scrollbar Styling */
@@ -2925,11 +2968,13 @@ export default {
 /* On small screens, increase touch target slightly */
 @media (max-width: 600px) {
 	.item-action-btn,
-	.qty-btn {
-		width: 44px !important;
-		height: 44px !important;
-		min-width: 44px !important;
-	}
+	/* Qty buttons */
+  	.qty-btn {
+			min-width: 36px;
+			min-height: 36px;
+			border-radius: 10px;
+			font-weight: 700;
+		}
 	.qty-value {
 		min-width: 64px;
 		font-size: 1rem;

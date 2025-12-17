@@ -441,7 +441,6 @@ export default {
 							"posting_time",
 							"grand_total",
 							"currency",
-							// Request these so frontend can show employee
 							"custom_service_employee",
 							"custom_has_oil_item",
 							"custom_odometer_reading",
@@ -732,7 +731,7 @@ export default {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
-	padding: 6px 3px;
+	padding: 8px 6px;
 	overflow: hidden;
 	min-width: 0;
 	position: relative; /* Add this */
@@ -762,6 +761,11 @@ export default {
 	z-index: 2; 
 }
 
+.invoice-column .column-card {
+	border-radius: 14px;
+}
+
+
 .items-column {
 	flex: 0 0 25%;
 	padding-left: 2px;
@@ -775,10 +779,10 @@ export default {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
-	border: 2px solid #e0e0e0;
-	border-radius: 8px;
+	border: 1px solid #ececec;
+	border-radius: 12px;
 	overflow: hidden;
-	background: white;
+	background: #ffffff;
 	transition: border-color 0.2s ease;
 	position: relative;
 }
@@ -812,7 +816,7 @@ export default {
 	overflow-y: auto;
 	overflow-x: hidden;
 	padding: 10px;
-	background-color: #fafafa;
+	background-color: white;
 	min-height: 0;
 }
 
@@ -844,10 +848,8 @@ export default {
 	text-transform: none !important;
 	font-weight: 800 !important;
 	color: #fff !important;
-	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
 	transition:
-		transform 0.12s ease,
-		box-shadow 0.12s ease;
+		transform 0.12s ease;
 	overflow: visible !important;
 }
 
@@ -855,7 +857,6 @@ export default {
 .offer-style-btn:hover,
 .coupon-style-btn:hover {
 	transform: translateY(-2px);
-	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14) !important;
 }
 
 /* icon alignment (left) */
@@ -984,16 +985,18 @@ export default {
 
 /* Column Header */
 .column-header {
-	background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+	background: white;
 	padding: 10px 14px;
 	font-weight: 600;
-	font-size: 1.5rem;
+	font-size: 23px;
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	min-height: 50px;
 	flex-shrink: 0;
-	border-bottom: 1px solid #e0e0e0;
+	color: #333;
+	border-bottom: 1px solid #e5e7eb;
+
 }
 
 .column-header .v-icon {
@@ -1006,7 +1009,7 @@ export default {
 	overflow-y: hidden;
 	overflow-x: hidden;
 	padding: 10px;
-	background-color: #fafafa;
+	background-color: white;
 	min-height: 0;
 }
 .pos-main-container > .v-row:nth-child(1),
@@ -1052,8 +1055,8 @@ export default {
 	flex: 1;
 	overflow-y: auto;
 	overflow-x: hidden;
-	padding: 10px;
-	background-color: #fafafa;
+	padding: 14px 16px;
+	background-color: #ffffff;
 	min-height: 0;
 	pointer-events: auto; /* Add this */
 	position: relative; /* Add this */
@@ -1066,7 +1069,7 @@ export default {
 	left: 0;
 	right: 0;
 	background: white;
-	border-top: 2px solid #e0e0e0;
+	border-top: 1px solid #e5e7eb;
 	padding: 12px;
 	z-index: 100;
 }
@@ -1099,21 +1102,21 @@ export default {
 .drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar-track),
 .invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-track),
 .column-scroll-content::-webkit-scrollbar-track {
-	background: #f1f1f1;
+	background: white;
 	border-radius: 3px;
 }
 
 .drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar-thumb),
 .invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb),
 .column-scroll-content::-webkit-scrollbar-thumb {
-	background: #999;
+	background: rgba(0, 0, 0, 0.25);
 	border-radius: 3px;
 }
 
 .drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar-thumb:hover),
-invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb:hover),
+.invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb:hover),
 .column-scroll-content::-webkit-scrollbar-thumb:hover {
-	background: #666;
+	background: rgba(0, 0, 0, 0.4);
 }
 
 /* Responsive - Tablet */
