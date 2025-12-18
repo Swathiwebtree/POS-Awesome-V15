@@ -417,10 +417,23 @@ export default {
 		},
 
 		handleLogout() {
-			frappe.call("logout").finally(() => {
-				window.location.href = "/app";
+			// destroy Vue UI immediately
+			document.body.innerHTML = "";
+
+			frappe.call({
+				method: "logout",
+				callback: () => {
+					window.location.replace("/#login");
+				},
+				error: () => {
+					// even if logout fails, force login page
+					window.location.replace("/#login");
+				},
 			});
 		},
+
+
+
 
 		handleRefreshCacheUsage() {
 			this.cacheUsageLoading = true;
