@@ -28,26 +28,24 @@
 						<v-progress-linear :active="loading" :indeterminate="loading" absolute location="top"
 							color="info"></v-progress-linear>
 
+						<div v-if="invoice_doc" class="payment-summary-hero payment-summary-fixed mt-3">
+							<div class="summary-box paid">
+								<div class="label">{{ __('Paid') }}</div>
+								<div class="value">{{ total_payments_display }}</div>
+							</div>
+
+							<div class="summary-box due">
+								<div class="label">{{ __('To Be Paid') }}</div>
+								<div class="value">{{ diff_payment_display }}</div>
+							</div>
+						</div>
 						<!-- Scrollable content -->
 						<div ref="paymentContainer" class="overflow-y-auto pa-2">
+							<v-row dense >
 
-							<!-- ================= FIXED SUMMARY ================= -->
-							<div v-if="invoice_doc" class="payment-summary-hero payment-summary-fixed">
-								<div class="summary-box paid">
-									<div class="label">{{ __('Paid') }}</div>
-									<div class="value">{{ total_payments_display }}</div>
-								</div>
-
-								<div class="summary-box due">
-									<div class="label">{{ __('To Be Paid') }}</div>
-									<div class="value">{{ diff_payment_display }}</div>
-								</div>
-							</div>
-							<v-row dense class="mt-2">
-
-								<v-col cols="6" class="pr-2">
+								<v-col cols="6">
 									<!-- PAID / CREDIT CHANGE -->
-									<v-row v-if="invoice_doc" dense class="mt-2">
+									<v-row v-if="invoice_doc" dense>
 										<v-col cols="7" v-if="credit_change > 0 && !invoice_doc.is_return">
 											<v-text-field variant="solo" density="compact" color="primary"
 												:label="frappe._('Paid Change')"
@@ -154,7 +152,7 @@
 
 
 								<!-- ================= RIGHT COLUMN ================= -->
-								<v-col cols="6" class="pl-2 mt-5">
+								<v-col cols="6" class="pl-2 mt-2">
 
 
 									<!-- Invoice Totals -->
@@ -212,7 +210,7 @@
 												:prefix="currencySymbol(invoice_doc.currency)" persistent-placeholder />
 										</v-col>
 
-										<v-col cols="6" class="mb-3"  v-if="invoice_doc.rounded_total">
+										<v-col cols="6" class="mb-4"  v-if="invoice_doc.rounded_total">
 											<v-text-field density="compact" variant="solo" color="primary"
 												:label="frappe._('Rounded Total')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
@@ -3019,8 +3017,10 @@ div.v-card.selection {
 .payment-summary-hero {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
-	gap: 10px;              /* slightly tighter */
+	gap: 10px;
 	margin-bottom: 12px;
+	padding-left: 12px;
+	padding-right: 12px;
 }
 
 /* Main box */
@@ -3165,5 +3165,29 @@ div.v-card.selection {
 	background: var(--v-theme-surface);
 	padding-bottom: 10px;
 }
+
+.sleek-field .v-field-label {
+	font-size: 13px;
+	font-weight: 600;
+	color: #374151;
+	opacity: 1;
+}
+
+
+.sleek-field input {
+	font-size: 14px;
+	font-weight: 700;
+	color: #111827;
+}
+
+.sleek-field .v-field {
+	border-radius: 8px;
+	border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.sleek-field input {
+	letter-spacing: 0.3px;
+}
+
 
 </style>
