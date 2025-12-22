@@ -215,38 +215,15 @@ export default {
 				if (result && (result.success === true || result === true)) {
 					this.closingDialog = false;
 
-					// emit event so other components can react
+					// notify others
 					try {
 						this.eventBus?.emit("shift_closed", result);
-					} catch (e) {
-						// ignore
-					}
+					} catch (e) { }
 
-					// try to open opening dialog, else fallback to reload
-					try {
-						const openingResp = await frappe.call({
-							method: "posawesome.posawesome.api.shifts.get_opening_dialog_data",
-						});
-						const openingData = openingResp?.message ?? openingResp;
-						if (openingData) {
-							if (this.eventBus && typeof this.eventBus.emit === "function") {
-								this.eventBus.emit("open_OpeningDialog", openingData);
-							} else {
-								frappe.set_route("/");
-								location.reload();
-							}
-						} else {
-							frappe.set_route("/");
-							location.reload();
-						}
-					} catch (errFetch) {
-						console.error("Failed to fetch opening dialog data:", errFetch);
-						frappe.set_route("/");
-						location.reload();
-					}
+					frappe.set_route("/");
+					location.reload();
 				} else {
 					const errMsg = result?.message || this.__("Failed to close shift");
-					console.error("close_shift_with_reconciliation failed:", result);
 					alert(errMsg);
 				}
 			} catch (err) {

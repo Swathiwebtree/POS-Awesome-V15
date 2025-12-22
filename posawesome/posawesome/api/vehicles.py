@@ -409,3 +409,14 @@ def get_customer_by_vehicle(vehicle_no):
         f"get_customer_by_vehicle returning for {vehicle_no_clean}: customer {cust_doc.name}"
     )
     return resp
+
+@frappe.whitelist()
+def get_vehicles_by_search(search_term="", limit=1):
+    """
+    Lookup vehicle by vehicle_no and return vehicle + customer
+    (wrapper around get_customer_by_vehicle for compatibility)
+    """
+    if not search_term:
+        return {}
+
+    return get_customer_by_vehicle(search_term)

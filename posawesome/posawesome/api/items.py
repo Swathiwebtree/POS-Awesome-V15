@@ -776,7 +776,12 @@ def get_items_details(pos_profile, items_data, price_list=None, customer=None):
 
         item_price = {}
         if price_map.get(item_code):
-            item_price = price_map[item_code].get(stock_uom) or price_map[item_code].get("None") or {}
+            item_price = (
+                price_map[item_code].get(stock_uom)
+                or price_map[item_code].get("None")
+                or next(iter(price_map[item_code].values()), {})
+                )
+
 
         row = {}
         row.update(item)

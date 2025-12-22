@@ -1900,7 +1900,6 @@ export default {
 			} else if (vm.pos_profile && vm.pos_profile.posa_local_storage) {
 				if (vm.storageAvailable) {
 					await vm.loadVisibleItems(true);
-					vm.enter_event();
 				} else {
 					vm.get_items(true);
 				}
@@ -1909,7 +1908,6 @@ export default {
 				// from the server so searches aren't limited to the
 				// initially loaded set.
 				await vm.get_items(true);
-				vm.enter_event();
 
 				if (vm.filtered_items && vm.filtered_items.length > 0) {
 					setTimeout(() => {

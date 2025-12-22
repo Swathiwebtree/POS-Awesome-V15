@@ -6,7 +6,7 @@
 				<v-card-title class="offline-header pa-6">
 					<div class="header-content">
 						<div class="header-icon-wrapper">
-							<v-icon class="header-icon" size="40">mdi-file-document-multiple</v-icon>
+							<v-icon class="header-icon" size="40">mdi-file-document-multiple-outline</v-icon>
 						</div>
 						<div class="header-text">
 							<h3 class="header-title">{{ __("Offline Invoices") }}</h3>
@@ -284,9 +284,6 @@ export default {
 	box-shadow: var(--shadow-md);
 }
 
-.header-icon {
-	color: white;
-}
 
 .header-text {
 	flex: 1;
