@@ -45,8 +45,9 @@
 
 					<!-- Quantity display -->
 					<div class="qty-value">
-						{{ formatFloat(item.qty, hide_qty_decimals ? 0 : undefined) }}
+						{{ Math.trunc(item.qty) }}
 					</div>
+
 
 					<!-- Increase -->
 					<v-btn class="qty-btn qty-increase" icon size="small" :disabled="
@@ -75,8 +76,8 @@
 			<template v-slot:item.amount="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
-					<span class="amount-value" :class="{ 'negative-number': isNegative(item.qty * item.rate) }">{{
-						formatCurrency(item.qty * item.rate) }}
+					<span class="amount-value" :class="{ 'negative-number': isNegative(item.qty * item.rate) }">{{ 
+					  formatAmount3(item.qty * item.rate) }}
 					</span>
 				</div>
 			</template>
@@ -146,20 +147,14 @@
 									<div class="form-field">
 										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('QTY')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field" hide-details :model-value="
-												formatFloat(item.qty, hide_qty_decimals ? 0 : undefined)
-											" @change="
-												setFormatedQty(item, 'qty', null, false, $event.target.value)
-											" :rules="[isNumber]" :disabled="!!item.posa_is_replace" prepend-inner-icon="mdi-numeric"></v-text-field>
+											class="dark-field" hide-details :model-value="Math.trunc(item.qty)"
+											@change="setFormatedQtyLocal(item, 'qty', 0, false, $event.target.value)"
+												 :rules="[isNumber]" :disabled="!!item.posa_is_replace" prepend-inner-icon="mdi-numeric"></v-text-field>
 										<div v-if="item.max_qty !== undefined" class="text-caption mt-1">
 											{{
-											__("In stock: {0}", [
-											formatFloat(
-											item.max_qty,
-											hide_qty_decimals ? 0 : undefined,
-											),
-											])
+												__("In stock: {0}", [Math.trunc(item.max_qty)])
 											}}
+
 										</div>
 									</div>
 									<div class="form-field">
@@ -251,7 +246,7 @@
 										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Total Amount')"
 											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
-											hide-details :model-value="formatCurrency(item.qty * item.rate)" disabled
+											hide-details :model-value="formatAmount3(item.qty * item.rate)" disabled
 											prepend-inner-icon="mdi-calculator"></v-text-field>
 									</div>
 									<div class="form-field" v-if="pos_profile.posa_allow_price_list_rate_change">
@@ -275,13 +270,13 @@
 										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Available QTY')"
 											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
-											hide-details :model-value="formatFloat(item.actual_qty)" disabled
+											hide-details :model-value="Math.trunc(item.actual_qty)" disabled
 											prepend-inner-icon="mdi-package-variant"></v-text-field>
 									</div>
 									<div class="form-field">
 										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Stock QTY')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field" hide-details :model-value="formatFloat(item.stock_qty)"
+											class="dark-field" hide-details :model-value="Math.trunc(item.stock_qty)"
 											disabled prepend-inner-icon="mdi-scale-balance"></v-text-field>
 									</div>
 									<div class="form-field">
@@ -492,6 +487,14 @@ export default {
 	},
 	methods: {
 
+		formatQty3(value) {
+			const num = Number(value || 0);
+			return num.toFixed(3);
+		},
+		formatAmount3(value) {
+			const num = Number(value || 0);
+			return num.toFixed(3);
+		},
 		isCarWashItem(item) {
 			if (!item) return false;
 
@@ -597,8 +600,8 @@ export default {
 			item.stock_qty = this.flt(stock_qty);
 		},
 
-		setFormatedQty(item, field_name, precision, no_negative, value) {
-			// ===== CARWASH PROTECTION: Don't allow qty changes for CarWash =====
+		setFormatedQtyLocal(item, field_name, precision, no_negative, value) {
+			// ===== CARWASH PROTECTION =====
 			if (this.isCarWashItem(item)) {
 				item.qty = 1;
 				item.stock_qty = 1;
@@ -606,15 +609,23 @@ export default {
 			}
 			// ===== END PROTECTION =====
 
-			// For regular items - call the parent's setFormatedQty if it exists
-			if (this.setFormatedQty) {
-				return this.setFormatedQty(item, field_name, precision, no_negative, value);
+			// Call parent function passed as prop (NOT yourself)
+			if (typeof this.$props.setFormatedQty === "function") {
+				return this.$props.setFormatedQty(
+					item,
+					field_name,
+					0,      
+					no_negative,
+					value
+				);
 			}
 
-			// Fallback: just set the value directly
-			item[field_name] = value;
-			return value;
+			// Fallback (force integer)
+			const v = Math.trunc(Number(value) || 0);
+			item[field_name] = v;
+			return v;
 		},
+
 		onDragOverFromSelector(event) {
 			// Check if drag data is from item selector
 			const dragData = event.dataTransfer.types.includes("application/json");

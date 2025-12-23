@@ -51,6 +51,7 @@ import LazerPOS from "./components/LazerPOS.vue";
 import Payments from "./components/payments/Pay.vue";
 import AppLoadingOverlay from "./components/ui/LoadingOverlay.vue";
 import { useLoading } from "./composables/useLoading.js";
+import { forceClearAllCache } from "../offline/cache.js";
 import { loadingState, initLoadingSources, setSourceProgress, markSourceLoaded } from "./utils/loading.js";
 import {
 	getOpeningStorage,
@@ -416,21 +417,25 @@ export default {
 			this.$theme.toggle();
 		},
 
-		handleLogout() {
-			// destroy Vue UI immediately
+		async handleLogout() {
+			//  Clear POS cache FIRST
+			await forceClearAllCache();
+
+			//  Destroy Vue UI
 			document.body.innerHTML = "";
 
+			// Backend logout
 			frappe.call({
 				method: "logout",
 				callback: () => {
 					window.location.replace("/#login");
 				},
 				error: () => {
-					// even if logout fails, force login page
 					window.location.replace("/#login");
 				},
 			});
 		},
+
 
 
 

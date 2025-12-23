@@ -207,7 +207,7 @@ export default {
 					name: "Home",
 					text: "Home",
 					icon: "mdi-home",
-					route: "/app/home",
+					route: "/app",
 					routeType: "external",
 					submodules: [],
 				},

@@ -1636,16 +1636,16 @@ export default {
 		getItemsHeaders() {
 			const items_headers = [
 				{
-					title: __("Name"),
-					align: "start",
-					sortable: true,
-					key: "item_name",
-				},
-				{
 					title: __("Code"),
 					align: "start",
 					sortable: true,
 					key: "item_code",
+				},
+				{
+					title: __("Name"),
+					align: "start",
+					sortable: true,
+					key: "item_name",
 				},
 				{ title: __("Rate"), key: "rate", align: "start" },
 				// { title: __("Available QTY"), key: "actual_qty", align: "start" },

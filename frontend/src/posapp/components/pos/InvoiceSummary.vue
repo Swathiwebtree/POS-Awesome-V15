@@ -58,7 +58,7 @@
 
 							<!-- Total Qty -->
 							<v-col cols="6">
-								<v-text-field :model-value="formatFloat(total_qty, hide_qty_decimals ? 0 : undefined)"
+								<v-text-field :model-value="Math.trunc(total_qty)"
 									:label="__('Total Qty')" prepend-inner-icon="mdi-format-list-numbered"
 									variant="solo" density="compact" readonly color="accent" class="summary-field" />
 							</v-col>
@@ -90,7 +90,7 @@
 
 							<!-- Items Discounts -->
 							<v-col cols="6">
-								<v-text-field :model-value="formatCurrency(total_items_discount_amount)"
+								<v-text-field :model-value="formatCurrency(Number(total_items_discount_amount).toFixed(3))"
 									:prefix="currencySymbol(displayCurrency)" :label="__('Items Discounts')"
 									prepend-inner-icon="mdi-tag-minus" variant="solo" density="compact" color="warning"
 									readonly class="summary-field" />
@@ -98,7 +98,7 @@
 
 							<!-- Total -->
 							<v-col cols="6">
-								<v-text-field :model-value="formatCurrency(subtotal)"
+								<v-text-field :model-value="formatAmount3(subtotal)"
 									:prefix="currencySymbol(displayCurrency)" :label="__('Total')"
 									prepend-inner-icon="mdi-cash" variant="solo" density="compact" readonly
 									color="success" class="summary-field" />
@@ -593,6 +593,46 @@ export default {
 		},
 	},
 	methods: {
+
+		 resetAfterPayment() {
+    // Core sale state
+    this.selectedEmployee = null;
+    this.showEmployeeSelection = false;
+
+    this.showOdometerField = false;
+    this.odometerReading = null;
+    this.vehicleNumber = "";
+    this.mobileNumber = "";
+
+    // Loyalty
+    this.loyaltyPoints = null;
+    this.pointsToRedeem = 0;
+    this.conversionFactor = 0;
+    this.customerName = "";
+
+    // Frequent cards
+    this.frequentCards = [];
+    this.showFrequentCardsDialog = false;
+    this.applyingCard = false;
+
+    // UI loaders
+    this.saveLoading = false;
+    this.paymentLoading = false;
+
+    // 🔥 Important: clear localStorage if you used it
+    localStorage.removeItem("pos_selected_employee");
+
+    console.log("[InvoiceSummary] Reset after payment completed");
+  },
+		formatQty3(value) {
+			const num = Number(value || 0);
+			return num.toFixed(3);
+		},
+
+		formatAmount3(value) {
+			const num = Number(value || 0);
+			return num.toFixed(3);
+		},
 		handleAdditionalDiscountUpdate(value) {
 			this.$emit("update:additional_discount", value);
 		},
@@ -1079,6 +1119,7 @@ export default {
 			this.cancelLoading = true;
 			try {
 				this.$emit("cancel-sale");
+				this.resetAfterPayment();
 			} finally {
 				setTimeout(() => {
 					this.cancelLoading = false;
@@ -1215,6 +1256,8 @@ export default {
 		this.checkIfCarWashService();
 
 		this.eventBus.on("employee_selected", this.handleExternalEmployeeSelected);
+
+		this.eventBus.on("payment_completed", this.resetAfterPayment);
 	},
 	beforeUnmount() {
 		this.eventBus.off("item_added_to_invoice", this.checkAutoApplyCard);
@@ -1224,6 +1267,8 @@ export default {
 		this.eventBus.off("show_odometer_field");
 		this.eventBus.off("load_odometer_data");
 		this.eventBus.off("update_customer_details");
+		this.eventBus.off("payment_completed", this.resetAfterPayment);
+
 	},
 };
 </script>

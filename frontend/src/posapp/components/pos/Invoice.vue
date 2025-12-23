@@ -689,8 +689,11 @@ export default {
 
 		// Recalculate subtotal and total qty
 		update_totals() {
-			this.subtotal = this.items.reduce((sum, i) => sum + i.qty * i.rate, 0);
-			this.total_qty = this.items.reduce((sum, i) => sum + i.qty, 0);
+              this.subtotal = this.items.reduce((sum, i) => sum + i.qty * i.rate, 0);			
+			 this.total_qty = this.items.reduce(
+				(sum, i) => sum + Math.trunc(i.qty),
+				0
+			);
 		},
 
 		// Handle item dropped from ItemsSelector to ItemsTable
@@ -901,21 +904,33 @@ export default {
 
 		// Override setFormatedFloat for qty field to handle stock limits and return mode
 		setFormatedQty(item, field_name, precision, no_negative, value) {
-			// Parse and set the value using the mixin's formatter
-			let parsedValue = this.setFormatedFloat(item, field_name, precision, no_negative, value);
+			let parsedValue = Math.trunc(
+				this.setFormatedFloat(
+					item,
+					field_name,
+					0,        
+					no_negative,
+					value
+				)
+			);
 
-			// Enforce available stock limits
-			if (item.max_qty !== undefined && this.flt(item[field_name]) > this.flt(item.max_qty)) {
+			// Ensure integer is stored
+			item[field_name] = parsedValue;
+
+			if (item.max_qty !== undefined && parsedValue > Number(item.max_qty)) {
 				const blockSale =
 					!this.stock_settings.allow_negative_stock ||
 					this.pos_profile.posa_block_sale_beyond_available_qty;
+
 				if (blockSale) {
-					item[field_name] = item.max_qty;
-					parsedValue = item.max_qty;
+					parsedValue = Math.trunc(item.max_qty);
+					item[field_name] = parsedValue;
+
 					this.eventBus.emit("show_message", {
-						title: __(`Maximum available quantity is {0}. Quantity adjusted to match stock.`, [
-							this.formatFloat(item.max_qty),
-						]),
+						title: __(
+							"Maximum available quantity is {0}. Quantity adjusted to match stock.",
+							[parsedValue]
+						),
 						color: "error",
 					});
 				} else {
@@ -926,24 +941,27 @@ export default {
 				}
 			}
 
-			// Ensure negative value for return invoices
 			if (this.isReturnInvoice && parsedValue > 0) {
 				parsedValue = -Math.abs(parsedValue);
 				item[field_name] = parsedValue;
 			}
 
-			// Recalculate stock quantity with the adjusted value
 			this.calc_stock_qty(item, item[field_name]);
+
 			if (field_name === "qty" && item.is_bundle) {
 				this.packed_items
 					.filter((it) => it.bundle_id === item.bundle_id)
 					.forEach((ch) => {
-						ch.qty = item.qty * (ch.child_qty_per_bundle || 1);
+						ch.qty = Math.trunc(
+							item.qty * (ch.child_qty_per_bundle || 1)
+						);
 						this.calc_stock_qty(ch, ch.qty);
 					});
 			}
+
 			return parsedValue;
 		},
+
 
 		async fetch_available_currencies() {
 			try {

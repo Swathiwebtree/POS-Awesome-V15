@@ -168,31 +168,14 @@
 
 										<v-col cols="6" class="mb-3">
 											<v-text-field density="compact" variant="solo" color="primary"
-												:label="frappe._('Tax and Charges')"
+												:label="frappe._('VAT and Charges')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field" hide-details
-												:model-value="formatCurrency(invoice_doc.total_taxes_and_charges, displayCurrency)"
+												:model-value="formatCurrency(computedTaxAndCharges, displayCurrency)"
 												readonly :prefix="currencySymbol()" persistent-placeholder />
 										</v-col>
 
-										<v-col cols="6" class="mb-3">
-											<v-text-field density="compact" variant="solo" color="primary"
-												:label="frappe._('Total Amount')"
-												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" hide-details
-												:model-value="formatCurrency(invoice_doc.total, displayCurrency)"
-												readonly :prefix="currencySymbol()" persistent-placeholder />
-										</v-col>
-
-										<v-col cols="6" class="mb-3">
-											<v-text-field density="compact" variant="solo" color="primary"
-												:label="diff_label" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" hide-details
-												:model-value="formatCurrency(diff_payment, displayCurrency)" readonly
-												:prefix="currencySymbol()" persistent-placeholder />
-										</v-col>
-
-										<v-col cols="6" class="mb-3">
+											<v-col cols="6" class="mb-3">
 											<v-text-field density="compact" variant="solo" color="primary"
 												:label="frappe._('Discount Amount')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
@@ -206,7 +189,11 @@
 												:label="frappe._('Grand Total')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field" hide-details
-												:model-value="formatCurrency(invoice_doc.grand_total)" readonly
+												:model-value="formatCurrency(
+													invoice_doc.rounded_total || invoice_doc.grand_total,
+													displayCurrency
+												)"
+												readonly
 												:prefix="currencySymbol(invoice_doc.currency)" persistent-placeholder />
 										</v-col>
 
@@ -217,6 +204,23 @@
 												class="dark-field sleek-field" hide-details
 												:model-value="formatCurrency(invoice_doc.rounded_total)" readonly
 												:prefix="currencySymbol(invoice_doc.currency)" persistent-placeholder />
+										</v-col>
+
+										<v-col cols="6" class="mb-3">
+											<v-text-field density="compact" variant="solo" color="primary"
+												:label="frappe._('Total Amount')"
+												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+												class="dark-field sleek-field" hide-details
+												:model-value="formatCurrency(invoice_doc.rounded_total || invoice_doc.grand_total, displayCurrency)"
+												readonly :prefix="currencySymbol()" persistent-placeholder />
+										</v-col>
+
+										<v-col cols="6" class="mb-3">
+											<v-text-field density="compact" variant="solo" color="primary"
+												:label="diff_label" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+												class="dark-field sleek-field" hide-details
+												:model-value="formatCurrency(diff_payment, displayCurrency)" readonly
+												:prefix="currencySymbol()" persistent-placeholder />
 										</v-col>
 									</v-row>
 
@@ -552,6 +556,35 @@ export default {
 		};
 	},
 	computed: {
+
+		computedTaxAndCharges() {
+			return this.flt(
+				this.invoice_doc?.total_taxes_and_charges || 0,
+				this.currency_precision
+			);
+		},
+
+		// Get the correct total for payment calculations
+		totalInvoiceAmount() {
+			if (!this.invoice_doc) return 0;
+
+			// Use rounded_total if available, otherwise use verified grand total
+			return this.flt(
+				this.invoice_doc.rounded_total || this.verifiedGrandTotal,
+				this.currency_precision
+			);
+		},
+
+		// Verify tax calculation
+		taxBreakdown() {
+			if (!this.invoice_doc || !this.invoice_doc.taxes) return null;
+
+			return this.invoice_doc.taxes.map(tax => ({
+				account: tax.account_head,
+				rate: tax.rate,
+				amount: this.flt(tax.tax_amount, this.currency_precision)
+			}));
+		},
 		currencySymbol() {
 			return (currency) => {
 				return get_currency_symbol(currency || this.invoice_doc.currency);
@@ -809,6 +842,76 @@ export default {
 		},
 	},
 	methods: {
+
+		calculateItemTax() {
+			let taxTotal = 0;
+
+			if (!this.invoice_doc || !this.invoice_doc.items) {
+				return 0;
+			}
+
+			this.invoice_doc.items.forEach(item => {
+				if (!item.item_tax_rate) return;
+
+				let taxMap = {};
+				try {
+					taxMap = JSON.parse(item.item_tax_rate);
+				} catch (e) {
+					return;
+				}
+
+				//  POS Awesome uses net_amount as taxable value
+				const taxableAmount =
+					this.flt(item.net_amount || (item.net_rate * item.qty) || 0);
+
+				Object.values(taxMap).forEach(rate => {
+					taxTotal += (taxableAmount * rate) / 100;
+				});
+			});
+
+			return this.flt(taxTotal, this.currency_precision);
+		},
+
+
+
+		// Verify invoice totals before submission
+		verifyInvoiceTotals() {
+			if (!this.invoice_doc) {
+				console.error('[Payment] No invoice document to verify');
+				return false;
+			}
+
+			const netTotal = this.flt(this.invoice_doc.net_total || 0);
+			const taxTotal = this.flt(this.invoice_doc.total_taxes_and_charges || 0);
+			const grandTotal = this.flt(this.invoice_doc.grand_total || 0);
+			const expectedGrandTotal = netTotal + taxTotal;
+
+			console.log('[Payment] Invoice Verification:', {
+				netTotal,
+				taxTotal,
+				grandTotal,
+				expectedGrandTotal,
+				difference: Math.abs(grandTotal - expectedGrandTotal),
+				taxes: this.taxBreakdown
+			});
+
+			// Check if grand total is correct
+			if (Math.abs(grandTotal - expectedGrandTotal) > 0.01) {
+				console.error('[Payment] Grand total does not match calculation!');
+				this.eventBus.emit('show_message', {
+					title: `Tax calculation error detected. Please refresh and try again.`,
+					color: 'error'
+				});
+				return false;
+			}
+
+			// Check if taxes are present
+			if (taxTotal === 0 && this.invoice_doc.taxes && this.invoice_doc.taxes.length > 0) {
+				console.warn('[Payment] Tax rows exist but total is zero');
+			}
+
+			return true;
+		},
 		toggleCreditSale() {
 			this.is_credit_sale = !this.is_credit_sale;
 
@@ -857,12 +960,14 @@ export default {
 			}
 		},
 		handleShowPayment(data) {
+
+			// 1️⃣ VALIDATIONS (unchanged)
 			if (this.showEmployeeSelection && !this.selectedEmployee) {
 				frappe.show_alert({
 					message: this.__("Please select a service employee before proceeding to payment."),
 					indicator: "red",
 				});
-				frappe.utils.play_sound && frappe.utils.play_sound("error");
+				frappe.utils.play_sound("error");
 				return;
 			}
 
@@ -872,11 +977,42 @@ export default {
 						message: this.__("Please enter a valid odometer reading before proceeding to payment."),
 						indicator: "red",
 					});
-					frappe.utils.play_sound && frappe.utils.play_sound("error");
+					frappe.utils.play_sound("error");
 					return;
 				}
 			}
 
+			// 2️⃣ FORCE BACKEND TAX CALCULATION
+			if (this.invoice_doc) {
+				frappe.call({
+					method: "posawesome.posawesome.api.invoices.update_invoice",
+					args: { data: this.invoice_doc },
+					async: false,
+					callback: (r) => {
+						if (r.message) {
+							// CLOSE → REPLACE → OPEN (Vuetify-safe)
+							this.showDialog = false;
+
+							this.$nextTick(() => {
+							    
+								this.invoice_doc = { ...r.message };
+
+								this.$nextTick(() => {
+									this.showDialog = true;
+								});
+							});
+
+							console.log("[Payment] Backend totals", {
+								net: r.message.net_total,
+								tax: r.message.total_taxes_and_charges,
+								grand: r.message.grand_total
+							});
+						}
+					}
+				});
+			}
+
+			// 3️⃣ OPEN PAYMENT UI
 			if (data === "true") {
 				this.$nextTick(() => {
 					setTimeout(() => {
@@ -938,6 +1074,21 @@ export default {
 			});
 		},
 		async submit(event, payment_received = false, print = false) {
+
+			this.invoice_doc.total_taxes_and_charges = this.computedTaxAndCharges;
+
+			this.invoice_doc.grand_total =
+				this.flt(this.invoice_doc.net_total) +
+				this.flt(this.computedTaxAndCharges);
+
+			console.log("Synced Tax:", this.invoice_doc.total_taxes_and_charges);
+			console.log("Synced Grand Total:", this.invoice_doc.grand_total);
+
+
+			if (!this.verifyInvoiceTotals()) {
+				console.error('[Payment] Invoice total verification failed');
+				return;
+			}
 			if (this.invoice_doc.is_return) {
 				this.ensureReturnPaymentsAreNegative();
 			}
@@ -2120,6 +2271,8 @@ export default {
 		this.eventBus.on("current_invoice_data", (invoiceData) => {
 			console.log("[Payment] current_invoice_data received");
 
+			const shouldOverwriteInvoice = !this.showDialog;
+
 			// Ensure payments array exists
 			if (!invoiceData.payments) {
 				invoiceData.payments = [];
@@ -2195,7 +2348,9 @@ export default {
 				}
 			}
 
-			this.invoice_doc = invoiceData;
+			if (shouldOverwriteInvoice) {
+				this.invoice_doc = invoiceData;
+			}
 			this.grand_total = invoiceData.grand_total || 0;
 			this.rounded_total = invoiceData.rounded_total || invoiceData.grand_total || 0;
 			this.customer = invoiceData.customer || "";
@@ -2249,7 +2404,10 @@ export default {
 			}
 
 			// Set payment amount
-			this.payment_amount = this.rounded_total;
+			this.payment_amount =
+				this.invoice_doc?.rounded_total ||
+				this.invoice_doc?.grand_total ||
+				0;
 			console.log("[Payment] Payment amount set to:", this.payment_amount);
 
 			// Force UI update
