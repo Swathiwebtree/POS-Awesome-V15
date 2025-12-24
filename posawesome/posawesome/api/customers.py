@@ -1520,34 +1520,36 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
 
     # STEP 1: Search Customers Directly
     customer_results = frappe.db.sql(
-        """
-        SELECT 
-            c.name,
-            c.customer_name,
-            c.mobile_no,
-            c.email_id,
-            c.tax_id,
-            COALESCE(c.is_company, 0) as is_corporate,
-            NULL as vehicle_no,
-            NULL as vehicle_model,
-            NULL as vehicle_make,
-            'customer' as match_source
-        FROM `tabCustomer` c
-        WHERE c.disabled = 0
-        AND (
-            c.name LIKE %(like)s
-            OR c.customer_name LIKE %(like)s
-            OR c.mobile_no LIKE %(like)s
-            OR c.email_id LIKE %(like)s
-            OR c.tax_id LIKE %(like)s
-        )
-        LIMIT %(limit)s
-        """,
-        {"like": like_pattern, "limit": limit},
-        as_dict=1,
+    """
+    SELECT 
+        c.name,
+        c.customer_name,
+        c.mobile_no,
+        c.email_id,
+        c.tax_id,
+        CASE 
+            WHEN c.customer_type = 'Company' THEN 1 
+            ELSE 0 
+        END AS is_corporate,
+        NULL as vehicle_no,
+        NULL as vehicle_model,
+        NULL as vehicle_make,
+        'customer' as match_source
+    FROM `tabCustomer` c
+    WHERE c.disabled = 0
+    AND (
+        c.name LIKE %(like)s
+        OR c.customer_name LIKE %(like)s
+        OR c.mobile_no LIKE %(like)s
+        OR c.email_id LIKE %(like)s
+        OR c.tax_id LIKE %(like)s
     )
+    LIMIT %(limit)s
+    """,
+    {"like": like_pattern, "limit": limit},
+    as_dict=1,
+   )
 
-    # STEP 2: Search Vehicle Master for matching vehicle numbers
     vehicle_results = []
     try:
         vehicle_matches = frappe.db.sql(
@@ -1568,7 +1570,6 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
             as_dict=1,
         )
 
-        # Get customer details for each vehicle match
         for vehicle in vehicle_matches:
             if not vehicle.get("customer"):
                 continue
@@ -1592,7 +1593,7 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
                             "vehicle_no": vehicle.vehicle_no,
                             "vehicle_model": vehicle.model or "",
                             "vehicle_make": vehicle.make or "",
-                            "is_corporate": bool(customer_data.get("is_company") or customer_data.get("is_corporate") or 0),
+                            "is_corporate": customer_data.get("customer_type") == "Company",
                             "match_source": "vehicle",
                         }
                     )
