@@ -1,136 +1,39 @@
 <template>
 	<div class="customer-vehicle-row" style="display: flex; gap: 12px; align-items: flex-start">
 		<div style="flex: 1 1 0">
+			<!-- VEHICLE INPUT -->
 			<Skeleton v-if="loadingVehicles" height="58" class="w-100" />
 
-			<v-autocomplete
-				v-else-if="vehicles.length > 1"
-				ref="vehicleDropdown"
-				class="vehicle-autocomplete sleek-field"
-				density="compact"
-				clearable
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				v-model="selectedVehicle"
-				:items="vehicles"
-				item-title="vehicle_no"
-				item-value="name"
-				hide-details
-				:disabled="loadingVehicles"
-				@update:modelValue="onVehicleSelect"
-				@update:search="onVehicleSearch"
-				:virtual-scroll="true"
-				:virtual-scroll-item-height="58"
-			>
+			<v-autocomplete v-else-if="vehicles.length > 1" ref="vehicleDropdown"
+				class="vehicle-autocomplete sleek-field" density="compact" clearable variant="solo"
+				:label="__('Vehicle No')" v-model="selectedVehicle" :items="vehicleItems" item-title="vehicle_no"
+				item-value="name" :search="vehicleSearchTerm" hide-details @update:search="onVehicleSearch"
+				@update:modelValue="onVehicleSelect">
 				<template #prepend-inner>
-					<v-tooltip text="Edit vehicle">
-						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_vehicle"
-								>mdi-car-edit</v-icon
-							>
-						</template>
-					</v-tooltip>
+					<v-icon class="icon-button" @click.stop="edit_vehicle">mdi-car-edit</v-icon>
 				</template>
+
 				<template #append-inner>
-					<v-tooltip text="Add vehicle">
-						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
-						</template>
-					</v-tooltip>
-				</template>
-				<template #item="{ props, item }">
-					<v-list-item v-bind="props">
-						<v-list-item-title>{{ item.raw.customer_name }}</v-list-item-title>
-						<v-list-item-subtitle v-if="item.raw.customer_name !== item.raw.name">
-							<div>ID: {{ item.raw.name }}</div>
-						</v-list-item-subtitle>
-						<v-list-item-subtitle v-if="item.raw.mobile_no">
-							<div>Mobile: {{ item.raw.mobile_no }}</div>
-						</v-list-item-subtitle>
-						<v-list-item-subtitle v-if="item.raw.vehicle_no">
-							<div>Vehicle: {{ item.raw.vehicle_no }}</div>
-						</v-list-item-subtitle>
-						<v-list-item-subtitle v-if="item.raw.tax_id">
-							<div>TAX ID: {{ item.raw.tax_id }}</div>
-						</v-list-item-subtitle>
-						<v-list-item-subtitle v-if="item.raw.email_id">
-							<div>Email: {{ item.raw.email_id }}</div>
-						</v-list-item-subtitle>
-						<v-list-item-subtitle v-if="item.raw.primary_address">
-							<div>Primary Address: {{ item.raw.primary_address }}</div>
-						</v-list-item-subtitle>
-					</v-list-item>
+					<v-icon class="icon-button" @click.stop="new_vehicle">mdi-plus</v-icon>
 				</template>
 			</v-autocomplete>
 
-			<v-text-field
-				v-else-if="vehicles.length === 1 && vehicles[0].name"
-				readonly
-				dense
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				v-model="vehicle_no"
-			>
+			<v-text-field v-else-if="vehicles.length === 1 && vehicles[0].name" readonly density="compact"
+				variant="solo" :label="__('Vehicle No')" v-model="vehicle_no">
 				<template #prepend-inner>
-					<v-tooltip text="Edit vehicle">
-						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="edit_vehicle"
-								>mdi-car-edit</v-icon
-							>
-						</template>
-					</v-tooltip>
+					<v-icon class="icon-button" @click.stop="edit_vehicle">mdi-car-edit</v-icon>
 				</template>
+
 				<template #append-inner>
-					<v-tooltip text="Add vehicle">
-						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
-						</template>
-					</v-tooltip>
+					<v-icon class="icon-button" @click.stop="new_vehicle">mdi-plus</v-icon>
 				</template>
 			</v-text-field>
 
-			<v-text-field
-				v-else
-				v-model="vehicle_no"
-				dense
-				variant="solo"
-				:label="frappe._('Vehicle No')"
-				placeholder="Enter vehicle no and press Enter"
-				@keydown.enter.prevent="onVehicleNoEnter"
-				hide-details
-			>
+			<v-text-field v-else density="compact" variant="solo" :label="__('Vehicle No')"
+				placeholder="Enter vehicle no and press Enter" v-model="vehicle_no"
+				@keydown.enter.prevent="onVehicleNoEnter" hide-details>
 				<template #append-inner>
-					<v-tooltip text="Add vehicle">
-						<template #activator="{ props }">
-							<v-icon
-								v-bind="props"
-								class="icon-button"
-								@mousedown.prevent.stop
-								@click.stop="new_vehicle"
-								>mdi-plus</v-icon
-							>
-						</template>
-					</v-tooltip>
+					<v-icon class="icon-button" @click.stop="new_vehicle">mdi-plus</v-icon>
 				</template>
 			</v-text-field>
 		</div>
@@ -350,6 +253,11 @@ export default {
 		filteredCustomers() {
 			return this.isCustomerBackgroundLoading ? [] : this.customers;
 		},
+		vehicleItems() {
+			return this.vehicleSearchTerm
+				? this.vehicleSearchResults
+				: this.vehicles;
+		},
 	},
 
 	watch: {
@@ -364,6 +272,39 @@ export default {
 	},
 
 	methods: {
+		async loadAllVehicles() {
+			this.loadingVehicles = true;
+			try {
+				const res = await frappe.call({
+					method: "posawesome.posawesome.api.vehicles.get_all_vehicles",
+					args: { limit: 500 },
+				});
+
+				this.vehicles = res.message || [];
+				this.selectedVehicle = null;
+				this.vehicle_no = "";
+
+				console.log("[Vehicle] Loaded all vehicles:", this.vehicles.length);
+			} catch (err) {
+				console.error("Failed to load all vehicles", err);
+				this.vehicles = [];
+			} finally {
+				this.loadingVehicles = false;
+			}
+		},
+
+		onVehicleMenuToggle(isOpen) {
+			if (isOpen) {
+				this.$nextTick(() => {
+					const dropdown = this.$refs.vehicleDropdown?.$el?.querySelector(
+						".v-overlay__content .v-select-list"
+					);
+					if (dropdown) {
+						dropdown.scrollTop = 0;
+					}
+				});
+			}
+		},
 		// --- Helper to normalize customer rows --
 		_normalizeCustomerRow(r) {
 			// Ensure we always have is_corporate boolean present in each customer row
@@ -482,7 +423,6 @@ export default {
 			if (!val) {
 				this.customer = null;
 				this.internalCustomer = null;
-				this.vehicles = [];
 				this.selectedVehicle = null;
 				this.vehicle_no = "";
 				this.eventBus.emit("update_customer", null);
@@ -626,40 +566,23 @@ export default {
 		},
 
 		onVehicleSearch: _.debounce(function (val) {
-			this.vehicleSearchTerm = val || "";
-			this.vehiclePage = 0;
-			this.vehicleSearchResults = [];
-			this.vehicleHasMore = true;
+			this.vehicleSearchTerm = (val || "").toLowerCase();
 
-			if (val) {
-				this.searchVehiclesByNumber(this.vehicleSearchTerm);
-			}
-		}, 500),
-
-		onVehicleSelect(val) {
-			if (!val) {
-				this.selectedVehicle = null;
-				this.vehicle_no = "";
-				this.eventBus.emit("vehicle_selected", null);
+			if (!this.vehicleSearchTerm) {
+				this.vehicleSearchResults = [];
 				return;
 			}
 
-			const vehicle = (this.vehicles || []).find((v) => v.name === val);
-			if (vehicle) {
-				this.selectedVehicle = val;
-				this.vehicle_no = vehicle.vehicle_no || "";
-				this.eventBus.emit("vehicle_selected", vehicle.name);
+			this.vehicleSearchResults = this.vehicles.filter((v) => {
+				return (
+					v.vehicle_no?.toLowerCase().includes(this.vehicleSearchTerm) ||
+					v.customer_name?.toLowerCase().includes(this.vehicleSearchTerm) ||
+					v.mobile_no?.toLowerCase().includes(this.vehicleSearchTerm)
+				);
+			});
 
-				// Set customer if not already set
-				if (!this.customer && vehicle.customer) {
-					this.customer = vehicle.customer;
-					this.internalCustomer = vehicle.customer;
-					this.eventBus.emit("update_customer", vehicle.customer);
-					// ensure corporate flag is fetched/emitted
-					this.fetchAndEmitCustomerDetails(vehicle.customer);
-				}
-			}
-		},
+		}, 300),
+
 
 		async onVehicleNoEnter() {
 			const vehicleNo = (this.vehicle_no || "").trim();
@@ -1321,10 +1244,6 @@ export default {
 				}
 			}
 		},
-
-		onVehicleSearch: _.debounce(function (val) {
-			// intentionally left minimal (handled earlier)
-		}, 300),
 	},
 
 	created() {
@@ -1337,7 +1256,6 @@ export default {
 			if (!customerName) {
 				this.customer = null;
 				this.internalCustomer = null;
-				this.vehicles = [];
 				this.selectedVehicle = null;
 				this.eventBus.emit("update_customer_details", {
 					contact_mobile: "",
@@ -1394,7 +1312,6 @@ export default {
 		});
 
 		this.eventBus.on("clear_vehicle_number", () => {
-			this.vehicles = [];
 			this.selectedVehicle = null;
 			this.vehicle_no = "";
 		});
@@ -1404,8 +1321,6 @@ export default {
 			this.customer = "";
 			this.internalCustomer = null;
 			this.tempSelectedCustomer = null;
-
-			this.vehicles = [];
 			this.selectedVehicle = null;
 			this.vehicle_no = "";
 		});
@@ -1496,7 +1411,8 @@ export default {
 
 				this.eventBus.on("add_vehicle_to_list", (vehicle) => {
 					if (vehicle.customer === this.customer) {
-						this.vehicles = this.vehicles.filter((v) => v.name && v.name !== vehicle.name);
+						this.vehicles = this.vehicles.filter(v => v.name !== vehicle.name);
+
 						this.vehicles.push({
 							name: vehicle.name,
 							vehicle_no: vehicle.vehicle_no,
@@ -1507,14 +1423,9 @@ export default {
 							customer: vehicle.customer,
 						});
 
-						if (this.vehicles.length === 1) {
-							this.selectedVehicle = vehicle.name;
-							this.eventBus.emit("vehicle_selected", vehicle.name);
-						} else {
-							this.vehicles.unshift({ name: null, vehicle_no: frappe._("Select Vehicle...") });
-							this.selectedVehicle = vehicle.name;
-							this.eventBus.emit("vehicle_selected", vehicle.name);
-						}
+						this.selectedVehicle = vehicle.name;
+						this.vehicle_no = vehicle.vehicle_no;
+						this.eventBus.emit("vehicle_selected", vehicle.name);
 					}
 				});
 
@@ -1535,10 +1446,7 @@ export default {
 			}
 		});
 
-		// Initial Vehicle Load
-		if (this.customer) {
-			this.fetchVehiclesForCustomer(this.customer);
-		}
+	    this.loadAllVehicles();
 	},
 	beforeUnmount() {
 		// Clean up event listeners

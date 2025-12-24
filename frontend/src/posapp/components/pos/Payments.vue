@@ -92,9 +92,9 @@
 												</div>
 
 												<v-text-field density="compact" variant="solo" hide-details
-													class="method-input" :model-value="formatCurrency(payment.amount)"
+													class="method-input" :model-value="payment.amount ? formatCurrency(payment.amount) : ''"
 													@change="setFormatedCurrency(payment, 'amount', null, false, $event)"
-													@focus="set_rest_amount(payment.idx)" :rules="[
+													@focus="payment.amount === 0 && set_rest_amount(payment.idx)" :rules="[
 														isNumber,
 														(v) =>
 															!payment.mode_of_payment.toLowerCase().includes('cash') ||
@@ -557,6 +557,10 @@ export default {
 	},
 	computed: {
 
+		currency_precision() {
+			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
+		},
+
 		computedTaxAndCharges() {
 			return this.flt(
 				this.invoice_doc?.total_taxes_and_charges || 0,
@@ -625,7 +629,7 @@ export default {
 				}
 			}
 
-			return this.flt(total, this.currency_precision);
+			return this.roundByLastDigit(total, this.currency_precision);
 		},
 
 		diff_payment() {
@@ -644,7 +648,7 @@ export default {
 				);
 			}
 
-			let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
+			let diff = this.roundByLastDigit(invoice_total - this.total_payments, this.currency_precision);
 
 			if (this.invoice_doc.is_return) {
 				return diff >= 0 ? diff : 0;
@@ -667,7 +671,7 @@ export default {
 				);
 			}
 
-			let change = this.flt(this.total_payments - invoice_total, this.currency_precision);
+			let change = this.roundByLastDigit(this.total_payments - invoice_total, this.currency_precision);
 
 			return change > 0 ? change : 0;
 		},
@@ -842,6 +846,75 @@ export default {
 		},
 	},
 	methods: {
+		roundByLastDigit(value, precision) {
+			if (value === null || value === undefined || isNaN(value)) return 0;
+
+			const factor = Math.pow(10, precision);
+			const shifted = value * factor;
+
+			const integerPart = Math.floor(shifted);
+			const decimalPart = shifted - integerPart;
+
+			// get next digit (N+1)
+			const nextDigit = Math.floor(decimalPart * 10);
+
+			// MAIN RULE
+			if (nextDigit > 5) {
+				return (integerPart + 1) / factor;
+			}
+
+			return integerPart / factor;
+		},
+
+		resetPaymentData() {
+			console.log('[Payment] Resetting all payment data');
+
+			// Reset invoice document
+			this.invoice_doc = null;
+
+			// Reset payment amounts
+			this.loyalty_amount = 0;
+			this.redeemed_customer_credit = 0;
+			this.credit_change = 0;
+			this.paid_change = 0;
+
+			// Reset flags
+			this.is_credit_sale = false;
+			this.is_write_off_change = false;
+			this.is_cashback = true;
+			this.is_credit_return = false;
+			this.redeem_customer_credit = false;
+			this.is_return = false;
+
+			// Reset customer credit
+			this.customer_credit_dict = [];
+
+			// Reset dates
+			this.new_delivery_date = null;
+			this.new_po_date = null;
+			this.new_credit_due_date = null;
+			this.credit_due_days = null;
+
+			// Reset sales person
+			this.sales_person = "";
+
+			// Reset customer info
+			this.customer = "";
+			this.customer_info = "";
+			this.selected_customer_is_corporate = false;
+
+			// Reset addresses
+			this.addresses = [];
+
+			// Reset UI states
+			this.loading = false;
+			this.showDialog = false;
+			this.highlightSubmit = false;
+			this.phone_dialog = false;
+			this.custom_days_dialog = false;
+
+			console.log('[Payment] Payment data reset complete');
+		},
 
 		calculateItemTax() {
 			let taxTotal = 0;
@@ -1475,33 +1548,25 @@ export default {
 		},
 		set_full_amount(idx) {
 			const isReturn = this.invoice_doc.is_return || this.invoiceType === "Return";
-			let totalAmount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
+			const totalAmount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
 
-			this.invoice_doc.payments.forEach((payment) => {
-				payment.amount = 0;
-				if (payment.base_amount !== undefined) {
-					payment.base_amount = 0;
-				}
-			});
+			const payment = this.invoice_doc.payments.find(p => p.idx === idx);
+			if (!payment) return;
 
-			const clickedButton = event?.target?.textContent?.trim();
+			// ONLY update clicked payment
+			let remaining = this.diff_payment;
 
-			const clickedPayment = this.invoice_doc.payments.find(
-				(payment) => payment.mode_of_payment === clickedButton,
-			);
+			if (remaining <= 0) return;
 
-			if (clickedPayment) {
-				let amount = isReturn ? -Math.abs(totalAmount) : totalAmount;
-				clickedPayment.amount = amount;
-				if (clickedPayment.base_amount !== undefined) {
-					clickedPayment.base_amount = isReturn ? -Math.abs(amount) : amount;
-				}
-			} else {
-				console.log("No payment found for button text:", clickedButton);
+			let amount = isReturn ? -Math.abs(remaining) : remaining;
+
+			payment.amount = this.roundByLastDigit(amount, this.currency_precision);
+
+			if (payment.base_amount !== undefined) {
+				payment.base_amount = payment.amount;
 			}
-
-			this.$forceUpdate();
 		},
+
 		set_rest_amount(idx) {
 			const isReturn = this.invoice_doc.is_return || this.invoiceType === "Return";
 			this.invoice_doc.payments.forEach((payment) => {
@@ -2498,9 +2563,7 @@ export default {
 
 		this.eventBus.on("clear_invoice", () => {
 			console.log("[Payment] clear_invoice received");
-			this.invoice_doc = "";
-			this.is_return = false;
-			this.is_credit_return = false;
+			this.resetPaymentData();
 		});
 	},
 	beforeUnmount() {

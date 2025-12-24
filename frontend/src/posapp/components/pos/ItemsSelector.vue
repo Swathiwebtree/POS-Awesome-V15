@@ -268,16 +268,7 @@
 														}}
 													</span>
 													<span class="price-amount">
-														{{
-															format_currency(
-																item.base_price_list_rate || item.rate,
-																item.original_currency ||
-																	pos_profile.currency,
-																ratePrecision(
-																	item.base_price_list_rate || item.rate,
-																),
-															)
-														}}
+														{{ formatByPrecision(item.base_price_list_rate || item.rate) }}
 													</span>
 												</div>
 												<div
@@ -291,13 +282,7 @@
 														currencySymbol(selected_currency)
 													}}</span>
 													<span class="price-amount">
-														{{
-															format_currency(
-																item.rate,
-																selected_currency,
-																ratePrecision(item.rate),
-															)
-														}}
+														{{ formatByPrecision(item.base_price_list_rate || item.rate) }}
 													</span>
 												</div>
 											</div>
@@ -345,13 +330,9 @@
 											{{
 												currencySymbol(item.original_currency || pos_profile.currency)
 											}}
-											{{
-												format_currency(
-													item.base_price_list_rate || item.rate,
-													item.original_currency || pos_profile.currency,
-													ratePrecision(item.base_price_list_rate || item.rate),
-												)
-											}}
+											{{ 
+											formatByPrecision(item.base_price_list_rate || item.rate)
+											 }}
 										</div>
 										<div
 											v-if="
@@ -361,13 +342,8 @@
 											class="text-success"
 										>
 											{{ currencySymbol(selected_currency) }}
-											{{
-												format_currency(
-													item.rate,
-													selected_currency,
-													ratePrecision(item.rate),
-												)
-											}}
+											{{ formatByPrecision(item.rate) }}
+
 										</div>
 									</div>
 								</template>
@@ -725,6 +701,12 @@ export default {
 	},
 
 	methods: {
+
+		formatByPrecision(value) {
+			const num = Number(value || 0);
+			return num.toFixed(this.decimalPrecision);
+		},
+
 		// Performance optimization: Memoized search function
 		memoizedSearch(searchTerm, itemGroup) {
 			const cacheKey = `${searchTerm || ""}_${itemGroup || "ALL"}`;
@@ -2565,7 +2547,7 @@ export default {
 			<div>
 				<div class="font-weight-bold">${item.item_name}</div>
 				<div class="text-muted small">${item.item_code}</div>
-				<div class="#4169E1">${this.format_currency(item.rate, this.pos_profile.currency, this.ratePrecision(item.rate))}</div>
+				<div class="#4169E1">${this.format_currency(item.rate, this.pos_profile.currency, this.formatRateByPosPrecision(item.rate))}</div>
 			</div>
 			</div>
 		</div>
@@ -2775,6 +2757,9 @@ export default {
 
 	computed: {
 
+		 decimalPrecision() {
+			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
+		},
 		
 		headers() {
 			return this.getItemsHeaders();

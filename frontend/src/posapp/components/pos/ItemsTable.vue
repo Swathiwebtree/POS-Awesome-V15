@@ -67,7 +67,7 @@
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span class="amount-value" :class="{ 'negative-number': isNegative(item.rate) }">{{
-						formatCurrency(item.rate)
+						formatByPrecision(item.rate)
 						}}</span>
 				</div>
 			</template>
@@ -77,7 +77,7 @@
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span class="amount-value" :class="{ 'negative-number': isNegative(item.qty * item.rate) }">{{ 
-					  formatAmount3(item.qty * item.rate) }}
+					formatByPrecision(item.qty * item.rate) }}
 					</span>
 				</div>
 			</template>
@@ -105,7 +105,7 @@
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span class="amount-value" :class="{ 'negative-number': isNegative(item.discount_amount || 0) }">{{
-						formatCurrency(item.discount_amount || 0) }}</span>
+						formatByPrecision(item.discount_amount || 0) }}</span>
 				</div>
 			</template>
 
@@ -114,7 +114,7 @@
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span class="amount-value" :class="{ 'negative-number': isNegative(item.price_list_rate) }">{{
-						formatCurrency(item.price_list_rate) }}</span>
+						formatByPrecision(item.price_list_rate) }}</span>
 				</div>
 			</template>
 
@@ -179,9 +179,9 @@
 									<div class="form-field">
 										<v-text-field density="compact" variant="outlined" color="primary" id="rate"
 											:label="frappe._('Rate')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field" hide-details :model-value="Math.round(item.rate || 0)"
+											class="dark-field" hide-details :model-value="formatByPrecision(item.rate || 0)"
 											type="number" step="1" @change="[ 
-												item.rate = Math.round($event.target.value || 0),
+												item.rate = formatByPrecision($event.target.value || 0),
 												setFormatedCurrency(item, 'rate', null, false, $event),
 												calcPrices(item, $event.target.value, $event),
 											]" :disabled="!pos_profile.posa_allow_user_to_edit_rate ||
@@ -213,7 +213,7 @@
 										<v-text-field density="compact" variant="outlined" color="primary"
 											id="discount_amount" :label="frappe._('Discount Amount')"
 											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
-											hide-details :model-value="Math.round(item.discount_amount || 0)"
+											hide-details :model-value="formatByPrecision(item.discount_amount || 0)"
 											type="number" step="1" @change="[ 
 												item.discount_amount = Math.round($event.target.value || 0),
 												setFormatedCurrency(
@@ -235,7 +235,7 @@
 										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Price List Rate')"
 											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
-											hide-details :model-value="Math.round(item.price_list_rate || 0)"
+											hide-details :model-value="formatByPrecision(item.price_list_rate || 0)"
 											type="number" step="1"
 											:disabled="!pos_profile.posa_allow_price_list_rate_change"
 											prepend-inner-icon="mdi-format-list-numbered"
@@ -246,7 +246,7 @@
 										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Total Amount')"
 											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
-											hide-details :model-value="formatAmount3(item.qty * item.rate)" disabled
+											hide-details :model-value="formatByPrecision(item.qty * item.rate)" disabled
 											prepend-inner-icon="mdi-calculator"></v-text-field>
 									</div>
 									<div class="form-field" v-if="pos_profile.posa_allow_price_list_rate_change">
@@ -466,6 +466,9 @@ export default {
 		};
 	},
 	computed: {
+		decimalPrecision() {
+			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
+		},
 		headerProps() {
 			return this.isDarkTheme ? { style: "background-color:#121212;color:#fff" } : {};
 		},
@@ -487,13 +490,9 @@ export default {
 	},
 	methods: {
 
-		formatQty3(value) {
+		formatByPrecision(value) {
 			const num = Number(value || 0);
-			return num.toFixed(3);
-		},
-		formatAmount3(value) {
-			const num = Number(value || 0);
-			return num.toFixed(3);
+			return num.toFixed(this.decimalPrecision);
 		},
 		isCarWashItem(item) {
 			if (!item) return false;

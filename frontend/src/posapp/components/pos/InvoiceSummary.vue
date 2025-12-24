@@ -65,8 +65,8 @@
 
 							<!-- Additional Discount -->
 							<v-col cols="6" v-if="pos_profile && !pos_profile.posa_use_percentage_discount">
-								<v-text-field :model-value="additional_discount"
-									@update:model-value="handleAdditionalDiscountUpdate"
+								<v-text-field :model-value="formatByPrecision(additional_discount)"
+									@update:model-value="formatByPrecision(handleAdditionalDiscountUpdate)"
 									@change="apply_additional_discount" :label="__('Additional Discount')"
 									prepend-inner-icon="mdi-cash-minus" variant="solo" density="compact" color="warning"
 									:prefix="pos_profile ? currencySymbol(pos_profile.currency) : ''" :disabled="
@@ -90,7 +90,7 @@
 
 							<!-- Items Discounts -->
 							<v-col cols="6">
-								<v-text-field :model-value="formatCurrency(Number(total_items_discount_amount).toFixed(3))"
+								<v-text-field :model-value="formatByPrecision(total_items_discount_amount)"
 									:prefix="currencySymbol(displayCurrency)" :label="__('Items Discounts')"
 									prepend-inner-icon="mdi-tag-minus" variant="solo" density="compact" color="warning"
 									readonly class="summary-field" />
@@ -98,7 +98,7 @@
 
 							<!-- Total -->
 							<v-col cols="6">
-								<v-text-field :model-value="formatAmount3(subtotal)"
+								<v-text-field :model-value="formatByPrecision(subtotal)"
 									:prefix="currencySymbol(displayCurrency)" :label="__('Total')"
 									prepend-inner-icon="mdi-cash" variant="solo" density="compact" readonly
 									color="success" class="summary-field" />
@@ -530,6 +530,9 @@ export default {
 		"apply-frequent-card",
 	],
 	computed: {
+		decimalPrecision() {
+			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
+		},
 		__() {
 			return window.__ || ((str) => str);
 		},
@@ -624,15 +627,10 @@ export default {
 
     console.log("[InvoiceSummary] Reset after payment completed");
   },
-		formatQty3(value) {
-			const num = Number(value || 0);
-			return num.toFixed(3);
-		},
-
-		formatAmount3(value) {
-			const num = Number(value || 0);
-			return num.toFixed(3);
-		},
+		formatByPrecision(value) {
+		const num = Number(value || 0);
+		return num.toFixed(this.decimalPrecision);
+	},
 		handleAdditionalDiscountUpdate(value) {
 			this.$emit("update:additional_discount", value);
 		},
@@ -1118,13 +1116,34 @@ export default {
 		async handleCancelSale() {
 			this.cancelLoading = true;
 			try {
+				// Only emit the cancel-sale event to parent
+				// Parent will show the confirmation dialog
 				this.$emit("cancel-sale");
-				this.resetAfterPayment();
 			} finally {
 				setTimeout(() => {
 					this.cancelLoading = false;
 				}, 500);
 			}
+		},
+
+		// Add this NEW method to handle the actual clearing after confirmation
+		handleConfirmedCancelSale() {
+			console.log("[InvoiceSummary] Cancel sale confirmed by user - clearing data");
+
+			// Reset local state
+			this.resetAfterPayment();
+
+			// Emit clear invoice to reset payment data
+			this.eventBus.emit("clear_invoice");
+
+			// Close payment dialog if open
+			this.eventBus.emit("show_payment", "false");
+
+			// Show success message
+			frappe.show_alert({
+				message: this.__("Sale cancelled successfully"),
+				indicator: "orange",
+			});
 		},
 
 		async handleOpenReturns() {
@@ -1258,6 +1277,8 @@ export default {
 		this.eventBus.on("employee_selected", this.handleExternalEmployeeSelected);
 
 		this.eventBus.on("payment_completed", this.resetAfterPayment);
+
+		this.eventBus.on("confirm_cancel_sale", this.handleConfirmedCancelSale);
 	},
 	beforeUnmount() {
 		this.eventBus.off("item_added_to_invoice", this.checkAutoApplyCard);
@@ -1268,6 +1289,7 @@ export default {
 		this.eventBus.off("load_odometer_data");
 		this.eventBus.off("update_customer_details");
 		this.eventBus.off("payment_completed", this.resetAfterPayment);
+		this.eventBus.off("confirm_cancel_sale", this.handleConfirmedCancelSale);
 
 	},
 };

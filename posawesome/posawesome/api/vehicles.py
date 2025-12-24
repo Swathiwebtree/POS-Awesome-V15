@@ -420,3 +420,40 @@ def get_vehicles_by_search(search_term="", limit=1):
         return {}
 
     return get_customer_by_vehicle(search_term)
+
+@frappe.whitelist()
+def get_all_vehicles(limit=500):
+    """
+    Used for POS vehicle dropdown (no customer selected).
+    Returns ALL vehicles with linked customer details.
+    """
+
+    vehicles = frappe.get_all(
+        VEHICLE_DOCTYPE,
+        fields=[
+            "name",
+            "vehicle_no",
+            "customer",
+        ],
+        order_by="modified desc",
+        limit_page_length=int(limit),
+    )
+
+    if not vehicles:
+        return []
+
+    # Fetch customer details in ONE query (important)
+    customer_names = list({v.customer for v in vehicles if v.customer})
+    customers = frappe.get_all(
+        "Customer",
+        filters={"name": ["in", customer_names]},
+        fields=["name", "customer_name", "mobile_no"],
+    )
+    customer_map = {c.name: c for c in customers}
+
+    for v in vehicles:
+        cust = customer_map.get(v.customer)
+        v["customer_name"] = cust.customer_name if cust else ""
+        v["mobile_no"] = cust.mobile_no if cust else ""
+
+    return vehicles

@@ -29,7 +29,14 @@ export default {
 	emits: ["update:modelValue", "confirm"],
 	methods: {
 		onConfirm() {
+			// Emit confirm event to parent
 			this.$emit("confirm");
+			
+			// Emit event bus for InvoiceSummary and Payments to clear
+			this.eventBus.emit("confirm_cancel_sale");
+			
+			// Close the dialog
+			this.$emit("update:modelValue", false);
 		},
 	},
 };
