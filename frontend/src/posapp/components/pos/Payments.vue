@@ -77,7 +77,7 @@
 
 											<div v-if="!is_mpesa_c2b_payment(payment)" class="payment-method-card"
 												:class="{ active: payment.amount > 0, disabled: invoice_doc.is_return }"
-												@click="!invoice_doc.is_return && set_full_amount(payment.idx)">
+												@click.stop>
 												<div class="method-left">
 													<v-icon size="26" color="primary">
 														{{ payment.mode_of_payment.toLowerCase().includes('cash') ?
@@ -94,7 +94,7 @@
 												<v-text-field density="compact" variant="solo" hide-details
 													class="method-input" :model-value="payment.amount ? formatCurrency(payment.amount) : ''"
 													@change="setFormatedCurrency(payment, 'amount', null, false, $event)"
-													@focus="payment.amount === 0 && set_rest_amount(payment.idx)" :rules="[
+													@focus="is_user_editing_paid_change = true" :rules="[
 														isNumber,
 														(v) =>
 															!payment.mode_of_payment.toLowerCase().includes('cash') ||
@@ -518,6 +518,8 @@ export default {
 	mixins: [format],
 	data() {
 		return {
+			showEmployeeSelection: false,
+			selectedEmployee: null,
 			showDialog: false,
 			selected_customer_is_corporate:false,
 			loading: false, // UI loading state
@@ -736,11 +738,11 @@ export default {
 			console.log("[Payment] loading state changed to:", newVal);
 		},
 
-		diff_payment(newVal) {
-			if (!this.is_user_editing_paid_change) {
-				this.paid_change = -newVal;
-			}
-		},
+		// diff_payment(newVal) {
+		// 	if (!this.is_user_editing_paid_change) {
+		// 		this.paid_change = -newVal;
+		// 	}
+		// },
 		paid_change(newVal) {
 			const changeLimit = -this.diff_payment;
 			if (newVal > changeLimit) {
@@ -1034,15 +1036,21 @@ export default {
 		},
 		handleShowPayment(data) {
 
-			// 1️⃣ VALIDATIONS (unchanged)
-			if (this.showEmployeeSelection && !this.selectedEmployee) {
-				frappe.show_alert({
-					message: this.__("Please select a service employee before proceeding to payment."),
-					indicator: "red",
-				});
-				frappe.utils.play_sound("error");
-				return;
-			}
+			// // SYNC EMPLOYEE STATE BEFORE VALIDATION
+			// this.showEmployeeSelection = !!this.invoice_doc?.custom_has_service_item;
+			// this.selectedEmployee = this.invoice_doc?.custom_service_employee || null;
+
+
+			// // 1️ VALIDATIONS (unchanged)
+			// if (this.showEmployeeSelection && !this.selectedEmployee) {
+			// 	frappe.show_alert({
+			// 		message: this.__("Please select a service employee before proceeding to payment."),
+			// 		indicator: "red",
+			// 	});
+			// 	frappe.utils.play_sound("error");
+			// 	this.showDialog = false;
+			// 	return;
+			// }
 
 			if (this.showOdometerField) {
 				if (!this.odometerValue || isNaN(this.odometerValue) || Number(this.odometerValue) <= 0) {
@@ -1055,7 +1063,7 @@ export default {
 				}
 			}
 
-			// 2️⃣ FORCE BACKEND TAX CALCULATION
+			//  FORCE BACKEND TAX CALCULATION
 			if (this.invoice_doc) {
 				frappe.call({
 					method: "posawesome.posawesome.api.invoices.update_invoice",
@@ -1085,7 +1093,7 @@ export default {
 				});
 			}
 
-			// 3️⃣ OPEN PAYMENT UI
+			//  OPEN PAYMENT UI
 			if (data === "true") {
 				this.$nextTick(() => {
 					setTimeout(() => {
@@ -2304,15 +2312,31 @@ export default {
 
 			if (data === "true") {
 
-				console.log("[Payment] Opening modal");
+				const hasServiceItem = this.invoice_doc?.items?.some(
+					item => item.is_service_item === 1 || item.item_group === "Services"
+				);
+
+				const hasEmployee = !!this.invoice_doc?.custom_service_employee;
+
+				if (hasServiceItem && !hasEmployee) {
+					frappe.show_alert({
+						message: __("Please select a service employee before proceeding to payment."),
+						indicator: "red",
+					});
+					frappe.utils.play_sound("error");
+
+					this.showDialog = false;
+					this.loading = false;
+					this.highlightSubmit = false;
+					return;
+				}
+
 				this.showDialog = true;
 				this.loading = false;
 				this.highlightSubmit = false;
 
-				// Get invoice data from Invoice component
 				this.eventBus.emit("get_current_invoice_from_component");
 
-				// Scroll to submit button and highlight
 				this.$nextTick(() => {
 					setTimeout(() => {
 						const btn = this.$refs.submitButton;
@@ -2324,15 +2348,16 @@ export default {
 						}
 					}, 100);
 				});
-			} else if (data === "false") {
-				console.log("[Payment] Closing modal via event");
+			}
+			else if (data === "false") {
 				this.showDialog = false;
-				this.highlightSubmit = false;
 				this.loading = false;
+				this.highlightSubmit = false;
 			}
 		});
 
-	
+
+
 		this.eventBus.on("current_invoice_data", (invoiceData) => {
 			console.log("[Payment] current_invoice_data received");
 
