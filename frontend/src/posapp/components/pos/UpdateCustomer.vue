@@ -130,7 +130,7 @@ export default {
 		loyalty_program: null,
 		hideNonEssential: false,
 
-		// Vehicle fields (visible in both create & update)
+		// Vehicle fields 
 		vehicle_no: "",
 		vehicle_make: "",
 		vehicle_model: "",

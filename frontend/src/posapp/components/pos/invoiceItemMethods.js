@@ -53,6 +53,48 @@ export default {
 		return removeItem(item, this);
 	},
 
+	async fetch_item_tax_template(item_code) {
+		try {
+			const res = await frappe.call({
+				method: "posawesome.posawesome.api.items.get_item_tax_template",
+				args: { item_code }
+			});
+			return res.message || null;
+		} catch (e) {
+			console.error("Item tax fetch failed", e);
+			return null;
+		}
+	},
+
+	async apply_item_tax_template(item, tax_template_name) {
+		if (!tax_template_name) return;
+
+		try {
+			const response = await frappe.call({
+				method: 'frappe.client.get',
+				args: {
+					doctype: 'Item Tax Template',
+					name: tax_template_name
+				}
+			});
+
+			if (response?.message?.taxes) {
+				// Build item_tax_rate JSON string
+				const tax_rates = {};
+				response.message.taxes.forEach(tax => {
+					tax_rates[tax.tax_type] = tax.tax_rate;
+				});
+
+				item.item_tax_template = tax_template_name;
+				item.item_tax_rate = JSON.stringify(tax_rates);
+
+				console.log('[Invoice] Applied tax template:', tax_template_name, tax_rates);
+			}
+		} catch (error) {
+			console.error('[Invoice] Error applying tax template:', error);
+		}
+	},
+
 	async add_item(item) {
 		try {
 			if (isServiceItem(item)) {
@@ -76,6 +118,13 @@ export default {
 				it.uom === (item.uom || it.uom) &&
 				(!it.batch_no || it.batch_no === item.batch_no),
 		);
+		const tax_template = await this.fetch_item_tax_template(item.item_code);
+		if (tax_template) {
+			await this.apply_item_tax_template(item, tax_template);
+		}
+
+		// Calculate price after tax is set
+		await this.calc_item_price(item);
 
 		// IMPORTANT: skip fetching available qty for service items to avoid clamp/alert
 		if (target && this.fetch_available_qty) {
@@ -317,6 +366,25 @@ export default {
 		this.customer = data.customer || "";
 
 		console.log("[Invoice] load_invoice completed with customer:", data.customer);
+
+		if (data.taxes && Array.isArray(data.taxes)) {
+			this.invoice_doc.taxes = data.taxes.map(tax => ({
+				...tax,
+				doctype: "Sales Taxes and Charges"
+			}));
+
+			// Calculate total tax amount
+			this.total_tax = data.taxes.reduce((sum, tax) => {
+				return sum + (parseFloat(tax.tax_amount) || 0);
+			}, 0);
+
+			console.log("[Invoice] Loaded taxes:", this.total_tax);
+		}
+
+		this.$nextTick(() => {
+			this.apply_additional_discount();
+			this.$forceUpdate();
+		});
 	},
 
 	// Save and clear the current invoice (draft logic)

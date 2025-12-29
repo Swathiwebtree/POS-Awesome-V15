@@ -155,51 +155,87 @@ def close_shift():
         return {"success": False, "message": _("Failed to close shift: {0}").format(str(e))}
 
 
+def get_shift_payment_mode_totals(shift_start, pos_profile):
+    """
+    Returns payment totals per mode_of_payment
+    """
+    return frappe.db.sql("""
+        SELECT
+            sip.mode_of_payment,
+            SUM(sip.amount) AS total_amount
+        FROM `tabSales Invoice Payment` sip
+        INNER JOIN `tabSales Invoice` si
+            ON si.name = sip.parent
+        WHERE
+            si.docstatus = 1
+            AND si.pos_profile = %s
+            AND si.creation >= %s
+        GROUP BY sip.mode_of_payment
+    """, (pos_profile, shift_start), as_dict=True)
+
+def get_shift_payment_entry_totals(shift_start, pos_profile):
+    """
+    Returns totals per mode_of_payment from Payment Entry
+    """
+    return frappe.db.sql("""
+        SELECT
+            pe.mode_of_payment,
+            SUM(pe.paid_amount) AS total_amount
+        FROM `tabPayment Entry` pe
+        INNER JOIN `tabPayment Entry Reference` per
+            ON per.parent = pe.name
+        INNER JOIN `tabSales Invoice` si
+            ON si.name = per.reference_name
+        WHERE
+            pe.docstatus = 1
+            AND pe.payment_type = 'Receive'
+            AND si.pos_profile = %s
+            AND pe.creation >= %s
+        GROUP BY pe.mode_of_payment
+    """, (pos_profile, shift_start), as_dict=True)
+
+
+
 @frappe.whitelist()
 def get_closing_dialog_data():
-    """
-    Return data needed to populate the closing dialog.
-    This implementation avoids referencing non-existent SQL columns (e.g. p.currency)
-    by fetching payment methods and then resolving currency per POS Profile.
-    """
     data = {}
 
-    # Find POS Profiles where current user is part of POS Profile User
-    pos_profiles_data = frappe.db.sql(
-        """
+    # -------------------------------------------------------
+    # 1. POS Profiles
+    # -------------------------------------------------------
+    pos_profiles_data = frappe.db.sql("""
         SELECT DISTINCT p.name, p.company
         FROM `tabPOS Profile` p
         INNER JOIN `tabPOS Profile User` u ON u.parent = p.name
         WHERE p.disabled = 0 AND u.user = %s
         ORDER BY p.name
-        """,
-        frappe.session.user,
-        as_dict=1,
-    )
+    """, frappe.session.user, as_dict=True)
 
-    # If none found, return empty
     if not pos_profiles_data:
-        data["pos_profiles_data"] = []
-        data["companies"] = []
-        data["payments_method"] = []
-        return data
+        return {
+            "pos_profiles_data": [],
+            "companies": [],
+            "payments_method": [],
+            "payment_reconciliation": [],
+        }
 
     data["pos_profiles_data"] = pos_profiles_data
 
-    # Derive company list
-    company_names = []
-    for profile in pos_profiles_data:
-        if profile.company and profile.company not in company_names:
-            company_names.append(profile.company)
-    data["companies"] = [{"name": c} for c in company_names]
+    # -------------------------------------------------------
+    # 2. Companies
+    # -------------------------------------------------------
+    companies = list({p.company for p in pos_profiles_data if p.company})
+    data["companies"] = [{"name": c} for c in companies]
 
-    # Build list of pos_profile names for filtering payment methods
     pos_profiles_list = [p.name for p in pos_profiles_data]
 
-    # Determine payments table name (compat with different versions)
-    payment_method_table = "POS Payment Method" if get_version() == 13 else "Sales Invoice Payment"
+    # -------------------------------------------------------
+    # 3. Payment methods from POS Profile
+    # -------------------------------------------------------
+    payment_method_table = (
+        "POS Payment Method" if get_version() == 13 else "Sales Invoice Payment"
+    )
 
-    # Fetch payment methods using frappe.get_list (safer than raw SQL select with missing columns)
     payments = frappe.get_list(
         payment_method_table,
         filters={"parent": ["in", pos_profiles_list]},
@@ -209,28 +245,123 @@ def get_closing_dialog_data():
         ignore_permissions=True,
     )
 
-    # For each payment method row, populate currency from POS Profile (if not present)
-    for row in payments:
-        try:
-            # many older schemas store currency on the POS Profile, not on the payment row
-            # use cached value to avoid extra queries where possible
-            profile_currency = frappe.get_cached_value("POS Profile", row.get("parent"), "currency")
-            if profile_currency:
-                row["currency"] = profile_currency
-            else:
-                # fallback: try company default currency if profile has no currency
-                profile_company = frappe.get_cached_value("POS Profile", row.get("parent"), "company")
-                if profile_company:
-                    row["currency"] = frappe.get_cached_value(
-                        "Company", profile_company, "default_currency"
-                    ) or row.get("currency")
-        except Exception as e:
-            # don't break the entire function for one missing value; log and continue
-            frappe.log_error(frappe.get_traceback(), "get_closing_dialog_data: currency lookup failed")
-            row["currency"] = row.get("currency") or ""
+    for pm in payments:
+        currency = frappe.get_cached_value("POS Profile", pm.parent, "currency")
+        if not currency:
+            company = frappe.get_cached_value("POS Profile", pm.parent, "company")
+            currency = frappe.get_cached_value("Company", company, "default_currency")
+        pm["currency"] = currency
 
     data["payments_method"] = payments
 
+    # -------------------------------------------------------
+    # 4. Open POS Shift
+    # -------------------------------------------------------
+    open_shift = frappe.get_all(
+        "POS Opening Shift",
+        filters={
+            "user": frappe.session.user,
+            "pos_closing_shift": ["in", ["", None]],
+            "docstatus": 1,
+            "status": "Open",
+        },
+        fields=["name", "period_start_date", "pos_profile"],
+        order_by="period_start_date desc",
+        limit_page_length=1,
+    )
+
+    if not open_shift:
+        data["payment_reconciliation"] = []
+        return data
+
+    shift_start = open_shift[0].period_start_date
+    pos_profile = open_shift[0].pos_profile
+
+    # -------------------------------------------------------
+    # 5A. POS CASH payments (Sales Invoice Payment)
+    # -------------------------------------------------------
+    pos_invoice_payments = get_shift_payment_mode_totals(
+        shift_start, pos_profile
+    )
+
+    pos_invoice_totals = {
+        p.mode_of_payment: flt(p.total_amount)
+        for p in pos_invoice_payments
+    }
+
+    # -------------------------------------------------------
+    # 5B. NON-CASH payments (Payment Entry)
+    # -------------------------------------------------------
+    payment_entry_payments = frappe.db.sql("""
+        SELECT
+            pe.mode_of_payment,
+            SUM(pe.paid_amount) AS total_amount
+        FROM `tabPayment Entry` pe
+        INNER JOIN `tabPayment Entry Reference` per
+            ON per.parent = pe.name
+        INNER JOIN `tabSales Invoice` si
+            ON si.name = per.reference_name
+        WHERE
+            pe.docstatus = 1
+            AND pe.payment_type = 'Receive'
+            AND si.pos_profile = %s
+            AND pe.creation >= %s
+        GROUP BY pe.mode_of_payment
+    """, (pos_profile, shift_start), as_dict=True)
+
+    payment_entry_totals = {
+        p.mode_of_payment: flt(p.total_amount)
+        for p in payment_entry_payments
+    }
+
+    # -------------------------------------------------------
+    # 5C. MERGE ALL totals
+    # -------------------------------------------------------
+    all_totals = {}
+
+    for mode, amt in pos_invoice_totals.items():
+        all_totals[mode] = all_totals.get(mode, 0) + amt
+
+    for mode, amt in payment_entry_totals.items():
+        all_totals[mode] = all_totals.get(mode, 0) + amt
+
+    # -------------------------------------------------------
+    # 5D. Credit-only fallback (NO payments)
+    # -------------------------------------------------------
+    sales_total = frappe.db.sql("""
+        SELECT SUM(si.grand_total) AS total
+        FROM `tabSales Invoice` si
+        WHERE
+            si.docstatus = 1
+            AND si.pos_profile = %s
+            AND si.creation >= %s
+    """, (pos_profile, shift_start), as_dict=True)
+
+    sales_total = flt(sales_total[0].total) if sales_total else 0
+
+    # -------------------------------------------------------
+    # 6. FINAL reconciliation logic 
+    # -------------------------------------------------------
+    reconciliation = []
+
+    for pm in payments:
+        mode = pm.mode_of_payment
+
+        if all_totals:
+            expected = all_totals.get(mode, 0)
+        else:
+            # Credit sale → Cash only
+            expected = sales_total if mode == "Cash" else 0
+
+        reconciliation.append({
+            "mode_of_payment": mode,
+            "opening_amount": 0,
+            "expected_amount": expected,
+            "closing_amount": expected,
+            "currency": pm.currency,
+        })
+
+    data["payment_reconciliation"] = reconciliation
     return data
 
 
@@ -296,3 +427,4 @@ def close_shift_with_reconciliation(balance_details=None):
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "posawesome.close_shift_with_reconciliation")
         return {"success": False, "message": _("Failed to close shift: {0}").format(str(e))}
+

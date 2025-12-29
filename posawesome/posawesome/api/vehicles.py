@@ -457,3 +457,26 @@ def get_all_vehicles(limit=500):
         v["mobile_no"] = cust.mobile_no if cust else ""
 
     return vehicles
+    
+@frappe.whitelist()
+def get_vehicle_makes(search_term=""):
+    conditions = ""
+    values = []
+
+    if search_term:
+        conditions = "WHERE make LIKE %s"
+        values.append(f"%{search_term}%")
+
+    makes = frappe.db.sql(
+        f"""
+        SELECT DISTINCT make
+        FROM `tabVehicle`
+        {conditions}
+        ORDER BY make ASC
+        LIMIT 20
+        """,
+        values,
+        as_dict=True,
+    )
+
+    return [d["make"] for d in makes if d.get("make")]

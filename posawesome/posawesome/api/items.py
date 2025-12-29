@@ -560,9 +560,9 @@ def get_items_details(pos_profile, items_data, price_list=None, customer=None):
 					AND item_code IN %(item_codes)s
 					AND currency = %(currency)s
 					AND selling = 1
-					AND valid_from <= %(today)s
+					AND (valid_from IS NULL OR valid_from <= %(today)s)
 					AND IFNULL(customer, '') IN ('', %(customer)s)
-					AND valid_upto >= %(today)s
+					AND (valid_upto IS NULL OR valid_upto = '' OR valid_upto >= %(today)s)
 				UNION ALL
 				SELECT
 					item_code,
@@ -1110,3 +1110,14 @@ def get_item_brand(item_code):
     if not brand and data.variant_of:
         brand = frappe.db.get_value("Item", data.variant_of, "brand")
     return normalize_brand(brand) if brand else ""
+
+@frappe.whitelist()
+def get_item_tax_template(item_code):
+    """
+    Return item_tax_template from Item Tax child table
+    """
+    return frappe.db.get_value(
+        "Item Tax",
+        {"parent": item_code},
+        "item_tax_template"
+    )

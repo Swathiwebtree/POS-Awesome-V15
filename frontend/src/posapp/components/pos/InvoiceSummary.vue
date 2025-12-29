@@ -597,40 +597,39 @@ export default {
 	},
 	methods: {
 
-		 resetAfterPayment() {
-    // Core sale state
-    this.selectedEmployee = null;
-    this.showEmployeeSelection = false;
+		resetAfterPayment() {
+			// Core sale state
+			this.selectedEmployee = null;
+			this.showEmployeeSelection = false;
 
-    this.showOdometerField = false;
-    this.odometerReading = null;
-    this.vehicleNumber = "";
-    this.mobileNumber = "";
+			this.showOdometerField = false;
+			this.odometerReading = null;
+			this.vehicleNumber = "";
+			this.mobileNumber = "";
 
-    // Loyalty
-    this.loyaltyPoints = null;
-    this.pointsToRedeem = 0;
-    this.conversionFactor = 0;
-    this.customerName = "";
+			// Loyalty
+			this.loyaltyPoints = null;
+			this.pointsToRedeem = 0;
+			this.conversionFactor = 0;
+			this.customerName = "";
 
-    // Frequent cards
-    this.frequentCards = [];
-    this.showFrequentCardsDialog = false;
-    this.applyingCard = false;
+			// Frequent cards
+			this.frequentCards = [];
+			this.showFrequentCardsDialog = false;
+			this.applyingCard = false;
 
-    // UI loaders
-    this.saveLoading = false;
-    this.paymentLoading = false;
+			// UI loaders
+			this.saveLoading = false;
+			this.paymentLoading = false;
 
-    // 🔥 Important: clear localStorage if you used it
-    localStorage.removeItem("pos_selected_employee");
+			localStorage.removeItem("pos_selected_employee");
 
-    console.log("[InvoiceSummary] Reset after payment completed");
-  },
+			console.log("[InvoiceSummary] Reset after payment completed");
+		},
 		formatByPrecision(value) {
-		const num = Number(value || 0);
-		return num.toFixed(this.decimalPrecision);
-	},
+			const num = Number(value || 0);
+			return num.toFixed(this.decimalPrecision);
+		},
 		handleAdditionalDiscountUpdate(value) {
 			this.$emit("update:additional_discount", value);
 		},

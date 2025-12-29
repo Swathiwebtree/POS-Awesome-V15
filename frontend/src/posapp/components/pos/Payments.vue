@@ -1036,22 +1036,6 @@ export default {
 		},
 		handleShowPayment(data) {
 
-			// // SYNC EMPLOYEE STATE BEFORE VALIDATION
-			// this.showEmployeeSelection = !!this.invoice_doc?.custom_has_service_item;
-			// this.selectedEmployee = this.invoice_doc?.custom_service_employee || null;
-
-
-			// // 1️ VALIDATIONS (unchanged)
-			// if (this.showEmployeeSelection && !this.selectedEmployee) {
-			// 	frappe.show_alert({
-			// 		message: this.__("Please select a service employee before proceeding to payment."),
-			// 		indicator: "red",
-			// 	});
-			// 	frappe.utils.play_sound("error");
-			// 	this.showDialog = false;
-			// 	return;
-			// }
-
 			if (this.showOdometerField) {
 				if (!this.odometerValue || isNaN(this.odometerValue) || Number(this.odometerValue) <= 0) {
 					frappe.show_alert({
@@ -1063,40 +1047,30 @@ export default {
 				}
 			}
 
-			//  FORCE BACKEND TAX CALCULATION
-			if (this.invoice_doc) {
-				frappe.call({
-					method: "posawesome.posawesome.api.invoices.update_invoice",
-					args: { data: this.invoice_doc },
-					async: false,
-					callback: (r) => {
-						if (r.message) {
-							// CLOSE → REPLACE → OPEN (Vuetify-safe)
-							this.showDialog = false;
+			if (!this.invoice_doc) return;
 
-							this.$nextTick(() => {
-							    
-								this.invoice_doc = { ...r.message };
+			this.loading = true;
 
-								this.$nextTick(() => {
-									this.showDialog = true;
-								});
-							});
+			frappe.call({
+				method: "posawesome.posawesome.api.invoices.update_invoice",
+				args: { data: this.invoice_doc },
+				callback: (r) => {
+					this.loading = false;
 
-							console.log("[Payment] Backend totals", {
-								net: r.message.net_total,
-								tax: r.message.total_taxes_and_charges,
-								grand: r.message.grand_total
-							});
-						}
-					}
-				});
-			}
+					if (!r.message) return;
 
-			//  OPEN PAYMENT UI
-			if (data === "true") {
-				this.$nextTick(() => {
-					setTimeout(() => {
+					this.invoice_doc = r.message;
+
+					console.log("[Payment] Synced invoice before opening", {
+						net: r.message.net_total,
+						tax: r.message.total_taxes_and_charges,
+						grand: r.message.grand_total
+					});
+
+					this.eventBus.emit("show_payment", "true");
+
+					// Optional UX highlight
+					this.$nextTick(() => {
 						const btn = this.$refs.submitButton;
 						const el = btn && btn.$el ? btn.$el : btn;
 						if (el) {
@@ -1104,11 +1078,9 @@ export default {
 							el.focus();
 							this.highlightSubmit = true;
 						}
-					}, 100);
-				});
-			} else {
-				this.highlightSubmit = false;
-			}
+					});
+				}
+			});
 		},
 		reset_cash_payments() {
 			if (!this.invoice_doc || !this.invoice_doc.payments) {
@@ -1156,11 +1128,11 @@ export default {
 		},
 		async submit(event, payment_received = false, print = false) {
 
-			this.invoice_doc.total_taxes_and_charges = this.computedTaxAndCharges;
+			// this.invoice_doc.total_taxes_and_charges = this.computedTaxAndCharges;
 
-			this.invoice_doc.grand_total =
-				this.flt(this.invoice_doc.net_total) +
-				this.flt(this.computedTaxAndCharges);
+			// this.invoice_doc.grand_total =
+			// 	this.flt(this.invoice_doc.net_total) +
+			// 	this.flt(this.computedTaxAndCharges);
 
 			console.log("Synced Tax:", this.invoice_doc.total_taxes_and_charges);
 			console.log("Synced Grand Total:", this.invoice_doc.grand_total);
@@ -2335,8 +2307,6 @@ export default {
 				this.loading = false;
 				this.highlightSubmit = false;
 
-				this.eventBus.emit("get_current_invoice_from_component");
-
 				this.$nextTick(() => {
 					setTimeout(() => {
 						const btn = this.$refs.submitButton;
@@ -2350,12 +2320,9 @@ export default {
 				});
 			}
 			else if (data === "false") {
-				this.showDialog = false;
-				this.loading = false;
-				this.highlightSubmit = false;
+				return;
 			}
 		});
-
 
 
 		this.eventBus.on("current_invoice_data", (invoiceData) => {

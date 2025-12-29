@@ -94,6 +94,18 @@
 										}}
 									</template>
 								</v-data-table>
+								<!-- Grand totals -->
+								<v-divider class="my-4" />
+
+								<div class="d-flex justify-end pr-4 text-subtitle-1 font-weight-bold">
+									{{ __("Total Expected") }} :
+									{{ companyCurrencySymbol }}{{ formatCurrency(totalExpectedAmount) }}
+								</div>
+
+								<div class="d-flex justify-end pr-4 text-subtitle-1 font-weight-bold mt-1">
+									{{ __("Total Closing") }} :
+									{{ companyCurrencySymbol }}{{ formatCurrency(totalClosingAmount) }}
+								</div>
 							</v-col>
 						</v-row>
 					</v-container>
@@ -174,6 +186,19 @@ export default {
 	}),
 
 	computed: {
+
+		totalExpectedAmount() {
+			return (this.dialog_data.payment_reconciliation || []).reduce(
+				(sum, p) => sum + (Number(p.expected_amount) || 0),
+				0
+			);
+		},
+		totalClosingAmount() {
+			return (this.dialog_data.payment_reconciliation || []).reduce(
+				(sum, p) => sum + (Number(p.closing_amount) || 0),
+				0
+			);
+		},
 		isDarkTheme() {
 			return this.$theme && this.$theme.current === "dark";
 		},
@@ -196,6 +221,15 @@ export default {
 				alert(this.__("Invalid closing amount"));
 				return;
 			}
+			if (this.totalExpectedAmount !== this.totalClosingAmount) {
+				frappe.show_alert({
+					message: this.__("Total closing amount does not match expected total"),
+					indicator: "red",
+				});
+				frappe.utils.play_sound("error");
+				return;
+			}
+
 
 			const balance_details = reconciliation.map((p) => ({
 				mode_of_payment: p.mode_of_payment,

@@ -1435,12 +1435,21 @@ export default {
 			}, 0);
 
 			// Keep rest of totals/fields
-			this.invoice_doc.total_taxes_and_charges = this.flt(this.total_tax || 0);
 			this.invoice_doc.discount_amount = this.flt(this.discount_amount || 0);
 			this.invoice_doc.additional_discount = this.flt(this.additional_discount || 0);
 			this.invoice_doc.additional_discount_percentage = this.flt(this.additional_discount_percentage || 0);
-			this.invoice_doc.grand_total = this.flt(this.grand_total || 0);
-			this.invoice_doc.rounded_total = this.flt(this.rounded_total || this.grand_total || 0);
+           
+			if (!this.invoice_doc.total_taxes_and_charges) {
+				this.invoice_doc.total_taxes_and_charges = 0;
+			}
+
+			if (!this.invoice_doc.grand_total) {
+				this.invoice_doc.grand_total = this.subtotal || 0;
+			}
+
+			if (!this.invoice_doc.rounded_total) {
+				this.invoice_doc.rounded_total = this.invoice_doc.grand_total;
+			}
 
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
