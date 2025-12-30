@@ -14,48 +14,118 @@ from .utilities import get_version
 
 @frappe.whitelist()
 def get_opening_dialog_data():
-    data = {}
-
-    # Get only POS Profiles where current user is defined in POS Profile User table
-    pos_profiles_data = frappe.db.sql(
-        """
-        SELECT DISTINCT p.name, p.company, p.currency 
-        FROM `tabPOS Profile` p
-        INNER JOIN `tabPOS Profile User` u ON u.parent = p.name
-        WHERE p.disabled = 0 AND u.user = %s
-        ORDER BY p.name
-    """,
-        frappe.session.user,
-        as_dict=1,
+    user = frappe.session.user
+    
+    # Get POS Profile Users
+    pos_profile_users = frappe.db.get_all(
+        "POS Profile User",
+        filters={"user": user},
+        pluck="parent"
     )
-
-    data["pos_profiles_data"] = pos_profiles_data
-
-    # Derive companies from accessible POS Profiles
-    company_names = []
-    for profile in pos_profiles_data:
-        if profile.company and profile.company not in company_names:
-            company_names.append(profile.company)
-    data["companies"] = [{"name": c} for c in company_names]
-
+    
+    # Get POS Profiles
+    pos_profiles_data = frappe.db.get_all(
+        "POS Profile",
+        filters={
+            "name": ["in", pos_profile_users],
+            "disabled": 0
+        },
+        fields=["name", "company", "currency"]
+    )
+    
+    # Get companies
+    companies = []
     pos_profiles_list = []
-    for i in data["pos_profiles_data"]:
-        pos_profiles_list.append(i.name)
-
-    payment_method_table = "POS Payment Method" if get_version() == 13 else "Sales Invoice Payment"
-    data["payments_method"] = frappe.get_list(
-        payment_method_table,
+    for profile in pos_profiles_data:
+        pos_profiles_list.append(profile.name)
+        if profile.company not in companies:
+            companies.append(profile.company)
+    
+    # Get payment methods
+    payments_method = frappe.db.get_all(
+        "POS Payment Method",
         filters={"parent": ["in", pos_profiles_list]},
-        fields=["*"],
-        limit_page_length=0,
-        order_by="parent",
-        ignore_permissions=True,
+        fields=["*"]
     )
-    # set currency from pos profile
-    for mode in data["payments_method"]:
-        mode["currency"] = frappe.get_cached_value("POS Profile", mode["parent"], "currency")
+    
+    # Get or create opening entry
+    pos_opening_entry = get_or_create_opening_entry(user, pos_profiles_data, pos_profiles_list)
+    
+    return {
+        "pos_profiles_data": pos_profiles_data,
+        "companies": [{"name": c} for c in companies],
+        "payments_method": payments_method,
+        "pos_opening_entry": pos_opening_entry
+    }
 
-    return data
+
+def get_or_create_opening_entry(user, pos_profiles_data, pos_profiles_list):
+    """Check for existing open entry or create new one"""
+    
+    if not pos_profiles_list:
+        return None
+    
+    # Check for existing open entry
+    open_entry = frappe.db.get_all(
+        "POS Opening Entry",
+        filters={
+            "user": user,
+            "pos_profile": ["in", pos_profiles_list],
+            "docstatus": 1,
+            "status": "Open"
+        },
+        fields=["name", "pos_profile", "company", "period_start_date"],
+        order_by="creation desc",
+        limit=1
+    )
+    
+    if open_entry:
+        # Check if there's a closing entry for this
+        closing_exists = frappe.db.exists(
+            "POS Closing Entry",
+            {
+                "pos_opening_entry": open_entry[0].name,
+                "docstatus": 1
+            }
+        )
+        
+        if not closing_exists:
+            return open_entry[0]
+    
+    # Create new opening entry
+    first_profile = pos_profiles_data[0]
+    
+    opening_entry = frappe.new_doc("POS Opening Entry")
+    opening_entry.user = user
+    opening_entry.pos_profile = first_profile.name
+    opening_entry.company = first_profile.company
+    opening_entry.posting_date = frappe.utils.today()
+    opening_entry.period_start_date = frappe.utils.now_datetime()
+    
+    # Get payment modes for this profile
+    payments = frappe.db.get_all(
+        "POS Payment Method",
+        filters={"parent": first_profile.name},
+        fields=["mode_of_payment"],
+        order_by="idx"
+    )
+    
+    # Add balance details with 0 opening amount
+    for payment in payments:
+        opening_entry.append("balance_details", {
+            "mode_of_payment": payment.mode_of_payment,
+            "opening_amount": 0
+        })
+    
+    opening_entry.insert()
+    opening_entry.submit()
+    
+    return {
+        "name": opening_entry.name,
+        "pos_profile": opening_entry.pos_profile,
+        "company": opening_entry.company,
+        "period_start_date": opening_entry.period_start_date
+    }
 
 
 @frappe.whitelist()
