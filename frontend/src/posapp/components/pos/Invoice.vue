@@ -2391,8 +2391,11 @@ export default {
 		};
 
 		// Remove any existing listener first to prevent duplicates, then add new one
+		console.log("[Invoice] Removing old listener...");
 		this.eventBus.off("get_current_invoice_from_component", this._handleGetInvoice);
+		console.log("[Invoice] Adding new listener...");
 		this.eventBus.on("get_current_invoice_from_component", this._handleGetInvoice);
+		console.log("[Invoice] Listener registered. Component ID:", this._uid || this.$.uid);
 
 		this.eventBus.on("prepare_invoice_for_payment", () => {
 			const invoice = this.prepareForPayment();
