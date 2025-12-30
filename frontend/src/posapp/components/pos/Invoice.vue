@@ -2380,8 +2380,8 @@ export default {
 		});
 
 		// ADD THESE NEW EVENT LISTENERS
-		// Use once() instead of on() to prevent duplicate calls
-		const handleGetInvoice = () => {
+		// Store handler so it can be properly cleaned up
+		this._handleGetInvoice = () => {
 			console.log("[Invoice] Listener triggered - calling prepareForPayment");
 			const invoiceData = this.prepareForPayment();
 			if (invoiceData) {
@@ -2390,9 +2390,9 @@ export default {
 			}
 		};
 
-		// Remove any existing listener first, then add new one
-		this.eventBus.off("get_current_invoice_from_component", handleGetInvoice);
-		this.eventBus.on("get_current_invoice_from_component", handleGetInvoice);
+		// Remove any existing listener first to prevent duplicates, then add new one
+		this.eventBus.off("get_current_invoice_from_component", this._handleGetInvoice);
+		this.eventBus.on("get_current_invoice_from_component", this._handleGetInvoice);
 
 		this.eventBus.on("prepare_invoice_for_payment", () => {
 			const invoice = this.prepareForPayment();
@@ -2577,7 +2577,10 @@ export default {
 		// Cleanup reset_posting_date listener
 		this.eventBus.off("reset_posting_date");
 
-		this.eventBus.off("get_current_invoice_from_component");
+		// Cleanup with stored handler reference
+		if (this._handleGetInvoice) {
+			this.eventBus.off("get_current_invoice_from_component", this._handleGetInvoice);
+		}
 		this.eventBus.off("prepare_invoice_for_payment");
 
 		// Clean up employee selection event listeners
