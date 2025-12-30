@@ -1549,12 +1549,14 @@ export default {
 
 			// Always use frontend-calculated totals to ensure item discounts are properly included
 			// This fixes the issue where backend-calculated totals don't include item-level discounts
+			console.log("[prepareForPayment] Called from:", new Error().stack);
 			console.log("[prepareForPayment] Current item rates:", this.items.map(i => ({
 				item: i.item_code,
 				qty: i.qty,
 				rate: i.rate,
 				discount_percentage: i.discount_percentage,
 				discount_amount: i.discount_amount,
+				price_list_rate: i.price_list_rate,
 				amount: i.qty * i.rate
 			})));
 
