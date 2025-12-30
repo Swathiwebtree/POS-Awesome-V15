@@ -441,6 +441,7 @@ export default {
 			temp_selected_columns: [], // Temporary array for column selection
 			available_columns: [], // All available columns
 			show_column_selector: false, // Column selector dialog visibility
+			invoice_instance_id: null,
 		};
 	},
 
@@ -1564,6 +1565,7 @@ export default {
 			invoiceData.net_total = this.net_total;
 			invoiceData.grand_total = this.grand_total;
 			invoiceData.rounded_total = this.rounded_total;
+			invoiceData._posa_invoice_instance_id = this.invoice_instance_id;
 
 			console.log("[prepareForPayment] Setting invoice totals:", {
 				total: invoiceData.total,
@@ -2277,6 +2279,9 @@ export default {
 	},
 
 	mounted() {
+		if (!this.invoice_instance_id) {
+			this.invoice_instance_id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+		}
 		this.eventBus.on("draft_selected", async (draftName) => {
 
 			try {
