@@ -1168,6 +1168,8 @@ export default {
 		},
 
 		async handleShowPayment() {
+			console.log("[InvoiceSummary] handleShowPayment called - START");
+			console.trace("[InvoiceSummary] Call stack:");
 
 			if (!this.selectedCustomerId) {
 				frappe.show_alert({
