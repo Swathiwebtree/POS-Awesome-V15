@@ -1168,6 +1168,8 @@ export default {
 		},
 
 		async handleShowPayment() {
+			console.log("[InvoiceSummary] handleShowPayment called - START");
+			console.trace("[InvoiceSummary] Call stack:");
 
 			if (!this.selectedCustomerId) {
 				frappe.show_alert({
@@ -1179,6 +1181,7 @@ export default {
 
 			this.paymentLoading = true;
 			try {
+				console.log("[InvoiceSummary] Emitting get_current_invoice_from_component ONCE");
 				this.eventBus.emit("get_current_invoice_from_component");
 
 				await new Promise((resolve) => {

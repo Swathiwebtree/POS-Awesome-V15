@@ -1277,13 +1277,48 @@ export default {
 				}
 			}
 
+			// Always use frontend-calculated totals to ensure item discounts are properly included
+			// This fixes the issue where backend-calculated totals don't include item-level discounts
+			console.log("[show_payment] Current item rates:", this.items.map(i => ({
+				item: i.item_code,
+				qty: i.qty,
+				rate: i.rate,
+				discount_percentage: i.discount_percentage,
+				discount_amount: i.discount_amount,
+				amount: i.qty * i.rate
+			})));
+
+			invoice_doc.total = this.Total;
+			invoice_doc.net_total = this.net_total;
+			invoice_doc.grand_total = this.grand_total;
+			invoice_doc.rounded_total = this.rounded_total;
+
+			console.log("[show_payment] Setting invoice totals:", {
+				total: invoice_doc.total,
+				net_total: invoice_doc.net_total,
+				grand_total: invoice_doc.grand_total,
+				rounded_total: invoice_doc.rounded_total,
+				backend_grand_total: invoice_doc.grand_total,
+			});
+
+			// Ensure invoice-level discount is preserved
+			if (this.additional_discount || this.discount_amount) {
+				invoice_doc.discount_amount = this.additional_discount || this.discount_amount || 0;
+				invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
+			}
+			// Recalculate base currency amounts
+			const exchangeRate = this.exchange_rate || this.conversion_rate || 1;
+			invoice_doc.base_total = invoice_doc.total * exchangeRate;
+			invoice_doc.base_net_total = invoice_doc.net_total * exchangeRate;
+			invoice_doc.base_grand_total = invoice_doc.grand_total * exchangeRate;
+			invoice_doc.base_rounded_total = invoice_doc.rounded_total * exchangeRate;
+			if (invoice_doc.discount_amount) {
+				invoice_doc.base_discount_amount = invoice_doc.discount_amount * exchangeRate;
+			}
+
 			// Get payments with correct sign (positive/negative)
+			// This MUST be called AFTER setting the correct totals
 			invoice_doc.payments = this.get_payments();
-			// Ensure totals present
-			invoice_doc.grand_total = invoice_doc.grand_total ?? this.rounded_total ?? this.subtotal;
-			invoice_doc.rounded_total =
-				invoice_doc.rounded_total ?? this.rounded_total ?? invoice_doc.grand_total;
-			invoice_doc.total = invoice_doc.total ?? this.Total ?? this.subtotal;
 
 			// Emit to Payment component
 			this.eventBus.emit("show_payment", "true");

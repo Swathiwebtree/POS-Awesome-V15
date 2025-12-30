@@ -441,6 +441,7 @@ export default {
 			temp_selected_columns: [], // Temporary array for column selection
 			available_columns: [], // All available columns
 			show_column_selector: false, // Column selector dialog visibility
+			invoice_instance_id: null,
 		};
 	},
 
@@ -1556,6 +1557,48 @@ export default {
 			// Call get_invoice_doc to ensure sync
 			const invoiceData = this.get_invoice_doc();
 
+			// Always use frontend-calculated totals to ensure item discounts are properly included
+			// This fixes the issue where backend-calculated totals don't include item-level discounts
+			console.log("[prepareForPayment] Called from:", new Error().stack);
+			console.log("[prepareForPayment] Current item rates:", this.items.map(i => ({
+				item: i.item_code,
+				qty: i.qty,
+				rate: i.rate,
+				discount_percentage: i.discount_percentage,
+				discount_amount: i.discount_amount,
+				price_list_rate: i.price_list_rate,
+				amount: i.qty * i.rate
+			})));
+
+			invoiceData.total = this.Total;
+			invoiceData.net_total = this.net_total;
+			invoiceData.grand_total = this.grand_total;
+			invoiceData.rounded_total = this.rounded_total;
+			invoiceData._posa_invoice_instance_id = this.invoice_instance_id;
+
+			console.log("[prepareForPayment] Setting invoice totals:", {
+				total: invoiceData.total,
+				net_total: invoiceData.net_total,
+				grand_total: invoiceData.grand_total,
+				rounded_total: invoiceData.rounded_total,
+			});
+
+			// Ensure invoice-level discount is preserved
+			if (this.additional_discount || this.discount_amount) {
+				invoiceData.discount_amount = this.additional_discount || this.discount_amount || 0;
+				invoiceData.additional_discount_percentage = this.additional_discount_percentage || 0;
+			}
+
+			// Recalculate base currency amounts
+			const exchangeRate = this.exchange_rate || this.conversion_rate || 1;
+			invoiceData.base_total = invoiceData.total * exchangeRate;
+			invoiceData.base_net_total = invoiceData.net_total * exchangeRate;
+			invoiceData.base_grand_total = invoiceData.grand_total * exchangeRate;
+			invoiceData.base_rounded_total = invoiceData.rounded_total * exchangeRate;
+			if (invoiceData.discount_amount) {
+				invoiceData.base_discount_amount = invoiceData.discount_amount * exchangeRate;
+			}
+
 			return invoiceData;
 		},
 
@@ -2245,6 +2288,9 @@ export default {
 	},
 
 	mounted() {
+		if (!this.invoice_instance_id) {
+			this.invoice_instance_id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+		}
 		this.eventBus.on("draft_selected", async (draftName) => {
 
 			try {
@@ -2348,12 +2394,19 @@ export default {
 		});
 
 		// ADD THESE NEW EVENT LISTENERS
-		this.eventBus.on("get_current_invoice_from_component", () => {
+		// Store handler so it can be properly cleaned up
+		this._handleGetInvoice = () => {
+			console.log("[Invoice] Listener triggered - calling prepareForPayment");
 			const invoiceData = this.prepareForPayment();
 			if (invoiceData) {
+				console.log("[Invoice] Emitting current_invoice_data");
 				this.eventBus.emit("current_invoice_data", invoiceData);
 			}
-		});
+		};
+
+		// Remove any existing listener first to prevent duplicates, then add new one
+		this.eventBus.off("get_current_invoice_from_component", this._handleGetInvoice);
+		this.eventBus.on("get_current_invoice_from_component", this._handleGetInvoice);
 
 		this.eventBus.on("prepare_invoice_for_payment", () => {
 			const invoice = this.prepareForPayment();
@@ -2489,14 +2542,6 @@ export default {
 			}
 		});
 
-		// Listener to get current invoice on demand
-		this.eventBus.on("get_current_invoice_from_component", () => {
-			const invoiceData = this.prepareForPayment();
-			if (invoiceData) {
-				this.eventBus.emit("current_invoice_data", invoiceData);
-			}
-		});
-
 		// Listener to prepare invoice for payment
 		this.eventBus.on("prepare_invoice_for_payment", () => {
 			this.prepareForPayment();
@@ -2546,7 +2591,10 @@ export default {
 		// Cleanup reset_posting_date listener
 		this.eventBus.off("reset_posting_date");
 
-		this.eventBus.off("get_current_invoice_from_component");
+		// Cleanup with stored handler reference
+		if (this._handleGetInvoice) {
+			this.eventBus.off("get_current_invoice_from_component", this._handleGetInvoice);
+		}
 		this.eventBus.off("prepare_invoice_for_payment");
 
 		// Clean up employee selection event listeners

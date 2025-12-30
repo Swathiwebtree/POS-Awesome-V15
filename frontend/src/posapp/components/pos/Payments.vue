@@ -555,6 +555,7 @@ export default {
 			addresses: [], // List of customer addresses
 			is_user_editing_paid_change: false, // User interaction flag
 			highlightSubmit: false, // Highlight state for submit button
+			_active_invoice_instance_id: null,
 		};
 	},
 	computed: {
@@ -1016,6 +1017,7 @@ export default {
 		back_to_invoice() {
 			this.showDialog = false;
 			this.loading = false;
+			this._active_invoice_instance_id = null;
 			this.eventBus.emit("show_payment", "false");
 			this.eventBus.emit("set_customer_readonly", false);
 		},
@@ -1031,6 +1033,7 @@ export default {
 				// Dialog is being closed
 				this.showDialog = false;
 				this.loading = false;
+				this._active_invoice_instance_id = null;
 				console.log("[Payment] Modal closed by user");
 			}
 		},
@@ -2327,6 +2330,17 @@ export default {
 
 		this.eventBus.on("current_invoice_data", (invoiceData) => {
 			console.log("[Payment] current_invoice_data received");
+
+			const sourceId = invoiceData && invoiceData._posa_invoice_instance_id;
+			if (sourceId) {
+				if (this._active_invoice_instance_id && this._active_invoice_instance_id !== sourceId) {
+					console.log("[Payment] Ignoring invoice data from inactive instance:", sourceId);
+					return;
+				}
+				if (!this._active_invoice_instance_id) {
+					this._active_invoice_instance_id = sourceId;
+				}
+			}
 
 			const shouldOverwriteInvoice = !this.showDialog;
 
