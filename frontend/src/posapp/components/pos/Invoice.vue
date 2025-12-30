@@ -1547,6 +1547,45 @@ export default {
 			// Call get_invoice_doc to ensure sync
 			const invoiceData = this.get_invoice_doc();
 
+			// Always use frontend-calculated totals to ensure item discounts are properly included
+			// This fixes the issue where backend-calculated totals don't include item-level discounts
+			console.log("[prepareForPayment] Current item rates:", this.items.map(i => ({
+				item: i.item_code,
+				qty: i.qty,
+				rate: i.rate,
+				discount_percentage: i.discount_percentage,
+				discount_amount: i.discount_amount,
+				amount: i.qty * i.rate
+			})));
+
+			invoiceData.total = this.Total;
+			invoiceData.net_total = this.net_total;
+			invoiceData.grand_total = this.grand_total;
+			invoiceData.rounded_total = this.rounded_total;
+
+			console.log("[prepareForPayment] Setting invoice totals:", {
+				total: invoiceData.total,
+				net_total: invoiceData.net_total,
+				grand_total: invoiceData.grand_total,
+				rounded_total: invoiceData.rounded_total,
+			});
+
+			// Ensure invoice-level discount is preserved
+			if (this.additional_discount || this.discount_amount) {
+				invoiceData.discount_amount = this.additional_discount || this.discount_amount || 0;
+				invoiceData.additional_discount_percentage = this.additional_discount_percentage || 0;
+			}
+
+			// Recalculate base currency amounts
+			const exchangeRate = this.exchange_rate || this.conversion_rate || 1;
+			invoiceData.base_total = invoiceData.total * exchangeRate;
+			invoiceData.base_net_total = invoiceData.net_total * exchangeRate;
+			invoiceData.base_grand_total = invoiceData.grand_total * exchangeRate;
+			invoiceData.base_rounded_total = invoiceData.rounded_total * exchangeRate;
+			if (invoiceData.discount_amount) {
+				invoiceData.base_discount_amount = invoiceData.discount_amount * exchangeRate;
+			}
+
 			return invoiceData;
 		},
 
