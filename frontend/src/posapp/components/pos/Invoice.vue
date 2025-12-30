@@ -2521,14 +2521,6 @@ export default {
 			}
 		});
 
-		// Listener to get current invoice on demand
-		this.eventBus.on("get_current_invoice_from_component", () => {
-			const invoiceData = this.prepareForPayment();
-			if (invoiceData) {
-				this.eventBus.emit("current_invoice_data", invoiceData);
-			}
-		});
-
 		// Listener to prepare invoice for payment
 		this.eventBus.on("prepare_invoice_for_payment", () => {
 			this.prepareForPayment();
