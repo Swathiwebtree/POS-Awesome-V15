@@ -2381,8 +2381,22 @@ export default {
 
 		// ADD THESE NEW EVENT LISTENERS
 		// Store handler so it can be properly cleaned up
+		this._lastGetInvoiceCall = 0;
 		this._handleGetInvoice = () => {
-			console.log("[Invoice] Listener triggered - calling prepareForPayment");
+			const now = Date.now();
+			const timeSinceLastCall = now - this._lastGetInvoiceCall;
+
+			console.log("[Invoice] Listener triggered. Component ID:", this._uid || this.$.uid, "Time since last call:", timeSinceLastCall);
+
+			// Debounce: ignore calls within 100ms of the previous call
+			if (timeSinceLastCall < 100) {
+				console.warn("[Invoice] DUPLICATE CALL BLOCKED - ignoring call within 100ms");
+				return;
+			}
+
+			this._lastGetInvoiceCall = now;
+			console.log("[Invoice] Calling prepareForPayment");
+
 			const invoiceData = this.prepareForPayment();
 			if (invoiceData) {
 				console.log("[Invoice] Emitting current_invoice_data");
