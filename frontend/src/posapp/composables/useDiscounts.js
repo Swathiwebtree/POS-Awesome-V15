@@ -78,6 +78,8 @@ export function useDiscounts() {
 					break;
 
 				case "discount_amount":
+					item._manual_discount_set = true;
+					item._manual_rate_set = true;
 					// Ensure discount amount doesn't exceed price list rate
 					newValue = Math.min(newValue, converted_price_list_rate);
 
@@ -110,6 +112,8 @@ export function useDiscounts() {
 					break;
 
 				case "discount_percentage":
+					item._manual_discount_set = true;
+					item._manual_rate_set = true;
 					// Ensure percentage doesn't exceed 100%
 					newValue = Math.min(newValue, 100);
 					item.discount_percentage = context.flt(newValue, context.float_precision);

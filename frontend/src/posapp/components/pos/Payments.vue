@@ -2407,6 +2407,11 @@ export default {
 
 			if (shouldOverwriteInvoice) {
 				this.invoice_doc = invoiceData;
+			} else if (this.invoice_doc) {
+				// Keep totals in sync even when dialog is already open
+				this.invoice_doc.grand_total = invoiceData.grand_total || 0;
+				this.invoice_doc.rounded_total =
+					invoiceData.rounded_total || invoiceData.grand_total || 0;
 			}
 			this.grand_total = invoiceData.grand_total || 0;
 			this.rounded_total = invoiceData.rounded_total || invoiceData.grand_total || 0;
@@ -2462,8 +2467,8 @@ export default {
 
 			// Set payment amount
 			this.payment_amount =
-				this.invoice_doc?.rounded_total ||
-				this.invoice_doc?.grand_total ||
+				invoiceData.rounded_total ||
+				invoiceData.grand_total ||
 				0;
 			console.log("[Payment] Payment amount set to:", this.payment_amount);
 

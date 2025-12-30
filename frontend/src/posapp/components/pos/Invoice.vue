@@ -715,6 +715,7 @@ export default {
 
 		handleShowCoupons() {
 			this.eventBus.emit("show_coupons", "true");
+		
 		},
 
 		get_draft_invoices() {
@@ -1118,6 +1119,18 @@ export default {
 						}
 					}
 
+					// Preserve discount amounts if base_discount_amount is missing
+					const existingDiscount = Number(item.discount_amount || 0);
+					if ((!Number.isFinite(item.base_discount_amount) || item.base_discount_amount === 0) && existingDiscount) {
+						const baseCurrency = this.price_list_currency || this.pos_profile.currency;
+						if (this.selected_currency === baseCurrency) {
+							item.base_discount_amount = existingDiscount;
+						} else {
+							const ex = this.exchange_rate || 1;
+							item.base_discount_amount = existingDiscount / ex;
+						}
+					}
+
 					// Currency conversion logic
 					const baseCurrency = this.price_list_currency || this.pos_profile.currency;
 					if (this.selected_currency === baseCurrency) {
@@ -1443,13 +1456,9 @@ export default {
 				this.invoice_doc.total_taxes_and_charges = 0;
 			}
 
-			if (!this.invoice_doc.grand_total) {
-				this.invoice_doc.grand_total = this.subtotal || 0;
-			}
-
-			if (!this.invoice_doc.rounded_total) {
-				this.invoice_doc.rounded_total = this.invoice_doc.grand_total;
-			}
+			// Always sync computed totals so payment uses the latest discounted values
+			this.invoice_doc.grand_total = this.grand_total || this.subtotal || 0;
+			this.invoice_doc.rounded_total = this.rounded_total || this.invoice_doc.grand_total;
 
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;

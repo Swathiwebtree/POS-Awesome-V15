@@ -1617,6 +1617,11 @@ export default {
 		}
 
 		const currentDoc = this.get_invoice_doc();
+		const previousDiscountState = {
+			manual: !!item._manual_discount_set,
+			discount_amount: Number(item.discount_amount || 0),
+			discount_percentage: Number(item.discount_percentage || 0),
+		};
 		frappe.call({
 			method: "posawesome.posawesome.api.items.get_item_detail",
 			args: {
@@ -1773,6 +1778,60 @@ export default {
 							);
 
 							item.rate = vm.flt(item.price_list_rate - discount_amount, vm.currency_precision);
+							item.base_rate = vm.flt(
+								item.base_price_list_rate - item.base_discount_amount,
+								vm.currency_precision,
+							);
+						}
+					}
+
+					// Preserve discounts after item detail refresh (server can reset them)
+					const shouldPreserveDiscount =
+						!item.posa_offer_applied &&
+						(previousDiscountState.discount_percentage > 0 ||
+							previousDiscountState.discount_amount > 0);
+					if (shouldPreserveDiscount) {
+						const baseCurrency = vm.price_list_currency || vm.pos_profile.currency;
+
+						if (previousDiscountState.discount_percentage > 0) {
+							const discountPercent = previousDiscountState.discount_percentage;
+							item.discount_percentage = discountPercent;
+							item.discount_amount = vm.flt(
+								(item.price_list_rate * discountPercent) / 100,
+								vm.currency_precision,
+							);
+							item.base_discount_amount = vm.flt(
+								(item.base_price_list_rate * discountPercent) / 100,
+								vm.currency_precision,
+							);
+						} else if (previousDiscountState.discount_amount > 0) {
+							const discountAmount = Math.min(
+								previousDiscountState.discount_amount,
+								item.price_list_rate || previousDiscountState.discount_amount,
+							);
+							item.discount_amount = vm.flt(discountAmount, vm.currency_precision);
+							item.discount_percentage = item.price_list_rate
+								? vm.flt(
+										(item.discount_amount / item.price_list_rate) * 100,
+										vm.float_precision,
+									)
+								: 0;
+							if (vm.selected_currency === baseCurrency) {
+								item.base_discount_amount = vm.flt(item.discount_amount, vm.currency_precision);
+							} else {
+								const ex = vm.exchange_rate || 1;
+								item.base_discount_amount = vm.flt(
+									item.discount_amount / ex,
+									vm.currency_precision,
+								);
+							}
+						}
+
+						if (item.discount_amount > 0) {
+							item.rate = vm.flt(
+								item.price_list_rate - item.discount_amount,
+								vm.currency_precision,
+							);
 							item.base_rate = vm.flt(
 								item.base_price_list_rate - item.base_discount_amount,
 								vm.currency_precision,
