@@ -2380,14 +2380,19 @@ export default {
 		});
 
 		// ADD THESE NEW EVENT LISTENERS
-		this.eventBus.on("get_current_invoice_from_component", () => {
+		// Use once() instead of on() to prevent duplicate calls
+		const handleGetInvoice = () => {
 			console.log("[Invoice] Listener triggered - calling prepareForPayment");
 			const invoiceData = this.prepareForPayment();
 			if (invoiceData) {
 				console.log("[Invoice] Emitting current_invoice_data");
 				this.eventBus.emit("current_invoice_data", invoiceData);
 			}
-		});
+		};
+
+		// Remove any existing listener first, then add new one
+		this.eventBus.off("get_current_invoice_from_component", handleGetInvoice);
+		this.eventBus.on("get_current_invoice_from_component", handleGetInvoice);
 
 		this.eventBus.on("prepare_invoice_for_payment", () => {
 			const invoice = this.prepareForPayment();
