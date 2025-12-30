@@ -2381,8 +2381,10 @@ export default {
 
 		// ADD THESE NEW EVENT LISTENERS
 		this.eventBus.on("get_current_invoice_from_component", () => {
+			console.log("[Invoice] Listener triggered - calling prepareForPayment");
 			const invoiceData = this.prepareForPayment();
 			if (invoiceData) {
+				console.log("[Invoice] Emitting current_invoice_data");
 				this.eventBus.emit("current_invoice_data", invoiceData);
 			}
 		});

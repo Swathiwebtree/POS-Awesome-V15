@@ -1179,6 +1179,7 @@ export default {
 
 			this.paymentLoading = true;
 			try {
+				console.log("[InvoiceSummary] Emitting get_current_invoice_from_component ONCE");
 				this.eventBus.emit("get_current_invoice_from_component");
 
 				await new Promise((resolve) => {
