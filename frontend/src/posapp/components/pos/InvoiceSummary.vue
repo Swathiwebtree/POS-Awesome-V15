@@ -743,7 +743,6 @@ export default {
 					method: "posawesome.posawesome.api.frequent_cards.get_customer_frequent_cards",
 					args: {
 						customer: customerId,
-						company: this.pos_profile?.company,
 					},
 				});
 

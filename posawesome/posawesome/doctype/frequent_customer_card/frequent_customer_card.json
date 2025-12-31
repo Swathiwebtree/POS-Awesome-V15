@@ -2,7 +2,7 @@
  "actions": [],
  "allow_rename": 1,
  "autoname": "format:FC-{customer}-{####}",
- "creation": "2025-11-20 18:17:23.628164",
+ "creation": "2025-12-29 15:39:50.344048",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -14,7 +14,6 @@
   "required_visits",
   "issue_date",
   "expiry_date",
-  "company",
   "status",
   "redeemed_on",
   "redeemed_invoice"
@@ -71,12 +70,6 @@
    "reqd": 1
   },
   {
-   "fieldname": "company",
-   "fieldtype": "Link",
-   "label": "Company",
-   "options": "Company"
-  },
-  {
    "default": "Active",
    "fieldname": "status",
    "fieldtype": "Select",
@@ -101,7 +94,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-20 18:35:43.655618",
+ "modified": "2025-12-31 11:37:53.509478",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Frequent Customer Card",
