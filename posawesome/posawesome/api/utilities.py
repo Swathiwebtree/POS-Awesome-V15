@@ -167,57 +167,74 @@ def ensure_child_doctype(doc, table_field, child_doctype):
 
 @frappe.whitelist()
 def get_sales_person_names():
-    import json
-
-    print("Fetching sales persons...")
     try:
+        logger = frappe.logger("posawesome")
+
+        logger.info("Fetching sales persons")
+
         profile = get_active_pos_profile()
         allowed = []
-        if profile:
-            # posa_sales_persons is the child table on POS Profile; ensure we get the raw values
-            allowed = [d.get("sales_person") for d in profile.get("posa_sales_persons", []) if d.get("sales_person")]
 
+        if profile:
+            allowed = [
+                d.get("sales_person")
+                for d in profile.get("posa_sales_persons", [])
+                if d.get("sales_person")
+            ]
 
         results = []
+
         if allowed:
-            # fetch direct matches
             direct = frappe.get_all(
                 "Sales Person",
-                filters=[["name", "in", allowed], ["enabled", "=", 1], ["is_group", "=", 0]],
+                filters=[
+                    ["name", "in", allowed],
+                    ["enabled", "=", 1],
+                    ["is_group", "=", 0],
+                ],
                 fields=["name", "sales_person_name", "parent_sales_person"],
                 limit_page_length=100000,
             ) or []
 
-            # fetch members of allowed teams
             members = frappe.get_all(
                 "Sales Person",
-                filters=[["parent_sales_person", "in", allowed], ["enabled", "=", 1], ["is_group", "=", 0]],
+                filters=[
+                    ["parent_sales_person", "in", allowed],
+                    ["enabled", "=", 1],
+                    ["is_group", "=", 0],
+                ],
                 fields=["name", "sales_person_name", "parent_sales_person"],
                 limit_page_length=100000,
             ) or []
 
-            # combine unique by name
             seen = set()
             for r in (direct + members):
-                if r.get("name") not in seen:
+                if r["name"] not in seen:
                     results.append(r)
-                    seen.add(r.get("name"))
+                    seen.add(r["name"])
         else:
-            # no allowed filter -> return all enabled non-group sales persons
             results = frappe.get_all(
                 "Sales Person",
-                filters=[["enabled", "=", 1], ["is_group", "=", 0]],
+                filters=[
+                    ["enabled", "=", 1],
+                    ["is_group", "=", 0],
+                ],
                 fields=["name", "sales_person_name", "parent_sales_person"],
                 order_by="sales_person_name",
                 limit_page_length=100000,
             ) or []
 
-        print(f"Found {len(results)} sales persons: {json.dumps(results)}")
+        logger.info(f"Found {len(results)} sales persons")
+
         return results
-    except Exception as e:
-        print(f"Error fetching sales persons: {str(e)}")
-        frappe.log_error(f"Error fetching sales persons: {str(e)}", "POS Sales Person Error")
+
+    except Exception:
+        frappe.log_error(
+            title="POS Sales Person Error",
+            message=frappe.get_traceback(),
+        )
         return []
+
 
 
 @frappe.whitelist()

@@ -73,6 +73,33 @@
 
 									<!-- PAYMENT METHODS -->
 									<div v-if="is_cashback">
+										
+										<!-- CREDIT SALE -->
+										<div v-if="pos_profile.posa_allow_credit_sale && !invoice_doc.is_return && selected_customer_is_corporate"
+											class="payment-method-card credit-sale-card"
+											:class="{ active: is_credit_sale }">
+											<div class="method-left">
+												<v-icon size="26" :color="is_credit_sale ? 'success' : 'grey'">
+													mdi-credit-card-clock
+												</v-icon>
+												<div>
+													<div class="method-title">Credit Sale</div>
+													<div class="method-amount">Amount will be added to customer credit
+													</div>
+												</div>
+											</div>
+
+											<v-btn size="small" :color="is_credit_sale ? 'success' : 'grey'"
+												:variant="is_credit_sale ? 'elevated' : 'outlined'"
+												@click="toggleCreditSale">
+												<v-icon size="20">
+													{{ is_credit_sale ? 'mdi-check-circle' : 'mdi-close-circle' }}
+												</v-icon>
+											</v-btn>
+										</div>
+
+										<v-divider class="my-2" />
+
 										<div v-for="payment in invoice_doc.payments" :key="payment.name" class="mb-2">
 
 											<div v-if="!is_mpesa_c2b_payment(payment)" class="payment-method-card"
@@ -121,31 +148,6 @@
 											</v-btn>
 
 										</div>
-									</div>
-
-									<v-divider class="my-2" />
-
-									<!-- CREDIT SALE -->
-									<div v-if="pos_profile.posa_allow_credit_sale && !invoice_doc.is_return && selected_customer_is_corporate"
-										class="payment-method-card credit-sale-card"
-										:class="{ active: is_credit_sale }">
-										<div class="method-left">
-											<v-icon size="26" :color="is_credit_sale ? 'success' : 'grey'">
-												mdi-credit-card-clock
-											</v-icon>
-											<div>
-												<div class="method-title">Credit Sale</div>
-												<div class="method-amount">Amount will be added to customer credit</div>
-											</div>
-										</div>
-
-										<v-btn size="small" :color="is_credit_sale ? 'success' : 'grey'"
-											:variant="is_credit_sale ? 'elevated' : 'outlined'"
-											@click="toggleCreditSale">
-											<v-icon size="20">
-												{{ is_credit_sale ? 'mdi-check-circle' : 'mdi-close-circle' }}
-											</v-icon>
-										</v-btn>
 									</div>
 
 								</v-col>
