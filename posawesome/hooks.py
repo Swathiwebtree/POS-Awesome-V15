@@ -43,6 +43,7 @@ doctype_js = {
     "POS Payment Method": "posawesome/api/pos_profile.js",
     "Sales Invoice": "posawesome/api/invoice.js",
     "Company": "posawesome/api/company.js",
+    "Payment Entry": "posawesome/api/payment_entry.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -109,6 +110,12 @@ doc_events = {
         "after_insert": "posawesome.posawesome.api.customer.after_insert",
         "on_update": "posawesome.posawesome.api.customer_vehicle_update.update_vehicle_for_customer",
         "after_save": "posawesome.posawesome.api.customer_vehicle_update.update_vehicle_for_customer",
+    },
+    "Consumables Material Issue": {
+        "on_submit": "posawesome.posawesome.doctype.consumables_material_issue.consumables_material_issue.create_stock_entry"
+    },
+    "Purchase Receipt": {
+        "on_submit": "posawesome.posawesome.api.purchase_receipt.create_stock_entry_from_pr"
     },
 }
 
