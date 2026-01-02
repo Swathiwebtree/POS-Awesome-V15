@@ -169,7 +169,7 @@ doc_events = {
 # auto_cancel_exempted_doctypes = ["Auto Repeat"]
 
 fixtures = [
-    {"doctype": "Workspace" },
+    {"doctype": "Workspace"},
     {
         "doctype": "Custom Field",
         "filters": [
