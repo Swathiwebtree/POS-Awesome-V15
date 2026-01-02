@@ -122,6 +122,10 @@ export default {
 		if (tax_template) {
 			await this.apply_item_tax_template(item, tax_template);
 		}
+		if (target && (item.item_tax_rate || item.item_tax_template)) {
+			target.item_tax_rate = item.item_tax_rate;
+			target.item_tax_template = item.item_tax_template;
+		}
 
 		// Calculate price after tax is set
 		await this.calc_item_price(item);
@@ -138,6 +142,26 @@ export default {
 			}
 		}
 		return res;
+	},
+
+	calculate_item_tax_from_items() {
+		let taxTotal = 0;
+		(this.items || []).forEach((item) => {
+			if (!item || !item.item_tax_rate) return;
+			let taxMap = {};
+			try {
+				taxMap = JSON.parse(item.item_tax_rate);
+			} catch (e) {
+				return;
+			}
+			const rate = item.net_rate ?? item.rate ?? 0;
+			const amount = item.net_amount ?? item.amount ?? (rate * item.qty) ?? 0;
+			const taxableAmount = this.flt ? this.flt(amount) : amount;
+			Object.values(taxMap).forEach((taxRate) => {
+				taxTotal += (taxableAmount * taxRate) / 100;
+			});
+		});
+		return this.flt ? this.flt(taxTotal, this.currency_precision || 2) : taxTotal;
 	},
 	// Create a new item object with default and calculated fields
 	get_new_item(item) {
@@ -862,6 +886,8 @@ export default {
 				...(item.sales_invoice_item && { sales_invoice_item: item.sales_invoice_item }),
 				...(item.pos_invoice_item && { pos_invoice_item: item.pos_invoice_item }),
 				discount_percentage: flt(item.discount_percentage),
+				item_tax_template: item.item_tax_template,
+				item_tax_rate: item.item_tax_rate,
 				batch_no: item.batch_no,
 				posa_notes: item.posa_notes,
 				posa_delivery_date: this.formatDateForBackend(item.posa_delivery_date),
@@ -2082,7 +2108,7 @@ export default {
 	calc_item_price(item) {
 		return calcItemPrice(item, this);
 	},
-
+ 
 	// Update UOM (unit of measure) for an item and recalculate prices
 	calc_uom(item, value) {
 		return calcUom(item, value, this);

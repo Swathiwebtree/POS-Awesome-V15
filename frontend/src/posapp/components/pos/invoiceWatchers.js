@@ -36,6 +36,13 @@ export default {
 		handler() {
 			if (this.isApplyingOffer) return;
 			this.handelOffers();
+			if (this.calculate_item_tax_from_items) {
+				const taxTotal = this.calculate_item_tax_from_items();
+				this.total_tax = taxTotal;
+				if (this.invoice_doc) {
+					this.invoice_doc.total_taxes_and_charges = taxTotal;
+				}
+			}
 			this.$forceUpdate();
 		},
 	},

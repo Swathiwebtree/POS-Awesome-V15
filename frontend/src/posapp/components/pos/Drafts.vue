@@ -9,7 +9,7 @@
 					<span class="text-caption font-weight-medium">{{ column.title }}</span>
 				</template>
 				<template v-slot:item.posting_date="{ item }">
-					<span class="text-caption">{{ item.posting_date }}</span>
+					<span class="text-caption">{{ formatDateDMY(item.posting_date) }}</span>
 				</template>
 
 				<template v-slot:column.posting_time="{ column }">
@@ -20,6 +20,18 @@
 						item.posting_time ? item.posting_time.split(".")[0] : ""
 					}}</span>
 				</template>
+
+				
+				<!-- Mobile -->
+				<template v-slot:item.contact_mobile="{ item }">
+					<span class="text-caption">{{ item.contact_mobile !== "" ? item.contact_mobile : "—" }}</span>
+				</template>
+
+				<!-- Vehicle -->
+				<template v-slot:item.custom_vehicle_no="{ item }">
+					<span class="text-caption">{{ item.custom_vehicle_no !== "" ? item.custom_vehicle_no : "—" }}</span>
+				</template>
+
 
 				<template v-slot:item.customer="{ item }">
 					<div class="d-flex align-center gap-1">
@@ -48,16 +60,6 @@
 						</v-chip>
 					</div>
 					<span v-else class="text-caption">_</span>
-				</template>
-
-				<!-- Mobile -->
-				<template v-slot:item.contact_mobile="{ item }">
-					<span class="text-caption">{{ item.contact_mobile !== "" ? item.contact_mobile : "—" }}</span>
-				</template>
-
-				<!-- Vehicle -->
-				<template v-slot:item.custom_vehicle_no="{ item }">
-					<span class="text-caption">{{ item.custom_vehicle_no !== "" ? item.custom_vehicle_no : "—" }}</span>
 				</template>
 
 				<!-- Odometer -->
@@ -207,6 +209,8 @@ export default {
 		dialog_data: [],
 		refreshing: false,
 		headers: [
+			{ title: __("Mobile"), value: "contact_mobile", align: "start", sortable: false, width: "120px" },
+			{ title: __("Vehicle"), value: "custom_vehicle_no", align: "start", sortable: false, width: "120px" },
 			{ title: __("Customer"), value: "customer", align: "start", sortable: true },
 			{ title: __("Date"), value: "posting_date", align: "start", sortable: true, width: "100px" },
 			{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
@@ -218,8 +222,6 @@ export default {
 				sortable: true,
 				width: "120px",
 			},
-			{ title: __("Mobile"), value: "contact_mobile", align: "start", sortable: false, width: "120px" },
-			{ title: __("Vehicle"), value: "custom_vehicle_no", align: "start", sortable: false, width: "120px" },
 			{ title: __("Odometer"), value: "custom_odometer_reading", align: "start", sortable: false, width: "100px" },
 			{ title: __("Amount"), value: "grand_total", align: "end", sortable: false, width: "120px" },
 		],
@@ -235,6 +237,12 @@ export default {
 		},
 	},
 	methods: {
+		formatDateDMY(dateStr) {
+			if (!dateStr) return "";
+			const [year, month, day] = dateStr.split("-");
+			return `${day}/${month}/${year}`;
+		},
+
 		isCurrentDraft(draftName) {
 			return this.$parent?.loaded_draft_name === draftName;
 		},

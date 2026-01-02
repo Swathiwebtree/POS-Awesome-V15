@@ -430,7 +430,6 @@ export default {
 		pos_profile: {},
 		flags: {},
 		items_view: "list",
-		item_group: "ALL",
 		loading: false,
 		items_group: ["ALL"],
 		items: [],
@@ -500,6 +499,14 @@ export default {
 		totalItemCount: 0,
 		posCart: [],
 	}),
+
+	props: {
+		item_group: {
+			type: String,
+			default: "ALL",
+		},
+	},
+
 
 	watch: {
 		// ADD THIS NEW WATCHER
@@ -627,19 +634,27 @@ export default {
 		new_line() {
 			this.eventBus.emit("set_new_line", this.new_line);
 		},
-		item_group(newValue, oldValue) {
-			if (this.pos_profile && this.pos_profile.pose_use_limit_search && newValue !== oldValue) {
-				if (this.pos_profile && (!this.pos_profile.posa_local_storage || !this.storageAvailable)) {
+		item_group(newVal, oldVal) {
+			if (newVal === oldVal) return;
+
+			this.searchCache.clear();
+			this.currentPage = 0;
+			this.first_search = "";
+			this.search = "";
+
+			if (this.pos_profile?.pose_use_limit_search) {
+				if (!this.pos_profile.posa_local_storage || !this.storageAvailable) {
 					this.get_items(true);
 				} else {
 					this.get_items();
 				}
-			} else if (this.pos_profile && this.pos_profile.posa_local_storage && newValue !== oldValue) {
-				if (this.storageAvailable) {
-					this.loadVisibleItems(true);
-				} else {
-					this.get_items(true);
-				}
+				return;
+			}
+
+			if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
+				this.loadVisibleItems(true);
+			} else {
+				this.get_items(true);
 			}
 		},
 		filtered_items(new_value, old_value) {
@@ -708,22 +723,15 @@ export default {
 		},
 
 		// Performance optimization: Memoized search function
-		memoizedSearch(searchTerm, itemGroup) {
-			const cacheKey = `${searchTerm || ""}_${itemGroup || "ALL"}`;
+		memoizedSearch(searchTerm) {
+			const cacheKey = searchTerm || "__all__";
 
-			// Check if we have a cached result
-			if (this.searchCache && this.searchCache.has(cacheKey)) {
-				const cachedResult = this.searchCache.get(cacheKey);
-				return cachedResult;
+			if (this.searchCache.has(cacheKey)) {
+				return this.searchCache.get(cacheKey);
 			}
 
-			// Perform the search
-			const result = this.performSearch(searchTerm, itemGroup);
-
-			// Cache the result
-			if (this.searchCache) {
-				this.searchCache.set(cacheKey, result);
-			}
+			const result = this.performSearch(searchTerm);
+			this.searchCache.set(cacheKey, result);
 
 			return result;
 		},
@@ -777,37 +785,24 @@ export default {
 			return this.posCart.reduce((sum, i) => sum + i.qty * i.rate, 0);
 		},
 
-		performSearch(searchTerm, itemGroup) {
-			if (!this.items || !this.items.length) {
-				return [];
-			}
+		performSearch(searchTerm) {
+			if (!this.items || !this.items.length) return [];
 
 			let filtered = this.items;
 
-			// Filter by item group
-			if (itemGroup !== "ALL") {
-				filtered = filtered.filter(
-					(item) =>
-						item.item_group && item.item_group.toLowerCase().includes(itemGroup.toLowerCase()),
-				);
-			}
-
-			// Filter by search term only if it exists and is long enough
-			if (searchTerm && searchTerm.trim() && searchTerm.trim().length >= 3) {
+			if (searchTerm && searchTerm.trim().length >= 3) {
 				const term = searchTerm.toLowerCase();
+
 				filtered = filtered.filter((item) => {
 					const barcodeMatch =
-						(Array.isArray(item.item_barcode) &&
-							item.item_barcode.some(
-								(b) => b.barcode && b.barcode.toLowerCase().includes(term),
-							)) ||
-						(Array.isArray(item.barcodes) &&
-							item.barcodes.some((bc) => String(bc).toLowerCase().includes(term))) ||
-						(item.barcode && String(item.barcode).toLowerCase().includes(term));
+						Array.isArray(item.item_barcode) &&
+						item.item_barcode.some(
+							(b) => b.barcode && b.barcode.toLowerCase().includes(term)
+						);
 
 					return (
-						item.item_code.toLowerCase().includes(term) ||
-						item.item_name.toLowerCase().includes(term) ||
+						item.item_code?.toLowerCase().includes(term) ||
+						item.item_name?.toLowerCase().includes(term) ||
 						barcodeMatch
 					);
 				});
@@ -1200,7 +1195,11 @@ export default {
 			}
 			try {
 				const localCount = await getStoredItemsCount();
-				const profileGroups = (this.pos_profile?.item_groups || []).map((g) => g.item_group);
+				const profileGroups =
+					this.item_group && this.item_group !== "ALL"
+						? [this.item_group]
+						: (this.pos_profile?.item_groups || []).map((g) => g.item_group);
+
 				const res = await frappe.call({
 					method: "posawesome.posawesome.api.items.get_items_count",
 					args: {
@@ -1254,7 +1253,10 @@ export default {
 			const search = this.get_search(this.first_search);
 			const gr = vm.item_group !== "ALL" ? vm.item_group.toLowerCase() : "";
 			const sr = search || "";
-			const profileGroups = (vm.pos_profile?.item_groups || []).map((g) => g.item_group);
+			const profileGroups =
+				vm.item_group && vm.item_group !== "ALL"
+					? [vm.item_group]
+					: (vm.pos_profile?.item_groups || []).map((g) => g.item_group);
 
 			// Skip if already loading the same data
 			if (!force_server && this.items_loaded && this.items.length > 0) {
@@ -1290,6 +1292,7 @@ export default {
 						pos_profile: JSON.stringify(vm.pos_profile),
 						price_list: vm.customer_price_list,
 						item_group: gr,
+						item_groups: profileGroups,
 						search_value: sr,
 						customer: vm.customer,
 						limit: vm.itemsPageLimit,
@@ -1368,7 +1371,11 @@ export default {
 		async backgroundLoadItems(startAfter, syncSince, clearBefore = false, requestToken, loaded = 0) {
 			this.isBackgroundLoading = true;
 			const limit = this.itemsPageLimit;
-			const profileGroups = (this.pos_profile?.item_groups || []).map((g) => g.item_group);
+			const profileGroups =
+				this.item_group && this.item_group !== "ALL"
+					? [this.item_group]
+					: (this.pos_profile?.item_groups || []).map((g) => g.item_group);
+
 			// When the limit is extremely high, treat it as
 			// "no incremental loading" and exit early.
 			if (!limit || limit >= 10000) {
@@ -1631,7 +1638,7 @@ export default {
 				},
 				{ title: __("Rate"), key: "rate", align: "start" },
 				// { title: __("Available QTY"), key: "actual_qty", align: "start" },
-				{ title: __("UOM"), key: "stock_uom", align: "start" },
+				//{ title: __("UOM"), key: "stock_uom", align: "start" },
 			];
 			if (!this.pos_profile.posa_display_item_code) {
 				items_headers.splice(1, 1);
@@ -2803,14 +2810,6 @@ export default {
 
 					return searchFields.some((field) => field.includes(searchTerm));
 				});
-			}
-
-			// Apply item group filter
-			if (this.item_group !== "ALL") {
-				filteredItems = filteredItems.filter(
-					(item) =>
-						item.item_group && item.item_group.toLowerCase() === this.item_group.toLowerCase(),
-				);
 			}
 
 			// Apply zero rate filter

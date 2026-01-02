@@ -112,6 +112,7 @@
 							<ItemsSelector
 								:initial-view-mode="items_view"
 								:view-mode="items_view"
+								:item_group="item_group" 
 								@update-view-mode="handleItemsViewUpdate"
 								:is-modal="false"
 								:hide-filters="true"
@@ -125,21 +126,19 @@
 							<v-col cols="12">
 								<v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
 									<!-- Item Group and Price List -->
-									<!-- <v-col cols="12" class="mb-2">
+									 <v-col cols="12" class="mb-2">
 										<v-row dense>
-											<v-col cols="12" md="6" class="pr-md-2">
-												<v-select
-													:items="items_group"
-													:label="__('Items Group')"
-													density="compact"
-													variant="solo"
-													hide-details
-													:model-value="item_group"
-													@update:model-value="handleItemGroupUpdate"
-												></v-select>
+											<v-col cols="12" class="px-0">
+												<v-select :items="items_group" :label="__('Items Group')"
+													density="compact" variant="solo" hide-details
+													class="items-group-full" :model-value="item_group"
+													@update:model-value="handleItemGroupUpdate" />
 											</v-col>
 
-											<v-col
+										</v-row>
+									</v-col>
+
+											<!-- <v-col
 												cols="12"
 												md="6"
 												class="pl-md-2"
@@ -158,7 +157,7 @@
 												></v-text-field>
 											</v-col>
 										</v-row>
-									</v-col> -->
+									</v-col>  -->
 
 									<!-- Offers & Coupons -->
 									<v-col cols="12" class="mt-2 mb-2">
@@ -745,7 +744,7 @@ export default {
 }
 
 .drafts-column {
-	flex: 0 0 25%;
+	flex: 0 0 20%;
 	padding-left: 1px;
 	padding-right: 2px;
 	flex-shrink: 0;
@@ -753,7 +752,7 @@ export default {
 }
 
 .invoice-column {
-	flex: 0 0 50%;
+	flex: 0 0 60%;
 	padding-left: 3px;
 	padding-right: 3px;
 	flex-shrink: 0;
@@ -767,7 +766,7 @@ export default {
 
 
 .items-column {
-	flex: 0 0 25%;
+	flex: 0 0 20%;
 	padding-left: 2px;
 	padding-right: 1px;
 	flex-shrink: 0;

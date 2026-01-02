@@ -1,7 +1,5 @@
 <template>
-	<v-dialog v-model="showDialog" max-width="1000px" persistent @update:model-value="handleDialogClose" transition="dialog-bottom-transition "
-		overlay-opacity="0.5">
-
+	<v-dialog v-model="showDialog" max-width="1400px" width="90vw" height="90vh" persistent scrollable="false" transition="dialog-bottom-transition " overlay-opacity="0.5">
 		<div class="payment-modal-container">
 			<div class="payment-content">
 				<div class="payment-card-wrapper">
@@ -40,7 +38,7 @@
 							</div>
 						</div>
 						<!-- Scrollable content -->
-						<div ref="paymentContainer" class="overflow-y-auto pa-2">
+						<div ref="paymentContainer" lass="pa-2 payment-content-container">
 							<v-row dense >
 
 								<v-col cols="6">
@@ -177,14 +175,14 @@
 												readonly :prefix="currencySymbol()" persistent-placeholder />
 										</v-col>
 
-											<v-col cols="6" class="mb-3">
+											<!-- <v-col cols="6" class="mb-3">
 											<v-text-field density="compact" variant="solo" color="primary"
 												:label="frappe._('Discount Amount')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field" hide-details
 												:model-value="formatCurrency(invoice_doc.discount_amount)" readonly
 												:prefix="currencySymbol(invoice_doc.currency)" persistent-placeholder />
-										</v-col>
+										</v-col> -->
 
 										<v-col cols="6" class="mb-3">
 											<v-text-field density="compact" variant="solo" color="primary"
@@ -567,10 +565,14 @@ export default {
 		},
 
 		computedTaxAndCharges() {
-			return this.flt(
+			const total = this.flt(
 				this.invoice_doc?.total_taxes_and_charges || 0,
 				this.currency_precision
 			);
+			if (total === 0 && this.invoice_doc?.items?.some((item) => item.item_tax_rate)) {
+				return this.calculateItemTax();
+			}
+			return total;
 		},
 
 		// Get the correct total for payment calculations
@@ -783,6 +785,17 @@ export default {
 				});
 			}
 		},
+		'invoice_doc.items': {
+			handler(newItems, oldItems) {
+				console.log('[Payment] invoice_doc.items changed, clearing old payment amounts');
+
+				// Only reset if items array length changed or items were modified
+				if (!oldItems || oldItems.length !== newItems?.length) {
+					this.resetPaymentAmounts();
+				}
+			},
+			deep: true
+		},
 		customer_credit_dict: {
 			handler(newVal) {
 				const total = newVal.reduce((sum, row) => sum + this.flt(row.credit_to_redeem || 0), 0);
@@ -851,6 +864,37 @@ export default {
 		},
 	},
 	methods: {
+		resetPaymentAmounts() {
+			if (!this.invoice_doc || !this.invoice_doc.payments) {
+				return;
+			}
+
+			console.log('[Payment] Resetting all payment amounts to 0');
+
+			// Clear all payment amounts
+			this.invoice_doc.payments.forEach((payment) => {
+				payment.amount = 0;
+				if (payment.base_amount !== undefined) {
+					payment.base_amount = 0;
+				}
+			});
+
+			// Reset related flags
+			this.loyalty_amount = 0;
+			this.redeemed_customer_credit = 0;
+			this.is_cashback = true;
+			this.is_credit_return = false;
+			this.is_write_off_change = false;
+			this.paid_change = 0;
+			this.credit_change = 0;
+			this.customer_credit_dict = [];
+			this.redeem_customer_credit = false;
+
+			// Force UI update
+			this.$nextTick(() => {
+				this.$forceUpdate();
+			});
+		},
 		roundByLastDigit(value, precision) {
 			if (value === null || value === undefined || isNaN(value)) return 0;
 
@@ -939,8 +983,9 @@ export default {
 				}
 
 				//  POS Awesome uses net_amount as taxable value
-				const taxableAmount =
-					this.flt(item.net_amount || (item.net_rate * item.qty) || 0);
+				const rate = item.net_rate ?? item.rate ?? 0;
+				const amount = item.net_amount ?? item.amount ?? (rate * item.qty) ?? 0;
+				const taxableAmount = this.flt(amount);
 
 				Object.values(taxMap).forEach(rate => {
 					taxTotal += (taxableAmount * rate) / 100;
@@ -2188,6 +2233,10 @@ export default {
 		this.eventBus.on("send_invoice_doc_payment", (invoice_doc) => {
 			console.log("[Payment] send_invoice_doc_payment received, initializing...");
 			this.invoice_doc = invoice_doc;
+			const hasItemTaxRates = this.invoice_doc?.items?.some((item) => item.item_tax_rate);
+			if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0) && hasItemTaxRates) {
+				this.invoice_doc.total_taxes_and_charges = this.calculateItemTax();
+			}
 
 			if (this.invoice_doc && this.invoice_doc.posting_date) {
 				const posting_date = new Date(this.invoice_doc.posting_date);
@@ -2345,6 +2394,26 @@ export default {
 			}
 
 			const shouldOverwriteInvoice = !this.showDialog;
+			const hasItemTaxRates = invoiceData?.items?.some((item) => item.item_tax_rate);
+			if (!this.flt(invoiceData?.total_taxes_and_charges || 0) && hasItemTaxRates) {
+				let taxTotal = 0;
+				invoiceData.items.forEach((item) => {
+					if (!item.item_tax_rate) return;
+					let taxMap = {};
+					try {
+						taxMap = JSON.parse(item.item_tax_rate);
+					} catch (e) {
+						return;
+					}
+					const rate = item.net_rate ?? item.rate ?? 0;
+					const amount = item.net_amount ?? item.amount ?? (rate * item.qty) ?? 0;
+					const taxableAmount = this.flt(amount);
+					Object.values(taxMap).forEach((rate) => {
+						taxTotal += (taxableAmount * rate) / 100;
+					});
+				});
+				invoiceData.total_taxes_and_charges = this.flt(taxTotal, this.currency_precision);
+			}
 
 			// Ensure payments array exists
 			if (!invoiceData.payments) {
@@ -2428,6 +2497,23 @@ export default {
 				this.invoice_doc.grand_total = invoiceData.grand_total || 0;
 				this.invoice_doc.rounded_total =
 					invoiceData.rounded_total || invoiceData.grand_total || 0;
+				if (invoiceData.items) {
+					this.invoice_doc.items = invoiceData.items;
+				}
+				if (invoiceData.total_taxes_and_charges !== undefined) {
+					this.invoice_doc.total_taxes_and_charges = invoiceData.total_taxes_and_charges;
+				}
+			}
+
+			// Reset payment amounts when invoice items change
+			if (this.invoice_doc && invoiceData.items) {
+				const oldItemCount = this.invoice_doc.items?.length || 0;
+				const newItemCount = invoiceData.items?.length || 0;
+
+				if (oldItemCount !== newItemCount) {
+					console.log('[Payment] Item count changed, resetting payments');
+					this.resetPaymentAmounts();
+				}
 			}
 			this.grand_total = invoiceData.grand_total || 0;
 			this.rounded_total = invoiceData.rounded_total || invoiceData.grand_total || 0;
@@ -2480,6 +2566,18 @@ export default {
 						console.warn("[Payment] could not fetch customer info:", err);
 					});
 			}
+
+			const item = invoiceData.items?.[0] || {};
+			console.log("[Payment] item fields", {
+				item_tax_rate: item.item_tax_rate,
+				item_tax_template: item.item_tax_template,
+				qty: item.qty,
+				rate: item.rate,
+				amount: item.amount,
+				net_rate: item.net_rate,
+				net_amount: item.net_amount,
+				price_list_rate: item.price_list_rate,
+			});
 
 			// Set payment amount
 			this.payment_amount =
@@ -2577,6 +2675,7 @@ export default {
 		this.eventBus.on("clear_invoice", () => {
 			console.log("[Payment] clear_invoice received");
 			this.resetPaymentData();
+			this.resetPaymentAmounts();
 		});
 	},
 	beforeUnmount() {
@@ -3423,5 +3522,22 @@ div.v-card.selection {
 	letter-spacing: 0.3px;
 }
 
+
+.payment-content-container {
+	max-height: none;
+	overflow: visible;
+}
+
+.payment-modal-container {
+	height: 90vh;
+	display: flex;
+	flex-direction: column;
+}
+
+.payment-card-wrapper,
+.payment-content,
+.v-card {
+	height: 100%;
+}
 
 </style>

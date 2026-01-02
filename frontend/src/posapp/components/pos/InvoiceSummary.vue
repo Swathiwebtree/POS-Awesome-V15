@@ -97,12 +97,10 @@
 							</v-col>
 
 							<!-- Total -->
-							<v-col cols="6">
-								<v-text-field :model-value="formatByPrecision(subtotal)"
-									:prefix="currencySymbol(displayCurrency)" :label="__('Total')"
-									prepend-inner-icon="mdi-cash" variant="solo" density="compact" readonly
-									color="success" class="summary-field" />
-							</v-col>
+							<v-text-field v-model="manual_total" :label="__('Total')" prepend-inner-icon="mdi-cash"
+								variant="solo" density="compact" color="success" class="summary-field" type="number"
+								:prefix="currencySymbol(displayCurrency)" @change="onManualTotalChange" />
+
 
 							<!-- Frequent Cards Button (LEFT SIDE) -->
 							<v-col cols="12">
@@ -510,6 +508,9 @@ export default {
 			odometerReading: null,
 			vehicleNumber: "",
 			mobileNumber: "",
+
+			manual_total: 0,
+			isManualEdit: false,
 		};
 	},
 	emits: [
@@ -594,9 +595,28 @@ export default {
 			},
 			immediate: true,
 		},
+
+		 subtotal: {
+			immediate: true,
+			handler(val) {
+				if (!this.isManualEdit) {
+					this.manual_total = this.formatByPrecision(val);
+				}
+			},
+  },
 	},
 	methods: {
 
+		onManualTotalChange() {
+			this.isManualEdit = true;
+
+			const enteredTotal = Number(this.manual_total || 0);
+			const calculatedTotal = Number(this.subtotal || 0);
+
+			const roundOff = enteredTotal - calculatedTotal;
+
+			this.eventBus.emit("update_manual_round_off", roundOff);
+		},
 		resetAfterPayment() {
 			// Core sale state
 			this.selectedEmployee = null;

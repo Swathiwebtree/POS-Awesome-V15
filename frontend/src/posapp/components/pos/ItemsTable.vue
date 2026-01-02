@@ -189,7 +189,7 @@
 												!!item.posa_offer_applied
 												" prepend-inner-icon="mdi-currency-usd"></v-text-field>
 									</div>
-									<div class="form-field">
+									<!-- <div class="form-field">
 										<v-text-field density="compact" variant="outlined" color="primary"
 											id="discount_percentage" :label="frappe._('Discount %')"
 											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
@@ -208,7 +208,7 @@
 												!!item.posa_is_replace ||
 												!!item.posa_offer_applied
 												" prepend-inner-icon="mdi-percent"></v-text-field>
-									</div>
+									</div> -->
 									<div class="form-field">
 										<v-text-field density="compact" variant="outlined" color="primary"
 											id="discount_amount" :label="frappe._('Discount Amount')"
@@ -395,6 +395,18 @@
 					</div>
 				</td>
 			</template>
+			<template v-slot:item.discount_percentage="{ item }">
+				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" hide-details class="discount-input"
+					:model-value="Math.round(item.discount_percentage || 0)" :disabled="!pos_profile.posa_allow_user_to_edit_item_discount ||
+						!!item.posa_is_replace ||
+						!!item.posa_offer_applied
+						" @change="[
+							item.discount_percentage = Math.round($event.target.value || 0),
+							setFormatedCurrency(item, 'discount_percentage', null, false, $event),
+							this.calcPrices(item, $event.target.value, $event),
+						]" prepend-inner-icon="mdi-percent" />
+			</template>
+
 		</v-data-table-virtual>
 		<v-dialog v-model="editNameDialog" max-width="400">
 			<v-card>

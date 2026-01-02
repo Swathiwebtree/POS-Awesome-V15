@@ -476,6 +476,23 @@ export default {
 			this.item_group = newGroup;
 		},
 
+		recalculateTotals() {
+			const precision = this.currency_precision;
+
+			const subtotal = this.flt(this.subtotal || 0, precision);
+			const tax = this.flt(this.total_tax || 0, precision);
+			const discount = this.flt(this.total_items_discount_amount || 0, precision);
+			const roundOff = this.flt(
+				this.invoice_doc.rounding_adjustment || 0,
+				precision
+			);
+
+			const grandTotal = subtotal + tax - discount + roundOff;
+
+			this.invoice_doc.grand_total = this.flt(grandTotal, precision);
+			this.invoice_doc.rounded_total = this.invoice_doc.grand_total;
+		},
+
 		initializeItemsHeaders() {
 			// Define all available columns
 			this.available_columns = [
@@ -484,7 +501,7 @@ export default {
 				{ title: __("QTY"), key: "qty", align: "start", required: true },
 				{ title: __("UOM"), key: "uom", align: "start", required: false },
 				{ title: __("Price"), key: "price_list_rate", align: "start", required: false },
-				{ title: __("Discount %"), key: "discount_value", align: "start", required: false },
+				{ title: __("Discount %"), key: "discount_percentage", align: "start", required: false },
 				{ title: __("Discount Amount"), key: "discount_amount", align: "start", required: false },
 				{ title: __("Rate"), key: "rate", align: "start", required: false },
 				{ title: __("Amount"), key: "amount", align: "start", required: true },
@@ -499,7 +516,7 @@ export default {
 					.filter((col) => {
 						if (col.required) return true;
 						if (col.key === "price_list_rate") return true;
-						if (col.key === "discount_value" && this.pos_profile.posa_display_discount_percentage)
+						if (col.key === "discount_percentage" && this.pos_profile.posa_display_discount_percentage)
 							return true;
 						if (col.key === "discount_amount" && this.pos_profile.posa_display_discount_amount)
 							return true;
@@ -2289,6 +2306,12 @@ export default {
 	},
 
 	mounted() {
+
+		this.eventBus.on("update_manual_round_off", (roundOff) => {
+			this.invoice_doc.rounding_adjustment = this.flt(roundOff, this.currency_precision);
+			this.recalculateTotals();
+		});
+
 		if (!this.invoice_instance_id) {
 			this.invoice_instance_id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 		}
@@ -2605,6 +2628,7 @@ export default {
 
 		this.eventBus.off("update_odometer_data");
         this.eventBus.off("update_customer_details");
+		this.eventBus.off("update_manual_round_off");
 	},
 
 	// Register global keyboard shortcuts when component is created
