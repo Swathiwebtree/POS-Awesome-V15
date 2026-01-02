@@ -63,7 +63,7 @@
 			</template>
 
 			<!-- Rate column (hidden if shouldHidePricing is true) -->
-			<template v-if="!shouldHidePricing" v-slot:item.rate="{ item }">
+			<template v-if="!shouldHidePricingForItem(item)" v-slot:item.rate="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span class="amount-value" :class="{ 'negative-number': isNegative(item.rate) }">{{
@@ -101,7 +101,7 @@
 			</template>
 
 			<!-- Discount amount column (hidden if shouldHidePricing is true) -->
-			<template v-if="!shouldHidePricing" v-slot:item.discount_amount="{ item }">
+			<template v-if="!shouldHidePricingForItem(item)" v-slot:item.discount_amount="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span class="amount-value" :class="{ 'negative-number': isNegative(item.discount_amount || 0) }">{{
@@ -110,7 +110,7 @@
 			</template>
 
 			<!-- Price list rate column (hidden if shouldHidePricing is true) -->
-			<template v-if="!shouldHidePricing" v-slot:item.price_list_rate="{ item }">
+			<template v-if="!shouldHidePricingForItem(item)" v-slot:item.price_list_rate="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span class="amount-value" :class="{ 'negative-number': isNegative(item.price_list_rate) }">{{
@@ -119,7 +119,7 @@
 			</template>
 
 			<!-- Offer toggle button column (hidden if shouldHidePricing is true) -->
-			<template v-if="!shouldHidePricing" v-slot:item.posa_is_offer="{ item }">
+			<template v-if="!shouldHidePricingForItem(item)" v-slot:item.posa_is_offer="{ item }">
 				<v-btn size="x-small" color="primary" variant="tonal" class="ma-0 pa-0" @click.stop="toggleOffer(item)">
 					{{ item.posa_offer_applied ? __("Remove Offer") : __("Apply Offer") }}
 				</v-btn>
@@ -170,7 +170,7 @@
 							</div>
 
 							<!-- Pricing Section (hidden when parent requests pricing hide) -->
-							<div v-if="!shouldHidePricing" class="form-section">
+							<div v-if="!shouldHidePricingForItem(item)" class="form-section">
 								<div class="section-header">
 									<v-icon size="small" class="section-icon">mdi-currency-usd</v-icon>
 									<span class="section-title">{{ __("Pricing & Discounts") }}</span>
@@ -399,7 +399,8 @@
 				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" hide-details class="discount-input"
 					:model-value="Math.round(item.discount_percentage || 0)" :disabled="!pos_profile.posa_allow_user_to_edit_item_discount ||
 						!!item.posa_is_replace ||
-						!!item.posa_offer_applied
+						!!item.posa_offer_applied ||
+						item.item_group === 'Engine Oil'
 						" @change="[
 							item.discount_percentage = Math.round($event.target.value || 0),
 							setFormatedCurrency(item, 'discount_percentage', null, false, $event),
@@ -459,11 +460,7 @@ export default {
 		toggleOffer: Function,
 		changePriceListRate: Function,
 		isNegative: Function,
-		// NEW prop - parent decides when to hide pricing
-		shouldHidePricing: {
-			type: Boolean,
-			default: false,
-		},
+
 	},
 	data() {
 		return {
@@ -502,8 +499,21 @@ export default {
 	},
 	methods: {
 
-		formatByPrecision(value) {
+		shouldHidePricingForItem(item) {
+			if (!item) return false;
+
+			return (item.item_group || "").trim() === "Engine Oil";
+		},
+
+		formatByPrecision(value, item = null) {
 			const num = Number(value || 0);
+
+			if (item && item.item_group === "Engine Oil") {
+				const precision =
+					this.pos_profile?.posa_decimal_precision ?? this.decimalPrecision;
+				return num.toFixed(precision);
+			}
+
 			return num.toFixed(this.decimalPrecision);
 		},
 		isCarWashItem(item) {

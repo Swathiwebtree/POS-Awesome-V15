@@ -458,13 +458,8 @@ export default {
 		...invoiceComputed,
 		// Check if pricing should be hidden
 		shouldHidePricing() {
-			if (!this.items || this.items.length === 0) return false;
-
-			return this.items.some(item => {
-				return item.item_group === "Engine Oil";
-			});
+			return false;
 		},
-
 	},
 
 	methods: {
@@ -1193,6 +1188,18 @@ export default {
 					item.amount = this.flt(qtyNum * rateNum, this.currency_precision);
 					item.base_amount = this.flt(qtyNum * baseRateNum, this.currency_precision);
 
+					// Engine oil
+					if ((item.item_group || "").trim() === "Engine Oil") {
+						const precision =
+							this.pos_profile?.posa_decimal_precision ?? this.currency_precision;
+
+						item.price_list_rate = this.flt(item.price_list_rate, precision);
+						item.rate = this.flt(item.rate, precision);
+						item.amount = this.flt(item.qty * item.rate, precision);
+						item.base_rate = this.flt(item.base_rate, precision);
+						item.base_amount = this.flt(item.base_amount, precision);
+					}
+
 					// Apply any other pricing rules if needed
 					this.calc_item_price && this.calc_item_price(item);
 				} catch (e) {
@@ -1201,12 +1208,16 @@ export default {
 					// Clear skip flag
 					if (item) item._skip_calc = false;
 				}
+
+
 			});
 
 			// Force UI update after all calculations
 			this.$forceUpdate && this.$forceUpdate();
 
 			this.apply_additional_discount && this.apply_additional_discount();
+
+			
 		},
 
 		formatCurrency(value, precision = null) {
