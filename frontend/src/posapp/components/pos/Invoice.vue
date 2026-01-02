@@ -477,14 +477,13 @@ export default {
 			const subtotal = this.flt(this.subtotal || 0, precision);
 			const tax = this.flt(this.total_tax || 0, precision);
 			const discount = this.flt(this.total_items_discount_amount || 0, precision);
-			const roundOff = this.flt(
-				this.invoice_doc.rounding_adjustment || 0,
-				precision
-			);
+			const roundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, precision);
 
-			const grandTotal = subtotal + tax - discount + roundOff;
+			const finalTotal = subtotal + tax - discount + roundOff;
 
-			this.invoice_doc.grand_total = this.flt(grandTotal, precision);
+			this.invoice_doc.net_total = this.flt(subtotal, precision);
+			this.invoice_doc.total = this.flt(finalTotal, precision);     
+			this.invoice_doc.grand_total = this.flt(finalTotal, precision);
 			this.invoice_doc.rounded_total = this.invoice_doc.grand_total;
 		},
 
@@ -745,6 +744,9 @@ export default {
 		},
 
 		show_payment() {
+
+			this.recalculateTotals();
+
 			const invoice = this.prepareForPayment();
 			if (invoice && invoice.items && invoice.items.length > 0) {
 				this.eventBus.emit("payment_ready", invoice);
@@ -2317,6 +2319,11 @@ export default {
 	},
 
 	mounted() {
+
+		this.eventBus.on("force_payment_refresh", () => {
+			this.recalculateTotals();
+		});
+
 
 		this.eventBus.on("update_manual_round_off", (roundOff) => {
 			this.invoice_doc.rounding_adjustment = this.flt(roundOff, this.currency_precision);

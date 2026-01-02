@@ -511,6 +511,7 @@ export default {
 
 			manual_total: 0,
 			isManualEdit: false,
+			isResetting: false,
 		};
 	},
 	emits: [
@@ -599,9 +600,8 @@ export default {
 		 subtotal: {
 			immediate: true,
 			handler(val) {
-				if (!this.isManualEdit) {
-					this.manual_total = this.formatByPrecision(val);
-				}
+				if (this.isResetting || this.isManualEdit) return; 
+				this.manual_total = this.formatByPrecision(val);
 			},
   },
 	},
@@ -616,6 +616,8 @@ export default {
 			const roundOff = enteredTotal - calculatedTotal;
 
 			this.eventBus.emit("update_manual_round_off", roundOff);
+
+			this.eventBus.emit("force_payment_refresh");
 		},
 		resetAfterPayment() {
 			// Core sale state
@@ -1236,6 +1238,18 @@ export default {
 		},
 	},
 	mounted() {
+
+		this.eventBus.on("reset_manual_total", () => {
+			this.isResetting = true;
+
+			this.manual_total = 0;
+			this.isManualEdit = false;
+
+			this.$nextTick(() => {
+				this.isResetting = false;
+			});
+		});
+
 		if (this.selectedCustomerId) {
 			this.fetchLoyaltyPoints();
 			this.fetchFrequentCards();
@@ -1311,6 +1325,8 @@ export default {
 		this.eventBus.off("update_customer_details");
 		this.eventBus.off("payment_completed", this.resetAfterPayment);
 		this.eventBus.off("confirm_cancel_sale", this.handleConfirmedCancelSale);
+		this.eventBus.off("reset_manual_total");
+
 
 	},
 };

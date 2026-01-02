@@ -168,10 +168,23 @@ export default {
 		return getNewItem(item, this);
 	},
 
-	// Reset all invoice fields to default/empty values
 	clear_invoice() {
-		return clearInvoice(this);
+		clearInvoice(this);
+
+		this.subtotal = 0;
+		this.total_tax = 0;
+		this.total_items_discount_amount = 0;
+
+		if (this.invoice_doc) {
+			this.invoice_doc.rounding_adjustment = 0;
+			this.invoice_doc.net_total = 0;
+			this.invoice_doc.grand_total = 0;
+			this.invoice_doc.rounded_total = 0;
+		}
+
+		this.eventBus.emit("reset_manual_total");
 	},
+
 
 	// Fetch customer balance from backend or cache
 	async fetch_customer_balance() {
@@ -256,6 +269,14 @@ export default {
 		}
 		this.clear_invoice();
 		this.cancel_dialog = false;
+		// Clear manual total & round off
+		this.invoice_doc.rounding_adjustment = 0;
+
+		this.eventBus.emit("reset_manual_total");
+
+		// recalc to sync UI + payment
+		this.recalculateTotals();
+
 	},
 
 	// Load an invoice (or return invoice) from data, set all fields accordingly
