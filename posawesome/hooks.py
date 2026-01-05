@@ -293,6 +293,9 @@ fixtures = [
                     "Sales Invoice-custom_has_oil_item",
                     "Sales Invoice-custom_odometer_reading",
                     "Sales Invoice-custom_service_employee",
+                    "Item Group-custom_enable_discount",
+                    "Sales Invoice-custom_job_order_number",
+                    "Company-custom_warehouse",
                 ],
             ]
         ],
@@ -313,6 +316,9 @@ fixtures = [
                     "Sales Invoice-contact_mobile-fieldtype",
                     "Sales Invoice-contact_mobile-hidden",
                     "Sales Invoice-main-field_order",
+                    "Item Group-main-field_order",
+                    "Company-main-field_order",
+                    "Material Request-set_warehouse-fetch_from",
                 ],
             ]
         ],
