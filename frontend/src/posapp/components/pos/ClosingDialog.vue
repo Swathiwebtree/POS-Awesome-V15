@@ -94,6 +94,18 @@
 										}}
 									</template>
 								</v-data-table>
+								<!-- Grand totals -->
+								<v-divider class="my-4" />
+
+								<div class="d-flex justify-end pr-4 text-subtitle-1 font-weight-bold">
+									{{ __("Total Expected") }} :
+									{{ companyCurrencySymbol }}{{ formatCurrency(totalExpectedAmount) }}
+								</div>
+
+								<div class="d-flex justify-end pr-4 text-subtitle-1 font-weight-bold mt-1">
+									{{ __("Total Closing") }} :
+									{{ companyCurrencySymbol }}{{ formatCurrency(totalClosingAmount) }}
+								</div>
 							</v-col>
 						</v-row>
 					</v-container>
@@ -110,9 +122,10 @@
 						class="pos-action-btn submit-action-btn"
 						size="large"
 						elevation="2"
+						:disabled="isSubmitting"
 					>
 						<v-icon start>mdi-check-circle-outline</v-icon>
-						<span>{{ __("Submit") }}</span>
+						<span>{{ isSubmitting ? __("Processing...") : __("Submit") }}</span>
 					</v-btn>
 
 					<!-- small gap between Submit and Close -->
@@ -124,6 +137,7 @@
 						class="pos-action-btn cancel-action-btn"
 						size="large"
 						elevation="2"
+						:disabled="isSubmitting"
 					>
 						<v-icon start>mdi-close-circle-outline</v-icon>
 						<span>{{ __("Close") }}</span>
@@ -142,6 +156,7 @@ export default {
 	data: () => ({
 		closingDialog: false,
 		itemsPerPage: 20,
+		isSubmitting: false,
 		// default to an object with array so template doesn't error before payload arrives
 		dialog_data: { payment_reconciliation: [] },
 		pos_profile: null,
@@ -174,6 +189,19 @@ export default {
 	}),
 
 	computed: {
+
+		totalExpectedAmount() {
+			return (this.dialog_data.payment_reconciliation || []).reduce(
+				(sum, p) => sum + (Number(p.expected_amount) || 0),
+				0
+			);
+		},
+		totalClosingAmount() {
+			return (this.dialog_data.payment_reconciliation || []).reduce(
+				(sum, p) => sum + (Number(p.closing_amount) || 0),
+				0
+			);
+		},
 		isDarkTheme() {
 			return this.$theme && this.$theme.current === "dark";
 		},
@@ -190,10 +218,23 @@ export default {
 		},
 
 		async submit_dialog() {
+			// Prevent double submission
+			if (this.isSubmitting) {
+				return;
+			}
+
 			const reconciliation = this.dialog_data?.payment_reconciliation || [];
 			const invalid = reconciliation.some((p) => isNaN(parseFloat(p.closing_amount)));
 			if (invalid) {
 				alert(this.__("Invalid closing amount"));
+				return;
+			}
+			if (this.totalExpectedAmount !== this.totalClosingAmount) {
+				frappe.show_alert({
+					message: this.__("Total closing amount does not match expected total"),
+					indicator: "red",
+				});
+				frappe.utils.play_sound("error");
 				return;
 			}
 
@@ -206,6 +247,8 @@ export default {
 			}));
 
 			try {
+				this.isSubmitting = true;
+
 				const resp = await frappe.call({
 					method: "posawesome.posawesome.api.shifts.close_shift_with_reconciliation",
 					args: { balance_details: JSON.stringify(balance_details) },
@@ -215,43 +258,113 @@ export default {
 				if (result && (result.success === true || result === true)) {
 					this.closingDialog = false;
 
-					// emit event so other components can react
+					// notify others before clearing cache
 					try {
 						this.eventBus?.emit("shift_closed", result);
 					} catch (e) {
-						// ignore
+						console.warn("Event bus error:", e);
 					}
 
-					// try to open opening dialog, else fallback to reload
-					try {
-						const openingResp = await frappe.call({
-							method: "posawesome.posawesome.api.shifts.get_opening_dialog_data",
-						});
-						const openingData = openingResp?.message ?? openingResp;
-						if (openingData) {
-							if (this.eventBus && typeof this.eventBus.emit === "function") {
-								this.eventBus.emit("open_OpeningDialog", openingData);
-							} else {
-								frappe.set_route("/");
-								location.reload();
-							}
-						} else {
-							frappe.set_route("/");
-							location.reload();
-						}
-					} catch (errFetch) {
-						console.error("Failed to fetch opening dialog data:", errFetch);
-						frappe.set_route("/");
-						location.reload();
-					}
+					// Clear all caches and reload
+					await this.clearPOSCacheCompletely();
+
+					// Reload page after cache is cleared
+					setTimeout(() => {
+						window.location.href = "/app";
+					}, 800);
 				} else {
+					this.isSubmitting = false;
 					const errMsg = result?.message || this.__("Failed to close shift");
-					console.error("close_shift_with_reconciliation failed:", result);
 					alert(errMsg);
 				}
 			} catch (err) {
+				this.isSubmitting = false;
 				console.error("submit_dialog error:", err);
 				alert(this.__("Failed to close shift: ") + (err?.message || err));
+			}
+		},
+
+		async clearPOSCacheCompletely() {
+			try {
+				// 1. Remove all localStorage entries
+				const localStorageKeys = [...Object.keys(localStorage)];
+				localStorageKeys.forEach(key => {
+					try {
+						localStorage.removeItem(key);
+					} catch (e) {
+						console.warn(`Could not remove localStorage key: ${key}`, e);
+					}
+				});
+
+				// 2. Clear sessionStorage
+				sessionStorage.clear();
+
+				// 3. Clear all cookies
+				document.cookie.split(";").forEach(c => {
+					const eqPos = c.indexOf("=");
+					const name = eqPos > -1 ? c.substr(0, eqPos).trim() : c.trim();
+					if (name) {
+						document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;`;
+						document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname};`;
+					}
+				});
+
+				// 4. Clear IndexedDB databases
+				if (window.indexedDB) {
+					try {
+						const databases = await indexedDB.databases();
+						for (const db of databases) {
+							try {
+								indexedDB.deleteDatabase(db.name);
+							} catch (e) {
+								console.warn(`Could not delete IndexedDB: ${db.name}`, e);
+							}
+						}
+					} catch (e) {
+						console.warn("IndexedDB databases error:", e);
+					}
+				}
+
+				// 5. Clear Frappe's internal caches
+				if (window.frappe) {
+					try {
+						frappe.clear_cache();
+					} catch (e) {
+						console.warn("Frappe clear_cache error:", e);
+					}
+				}
+
+				// 6. Clear service workers
+				if ('serviceWorker' in navigator) {
+					try {
+						const registrations = await navigator.serviceWorker.getRegistrations();
+						for (let registration of registrations) {
+							try {
+								await registration.unregister();
+							} catch (e) {
+								console.warn("Service Worker unregister error:", e);
+							}
+						}
+					} catch (e) {
+						console.warn("Service Worker error:", e);
+					}
+				}
+
+				// 7. Invalidate Service Worker cache storage
+				if ('caches' in window) {
+					try {
+						const cacheNames = await caches.keys();
+						for (const cacheName of cacheNames) {
+							await caches.delete(cacheName);
+						}
+					} catch (e) {
+						console.warn("Cache storage error:", e);
+					}
+				}
+
+				console.log("Complete POS cache cleared successfully");
+			} catch (err) {
+				console.error("Error clearing cache:", err);
 			}
 		},
 	},
@@ -264,8 +377,6 @@ export default {
 		this._onOpenClosingDialog = (raw) => {
 			let data = raw && raw.detail ? raw.detail : raw;
 			if (data && data.message && typeof data.message === "object") data = data.message;
-
-			console.log("open_ClosingDialog payload:", data);
 
 			if (!data) {
 				console.warn("open_ClosingDialog called without payload");
@@ -315,6 +426,7 @@ export default {
 			// set dialog data and open
 			this.dialog_data = data;
 			this.closingDialog = true;
+			this.isSubmitting = false;
 
 			// translate and configure headers (Vuetify expects `text`)
 			const base = [
@@ -347,6 +459,7 @@ export default {
 				!this.pos_profile || !this.pos_profile.hide_expected_amount ? [...base, ...extended] : base;
 		};
 
+		// Check if listeners are already registered - prevent duplicates
 		if (!window._closingDialogListenersRegistered) {
 			if (this.eventBus && typeof this.eventBus.on === "function") {
 				this.eventBus.on("open_ClosingDialog", this._onOpenClosingDialog);
@@ -356,7 +469,7 @@ export default {
 			window.addEventListener("open_ClosingDialog", this._onOpenClosingDialog);
 			window.addEventListener("register_pos_profile", this._onRegisterPosProfile);
 
-			// Mark as registered
+			// Mark as registered to prevent re-registration
 			window._closingDialogListenersRegistered = true;
 		}
 	},
@@ -418,7 +531,7 @@ export default {
 	color: #6b7280 !important;
 }
 
-/* Body - limit height and allow internal scrolling so overlay remains centered and not huge */
+/* Body - limit height and allow internal scrolling so overlay remains centered */
 .dialog-body {
 	max-height: calc(100vh - 220px);
 	overflow: auto;
@@ -473,8 +586,16 @@ export default {
 .submit-action-btn {
 	background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%) !important;
 }
+.submit-action-btn:disabled {
+	opacity: 0.7 !important;
+	cursor: not-allowed !important;
+}
 .cancel-action-btn {
 	background: linear-gradient(135deg, #d32f2f 0%, #c62828 100%) !important;
+}
+.cancel-action-btn:disabled {
+	opacity: 0.7 !important;
+	cursor: not-allowed !important;
 }
 
 /* z-index fixes so dialog sits above complex app UI */

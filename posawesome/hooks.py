@@ -169,7 +169,7 @@ doc_events = {
 # auto_cancel_exempted_doctypes = ["Auto Repeat"]
 
 fixtures = [
-    {"doctype": "Workspace" },
+    {"doctype": "Workspace", "filters": [["title", "in", ["Accounting"]]]},
     {
         "doctype": "Custom Field",
         "filters": [
@@ -290,11 +290,9 @@ fixtures = [
                     "Customer-custom_vehicle_no",
                     "Sales Invoice-custom_vehicle_no",
                     "POS Payment Method-custom_account",
-                    "Material Request Item-custom_stock_in_hand",
-                    "Material Request Item-custom_last_purchase_rate",
-                    "Item Group-custom_enable_discount",
-                    "Sales Invoice-custom_job_order_number",
-                    "Company-custom_warehouse",
+                    "Sales Invoice-custom_has_oil_item",
+                    "Sales Invoice-custom_odometer_reading",
+                    "Sales Invoice-custom_service_employee",
                 ],
             ]
         ],
@@ -311,10 +309,10 @@ fixtures = [
                     "Sales Invoice Reference-sales_invoice-reqd",
                     "Sales Invoice-main-field_order",
                     "POS Payment Method-main-field_order",
-                    "Item Group-main-field_order",
                     "Sales Invoice-main-field_order",
-                    "Company-main-field_order",
-                    "Material Request-set_warehouse-fetch_from",
+                    "Sales Invoice-contact_mobile-fieldtype",
+                    "Sales Invoice-contact_mobile-hidden",
+                    "Sales Invoice-main-field_order",
                 ],
             ]
         ],

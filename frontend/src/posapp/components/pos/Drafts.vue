@@ -1,26 +1,15 @@
 <template>
 	<div class="drafts-wrapper" v-if="!useAsModal">
-		<!-- Scrollable Content Area -->
 		<div class="drafts-content">
-			<v-data-table
-				:headers="headers"
-				:items="dialog_data"
-				item-value="name"
-				class="elevation-0 drafts-table"
-				:theme="isDarkTheme ? 'dark' : 'light'"
-				show-select
-				v-model="selected"
-				select-strategy="single"
-				return-object
-				density="compact"
-				:items-per-page="100"
-				:item-class="(item) => (isCurrentDraft(item.name) ? 'v-data-table__tr--active' : '')"
-			>
+			<v-data-table :headers="headers" :items="dialog_data" item-value="name" class="elevation-0 drafts-table"
+				:theme="isDarkTheme ? 'dark' : 'light'" show-select v-model="selected" select-strategy="single"
+				return-object density="compact" :items-per-page="100"
+				:item-class="(item) => (isCurrentDraft(item.name) ? 'v-data-table__tr--active' : '')">
 				<template v-slot:column.posting_date="{ column }">
 					<span class="text-caption font-weight-medium">{{ column.title }}</span>
 				</template>
 				<template v-slot:item.posting_date="{ item }">
-					<span class="text-caption">{{ item.posting_date }}</span>
+					<span class="text-caption">{{ formatDateDMY(item.posting_date) }}</span>
 				</template>
 
 				<template v-slot:column.posting_time="{ column }">
@@ -32,38 +21,65 @@
 					}}</span>
 				</template>
 
+				
+				<!-- Mobile -->
+				<template v-slot:item.contact_mobile="{ item }">
+					<span class="text-caption">{{ item.contact_mobile !== "" ? item.contact_mobile : "—" }}</span>
+				</template>
+
+				<!-- Vehicle -->
+				<template v-slot:item.custom_vehicle_no="{ item }">
+					<span class="text-caption">{{ item.custom_vehicle_no !== "" ? item.custom_vehicle_no : "—" }}</span>
+				</template>
+
+
 				<template v-slot:item.customer="{ item }">
-					<span class="text-caption">{{ item.customer }}</span>
+					<div class="d-flex align-center gap-1">
+						<span class="customer-name">{{ item.customer }}</span>
+						<v-chip v-if="item.is_corporate" color="teal" text="black" size="x-small" variant="tonal" class="ml-1">
+							{{ __("Corporate") }}
+						</v-chip>
+					</div>
 				</template>
 
 				<template v-slot:item.name="{ item }">
 					<div class="d-flex align-center">
-						<v-chip
-							v-if="isCurrentDraft(item.name)"
-							color="success"
-							size="x-small"
-							class="mr-2"
-							prepend-icon="mdi-check-circle"
-						>
+						<v-chip v-if="isCurrentDraft(item.name)" color="success" size="x-small" class="mr-2"
+							prepend-icon="mdi-check-circle">
 							{{ __("Current") }}
 						</v-chip>
 						<span class="text-caption font-weight-medium text-primary">{{ item.name }}</span>
 					</div>
 				</template>
 
+				<!-- Service Employee Column -->
+				<template v-slot:item.custom_service_employee="{ item }">
+					<div v-if="item.custom_service_employee" class="d-flex align-center">
+						<v-chip size="x-small" color="primary" prepend-icon="mdi-account-hard-hat">
+							{{ item.custom_service_employee }}
+						</v-chip>
+					</div>
+					<span v-else class="text-caption">_</span>
+				</template>
+
+				<!-- Odometer -->
+				<template v-slot:item.custom_odometer_reading="{ item }">
+					<span class="text-caption" v-if="item.custom_has_oil_item">
+						{{ item.custom_odometer_reading !== "" ? item.custom_odometer_reading + ' km' : '—' }}
+					</span>
+					<span class="text-caption" v-else>—</span>
+				</template>
+
 				<template v-slot:item.grand_total="{ item }">
-					<span class="text-caption font-weight-bold">
+					<span class="draft-amount">
 						{{ currencySymbol(item.currency) }}
 						{{ formatCurrency(item.grand_total) }}
 					</span>
 				</template>
 
 				<template v-slot:bottom>
-					<div
-						class="pa-4 text-center text-caption text-medium-emphasis"
-						v-if="dialog_data.length === 0"
-					>
-						<v-icon size="large" color="grey" class="mb-2">mdi-file-document-outline</v-icon>
+					<div class="pa-4 text-center text-caption text-medium-emphasis" v-if="dialog_data.length === 0">
+						<v-icon size="48" color="grey-lighten-1"class="mb-2">mdi-file-document-outline</v-icon>
 						<div>{{ __("No draft invoices found.") }}</div>
 						<div class="text-caption mt-1">{{ __("Create a new sale to get started") }}</div>
 					</div>
@@ -71,31 +87,17 @@
 			</v-data-table>
 		</div>
 
-		<!-- Fixed Footer Button -->
 		<div class="drafts-footer">
-			<v-btn
-				block
-				color="success"
-				size="large"
-				variant="flat"
-				prepend-icon="mdi-file-document-check"
-				@click="submit_selection"
-				:disabled="selected.length === 0"
-				class="load-draft-btn"
-			>
+			<v-btn block color="success" size="large" variant="flat" prepend-icon="mdi-file-document-check"
+				@click="submit_selection" :disabled="selected.length === 0" class="load-draft-btn">
 				{{ __("LOAD JOB ORDERS") }}
 			</v-btn>
 		</div>
 	</div>
 
-	<!-- Modal View -->
 	<v-row justify="center" v-else>
-		<v-dialog
-			v-model="draftsDialog"
-			:max-width="isMobileModal ? '100%' : maxWidth"
-			:fullscreen="isMobileModal"
-			:scrollable="true"
-		>
+		<v-dialog v-model="draftsDialog" :max-width="isMobileModal ? '100%' : maxWidth" :fullscreen="isMobileModal"
+			:scrollable="true">
 			<v-card variant="flat" :color="isDarkTheme ? $vuetify.theme.themes.dark.colors.surface : 'white'">
 				<v-card-title class="pb-1 pt-3">
 					<span class="text-h6 text-primary">{{ __("Load Sales Invoice") }}</span>
@@ -107,48 +109,28 @@
 					<v-container fluid class="pa-0">
 						<v-row no-gutters>
 							<v-col cols="12" class="pa-1">
-								<v-data-table
-									:headers="headers"
-									:items="dialog_data"
-									item-value="name"
-									class="elevation-0"
-									:theme="isDarkTheme ? 'dark' : 'light'"
-									show-select
-									v-model="selected"
-									select-strategy="single"
-									return-object
-									density="compact"
-									:items-per-page="10"
-									:item-class="
+								<v-data-table :headers="headers" :items="dialog_data" item-value="name"
+									class="elevation-0" :theme="isDarkTheme ? 'dark' : 'light'" show-select
+									v-model="selected" select-strategy="single" return-object density="compact"
+									:items-per-page="10" :item-class="
 										(item) =>
 											isCurrentDraft(item.name) ? 'v-data-table__tr--active' : ''
-									"
-								>
-									<template v-slot:column.posting_date="{ column }">
-										<span class="d-none">{{ column.title }}</span>
-									</template>
-									<template v-slot:item.posting_date="{ item }">
-										<span class="text-caption">{{ item.posting_date }}</span>
-									</template>
+									">
+									<template v-slot:column.posting_date="{ column }"><span class="d-none">{{
+											column.title }}</span></template>
+									<template v-slot:item.posting_date="{ item }"><span class="text-caption">{{
+											item.posting_date }}</span></template>
 
-									<template v-slot:column.posting_time="{ column }">
-										<span class="d-none">{{ column.title }}</span>
-									</template>
-									<template v-slot:item.posting_time="{ item }">
-										<span class="text-caption">{{
+									<template v-slot:column.posting_time="{ column }"><span class="d-none">{{
+											column.title }}</span></template>
+									<template v-slot:item.posting_time="{ item }"><span class="text-caption">{{
 											item.posting_time ? item.posting_time.split(".")[0] : ""
-										}}</span>
-									</template>
+									}}</span></template>
 
 									<template v-slot:item.name="{ item }">
 										<div class="d-flex align-center">
-											<v-chip
-												v-if="isCurrentDraft(item.name)"
-												color="success"
-												size="x-small"
-												class="mr-2"
-												prepend-icon="mdi-check-circle"
-											>
+											<v-chip v-if="isCurrentDraft(item.name)" color="success" size="x-small"
+												class="mr-2" prepend-icon="mdi-check-circle">
 												{{ __("Current") }}
 											</v-chip>
 											<span class="text-caption font-weight-medium text-primary">{{
@@ -157,25 +139,44 @@
 										</div>
 									</template>
 
-									<template v-slot:item.grand_total="{ item }">
-										{{ currencySymbol(item.currency) }}
-										{{ formatCurrency(item.grand_total) }}
+									<!-- Service Employee Column -->
+									<template v-slot:item.custom_service_employee="{ item }">
+										<div v-if="item.custom_service_employee" class="d-flex align-center">
+											<v-chip size="x-small" color="primary" prepend-icon="mdi-account-hard-hat">
+												{{ item.custom_service_employee }}
+											</v-chip>
+										</div>
+										<span v-else class="text-caption text-grey">-</span>
 									</template>
 
+									<!-- Mobile -->
+									<template v-slot:item.contact_mobile="{ item }">
+										<span class="text-caption">{{ item.contact_mobile !== "" ? item.contact_mobile : "—" }}</span>
+									</template>
+
+									<!-- Vehicle -->
+									<template v-slot:item.custom_vehicle_no="{ item }">
+										<span class="text-caption">{{ item.custom_vehicle_no !== "" ? item.custom_vehicle_no : "—" }}</span>
+									</template>
+
+									<!-- Odometer -->
+									<template v-slot:item.custom_odometer_reading="{ item }">
+										<span class="text-caption" v-if="item.custom_has_oil_item">
+											{{ item.custom_odometer_reading !== "" ? item.custom_odometer_reading + ' km' : '—' }}
+										</span>
+										<span class="text-caption" v-else>—</span>
+									</template>
+
+									<template v-slot:item.grand_total="{ item }">{{ currencySymbol(item.currency)
+									}}{{ formatCurrency(item.grand_total) }}</template>
+
 									<template v-slot:bottom>
-										<div
-											class="pa-2 text-caption text-medium-emphasis"
-											v-if="dialog_data.length === 0"
-										>
+										<div class="pa-2 text-caption text-medium-emphasis"
+											v-if="dialog_data.length === 0">
 											{{ __("No draft invoices found.") }}
 										</div>
-										<v-pagination
-											v-else
-											:length="1"
-											:total-visible="3"
-											size="small"
-											class="mt-2"
-										></v-pagination>
+										<v-pagination v-else :length="1" :total-visible="3" size="small"
+											class="mt-2"></v-pagination>
 									</template>
 								</v-data-table>
 							</v-col>
@@ -185,14 +186,8 @@
 				<v-card-actions class="pt-1">
 					<v-spacer></v-spacer>
 					<v-btn color="error" variant="text" @click="close_dialog">{{ __("Close") }}</v-btn>
-					<v-btn
-						color="success"
-						variant="flat"
-						@click="submit_dialog"
-						:disabled="selected.length === 0"
-					>
-						{{ __("Load Sale") }}
-					</v-btn>
+					<v-btn color="success" variant="flat" @click="submit_dialog" :disabled="selected.length === 0">{{
+						__("Load Sale") }}</v-btn>
 				</v-card-actions>
 			</v-card>
 		</v-dialog>
@@ -201,58 +196,37 @@
 
 <script>
 import format from "../../format";
+
 export default {
 	props: {
-		maxWidth: {
-			type: [String, Number],
-			default: "600px",
-		},
-		useAsModal: {
-			type: Boolean,
-			default: false,
-		},
+		maxWidth: { type: [String, Number], default: "600px" },
+		useAsModal: { type: Boolean, default: false },
 	},
 	mixins: [format],
 	data: () => ({
 		draftsDialog: false,
-		singleSelect: true,
 		selected: [],
 		dialog_data: [],
+		refreshing: false,
 		headers: [
+			{ title: __("Mobile"), value: "contact_mobile", align: "start", sortable: false, width: "120px" },
+			{ title: __("Vehicle"), value: "custom_vehicle_no", align: "start", sortable: false, width: "120px" },
+			{ title: __("Customer"), value: "customer", align: "start", sortable: true },
+			{ title: __("Date"), value: "posting_date", align: "start", sortable: true, width: "100px" },
+			{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
+			{ title: __("Invoice"), value: "name", align: "start", sortable: true },
 			{
-				title: __("Customer"),
-				value: "customer",
+				title: __("Employee"),
+				value: "custom_service_employee",
 				align: "start",
 				sortable: true,
-			},
-			{
-				title: __("Date"),
-				align: "start",
-				sortable: true,
-				value: "posting_date",
-				width: "100px",
-			},
-			{
-				title: __("Time"),
-				align: "start",
-				sortable: true,
-				value: "posting_time",
-				width: "80px",
-			},
-			{
-				title: __("Invoice"),
-				value: "name",
-				align: "start",
-				sortable: true,
-			},
-			{
-				title: __("Amount"),
-				value: "grand_total",
-				align: "end",
-				sortable: false,
 				width: "120px",
 			},
+			{ title: __("Odometer"), value: "custom_odometer_reading", align: "start", sortable: false, width: "100px" },
+			{ title: __("Amount"), value: "grand_total", align: "end", sortable: false, width: "120px" },
 		],
+		_employeeNameCache: {},
+	    _customerTypeCache: {},
 	}),
 	computed: {
 		isDarkTheme() {
@@ -263,33 +237,19 @@ export default {
 		},
 	},
 	methods: {
-		// Check if this draft is currently loaded
+		formatDateDMY(dateStr) {
+			if (!dateStr) return "";
+			const [year, month, day] = dateStr.split("-");
+			return `${day}/${month}/${year}`;
+		},
+
 		isCurrentDraft(draftName) {
 			return this.$parent?.loaded_draft_name === draftName;
 		},
-		// Submit selection for inline view
+
 		submit_selection() {
 			if (this.selected.length > 0) {
 				const draftName = this.selected[0].name;
-				console.log("[Drafts] Loading draft:", draftName);
-
-				// ========== ENSURE DRAFT HAS PAYMENTS ==========
-				const selectedDraft = this.selected[0];
-				if (!selectedDraft.payments || selectedDraft.payments.length === 0) {
-					console.log("[Drafts] Draft has no payments, adding default");
-					selectedDraft.payments = [
-						{
-							mode_of_payment: "Cash",
-							account: "",
-							amount: 0,
-							base_amount: 0,
-							type: "Cash",
-							idx: 1,
-							default: 1,
-						},
-					];
-				}
-
 				this.eventBus.emit("draft_selected", draftName);
 				this.selected = [];
 			} else {
@@ -299,7 +259,7 @@ export default {
 				});
 			}
 		},
-		// Close and submit for dialog view
+
 		close_dialog() {
 			this.draftsDialog = false;
 			this.selected = [];
@@ -309,106 +269,381 @@ export default {
 		submit_dialog() {
 			if (this.selected.length > 0) {
 				const draftName = this.selected[0].name;
-				console.log("[Drafts] Loading draft from dialog:", draftName);
-
-				// ========== ENSURE DRAFT HAS PAYMENTS ==========
-				const selectedDraft = this.selected[0];
-				if (!selectedDraft.payments || selectedDraft.payments.length === 0) {
-					console.log("[Drafts] Draft has no payments, adding default");
-					selectedDraft.payments = [
-						{
-							mode_of_payment: "Cash",
-							account: "",
-							amount: 0,
-							base_amount: 0,
-							type: "Cash",
-							idx: 1,
-							default: 1,
-						},
-					];
-				}
-
 				this.eventBus.emit("draft_selected", draftName);
 				this.close_dialog();
 			} else {
-				this.eventBus.emit("show_message", {
-					title: `Select an invoice to load`,
-					color: "error",
-				});
+				this.eventBus.emit("show_message", { title: `Select an invoice to load`, color: "error" });
 			}
 		},
-	},
-	created: function () {
-		this.eventBus.on("open_drafts", (data) => {
-			console.log("[Drafts] Received drafts data:", data.length, "items");
-			this.dialog_data = data;
-			this.selected = [];
-			// If useAsModal is TRUE (meaning we are showing the dialog structure), open the dialog
-			if (this.useAsModal) {
-				this.draftsDialog = true;
+
+		async fetchDrafts() {
+			const args = {
+				doctype: "Sales Invoice",
+				filters: { docstatus: 0, company: "webtree", pos_profile: "pos" },
+				fields: [
+					"name",
+					"customer",
+					"posting_date",
+					"posting_time",
+					"grand_total",
+					"currency",
+					"custom_service_employee",
+					"custom_has_oil_item",
+					"custom_odometer_reading",
+					"custom_vehicle_no",
+					"contact_mobile",
+				],
+				limit_page_length: 500,
+				order_by: "modified desc",
+			};
+
+			try {
+				this.refreshing = true;
+
+				const r = await frappe.call({
+					method: "frappe.client.get_list",
+					args,
+				});
+
+				const list = r && r.message ? r.message : [];
+
+				let drafts = (list || []).map((i) => this._normalizeSingle(i));
+
+				const employeeIdsToResolve = Array.from(
+					new Set(
+						drafts
+							.map((d) => d.custom_service_employee)
+							.filter((v) => v && !this._employeeNameCache[v]),
+					),
+				);
+
+				if (employeeIdsToResolve.length) {
+					await this._resolveEmployeeNames(employeeIdsToResolve);
+				}
+				// Resolve customer types (to detect corporate/company customers)
+				const customerIdsToResolve = Array.from(
+					new Set(
+						drafts
+							.map((d) => d.customer)
+							.filter((v) => v && !this._customerTypeCache[v])
+					)
+				);
+
+				if (customerIdsToResolve.length) {
+					await this._resolveCustomerTypes(customerIdsToResolve);
+				}
+
+				// Mark is_corporate on drafts based on resolved customer type
+				drafts = drafts.map((d) => {
+					const custType = this._customerTypeCache[d.customer];
+					d.is_corporate = (custType === "Company");
+					return d;
+				});
+
+				drafts = drafts.map((d) => {
+					if (d.custom_service_employee_name) {
+						d.custom_service_employee = d.custom_service_employee_name;
+					} else if (
+						d.custom_service_employee &&
+						this._employeeNameCache[d.custom_service_employee]
+					) {
+						d.custom_service_employee = this._employeeNameCache[d.custom_service_employee];
+					}
+					delete d.custom_service_employee_name;
+					return d;
+				});
+
+				this.dialog_data = this._sortByDateTime(drafts);
+			} catch (err) {
+				console.error("[Drafts] fetchDrafts error:", err);
+			} finally {
+				this.refreshing = false;
 			}
-			// If useAsModal is FALSE (meaning we are showing the inline structure), it's already visible
+		},
+
+		async _resolveEmployeeNames(empIds = []) {
+			if (!empIds || empIds.length === 0) return;
+			try {
+				const empResp = await frappe.call({
+					method: "frappe.client.get_list",
+					args: {
+						doctype: "Employee",
+						filters: [["name", "in", empIds]],
+						fields: ["name", "employee_name"],
+						limit_page_length: empIds.length,
+					},
+				});
+
+				const list = empResp && empResp.message ? empResp.message : [];
+
+				(list || []).forEach((rec) => {
+					this._employeeNameCache[rec.name] = rec.employee_name || rec.name;
+				});
+			} catch (err) {
+				console.warn("[Drafts] Employee lookup failed", err);
+			}
+		},
+
+		async _resolveCustomerTypes(customerIds = []) {
+			if (!customerIds || customerIds.length === 0) return;
+			try {
+				const resp = await frappe.call({
+					method: "frappe.client.get_list",
+					args: {
+						doctype: "Customer",
+						filters: [["name", "in", customerIds]],
+						fields: ["name", "customer_type"],
+						limit_page_length: customerIds.length,
+					},
+				});
+
+				const list = resp && resp.message ? resp.message : [];
+
+				(list || []).forEach((rec) => {
+					// store exact customer_type (could be "Individual", "Company", etc.)
+					this._customerTypeCache[rec.name] = rec.customer_type || "";
+				});
+			} catch (err) {
+				console.warn("[Drafts] Customer type lookup failed", err);
+			}
+		},
+
+		async mergeDraft(newDraft) {
+			if (!newDraft || !newDraft.name) return;
+
+			const nd = this._normalizeSingle(newDraft);
+
+			const empId = nd.custom_service_employee;
+			if (nd.custom_service_employee_name) {
+				nd.custom_service_employee = nd.custom_service_employee_name;
+			} else if (empId) {
+				if (!this._employeeNameCache[empId]) {
+					await this._resolveEmployeeNames([empId]);
+				}
+				if (this._employeeNameCache[empId]) {
+					nd.custom_service_employee = this._employeeNameCache[empId];
+				}
+			}
+
+			// Resolve customer type
+			if (nd.customer && !this._customerTypeCache[nd.customer]) {
+				await this._resolveCustomerTypes([nd.customer]);
+			}
+			const custType = this._customerTypeCache[nd.customer];
+			nd.is_corporate = (custType === "Company");
+
+			this.dialog_data = this.dialog_data.filter((d) => d.name !== nd.name);
+			this.dialog_data.unshift(nd);
+			this.dialog_data = this._sortByDateTime(this.dialog_data);
+		},
+
+		_normalizeSingle(item) {
+			const posting_date = item.posting_date || "";
+			const posting_time =
+				typeof item.posting_time !== "undefined" && item.posting_time !== null
+					? String(item.posting_time)
+					: "";
+
+			return {
+				name: item.name,
+				customer: item.customer || "",
+				posting_date,
+				posting_time,
+				grand_total: item.grand_total != null ? item.grand_total : 0,
+				currency: item.currency || "INR",
+				custom_service_employee: item.custom_service_employee || null,
+				custom_service_employee_name: item.custom_service_employee_name || null,
+				// Keep empty string instead of null so the template can show it if present
+				contact_mobile: (typeof item.contact_mobile !== "undefined" && item.contact_mobile !== null)
+					? String(item.contact_mobile)
+					: "",
+				custom_vehicle_no: (typeof item.custom_vehicle_no !== "undefined" && item.custom_vehicle_no !== null)
+					? String(item.custom_vehicle_no)
+					: "",
+				// Keep odometer as string if present (e.g. "12345"), empty string if not
+				custom_odometer_reading: (typeof item.custom_odometer_reading !== "undefined" && item.custom_odometer_reading !== null)
+					? String(item.custom_odometer_reading)
+					: "",
+				// coerce to boolean (1 / "1" -> true ; 0 / "0" / undefined -> false)
+				custom_has_oil_item: Boolean(Number(item.custom_has_oil_item)) || false,
+			};
+		},
+
+		_normalizeAndSort(list) {
+			const normalized = (list || []).map((i) => this._normalizeSingle(i));
+			return this._sortByDateTime(normalized);
+		},
+
+		_sortByDateTime(arr) {
+			return arr.slice().sort((a, b) => {
+				const da = `${a.posting_date || ""} ${a.posting_time || ""}`.trim();
+				const db = `${b.posting_date || ""} ${b.posting_time || ""}`.trim();
+				if (da > db) return -1;
+				if (da < db) return 1;
+				if ((a.name || "") > (b.name || "")) return -1;
+				if ((a.name || "") < (b.name || "")) return 1;
+				return 0;
+			});
+		},
+	},
+
+	created() {
+		this.eventBus.on("open_drafts", async (data) => {
+			if (Array.isArray(data) && data.length) {
+				const normalized = this._normalizeAndSort(data);
+
+				// Resolve employee names
+				const employeeIdsToResolve = Array.from(
+					new Set(
+						normalized
+							.map((d) => d.custom_service_employee)
+							.filter((v) => v && !this._employeeNameCache[v]),
+					),
+				);
+
+				if (employeeIdsToResolve.length) {
+					await this._resolveEmployeeNames(employeeIdsToResolve);
+				}
+
+				// Resolve customer types
+				const customerIdsToResolve = Array.from(
+					new Set(
+						normalized
+							.map((d) => d.customer)
+							.filter((v) => v && !this._customerTypeCache[v])
+					)
+				);
+
+				if (customerIdsToResolve.length) {
+					await this._resolveCustomerTypes(customerIdsToResolve);
+				}
+
+				// Map employee names AND set is_corporate flag
+				const drafts = normalized.map((d) => {
+					// Handle employee names
+					if (d.custom_service_employee_name) {
+						d.custom_service_employee = d.custom_service_employee_name;
+					} else if (
+						d.custom_service_employee &&
+						this._employeeNameCache[d.custom_service_employee]
+					) {
+						d.custom_service_employee = this._employeeNameCache[d.custom_service_employee];
+					}
+					delete d.custom_service_employee_name;
+
+					// for is_corporate flag
+					const custType = this._customerTypeCache[d.customer];
+					d.is_corporate = (custType === "Company");
+
+					return d;
+				});
+
+				this.dialog_data = this._sortByDateTime(drafts);
+			} else {
+				this.dialog_data = [];
+				this.selected = [];
+				if (this.useAsModal) this.draftsDialog = true;
+				await this.fetchDrafts();
+			}
+			this.selected = [];
+			if (this.useAsModal) this.draftsDialog = true;
 		});
 
 		this.eventBus.on("close_drafts", () => {
 			this.draftsDialog = false;
 			this.selected = [];
 		});
+
+		this.eventBus.on("draft_saved", (payload) => {
+			try {
+				this.mergeDraft(payload);
+			} catch (e) {
+				console.warn("[Drafts] mergeDraft failed", e);
+			}
+		});
+
+		this.fetchDrafts();
 	},
+
 	beforeUnmount() {
 		this.eventBus.off("open_drafts");
 		this.eventBus.off("close_drafts");
+		this.eventBus.off("draft_saved");
+		this.eventBus.off("invoice_saved_successfully");
 	},
 };
 </script>
 
 <style scoped>
-/* Drafts Wrapper - Flex container */
 .drafts-wrapper {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
 	width: 100%;
-	background: white;
+	background:#ffffff;
 }
-
-/* Scrollable Content Area */
 .drafts-content {
 	flex: 1;
 	overflow-y: auto;
 	overflow-x: hidden;
 	background-color: #fafafa;
 }
-
-/* Data Table Styling */
 .drafts-table {
-	background-color: white;
+	background-color:white;
+	border-radius: 8px;
+}
+.customer-name {
+	font-weight: 600;
+	color: #222;
+}
+:deep(.v-data-table td .text-caption) {
+	color: #6b7280;
+}
+.draft-amount {
+	font-weight: 600;
+	color: #111827;
+	font-size: 0.8rem;
 }
 
 :deep(.v-data-table-row td),
 :deep(.v-data-table-row th) {
-	padding: 8px 12px !important;
+	padding: 12px 12px !important;
+}
+:deep(.v-data-table__tr) {
+	border-radius: 8px;
+	transition: background-color 0.15s ease;
+}
+
+:deep(.v-data-table__tr) {
+	border-bottom: 8px solid transparent;
+}
+
+:deep(.v-data-table__tr) {
+	background: #ffffff;
+	border-radius: 10px;
+	box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+	border-bottom: 10px solid transparent;
+}
+
+
+:deep(.v-data-table__tr:hover) {
+	background-color: #f1f5ff;
 }
 
 :deep(.v-data-table) {
-	font-size: 0.875rem;
+	font-size: 0.9rem;
 }
-
 :deep(.v-data-table__wrapper) {
 	overflow-y: auto;
 	max-height: 100%;
 }
-
-/* Highlight current draft row */
 :deep(.v-data-table__tr--active) {
 	background-color: rgba(76, 175, 80, 0.08) !important;
+	border-left: 4px solid #4caf50;
 }
-
 :deep(.v-data-table__tr--active:hover) {
 	background-color: rgba(76, 175, 80, 0.12) !important;
 }
-
-/* Fixed Footer Button */
 .drafts-footer {
 	flex-shrink: 0;
 	padding: 12px;
@@ -416,39 +651,33 @@ export default {
 	border-top: 2px solid #e0e0e0;
 	z-index: 100;
 }
-
 .load-draft-btn {
 	text-transform: uppercase;
 	font-weight: 600;
 	letter-spacing: 0.5px;
+	border-radius: 10px;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
-
-/* Scrollbar Styling */
 .drafts-content::-webkit-scrollbar {
 	width: 6px;
 }
-
 .drafts-content::-webkit-scrollbar-track {
 	background: #f1f1f1;
 	border-radius: 3px;
 }
-
 .drafts-content::-webkit-scrollbar-thumb {
 	background: #999;
 	border-radius: 3px;
 }
-
 .drafts-content::-webkit-scrollbar-thumb:hover {
 	background: #666;
 }
-
 @media (max-width: 768px) {
 	:deep(.v-data-table-row td),
 	:deep(.v-data-table-row th) {
 		padding: 6px 8px !important;
 		font-size: 0.8rem;
 	}
-
 	.drafts-footer {
 		padding: 8px;
 	}

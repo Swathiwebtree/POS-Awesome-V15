@@ -51,6 +51,7 @@ import LazerPOS from "./components/LazerPOS.vue";
 import Payments from "./components/payments/Pay.vue";
 import AppLoadingOverlay from "./components/ui/LoadingOverlay.vue";
 import { useLoading } from "./composables/useLoading.js";
+import { forceClearAllCache } from "../offline/cache.js";
 import { loadingState, initLoadingSources, setSourceProgress, markSourceLoaded } from "./utils/loading.js";
 import {
 	getOpeningStorage,
@@ -158,6 +159,20 @@ export default {
 		AppLoadingOverlay,
 	},
 	mounted() {
+		if (!window.appHasLoaded) {
+            window.appHasLoaded = true;
+            this.clearAppCache();
+            
+            // Clear service worker cache
+            if ('caches' in window) {
+                caches.keys().then((names) => {
+                    names.forEach(name => {
+                        caches.delete(name);
+                        console.log(`[POS] Cleared browser cache: ${name}`);
+                    });
+                });
+            }
+        }
 		this.remove_frappe_nav();
 		// Initialize cache ready state early from stored value
 		this.cacheReady = isCacheReady();
@@ -178,6 +193,41 @@ export default {
 		checkWebSocketConnectivity,
 		setPage(page) {
 			this.page = page;
+		},
+
+		clearAppCache() {
+			console.log('[POS] Clearing app cache on load');
+
+			// Clear localStorage keys
+			const keysToDelete = [
+				'pos_selected_employee',
+				'posawesome_item_selector_settings',
+				'posawesome_drafts',
+				'posawesome_cart',
+				'posawesome_invoice_data',
+				'posa_recent_items',
+				'posa_recent_customers',
+			];
+
+			keysToDelete.forEach(key => {
+				try {
+					localStorage.removeItem(key);
+					console.log(`[POS] Cleared: ${key}`);
+				} catch (e) {
+					console.warn(`[POS] Could not clear ${key}:`, e);
+				}
+			});
+
+			// Clear sessionStorage
+			try {
+				sessionStorage.clear();
+				console.log('[POS] Cleared sessionStorage');
+			} catch (e) {
+				console.warn('[POS] Could not clear sessionStorage:', e);
+			}
+
+			// Emit event to notify all child components
+			this.eventBus.emit('cache_cleared');
 		},
 
 		handleFullscreenToggle(fullscreen) {
@@ -287,7 +337,6 @@ export default {
 					this.serverOnline = true;
 					window.serverOnline = true;
 					this.serverConnecting = false;
-					console.log("Server: Connected via WebSocket");
 					this.$forceUpdate();
 				});
 
@@ -295,7 +344,6 @@ export default {
 					this.serverOnline = false;
 					window.serverOnline = false;
 					this.serverConnecting = false;
-					console.log("Server: Disconnected from WebSocket");
 					// Trigger connectivity check to verify if it's just WebSocket or full network
 					setTimeout(() => {
 						if (!isManualOffline()) {
@@ -306,12 +354,10 @@ export default {
 
 				frappe.realtime.on("connecting", () => {
 					this.serverConnecting = true;
-					console.log("Server: Connecting to WebSocket...");
 					this.$forceUpdate();
 				});
 
 				frappe.realtime.on("reconnect", () => {
-					console.log("Server: Reconnected to WebSocket");
 					window.serverOnline = true;
 					if (!isManualOffline()) {
 						this.checkNetworkConnectivity();
@@ -420,11 +466,28 @@ export default {
 			this.$theme.toggle();
 		},
 
-		handleLogout() {
-			frappe.call("logout").finally(() => {
-				window.location.href = "/app";
+		async handleLogout() {
+			//  Clear POS cache FIRST
+			await forceClearAllCache();
+
+			//  Destroy Vue UI
+			document.body.innerHTML = "";
+
+			// Backend logout
+			frappe.call({
+				method: "logout",
+				callback: () => {
+					window.location.replace("/#login");
+				},
+				error: () => {
+					window.location.replace("/#login");
+				},
 			});
 		},
+
+
+
+
 
 		handleRefreshCacheUsage() {
 			this.cacheUsageLoading = true;

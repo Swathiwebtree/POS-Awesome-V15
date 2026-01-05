@@ -49,37 +49,22 @@
 							</v-col>
 
 							<v-col cols="6">
-								<v-text-field
-									density="compact"
-									color="primary"
-									:label="frappe._('Make')"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									hide-details
-									class="dark-field"
-									v-model="make"
-								></v-text-field>
-							</v-col>
-
-							<v-col cols="6">
-								<v-autocomplete
-									density="compact"
-									color="primary"
-									:label="frappe._('Model No')"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									hide-details
-									class="dark-field"
-									v-model="model"
-									:items="model_list"
-									:loading="loading_models"
-									@update:search="search_models"
-									clearable
-								>
+								<v-autocomplete density="compact" color="primary" :label="frappe._('Make')"
+									v-model="make" :items="make_list" :loading="loading_makes"
+									@update:search="search_makes" clearable>
 									<template #no-data>
 										<div class="pa-2 text-center text-caption text-medium-emphasis">
-											{{ __("No models found. Type to enter a new one.") }}
+											{{ __("No makes found. Type to add a new one.") }}
 										</div>
 									</template>
 								</v-autocomplete>
+
+							</v-col>
+
+							<v-col cols="6">
+								<v-text-field density="compact" color="primary" :label="frappe._('Model No')"
+									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" hide-details class="dark-field"
+									v-model="model" />
 							</v-col>
 
 							<v-col cols="6">
@@ -122,7 +107,7 @@
 								<v-text-field
 									density="compact"
 									color="primary"
-									:label="frappe._('Mobile No')"
+									:label="frappe._('Mobile No') + ' *'"
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 									hide-details
 									class="dark-field"
@@ -169,8 +154,8 @@ export default {
 		loading_customers: false,
 
 		// New Data Properties for Model List
-		loading_models: false,
-		model_list: [],
+		loading_makes: false,
+		make_list: [],
 
 		make: "",
 		model: "", // Holds the selected or typed model name
@@ -202,7 +187,7 @@ export default {
 			this.chasis_no = "";
 			this.color = "";
 			this.registration_number = "";
-			this.model_list = []; // Reset model list
+			this.make_list = []; // Reset make list
 		},
 
 		close_dialog() {
@@ -234,33 +219,30 @@ export default {
 		},
 
 		// --- Model Search Logic (New) ---
-		async search_models(search_term = "") {
-			this.loading_models = true;
+		async search_makes(search_term = "") {
+			this.loading_makes = true;
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.vehicles.get_vehicle_models",
+					method: "posawesome.posawesome.api.vehicles.get_vehicle_makes",
 					args: { search_term },
 				});
 
-				if (res && res.message) {
-					this.model_list = res.message;
-				} else {
-					this.model_list = [];
-				}
+				this.make_list = res.message || [];
 			} catch (err) {
-				console.error("Model search failed:", err);
-				this.model_list = [];
+				console.error("Make search failed:", err);
+				this.make_list = [];
 			} finally {
-				this.loading_models = false;
+				this.loading_makes = false;
 			}
 		},
+
 
 		// single entry point to open and populate the dialog
 		async open_dialog(payload = {}) {
 			this.reset_dialog();
 
 			// pre-load lists (no-op if server returns quickly)
-			await Promise.all([this.search_customers(), this.search_models()]);
+			await Promise.all([this.search_customers(), this.search_makes()]);
 
 			if (payload && payload.name) {
 				// editing an existing vehicle
@@ -309,6 +291,24 @@ export default {
 				});
 				return;
 			}
+			// Mobile validation
+			if (!this.mobile_no) {
+				frappe.show_alert({
+					message: this.__("Mobile number is required"),
+					indicator: "red",
+				});
+				return;
+			}
+
+			// Digits only
+			if (!/^[0-9]{8,15}$/.test(this.mobile_no)) {
+				frappe.show_alert({
+					message: this.__("Enter a valid mobile number (8–15 digits)"),
+					indicator: "red",
+				});
+				return;
+			}
+
 
 			this.loading = true;
 			try {

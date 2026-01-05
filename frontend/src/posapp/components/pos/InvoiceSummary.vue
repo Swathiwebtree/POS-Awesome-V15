@@ -1,8 +1,6 @@
 <template>
-	<v-card
-		:class="['cards mb-0 mt-3 py-2 px-3 rounded-lg resizable', isDarkTheme ? '' : 'bg-grey-lighten-4']"
-		:style="(isDarkTheme ? 'background-color:#1E1E1E;' : '') + 'resize: vertical; overflow: auto;'"
-	>
+	<v-card :class="['cards mb-0 mt-3 py-2 px-3 rounded-lg resizable', isDarkTheme ? '' : 'bg-grey-lighten-4']"
+		:style="(isDarkTheme ? 'background-color:#1E1E1E;' : '') + 'resize: vertical; overflow: auto;'">
 		<v-row dense class="w-100">
 			<v-col cols="12" class="my-2">
 				<v-divider />
@@ -14,111 +12,103 @@
 					<!-- Left Side - Summary Fields -->
 					<v-col cols="12" md="7">
 						<v-row dense>
+							<!-- Odometer Reading Field (Only shown when Engine Oil item is present) -->
+							<v-col cols="6" v-if="showOdometerField">
+								<v-text-field v-model="odometerReading" :label="__('Odometer Reading (km)')"
+									prepend-inner-icon="mdi-speedometer" variant="solo" density="compact"
+									color="primary" type="number" class="summary-field" :rules="[isNumber]"
+									@update:model-value="emitOdometerData" />
+							</v-col>
+							<!-- Service Employee Selection (for car wash services) -->
+							<v-col cols="12" v-if="showEmployeeSelection">
+								<v-autocomplete v-model="selectedEmployee" :items="employees"
+									:loading="loadingEmployees" :label="__('Select Service Employee')"
+									item-title="employee_name" item-value="name"
+									prepend-inner-icon="mdi-account-hard-hat" variant="solo" density="compact"
+									color="primary" clearable class="summary-field" :custom-filter="employeeFilter"
+									@update:model-value="handleEmployeeChange">
+									<template v-slot:item="{ props, item }">
+										<v-list-item v-bind="props" :title="item.raw.employee_name">
+											<template v-slot:prepend>
+												<v-avatar size="32" color="primary" class="mr-2">
+													<v-img v-if="item.raw.image" :src="item.raw.image" />
+													<v-icon v-else color="white">mdi-account</v-icon>
+												</v-avatar>
+											</template>
+											<template v-slot:subtitle>
+												<span class="text-caption">
+													{{ item.raw.name }}
+													<span v-if="item.raw.designation">
+														- {{ item.raw.designation }}</span>
+												</span>
+											</template>
+										</v-list-item>
+									</template>
+									<template v-slot:chip="{ item }">
+										<v-chip size="small" color="primary">
+											<v-avatar left>
+												<v-img v-if="item.raw.image" :src="item.raw.image" />
+												<v-icon v-else>mdi-account</v-icon>
+											</v-avatar>
+											{{ item.raw.employee_name }} ({{ item.raw.name }})
+										</v-chip>
+									</template>
+								</v-autocomplete>
+							</v-col>
+
 							<!-- Total Qty -->
 							<v-col cols="6">
-								<v-text-field
-									:model-value="formatFloat(total_qty, hide_qty_decimals ? 0 : undefined)"
-									:label="__('Total Qty')"
-									prepend-inner-icon="mdi-format-list-numbered"
-									variant="solo"
-									density="compact"
-									readonly
-									color="accent"
-									class="summary-field"
-								/>
+								<v-text-field :model-value="Math.trunc(total_qty)"
+									:label="__('Total Qty')" prepend-inner-icon="mdi-format-list-numbered"
+									variant="solo" density="compact" readonly color="accent" class="summary-field" />
 							</v-col>
 
 							<!-- Additional Discount -->
 							<v-col cols="6" v-if="pos_profile && !pos_profile.posa_use_percentage_discount">
-								<v-text-field
-									:model-value="additional_discount"
-									@update:model-value="handleAdditionalDiscountUpdate"
-									@change="apply_additional_discount"
-									:label="__('Additional Discount')"
-									prepend-inner-icon="mdi-cash-minus"
-									variant="solo"
-									density="compact"
-									color="warning"
-									:prefix="pos_profile ? currencySymbol(pos_profile.currency) : ''"
-									:disabled="
+								<v-text-field :model-value="formatByPrecision(additional_discount)"
+									@update:model-value="formatByPrecision(handleAdditionalDiscountUpdate)"
+									@change="apply_additional_discount" :label="__('Additional Discount')"
+									prepend-inner-icon="mdi-cash-minus" variant="solo" density="compact" color="warning"
+									:prefix="pos_profile ? currencySymbol(pos_profile.currency) : ''" :disabled="
 										!pos_profile ||
 										!pos_profile.posa_allow_user_to_edit_additional_discount ||
 										!!discount_percentage_offer_name
-									"
-									class="summary-field"
-								/>
+									" class="summary-field" />
 							</v-col>
 
 							<!-- Additional Discount Percentage -->
 							<v-col cols="6" v-else-if="pos_profile">
-								<v-text-field
-									:model-value="additional_discount_percentage"
+								<v-text-field :model-value="additional_discount_percentage"
 									@update:model-value="handleAdditionalDiscountPercentageUpdate"
-									@change="apply_additional_discount"
-									:rules="[isNumber]"
-									:label="__('Additional Discount %')"
-									suffix="%"
-									prepend-inner-icon="mdi-percent"
-									variant="solo"
-									density="compact"
-									color="warning"
-									:disabled="
+									@change="apply_additional_discount" :rules="[isNumber]"
+									:label="__('Additional Discount %')" suffix="%" prepend-inner-icon="mdi-percent"
+									variant="solo" density="compact" color="warning" :disabled="
 										!pos_profile.posa_allow_user_to_edit_additional_discount ||
 										!!discount_percentage_offer_name
-									"
-									class="summary-field"
-								/>
+									" class="summary-field" />
 							</v-col>
 
 							<!-- Items Discounts -->
 							<v-col cols="6">
-								<v-text-field
-									:model-value="formatCurrency(total_items_discount_amount)"
-									:prefix="currencySymbol(displayCurrency)"
-									:label="__('Items Discounts')"
-									prepend-inner-icon="mdi-tag-minus"
-									variant="solo"
-									density="compact"
-									color="warning"
-									readonly
-									class="summary-field"
-								/>
+								<v-text-field :model-value="formatByPrecision(total_items_discount_amount)"
+									:prefix="currencySymbol(displayCurrency)" :label="__('Items Discounts')"
+									prepend-inner-icon="mdi-tag-minus" variant="solo" density="compact" color="warning"
+									readonly class="summary-field" />
 							</v-col>
 
 							<!-- Total -->
-							<v-col cols="6">
-								<v-text-field
-									:model-value="formatCurrency(subtotal)"
-									:prefix="currencySymbol(displayCurrency)"
-									:label="__('Total')"
-									prepend-inner-icon="mdi-cash"
-									variant="solo"
-									density="compact"
-									readonly
-									color="success"
-									class="summary-field"
-								/>
-							</v-col>
+							<v-text-field v-model="manual_total" :label="__('Total')" prepend-inner-icon="mdi-cash"
+								variant="solo" density="compact" color="success" class="summary-field" type="number"
+								:prefix="currencySymbol(displayCurrency)" @change="onManualTotalChange" />
+
 
 							<!-- Frequent Cards Button (LEFT SIDE) -->
 							<v-col cols="12">
-								<v-btn
-									block
-									color="orange"
-									theme="dark"
-									prepend-icon="mdi-cards"
-									@click="handleFrequentCards"
-									class="summary-btn"
-									:loading="frequentCardsLoading"
-								>
+								<v-btn block color="orange" theme="dark" prepend-icon="mdi-cards"
+									@click="handleFrequentCards" class="summary-btn" :loading="frequentCardsLoading">
 									<span class="flex-grow-1">{{ __("FREQUENT CARDS") }}</span>
-									<v-chip
-										v-if="completedCardsCount > 0"
-										size="small"
-										color="white"
-										text-color="orange"
-										class="ml-2"
-									>
+									<v-chip v-if="completedCardsCount > 0" size="small" color="white"
+										text-color="orange" class="ml-2">
 										{{ completedCardsCount }} {{ __("Free") }}
 									</v-chip>
 								</v-btn>
@@ -131,29 +121,16 @@
 						<v-row dense>
 							<!-- Save Button -->
 							<v-col cols="12">
-								<v-btn
-									block
-									color="info"
-									prepend-icon="mdi-content-save"
-									@click="handleSaveAndClear"
-									class="summary-btn"
-									:loading="saveLoading"
-								>
+								<v-btn block color="info" prepend-icon="mdi-content-save" @click="handleSaveAndClear"
+									class="summary-btn" :loading="saveLoading">
 									{{ __("SAVE & CLEAR") }}
 								</v-btn>
 							</v-col>
 
 							<!-- Loyalty Points Button -->
 							<v-col cols="12">
-								<v-btn
-									block
-									color="purple"
-									theme="dark"
-									prepend-icon="mdi-star"
-									@click="handleLoyaltyPoints"
-									class="summary-btn"
-									:loading="loyaltyLoading"
-								>
+								<v-btn block color="purple" theme="dark" prepend-icon="mdi-star"
+									@click="handleLoyaltyPoints" class="summary-btn" :loading="loyaltyLoading">
 									{{ __("LOYALTY POINTS") }}
 								</v-btn>
 							</v-col>
@@ -187,52 +164,25 @@
 							</v-col>
 
 							<!-- Select Sales Order Button (Conditional) -->
-							<v-col
-								cols="12"
-								v-if="pos_profile && pos_profile.custom_allow_select_sales_order == 1"
-							>
-								<v-btn
-									block
-									color="info"
-									theme="dark"
-									prepend-icon="mdi-book-search"
-									@click="handleSelectOrder"
-									class="summary-btn"
-									:loading="selectOrderLoading"
-								>
+							<v-col cols="12" v-if="pos_profile && pos_profile.custom_allow_select_sales_order == 1">
+								<v-btn block color="info" theme="dark" prepend-icon="mdi-book-search"
+									@click="handleSelectOrder" class="summary-btn" :loading="selectOrderLoading">
 									{{ __("SELECT S.O") }}
 								</v-btn>
 							</v-col>
 
 							<!-- Sales Return Button (Conditional) -->
 							<v-col cols="12" v-if="pos_profile && pos_profile.posa_allow_return == 1">
-								<v-btn
-									block
-									color="secondary"
-									theme="dark"
-									prepend-icon="mdi-backup-restore"
-									@click="handleOpenReturns"
-									class="summary-btn"
-									:loading="returnsLoading"
-								>
+								<v-btn block color="secondary" theme="dark" prepend-icon="mdi-backup-restore"
+									@click="handleOpenReturns" class="summary-btn" :loading="returnsLoading">
 									{{ __("SALES RETURN") }}
 								</v-btn>
 							</v-col>
 
 							<!-- Print Draft Button (Conditional) -->
-							<v-col
-								cols="12"
-								v-if="pos_profile && pos_profile.posa_allow_print_draft_invoices"
-							>
-								<v-btn
-									block
-									color="primary"
-									theme="dark"
-									prepend-icon="mdi-printer"
-									@click="handlePrintDraft"
-									class="summary-btn"
-									:loading="printLoading"
-								>
+							<v-col cols="12" v-if="pos_profile && pos_profile.posa_allow_print_draft_invoices">
+								<v-btn block color="primary" theme="dark" prepend-icon="mdi-printer"
+									@click="handlePrintDraft" class="summary-btn" :loading="printLoading">
 									{{ __("PRINT DRAFT") }}
 								</v-btn>
 							</v-col>
@@ -246,15 +196,9 @@
 				<v-row dense class="mt-4">
 					<!-- Cancel Sale Button -->
 					<v-col cols="6">
-						<v-btn
-							block
-							color="error"
-							theme="dark"
-							@click="handleCancelSale"
-							class="summary-btn"
+						<v-btn block color="error" theme="dark" @click="handleCancelSale" class="summary-btn"
 							:loading="cancelLoading"
-							style="display: flex; align-items: center; justify-content: center"
-						>
+							style="display: flex; align-items: center; justify-content: center">
 							<v-icon left size="18">mdi-close-circle</v-icon>
 							{{ __("CANCEL SALE") }}
 						</v-btn>
@@ -262,15 +206,9 @@
 
 					<!-- Pay Button -->
 					<v-col cols="6">
-						<v-btn
-							block
-							color="green darken-2"
-							theme="dark"
-							@click="handleShowPayment"
-							class="summary-btn pay-btn"
-							:loading="paymentLoading"
-							style="display: flex; align-items: center; justify-content: center"
-						>
+						<v-btn block color="green darken-2" theme="dark" @click="handleShowPayment"
+							class="summary-btn pay-btn" :loading="paymentLoading"
+							style="display: flex; align-items: center; justify-content: center">
 							<v-icon left size="18">mdi-credit-card</v-icon>
 							{{ __("PAY") }}
 						</v-btn>
@@ -321,22 +259,13 @@
 						</v-alert>
 
 						<!-- Redeem Points Input -->
-						<v-text-field
-							v-model="pointsToRedeem"
-							:label="__('Points to Redeem')"
-							prepend-inner-icon="mdi-star-minus"
-							variant="outlined"
-							density="comfortable"
-							color="purple"
-							type="number"
-							:rules="[
+						<v-text-field v-model="pointsToRedeem" :label="__('Points to Redeem')"
+							prepend-inner-icon="mdi-star-minus" variant="outlined" density="comfortable" color="purple"
+							type="number" :rules="[
 								isNumber,
 								(v) => v <= loyaltyPoints || __('Cannot redeem more than available points'),
 								(v) => v >= 0 || __('Points must be positive'),
-							]"
-							:hint="__('Enter points to redeem for a discount')"
-							persistent-hint
-						/>
+							]" :hint="__('Enter points to redeem for a discount')" persistent-hint />
 
 						<!-- Redemption Preview -->
 						<div v-if="pointsToRedeem > 0" class="mt-3 pa-3 redemption-preview">
@@ -369,13 +298,8 @@
 					<v-btn color="error" variant="text" @click="showLoyaltyDialog = false">
 						{{ __("Cancel") }}
 					</v-btn>
-					<v-btn
-						color="purple"
-						variant="flat"
-						:disabled="!isValidRedemption || redeemLoading"
-						:loading="redeemLoading"
-						@click="handleRedeemPoints"
-					>
+					<v-btn color="purple" variant="flat" :disabled="!isValidRedemption || redeemLoading"
+						:loading="redeemLoading" @click="handleRedeemPoints">
 						<v-icon left>mdi-check</v-icon>
 						{{ __("Apply Redemption") }}
 					</v-btn>
@@ -407,12 +331,8 @@
 						</p>
 
 						<!-- Loading State -->
-						<v-progress-linear
-							v-if="loadingFrequentCards"
-							indeterminate
-							color="orange"
-							class="mb-3"
-						></v-progress-linear>
+						<v-progress-linear v-if="loadingFrequentCards" indeterminate color="orange"
+							class="mb-3"></v-progress-linear>
 
 						<!-- Empty State -->
 						<div v-else-if="frequentCards.length === 0" class="text-center py-8">
@@ -428,34 +348,27 @@
 						<!-- Cards Grid -->
 						<v-row v-else dense>
 							<v-col v-for="card in frequentCards" :key="card.name" cols="12">
-								<v-card
-									:class="[
+								<v-card :class="[
 										'frequent-card',
 										card.is_expired ? 'expired-card' : '',
 										card.visits >= card.required_visits ? 'completed-card' : '',
-									]"
-									:elevation="card.visits >= card.required_visits ? 4 : 2"
-									@click="handleCardClick(card)"
-									:disabled="card.is_expired || applyingCard"
-								>
+									]" :elevation="card.visits >= card.required_visits ? 4 : 2" @click="handleCardClick(card)"
+									:disabled="card.is_expired || applyingCard">
 									<v-card-text class="pa-4">
 										<v-row align="center" no-gutters>
 											<v-col cols="auto" class="mr-3">
-												<v-avatar
-													:color="
+												<v-avatar :color="
 														card.is_expired
 															? 'grey'
 															: card.visits >= card.required_visits
 																? 'success'
 																: 'orange'
-													"
-													size="56"
-												>
+													" size="56">
 													<v-icon color="white" size="28">
 														{{
-															card.visits >= card.required_visits
-																? "mdi-gift"
-																: "mdi-cards"
+														card.visits >= card.required_visits
+														? "mdi-gift"
+														: "mdi-cards"
 														}}
 													</v-icon>
 												</v-avatar>
@@ -472,61 +385,40 @@
 												<div class="visit-progress mb-2">
 													<v-row dense align="center">
 														<v-col cols="auto">
-															<v-chip
-																size="small"
-																:color="
+															<v-chip size="small" :color="
 																	card.visits >= card.required_visits
 																		? 'success'
 																		: 'orange'
-																"
-															>
+																">
 																{{ card.visits }}/{{ card.required_visits }}
 																visits
 															</v-chip>
 														</v-col>
 														<v-col>
-															<v-progress-linear
-																:model-value="
+															<v-progress-linear :model-value="
 																	(card.visits / card.required_visits) * 100
-																"
-																:color="
+																" :color="
 																	card.visits >= card.required_visits
 																		? 'success'
 																		: 'orange'
-																"
-																height="6"
-																rounded
-															></v-progress-linear>
+																" height="6" rounded></v-progress-linear>
 														</v-col>
 													</v-row>
 												</div>
 
 												<!-- Status & Expiry -->
 												<div>
-													<v-chip
-														v-if="card.is_expired"
-														size="small"
-														color="error"
-														variant="flat"
-													>
+													<v-chip v-if="card.is_expired" size="small" color="error"
+														variant="flat">
 														<v-icon size="small" left>mdi-clock-alert</v-icon>
 														{{ __("Expired") }}
 													</v-chip>
-													<v-chip
-														v-else-if="card.visits >= card.required_visits"
-														size="small"
-														color="success"
-														variant="flat"
-													>
+													<v-chip v-else-if="card.visits >= card.required_visits" size="small"
+														color="success" variant="flat">
 														<v-icon size="small" left>mdi-gift</v-icon>
 														{{ __("Free Service Available!") }}
 													</v-chip>
-													<v-chip
-														v-else
-														size="small"
-														color="grey"
-														variant="outlined"
-													>
+													<v-chip v-else size="small" color="grey" variant="outlined">
 														<v-icon size="small" left>mdi-calendar</v-icon>
 														{{ __("Expires") }}:
 														{{ formatDate(card.expiry_date) }}
@@ -540,18 +432,12 @@
 						</v-row>
 
 						<!-- Auto-apply notification -->
-						<v-alert
-							v-if="hasCompletedCards"
-							type="success"
-							variant="tonal"
-							density="compact"
-							class="mt-4"
-							icon="mdi-information"
-						>
+						<v-alert v-if="hasCompletedCards" type="success" variant="tonal" density="compact" class="mt-4"
+							icon="mdi-information">
 							{{
-								__(
-									"Click on a completed card to add the free service to your invoice automatically",
-								)
+							__(
+							"Click on a completed card to add the free service to your invoice automatically",
+							)
 							}}
 						</v-alert>
 					</div>
@@ -612,6 +498,20 @@ export default {
 			applyingCard: false,
 			showFrequentCardsDialog: false,
 			frequentCardsLoading: false,
+
+			employees: [],
+			selectedEmployee: null,
+			loadingEmployees: false,
+			showEmployeeSelection: false,
+
+			showOdometerField: false,
+			odometerReading: null,
+			vehicleNumber: "",
+			mobileNumber: "",
+
+			manual_total: 0,
+			isManualEdit: false,
+			isResetting: false,
 		};
 	},
 	emits: [
@@ -632,6 +532,9 @@ export default {
 		"apply-frequent-card",
 	],
 	computed: {
+		decimalPrecision() {
+			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
+		},
 		__() {
 			return window.__ || ((str) => str);
 		},
@@ -689,13 +592,66 @@ export default {
 		},
 		total_qty: {
 			handler(newVal) {
-				console.log("[InvoiceSummary] total_qty changed:", newVal);
 				this.$forceUpdate();
 			},
 			immediate: true,
 		},
+
+		 subtotal: {
+			immediate: true,
+			handler(val) {
+				if (this.isResetting || this.isManualEdit) return; 
+				this.manual_total = this.formatByPrecision(val);
+			},
+  },
 	},
 	methods: {
+
+		onManualTotalChange() {
+			this.isManualEdit = true;
+
+			const enteredTotal = Number(this.manual_total || 0);
+			const calculatedTotal = Number(this.subtotal || 0);
+
+			const roundOff = enteredTotal - calculatedTotal;
+
+			this.eventBus.emit("update_manual_round_off", roundOff);
+
+			this.eventBus.emit("force_payment_refresh");
+		},
+		resetAfterPayment() {
+			// Core sale state
+			this.selectedEmployee = null;
+			this.showEmployeeSelection = false;
+
+			this.showOdometerField = false;
+			this.odometerReading = null;
+			this.vehicleNumber = "";
+			this.mobileNumber = "";
+
+			// Loyalty
+			this.loyaltyPoints = null;
+			this.pointsToRedeem = 0;
+			this.conversionFactor = 0;
+			this.customerName = "";
+
+			// Frequent cards
+			this.frequentCards = [];
+			this.showFrequentCardsDialog = false;
+			this.applyingCard = false;
+
+			// UI loaders
+			this.saveLoading = false;
+			this.paymentLoading = false;
+
+			localStorage.removeItem("pos_selected_employee");
+
+			console.log("[InvoiceSummary] Reset after payment completed");
+		},
+		formatByPrecision(value) {
+			const num = Number(value || 0);
+			return num.toFixed(this.decimalPrecision);
+		},
 		handleAdditionalDiscountUpdate(value) {
 			this.$emit("update:additional_discount", value);
 		},
@@ -704,7 +660,47 @@ export default {
 			this.$emit("update:additional_discount_percentage", value);
 		},
 
+		emitOdometerData() {
+			const odometerData = {
+				custom_has_oil_item: this.showOdometerField ? 1 : 0,
+				custom_odometer_reading: this.odometerReading,
+				contact_mobile: this.mobileNumber,
+				custom_vehicle_no: this.vehicleNumber,
+			};
+
+			this.eventBus.emit("update_odometer_data", odometerData);
+		},
+
+		clearOdometerFields() {
+			this.odometerReading = null;
+			this.vehicleNumber = "";
+			this.mobileNumber = "";
+			this.showOdometerField = false;
+		},
+
 		async handleSaveAndClear() {
+			//  MANDATORY EMPLOYEE VALIDATION FOR CAR WASH SERVICE
+			if (this.showEmployeeSelection && !this.selectedEmployee) {
+				frappe.show_alert({
+					message: this.__("Please select a service employee before saving."),
+					indicator: "red",
+				});
+				return;
+			}
+			// 2. MANDATORY ODOMETER VALIDATION
+			if (this.showOdometerField) {
+				if (!this.odometerValue || isNaN(this.odometerValue) || Number(this.odometerValue) <= 0) {
+					frappe.show_alert({
+						message: this.__("Please enter a valid odometer reading before saving."),
+						indicator: "red",
+					});
+					return;
+				}
+
+				// Emit odometer data only if valid
+				this.emitOdometerData();
+			}
+
 			this.saveLoading = true;
 			try {
 				this.$emit("save-and-clear");
@@ -769,7 +765,6 @@ export default {
 					method: "posawesome.posawesome.api.frequent_cards.get_customer_frequent_cards",
 					args: {
 						customer: customerId,
-						company: this.pos_profile?.company,
 					},
 				});
 
@@ -781,47 +776,6 @@ export default {
 				}
 			} catch (err) {
 				console.error("Failed to fetch frequent cards:", err);
-
-				// TEMPORARY: Use mock data for testing
-				console.warn("Using mock data for testing frequent cards");
-				this.frequentCards = [
-					{
-						name: "FC-TEST-001",
-						card_name: "Haircut Frequent Card",
-						service_item: "ITEM-001",
-						service_item_name: "Basic Haircut",
-						visits: 2,
-						required_visits: 3,
-						issue_date: "2024-10-01",
-						expiry_date: "2025-04-01",
-						status: "Active",
-						is_expired: false,
-					},
-					{
-						name: "FC-TEST-002",
-						card_name: "Spa Treatment Card",
-						service_item: "ITEM-002",
-						service_item_name: "Full Body Massage",
-						visits: 3,
-						required_visits: 3,
-						issue_date: "2024-09-15",
-						expiry_date: "2025-03-15",
-						status: "Completed",
-						is_expired: false,
-					},
-					{
-						name: "FC-TEST-003",
-						card_name: "Expired Card",
-						service_item: "ITEM-003",
-						service_item_name: "Manicure",
-						visits: 1,
-						required_visits: 3,
-						issue_date: "2024-01-01",
-						expiry_date: "2024-07-01",
-						status: "Expired",
-						is_expired: true,
-					},
-				];
 			} finally {
 				this.loadingFrequentCards = false;
 			}
@@ -975,7 +929,7 @@ export default {
 					});
 
 					frappe.show_alert({
-						message: this.__("🎉 Free service added to invoice!"),
+						message: this.__(" Free service added to invoice!"),
 						indicator: "green",
 					});
 
@@ -1007,15 +961,209 @@ export default {
 			return date.toLocaleDateString();
 		},
 
+		employeeFilter(value, query, item) {
+			if (!query) return true;
+
+			const searchTerm = query.toLowerCase();
+			const employeeName = (item.raw.employee_name || "").toLowerCase();
+			const employeeCode = (item.raw.name || "").toLowerCase();
+			const designation = (item.raw.designation || "").toLowerCase();
+
+			// Extract just the number from employee code (e.g., "HR-EMP-00001" -> "00001" or "1")
+			const codeNumber = employeeCode.replace(/[^0-9]/g, "");
+			const queryNumber = searchTerm.replace(/[^0-9]/g, "");
+
+			return (
+				employeeName.includes(searchTerm) ||
+				employeeCode.includes(searchTerm) ||
+				designation.includes(searchTerm) ||
+				(queryNumber && codeNumber.includes(queryNumber))
+			);
+		},
+
+		async fetchEmployees() {
+			if (!this.pos_profile?.company) {
+				console.warn("[InvoiceSummary] No company in POS profile");
+				return;
+			}
+
+			this.loadingEmployees = true;
+			try {
+				const response = await frappe.call({
+					method: "posawesome.posawesome.api.employees.get_active_employees",
+					args: {
+						company: this.pos_profile.company,
+					},
+				});
+
+				if (response?.message) {
+					this.employees = response.message;
+				} else {
+					console.warn("[InvoiceSummary] No employees returned from API");
+					this.employees = [];
+				}
+			} catch (error) {
+				console.error("[InvoiceSummary] Failed to fetch employees:", error);
+				frappe.show_alert({
+					message: this.__("Failed to load employees. Please try again."),
+					indicator: "red",
+				});
+				this.employees = [];
+			} finally {
+				this.loadingEmployees = false;
+			}
+		},
+
+		handleEmployeeChange(employeeId) {
+			if (!employeeId) {
+				// Employee cleared
+				this.selectedEmployee = null;
+				this.eventBus.emit("employee_selected", {
+					employee_id: null,
+					employee_name: null,
+				});
+				return;
+			}
+
+			// Find selected employee details
+			const employee = this.employees.find((e) => e.name === employeeId);
+
+			if (!employee) {
+				console.warn("[InvoiceSummary] Selected employee not found in list:", employeeId);
+				return;
+			}
+
+			// Emit event to parent component to attach employee to invoice
+			this.eventBus.emit("employee_selected", {
+				employee_id: employee.name,
+				employee_name: employee.employee_name,
+				designation: employee.designation,
+				department: employee.department,
+			});
+
+			// Show confirmation message
+			frappe.show_alert({
+				message: this.__(`Service employee set to: ${employee.employee_name}`),
+				indicator: "green",
+			});
+		},
+
+		checkIfCarWashService() {
+
+			// Emit event to parent to check items
+			this.eventBus.emit("check_items_for_service", {
+				callback: (hasCarWashService) => {
+					this.showEmployeeSelection = hasCarWashService;
+
+					// Fetch employees if needed and not already loaded
+					if (hasCarWashService && this.employees.length === 0) {
+						this.fetchEmployees();
+					}
+
+					// Clear selection if no longer needed
+					if (!hasCarWashService && this.selectedEmployee) {
+						this.selectedEmployee = null;
+						this.handleEmployeeChange(null);
+					}
+				},
+			});
+		},
+
+		async handleExternalEmployeeSelected(payload) {
+			// payload may be { employee_id, employee_name } or just employee_id (string)
+			if (!payload) {
+				this.selectedEmployee = null;
+				this.showEmployeeSelection = false;
+				return;
+			}
+
+			const empId = payload.employee_id || payload;
+			const empNameProvided = payload.employee_name || null;
+
+			// show selector
+			this.showEmployeeSelection = true;
+
+			// if we already have employees loaded, set selection directly
+			if (empNameProvided) {
+				// if server gave friendly name, create/ensure employees array entry to show chip
+				// (we keep a minimal object, fetchEmployees will refresh full list eventually)
+				const exists = this.employees.find((e) => e.name === empId);
+				if (!exists) {
+					this.employees.unshift({
+						name: empId,
+						employee_name: empNameProvided,
+					});
+				}
+				this.selectedEmployee = empId;
+				return;
+			}
+
+			// No friendly name provided — ensure list loaded then set selection
+			if (this.employees.length === 0) {
+				await this.fetchEmployees();
+			}
+
+			// if still not found, try to fetch the single employee explicitly
+			let found = this.employees.find((e) => e.name === empId);
+			if (!found) {
+				try {
+					const resp = await frappe.call({
+						method: "frappe.client.get",
+						args: { doctype: "Employee", name: empId },
+					});
+					if (resp && resp.message) {
+						this.employees.unshift(resp.message);
+						found = resp.message;
+					}
+				} catch (err) {
+					console.warn("[InvoiceSummary] Employee single fetch failed", err);
+				}
+			}
+
+			if (found) {
+				this.selectedEmployee = found.name;
+				// show toast
+				frappe.show_alert({
+					message: this.__(`Service employee set to: ${found.employee_name || found.name}`),
+					indicator: "green",
+				});
+			} else {
+				// fallback: set id anyway so value exists and user can see placeholder
+				this.selectedEmployee = empId;
+			}
+		},
+
 		async handleCancelSale() {
 			this.cancelLoading = true;
 			try {
+				// Only emit the cancel-sale event to parent
+				// Parent will show the confirmation dialog
 				this.$emit("cancel-sale");
 			} finally {
 				setTimeout(() => {
 					this.cancelLoading = false;
 				}, 500);
 			}
+		},
+
+		// Add this NEW method to handle the actual clearing after confirmation
+		handleConfirmedCancelSale() {
+			console.log("[InvoiceSummary] Cancel sale confirmed by user - clearing data");
+
+			// Reset local state
+			this.resetAfterPayment();
+
+			// Emit clear invoice to reset payment data
+			this.eventBus.emit("clear_invoice");
+
+			// Close payment dialog if open
+			this.eventBus.emit("show_payment", "false");
+
+			// Show success message
+			frappe.show_alert({
+				message: this.__("Sale cancelled successfully"),
+				indicator: "orange",
+			});
 		},
 
 		async handleOpenReturns() {
@@ -1041,7 +1189,8 @@ export default {
 		},
 
 		async handleShowPayment() {
-			console.log("[InvoiceSummary] PAY button clicked");
+			console.log("[InvoiceSummary] handleShowPayment called - START");
+			console.trace("[InvoiceSummary] Call stack:");
 
 			if (!this.selectedCustomerId) {
 				frappe.show_alert({
@@ -1053,12 +1202,11 @@ export default {
 
 			this.paymentLoading = true;
 			try {
-				console.log("[InvoiceSummary] Requesting invoice from parent");
+				console.log("[InvoiceSummary] Emitting get_current_invoice_from_component ONCE");
 				this.eventBus.emit("get_current_invoice_from_component");
 
 				await new Promise((resolve) => {
 					const handler = (data) => {
-						console.log("[InvoiceSummary] Invoice received:", data.grand_total);
 						this.eventBus.off("current_invoice_data", handler);
 						resolve();
 					};
@@ -1069,7 +1217,6 @@ export default {
 					}, 2000);
 				});
 
-				console.log("[InvoiceSummary] Emitting show_payment");
 				this.eventBus.emit("show_payment", "true");
 			} catch (error) {
 				console.error("[InvoiceSummary] Error:", error);
@@ -1083,27 +1230,104 @@ export default {
 		},
 
 		handleShowOffers() {
-			console.log("[InvoiceSummary] Show offers clicked");
 			this.$emit("show-offers");
 		},
 
 		handleShowCoupons() {
-			console.log("[InvoiceSummary] Show coupons clicked");
 			this.$emit("show-coupons");
 		},
 	},
 	mounted() {
-		console.log("[InvoiceSummary] Mounted");
+
+		this.eventBus.on("reset_manual_total", () => {
+			this.isResetting = true;
+
+			this.manual_total = 0;
+			this.isManualEdit = false;
+
+			this.$nextTick(() => {
+				this.isResetting = false;
+			});
+		});
+
 		if (this.selectedCustomerId) {
 			this.fetchLoyaltyPoints();
 			this.fetchFrequentCards();
 		}
 
+		// Listen for odometer field visibility
+		this.eventBus.on("show_odometer_field", (shouldShow) => {
+			this.showOdometerField = shouldShow;
+
+			if (!shouldShow) {
+				this.clearOdometerFields();
+			}
+		});
+
+		// Listen for odometer data from parent (when loading draft)
+		this.eventBus.on("load_odometer_data", (data) => {
+
+			if (data) {
+				this.showOdometerField = data.custom_has_oil_item === 1;
+				this.odometerReading = data.custom_odometer_reading || null;
+				this.vehicleNumber = data.custom_vehicle_no || "";
+				this.mobileNumber = data.contact_mobile || "";
+			}
+		});
+
+		// Listen for customer details from Customer component (AUTO-FETCH)
+		this.eventBus.on("update_customer_details", (data) => {
+
+			// Auto-populate mobile and vehicle from customer
+			this.mobileNumber = data.contact_mobile || "";
+			this.vehicleNumber = data.custom_vehicle_no || "";
+
+			// If odometer field is visible, emit the data immediately
+			if (this.showOdometerField) {
+				this.emitOdometerData();
+			}
+		});
+
 		// Listen for item additions to check for auto-apply
 		this.eventBus.on("item_added_to_invoice", this.checkAutoApplyCard);
+
+		// EMPLOYEE SELECTION LISTENERS
+		this.eventBus.on("show_employee_selection", (shouldShow) => {
+			this.showEmployeeSelection = shouldShow;
+
+			if (shouldShow && this.employees.length === 0) {
+				this.fetchEmployees();
+			}
+		});
+
+		// Listen for clear employee selection event
+		this.eventBus.on("clear_employee_selection", () => {
+			this.selectedEmployee = null;
+			this.showEmployeeSelection = false;
+		});
+
+		// Check initially if we should show employee selection
+		this.checkIfCarWashService();
+
+		this.eventBus.on("employee_selected", this.handleExternalEmployeeSelected);
+
+		this.eventBus.on("payment_completed", this.resetAfterPayment);
+
+		this.eventBus.on("confirm_cancel_sale", this.handleConfirmedCancelSale);
 	},
 	beforeUnmount() {
 		this.eventBus.off("item_added_to_invoice", this.checkAutoApplyCard);
+		this.eventBus.off("show_employee_selection");
+		this.eventBus.off("clear_employee_selection");
+		this.eventBus.off("employee_selected", this.handleExternalEmployeeSelected);
+		this.eventBus.off("show_odometer_field");
+		this.eventBus.off("load_odometer_data");
+		this.eventBus.off("update_customer_details");
+		this.eventBus.off("payment_completed", this.resetAfterPayment);
+		this.eventBus.off("confirm_cancel_sale", this.handleConfirmedCancelSale);
+		this.eventBus.off("reset_manual_total");
+
+
 	},
 };
 </script>
@@ -1238,6 +1462,13 @@ export default {
 .summary-field:hover {
 	transform: translateY(-1px);
 }
+
+
+.summary-field :deep(.v-field-label) {
+	font-weight: 600;   
+	font-size: 0.95rem;   
+}
+
 
 /* Dialog Scrolling */
 .dialog-card {

@@ -1,60 +1,33 @@
 <template>
-	<div
-		class="my-0 py-0 overflow-y-auto items-table-container"
+	<div class="my-0 py-0 overflow-y-auto items-table-container"
 		:style="{ height: 'calc(100% - 80px)', maxHeight: 'calc(100% - 80px)' }"
-		@dragover="onDragOverFromSelector($event)"
-		@drop="onDropFromSelector($event)"
-		@dragenter="onDragEnterFromSelector"
-		@dragleave="onDragLeaveFromSelector"
-	>
-		<v-data-table-virtual
-			:headers="headers"
-			:items="items"
-			:theme="$theme.current"
-			:expanded="expanded"
-			show-expand
-			item-value="posa_row_id"
-			class="modern-items-table elevation-2"
-			:items-per-page="itemsPerPage"
-			expand-on-click
-			density="compact"
-			hide-default-footer
-			:single-expand="true"
-			:header-props="headerProps"
-			:no-data-text="__('No items in cart')"
-			@update:expanded="
+		@dragover="onDragOverFromSelector($event)" @drop="onDropFromSelector($event)"
+		@dragenter="onDragEnterFromSelector" @dragleave="onDragLeaveFromSelector">
+		<v-data-table-virtual :headers="headers" :items="items" :theme="$theme.current" :expanded="expanded" show-expand
+			item-value="posa_row_id" class="modern-items-table elevation-2" :items-per-page="itemsPerPage"
+			expand-on-click density="compact" hide-default-footer :single-expand="true" :header-props="headerProps"
+			:no-data-text="__('No items in cart')" @update:expanded="
 				(val) =>
 					$emit(
 						'update:expanded',
 						val.map((v) => (typeof v === 'object' ? v.posa_row_id : v)),
 					)
-			"
-			:search="itemSearch"
-		>
+			" :search="itemSearch">
 			<!-- Item name column -->
 			<template v-slot:item.item_name="{ item }">
 				<div class="d-flex align-center">
 					<span>{{ item.item_name }}</span>
 					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">{{
 						__("Bundle")
-					}}</v-chip>
+						}}</v-chip>
 					<v-chip v-if="item.name_overridden" color="primary" size="x-small" class="ml-1">{{
 						__("Edited")
-					}}</v-chip>
-					<v-icon
-						v-if="pos_profile.posa_allow_line_item_name_override && !item.posa_is_replace"
-						size="x-small"
-						class="ml-1"
-						@click.stop="openNameDialog(item)"
-					>
+						}}</v-chip>
+					<v-icon v-if="pos_profile.posa_allow_line_item_name_override && !item.posa_is_replace"
+						size="x-small" class="ml-1" @click.stop="openNameDialog(item)">
 						mdi-pencil
 					</v-icon>
-					<v-icon
-						v-if="item.name_overridden"
-						size="x-small"
-						class="ml-1"
-						@click.stop="resetItemName(item)"
-					>
+					<v-icon v-if="item.name_overridden" size="x-small" class="ml-1" @click.stop="resetItemName(item)">
 						mdi-undo
 					</v-icon>
 				</div>
@@ -62,18 +35,40 @@
 
 			<!-- Quantity column -->
 			<template v-slot:item.qty="{ item }">
-				<div class="amount-value" :class="{ 'negative-number': isNegative(item.qty) }">
-					{{ formatFloat(item.qty, hide_qty_decimals ? 0 : undefined) }}
+				<div class="qty-control" :class="{ 'negative-number': isNegative(item.qty) }" role="group"
+					:aria-label="__('Quantity controls')">
+					<!-- Decrease -->
+					<v-btn class="qty-btn qty-decrease" icon size="small" :disabled="!!item.posa_is_replace"
+						@click.stop="subtractOne(item)" :aria-label="__('Decrease quantity')" title="Decrease">
+						<v-icon size="18">mdi-minus</v-icon>
+					</v-btn>
+
+					<!-- Quantity display -->
+					<div class="qty-value">
+						{{ Math.trunc(item.qty) }}
+					</div>
+
+
+					<!-- Increase -->
+					<v-btn class="qty-btn qty-increase" icon size="small" :disabled="
+							!!item.posa_is_replace ||
+							((!stock_settings.allow_negative_stock ||
+								pos_profile.posa_block_sale_beyond_available_qty) &&
+								item.max_qty !== undefined &&
+								item.qty >= item.max_qty)
+						" @click.stop="addOne(item)" :aria-label="__('Increase quantity')" title="Increase">
+						<v-icon size="18">mdi-plus</v-icon>
+					</v-btn>
 				</div>
 			</template>
 
-			<!-- Rate column -->
-			<template v-slot:item.rate="{ item }">
+			<!-- Rate column (hidden if shouldHidePricing is true) -->
+			<template v-if="!shouldHidePricingForItem(item)" v-slot:item.rate="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
 					<span class="amount-value" :class="{ 'negative-number': isNegative(item.rate) }">{{
-						formatCurrency(item.rate)
-					}}</span>
+						formatByPrecision(item.rate)
+						}}</span>
 				</div>
 			</template>
 
@@ -81,91 +76,51 @@
 			<template v-slot:item.amount="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
-					<span
-						class="amount-value"
-						:class="{ 'negative-number': isNegative(item.qty * item.rate) }"
-						>{{ formatCurrency(item.qty * item.rate) }}
+					<span class="amount-value" :class="{ 'negative-number': isNegative(item.qty * item.rate) }">{{ 
+					formatByPrecision(item.qty * item.rate) }}
 					</span>
 				</div>
 			</template>
 
 			<!-- Actions column -->
 			<template v-slot:item.actions="{ item }">
-				<div class="action-buttons">
-					<v-btn
-						:disabled="!!item.posa_is_replace"
-						size="small"
-						color="error"
-						variant="tonal"
-						class="item-action-btn delete-btn"
-						@click.stop="removeItem(item)"
-					>
-						<v-icon size="small">mdi-trash-can-outline</v-icon>
-					</v-btn>
-
-					<v-btn
-						:disabled="!!item.posa_is_replace"
-						size="small"
-						color="warning"
-						variant="tonal"
-						class="item-action-btn minus-btn"
-						@click.stop="subtractOne(item)"
-					>
-						<v-icon size="small">mdi-minus-circle-outline</v-icon>
-					</v-btn>
-
-					<v-btn
-						:disabled="
-							!!item.posa_is_replace ||
-							((!stock_settings.allow_negative_stock ||
-								pos_profile.posa_block_sale_beyond_available_qty) &&
-								item.max_qty !== undefined &&
-								item.qty >= item.max_qty)
-						"
-						size="small"
-						color="success"
-						variant="tonal"
-						class="item-action-btn plus-btn"
-						@click.stop="addOne(item)"
-					>
-						<v-icon size="small">mdi-plus-circle-outline</v-icon>
-					</v-btn>
+				<div class="actions-cell">
+					<div class="actions-center" role="group" :aria-label="__('Item Actions')">
+						<v-tooltip location="top">
+							<template #activator="{ props }">
+								<v-btn v-bind="props" :disabled="!!item.posa_is_replace"
+									class="action-btn action-delete" variant="tonal" size="small"
+									@click.stop="removeItem(item)" :aria-label="__('Remove item')" title="Remove">
+									<v-icon size="18">mdi-trash-can-outline</v-icon>
+								</v-btn>
+							</template>
+							<span>{{ __("Remove") }}</span>
+						</v-tooltip>
+					</div>
 				</div>
 			</template>
 
-			<!-- Discount amount column -->
-			<template v-slot:item.discount_amount="{ item }">
+			<!-- Discount amount column (hidden if shouldHidePricing is true) -->
+			<template v-if="!shouldHidePricingForItem(item)" v-slot:item.discount_amount="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
-					<span
-						class="amount-value"
-						:class="{ 'negative-number': isNegative(item.discount_amount || 0) }"
-						>{{ formatCurrency(item.discount_amount || 0) }}</span
-					>
+					<span class="amount-value" :class="{ 'negative-number': isNegative(item.discount_amount || 0) }">{{
+						formatByPrecision(item.discount_amount || 0) }}</span>
 				</div>
 			</template>
 
-			<!-- Price list rate column -->
-			<template v-slot:item.price_list_rate="{ item }">
+			<!-- Price list rate column (hidden if shouldHidePricing is true) -->
+			<template v-if="!shouldHidePricingForItem(item)" v-slot:item.price_list_rate="{ item }">
 				<div class="currency-display">
 					<span class="currency-symbol">{{ currencySymbol(displayCurrency) }}</span>
-					<span
-						class="amount-value"
-						:class="{ 'negative-number': isNegative(item.price_list_rate) }"
-						>{{ formatCurrency(item.price_list_rate) }}</span
-					>
+					<span class="amount-value" :class="{ 'negative-number': isNegative(item.price_list_rate) }">{{
+						formatByPrecision(item.price_list_rate) }}</span>
 				</div>
 			</template>
 
-			<!-- Offer toggle button column -->
-			<template v-slot:item.posa_is_offer="{ item }">
-				<v-btn
-					size="x-small"
-					color="primary"
-					variant="tonal"
-					class="ma-0 pa-0"
-					@click.stop="toggleOffer(item)"
-				>
+			<!-- Offer toggle button column (hidden if shouldHidePricing is true) -->
+			<template v-if="!shouldHidePricingForItem(item)" v-slot:item.posa_is_offer="{ item }">
+				<v-btn size="x-small" color="primary" variant="tonal" class="ma-0 pa-0" @click.stop="toggleOffer(item)">
 					{{ item.posa_offer_applied ? __("Remove Offer") : __("Apply Offer") }}
 				</v-btn>
 			</template>
@@ -184,114 +139,63 @@
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('Item Code')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.item_code"
-											disabled
-											prepend-inner-icon="mdi-barcode"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('Item Code')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details v-model="item.item_code" disabled
+											prepend-inner-icon="mdi-barcode"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('QTY')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="
-												formatFloat(item.qty, hide_qty_decimals ? 0 : undefined)
-											"
-											@change="
-												setFormatedQty(item, 'qty', null, false, $event.target.value)
-											"
-											:rules="[isNumber]"
-											:disabled="!!item.posa_is_replace"
-											prepend-inner-icon="mdi-numeric"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('QTY')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details :model-value="Math.trunc(item.qty)"
+											@change="setFormatedQtyLocal(item, 'qty', 0, false, $event.target.value)"
+												 :rules="[isNumber]" :disabled="!!item.posa_is_replace" prepend-inner-icon="mdi-numeric"></v-text-field>
 										<div v-if="item.max_qty !== undefined" class="text-caption mt-1">
 											{{
-												__("In stock: {0}", [
-													formatFloat(
-														item.max_qty,
-														hide_qty_decimals ? 0 : undefined,
-													),
-												])
+												__("In stock: {0}", [Math.trunc(item.max_qty)])
 											}}
+
 										</div>
 									</div>
 									<div class="form-field">
-										<v-select
-											density="compact"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											:label="frappe._('UOM')"
-											v-model="item.uom"
-											:items="item.item_uoms"
-											variant="outlined"
-											item-title="uom"
-											item-value="uom"
-											hide-details
-											@update:model-value="calcUom(item, $event)"
-											:disabled="
+										<v-select density="compact" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" :label="frappe._('UOM')" v-model="item.uom"
+											:items="item.item_uoms" variant="outlined" item-title="uom" item-value="uom"
+											hide-details @update:model-value="calcUom(item, $event)" :disabled="
 												!!item.posa_is_replace ||
 												(isReturnInvoice && invoice_doc.return_against)
-											"
-											prepend-inner-icon="mdi-weight"
-										></v-select>
+											" prepend-inner-icon="mdi-weight"></v-select>
 									</div>
 								</div>
 							</div>
 
-							<!-- Pricing Section -->
-							<div class="form-section">
+							<!-- Pricing Section (hidden when parent requests pricing hide) -->
+							<div v-if="!shouldHidePricingForItem(item)" class="form-section">
 								<div class="section-header">
 									<v-icon size="small" class="section-icon">mdi-currency-usd</v-icon>
 									<span class="section-title">{{ __("Pricing & Discounts") }}</span>
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											id="rate"
-											:label="frappe._('Rate')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatCurrency(item.rate)"
-											@change="[
+										<v-text-field density="compact" variant="outlined" color="primary" id="rate"
+											:label="frappe._('Rate')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details :model-value="formatByPrecision(item.rate || 0)"
+											type="number" step="1" @change="[ 
+												item.rate = formatByPrecision($event.target.value || 0),
 												setFormatedCurrency(item, 'rate', null, false, $event),
 												calcPrices(item, $event.target.value, $event),
-											]"
-											:disabled="
-												!pos_profile.posa_allow_user_to_edit_rate ||
+											]" :disabled="!pos_profile.posa_allow_user_to_edit_rate ||
 												!!item.posa_is_replace ||
 												!!item.posa_offer_applied
-											"
-											prepend-inner-icon="mdi-currency-usd"
-										></v-text-field>
+												" prepend-inner-icon="mdi-currency-usd"></v-text-field>
 									</div>
-									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											id="discount_percentage"
-											:label="frappe._('Discount %')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatFloat(item.discount_percentage || 0)"
-											@change="[
+									<!-- <div class="form-field">
+										<v-text-field density="compact" variant="outlined" color="primary"
+											id="discount_percentage" :label="frappe._('Discount %')"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="Math.round(item.discount_percentage || 0)"
+											type="number" step="1" @change="[ 
+												item.discount_percentage = Math.round($event.target.value || 0),
 												setFormatedCurrency(
 													item,
 													'discount_percentage',
@@ -300,27 +204,18 @@
 													$event,
 												),
 												calcPrices(item, $event.target.value, $event),
-											]"
-											:disabled="
-												!pos_profile.posa_allow_user_to_edit_item_discount ||
+											]" :disabled="!pos_profile.posa_allow_user_to_edit_item_discount ||
 												!!item.posa_is_replace ||
 												!!item.posa_offer_applied
-											"
-											prepend-inner-icon="mdi-percent"
-										></v-text-field>
-									</div>
+												" prepend-inner-icon="mdi-percent"></v-text-field>
+									</div> -->
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											id="discount_amount"
-											:label="frappe._('Discount Amount')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatCurrency(item.discount_amount || 0)"
-											@change="[
+										<v-text-field density="compact" variant="outlined" color="primary"
+											id="discount_amount" :label="frappe._('Discount Amount')"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="formatByPrecision(item.discount_amount || 0)"
+											type="number" step="1" @change="[ 
+												item.discount_amount = Math.round($event.target.value || 0),
 												setFormatedCurrency(
 													item,
 													'discount_amount',
@@ -329,58 +224,34 @@
 													$event,
 												),
 												calcPrices(item, $event.target.value, $event),
-											]"
-											:disabled="
-												!pos_profile.posa_allow_user_to_edit_item_discount ||
+											]" :disabled="!pos_profile.posa_allow_user_to_edit_item_discount ||
 												!!item.posa_is_replace ||
 												!!item.posa_offer_applied
-											"
-											prepend-inner-icon="mdi-tag-minus"
-										></v-text-field>
+												" prepend-inner-icon="mdi-tag-minus"></v-text-field>
 									</div>
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Price List Rate')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatCurrency(item.price_list_rate || 0)"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="formatByPrecision(item.price_list_rate || 0)"
+											type="number" step="1"
 											:disabled="!pos_profile.posa_allow_price_list_rate_change"
 											prepend-inner-icon="mdi-format-list-numbered"
 											:prefix="currencySymbol(pos_profile.currency)"
-											@change="changePriceListRate(item)"
-										></v-text-field>
+											@change="changePriceListRate(item)"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Total Amount')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatCurrency(item.qty * item.rate)"
-											disabled
-											prepend-inner-icon="mdi-calculator"
-										></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="formatByPrecision(item.qty * item.rate)" disabled
+											prepend-inner-icon="mdi-calculator"></v-text-field>
 									</div>
-									<div
-										class="form-field"
-										v-if="pos_profile.posa_allow_price_list_rate_change"
-									>
-										<v-btn
-											size="small"
-											color="primary"
-											variant="outlined"
-											class="change-price-btn"
-											@click.stop="changePriceListRate(item)"
-										>
+									<div class="form-field" v-if="pos_profile.posa_allow_price_list_rate_change">
+										<v-btn size="small" color="primary" variant="outlined" class="change-price-btn"
+											@click.stop="changePriceListRate(item)">
 											<v-icon size="small" class="mr-1">mdi-pencil</v-icon>
 											{{ __("Change Price") }}
 										</v-btn>
@@ -396,87 +267,42 @@
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Available QTY')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatFloat(item.actual_qty)"
-											disabled
-											prepend-inner-icon="mdi-package-variant"
-										></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="Math.trunc(item.actual_qty)" disabled
+											prepend-inner-icon="mdi-package-variant"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('Stock QTY')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatFloat(item.stock_qty)"
-											disabled
-											prepend-inner-icon="mdi-scale-balance"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('Stock QTY')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details :model-value="Math.trunc(item.stock_qty)"
+											disabled prepend-inner-icon="mdi-scale-balance"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('Stock UOM')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.stock_uom"
-											disabled
-											prepend-inner-icon="mdi-weight-pound"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('Stock UOM')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details v-model="item.stock_uom" disabled
+											prepend-inner-icon="mdi-weight-pound"></v-text-field>
 									</div>
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('Warehouse')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.warehouse"
-											disabled
-											prepend-inner-icon="mdi-warehouse"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('Warehouse')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details v-model="item.warehouse" disabled
+											prepend-inner-icon="mdi-warehouse"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
-											:label="frappe._('Group')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.item_group"
-											disabled
-											prepend-inner-icon="mdi-folder-outline"
-										></v-text-field>
+										<v-text-field density="compact" variant="outlined" color="primary"
+											:label="frappe._('Group')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field" hide-details v-model="item.item_group" disabled
+											prepend-inner-icon="mdi-folder-outline"></v-text-field>
 									</div>
 									<div class="form-field" v-if="item.posa_offer_applied">
-										<v-checkbox
-											density="compact"
-											:label="frappe._('Offer Applied')"
-											v-model="item.posa_offer_applied"
-											readonly
-											hide-details
-											class="mt-1"
-											color="success"
-										></v-checkbox>
+										<v-checkbox density="compact" :label="frappe._('Offer Applied')"
+											v-model="item.posa_offer_applied" readonly hide-details class="mt-1"
+											color="success"></v-checkbox>
 									</div>
 								</div>
 							</div>
@@ -489,39 +315,22 @@
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Serial No QTY')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.serial_no_selected_count"
-											type="number"
-											disabled
-											prepend-inner-icon="mdi-counter"
-										></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details v-model="item.serial_no_selected_count" type="number" disabled
+											prepend-inner-icon="mdi-counter"></v-text-field>
 									</div>
 								</div>
 								<div class="form-row">
 									<div class="form-field full-width">
-										<v-autocomplete
-											v-model="item.serial_no_selected"
-											:items="item.serial_no_data"
-											item-title="serial_no"
-											item-value="serial_no"
-											variant="outlined"
-											density="compact"
-											chips
-											color="primary"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											:label="frappe._('Serial No')"
-											multiple
+										<v-autocomplete v-model="item.serial_no_selected" :items="item.serial_no_data"
+											item-title="serial_no" item-value="serial_no" variant="outlined"
+											density="compact" chips color="primary"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											:label="frappe._('Serial No')" multiple
 											@update:model-value="setSerialNo(item)"
-											prepend-inner-icon="mdi-barcode"
-										></v-autocomplete>
+											prepend-inner-icon="mdi-barcode"></v-autocomplete>
 									</div>
 								</div>
 							</div>
@@ -529,65 +338,37 @@
 							<!-- Batch Number Section -->
 							<div class="form-section" v-if="item.has_batch_no || item.batch_no">
 								<div class="section-header">
-									<v-icon size="small" class="section-icon"
-										>mdi-package-variant-closed</v-icon
-									>
+									<v-icon size="small" class="section-icon">mdi-package-variant-closed</v-icon>
 									<span class="section-title">{{ __("Batch Information") }}</span>
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Batch No. Available QTY')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											:model-value="formatFloat(item.actual_batch_qty)"
-											disabled
-											prepend-inner-icon="mdi-package-variant"
-										></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details :model-value="formatFloat(item.actual_batch_qty)" disabled
+											prepend-inner-icon="mdi-package-variant"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-text-field
-											density="compact"
-											variant="outlined"
-											color="primary"
+										<v-text-field density="compact" variant="outlined" color="primary"
 											:label="frappe._('Batch No Expiry Date')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
-											hide-details
-											v-model="item.batch_no_expiry_date"
-											disabled
-											prepend-inner-icon="mdi-calendar-clock"
-										></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
+											hide-details v-model="item.batch_no_expiry_date" disabled
+											prepend-inner-icon="mdi-calendar-clock"></v-text-field>
 									</div>
 									<div class="form-field">
-										<v-autocomplete
-											v-model="item.batch_no"
-											:items="item.batch_no_data"
-											item-title="batch_no"
-											variant="outlined"
-											density="compact"
-											color="primary"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-											class="dark-field"
+										<v-autocomplete v-model="item.batch_no" :items="item.batch_no_data"
+											item-title="batch_no" variant="outlined" density="compact" color="primary"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field"
 											:label="frappe._('Batch No')"
-											@update:model-value="setBatchQty(item, $event)"
-											hide-details
-											prepend-inner-icon="mdi-package-variant-closed"
-										>
+											@update:model-value="setBatchQty(item, $event)" hide-details
+											prepend-inner-icon="mdi-package-variant-closed">
 											<template v-slot:item="{ props, item }">
 												<v-list-item v-bind="props">
-													<v-list-item-title
-														v-html="item.raw.batch_no"
-													></v-list-item-title>
-													<v-list-item-subtitle
-														v-html="
-															`Available QTY  '${item.raw.batch_qty}' - Expiry Date ${item.raw.expiry_date}`
-														"
-													></v-list-item-subtitle>
+													<v-list-item-title v-html="item.raw.batch_no"></v-list-item-title>
+													<v-list-item-subtitle v-html="
+															`Available QTY  '${item.raw.batch_qty}' - Expiry Date ${item.raw.expiry_date}`"
+														"></v-list-item-subtitle>
 												</v-list-item>
 											</template>
 										</v-autocomplete>
@@ -596,25 +377,17 @@
 							</div>
 
 							<!-- Delivery Date Section -->
-							<div
-								class="form-section"
-								v-if="pos_profile.posa_allow_sales_order && invoiceType == 'Order'"
-							>
+							<div class="form-section"
+								v-if="pos_profile.posa_allow_sales_order && invoiceType == 'Order'">
 								<div class="section-header">
 									<v-icon size="small" class="section-icon">mdi-calendar-check</v-icon>
 									<span class="section-title">{{ __("Delivery Information") }}</span>
 								</div>
 								<div class="form-row">
 									<div class="form-field">
-										<VueDatePicker
-											v-model="item.posa_delivery_date"
-											model-type="format"
-											format="dd-MM-yyyy"
-											:min-date="new Date()"
-											auto-apply
-											:dark="isDarkTheme"
-											@update:model-value="validateDueDate(item)"
-										/>
+										<VueDatePicker v-model="item.posa_delivery_date" model-type="format"
+											format="dd-MM-yyyy" :min-date="new Date()" auto-apply :dark="isDarkTheme"
+											@update:model-value="validateDueDate(item)" />
 									</div>
 								</div>
 							</div>
@@ -622,6 +395,19 @@
 					</div>
 				</td>
 			</template>
+			<template v-slot:item.discount_percentage="{ item }">
+				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" hide-details class="discount-input"
+					:model-value="Math.round(item.discount_percentage || 0)" :disabled="!pos_profile.posa_allow_user_to_edit_item_discount ||
+						!!item.posa_is_replace ||
+						!!item.posa_offer_applied ||
+						item.item_group === 'Engine Oil'
+						" @change="[
+							item.discount_percentage = Math.round($event.target.value || 0),
+							setFormatedCurrency(item, 'discount_percentage', null, false, $event),
+							this.calcPrices(item, $event.target.value, $event),
+						]" prepend-inner-icon="mdi-percent" />
+			</template>
+
 		</v-data-table-virtual>
 		<v-dialog v-model="editNameDialog" max-width="400">
 			<v-card>
@@ -630,12 +416,8 @@
 					<v-text-field v-model="editedName" :maxlength="140" />
 				</v-card-text>
 				<v-card-actions>
-					<v-btn
-						v-if="editNameTarget && editNameTarget.name_overridden"
-						variant="text"
-						@click="resetItemName(editNameTarget)"
-						>{{ __("Reset") }}</v-btn
-					>
+					<v-btn v-if="editNameTarget && editNameTarget.name_overridden" variant="text"
+						@click="resetItemName(editNameTarget)">{{ __("Reset") }}</v-btn>
 					<v-spacer></v-spacer>
 					<v-btn variant="text" @click="editNameDialog = false">{{ __("Cancel") }}</v-btn>
 					<v-btn color="primary" variant="text" @click="saveItemName">{{ __("Save") }}</v-btn>
@@ -678,6 +460,7 @@ export default {
 		toggleOffer: Function,
 		changePriceListRate: Function,
 		isNegative: Function,
+
 	},
 	data() {
 		return {
@@ -692,6 +475,9 @@ export default {
 		};
 	},
 	computed: {
+		decimalPrecision() {
+			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
+		},
 		headerProps() {
 			return this.isDarkTheme ? { style: "background-color:#121212;color:#fff" } : {};
 		},
@@ -712,6 +498,155 @@ export default {
 		},
 	},
 	methods: {
+
+		shouldHidePricingForItem(item) {
+			if (!item) return false;
+
+			return (item.item_group || "").trim() === "Engine Oil";
+		},
+
+		formatByPrecision(value, item = null) {
+			const num = Number(value || 0);
+
+			if (item && item.item_group === "Engine Oil") {
+				const precision =
+					this.pos_profile?.posa_decimal_precision ?? this.decimalPrecision;
+				return num.toFixed(precision);
+			}
+
+			return num.toFixed(this.decimalPrecision);
+		},
+		isCarWashItem(item) {
+			if (!item) return false;
+
+			const ig = item.item_group || '';
+			const name = item.item_name || '';
+			const code = item.item_code || '';
+
+			return (
+				ig.includes('Carwash') ||
+				ig.includes('Car wash') ||
+				name.includes('Carwash') ||
+				name.includes('Car wash') ||
+				code.includes('Carwash') ||
+				code.includes('Car wash')
+			);
+		},
+
+		// === SAFE: applyRatesToItem ===
+		// Call this whenever you update rates from server so qty is preserved.
+		applyRatesToItem(item, rates) {
+			try {
+				const existingQty = Number(item.qty);
+
+				// update numeric rate fields only (do NOT overwrite qty)
+				item.base_rate = Number(rates.base_rate ?? item.base_rate ?? 0);
+				item.rate = Number(rates.rate ?? item.rate ?? 0);
+				item.base_price_list_rate = Number(rates.base_price_list_rate ?? item.base_price_list_rate ?? 0);
+				item.price_list_rate = Number(rates.price_list_rate ?? item.price_list_rate ?? 0);
+				item.exchange_rate = Number(rates.exchange_rate ?? item.exchange_rate ?? 1);
+
+				// detect service (Carwash) - adjust regex if you use strict case-sensitive matching
+				const looksLikeService = item.is_service_item === 1 || item.service_item === 1
+					|| /Carwash|car wash|bike wash|bikewash/i.test(item.item_group || item.item_name || '');
+
+				if (looksLikeService) {
+					// restore/ensure qty >= 1 for service items
+					item.qty = (Number.isFinite(existingQty) && existingQty > 0) ? existingQty : 1;
+					item.is_service_item = 1;
+					item.update_stock = 0;
+				} else {
+					// for stock items keep numeric qty (don't implicitly zero valid qty)
+					item.qty = Number.isFinite(existingQty) ? existingQty : (Number(rates.qty) || 0);
+				}
+
+			} catch (e) {
+				console.warn('[applyRatesToItem] error applying rates to', item && item.item_name, e);
+			}
+		},
+
+
+		async update_item_detail(item, force_update = false) {
+			// Defensive: ensure object
+			item = item || {};
+
+			// Normalize flags
+			item.is_service_item = item.is_service_item ? 1 : 0;
+
+			// If CarWash/service item -> protect qty and skip server normalization
+			const isCarWash = this.isCarWashItem ? this.isCarWashItem(item) : (item.is_service_item === 1);
+			if (isCarWash || item.is_service_item) {
+
+				// Ensure qty numeric and default to 1 for service items
+				item.qty = Number(item.qty);
+				if (!Number.isFinite(item.qty) || item.qty <= 0) {
+					item.qty = 1;
+				}
+
+				item.actual_qty = item.qty;
+				item.is_service_item = 1;
+				item.update_stock = 0;
+
+				return; // do not call server update that might overwrite qty
+			}
+
+			// Non-service items: coerce qty to numeric (default 0)
+			item.qty = Number(item.qty);
+			if (!Number.isFinite(item.qty)) item.qty = 0;
+
+			// Continue your existing stock/rate update logic here for stock items.
+			try {
+				// If you have a helper that fetches rates/stock, call it (keeps existing behavior).
+				if (typeof this._fetchAndUpdateStockAndRate === 'function') {
+					await this._fetchAndUpdateStockAndRate(item, force_update);
+				} else {
+					// Insert your original server call / logic here
+				}
+			} catch (e) {
+				console.warn('[ItemsTable] update_item_detail error for stock item:', e);
+			}
+
+		},
+		calc_stock_qty(item, qty) {
+			// ===== CARWASH PROTECTION =====
+			if (this.isCarWashItem(item)) {
+				item.qty = 1;
+				item.stock_qty = 1;
+				return;
+			}
+			// ===== END PROTECTION =====
+
+			// Regular stock calculation for non-CarWash items
+			const stock_qty = parseFloat(qty);
+			item.stock_qty = this.flt(stock_qty);
+		},
+
+		setFormatedQtyLocal(item, field_name, precision, no_negative, value) {
+			// ===== CARWASH PROTECTION =====
+			if (this.isCarWashItem(item)) {
+				item.qty = 1;
+				item.stock_qty = 1;
+				return 1;
+			}
+			// ===== END PROTECTION =====
+
+			// Call parent function passed as prop (NOT yourself)
+			if (typeof this.$props.setFormatedQty === "function") {
+				return this.$props.setFormatedQty(
+					item,
+					field_name,
+					0,      
+					no_negative,
+					value
+				);
+			}
+
+			// Fallback (force integer)
+			const v = Math.trunc(Number(value) || 0);
+			item[field_name] = v;
+			return v;
+		},
+
 		onDragOverFromSelector(event) {
 			// Check if drag data is from item selector
 			const dragData = event.dataTransfer.types.includes("application/json");
@@ -747,21 +682,48 @@ export default {
 			}
 		},
 		addItem(newItem) {
-			// Find a matching item (by item_code, uom, and rate)
+			// safe merge: match by item_code + uom + rate if possible
 			const match = this.items.find(
 				(item) =>
 					item.item_code === newItem.item_code &&
 					item.uom === newItem.uom &&
 					item.rate === newItem.rate,
 			);
+
 			if (match) {
-				// If found, increment quantity
-				match.qty += newItem.qty || 1;
-				match.amount = match.qty * match.rate;
-				this.$forceUpdate();
-			} else {
-				this.items.push({ ...newItem });
+				// If found, increment quantity (ensure numeric)
+				match.qty = Number(match.qty) + (Number(newItem.qty) || 1);
+				match.amount = Number(match.qty) * Number(match.rate || 0);
+				this.$forceUpdate && this.$forceUpdate();
+				return;
 			}
+
+			// If no exact match, attempt to find by item_code and merge safely
+			const idx = this.items.findIndex(i => i.item_code === newItem.item_code);
+			if (idx !== -1) {
+				// merge rates safely using helper if rates present on newItem
+				if (newItem.rate !== undefined || newItem.base_rate !== undefined) {
+					this.applyRatesToItem(this.items[idx], newItem);
+					// merge non-rate fields carefully
+					this.items[idx].description = newItem.description ?? this.items[idx].description;
+					this.items[idx].price_list_rate = newItem.price_list_rate ?? this.items[idx].price_list_rate;
+					this.$forceUpdate && this.$forceUpdate();
+				} else {
+					// just update qty if that's the purpose
+					this.items[idx].qty = (Number(this.items[idx].qty) || 0) + (Number(newItem.qty) || 1);
+				}
+				return;
+			}
+
+			// If genuinely a new item: ensure qty is correct (service->1 else numeric)
+			const newItemCopy = { ...newItem };
+			const isService = newItemCopy.is_service_item === 1 || /carwash|car wash|bike wash|bikewash/i.test(newItemCopy.item_group || newItemCopy.item_name || '');
+			newItemCopy.qty = isService ? (Number(newItemCopy.qty) || 1) : (Number(newItemCopy.qty) || 0);
+			newItemCopy.is_service_item = isService ? 1 : (newItemCopy.is_service_item ? 1 : 0);
+			newItemCopy.update_stock = isService ? 0 : (typeof newItemCopy.update_stock !== 'undefined' ? newItemCopy.update_stock : 1);
+
+			this.items.push(newItemCopy);
+			this.$forceUpdate && this.$forceUpdate();
 		},
 		addItemDebounced: _.debounce(function (item) {
 			this.addItem(item);
@@ -1236,6 +1198,97 @@ export default {
 	letter-spacing: 0.02em;
 }
 
+/* Center the actions vertically + horizontally inside the actions column cell */
+.actions-cell {
+	display: flex;
+	align-items: center;
+	justify-content: center; /* center horizontally */
+	height: 100%;
+	padding: 6px 0;
+}
+
+/* inner center wrapper to control spacing */
+.actions-center {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Unified action button look */
+.action-btn {
+	width: 38px !important; /* square for circular look */
+	height: 38px !important;
+	min-width: 38px !important;
+	padding: 0 !important;
+	border-radius: 10px !important; /* slightly rounded */
+	display: inline-flex !important;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 6px 14px rgba(16, 24, 40, 0.06);
+	transition:
+		transform 0.12s ease,
+		box-shadow 0.12s ease;
+}
+
+/* Icon size inside the button */
+.action-btn .v-icon {
+	font-size: 18px !important;
+}
+
+/* Colors: delete, minus, plus */
+.action-delete {
+	background: linear-gradient(180deg, #fff5f5, #ffecec) !important;
+	color: #b71c1c !important;
+	border: 1px solid rgba(183, 28, 28, 0.08) !important;
+}
+
+.action-minus {
+	background: linear-gradient(180deg, #fffaf0, #fff2db) !important;
+	color: #ef6c00 !important;
+	border: 1px solid rgba(239, 108, 0, 0.08) !important;
+}
+
+.action-plus {
+	background: linear-gradient(180deg, #f2fff4, #e6f6e9) !important;
+	color: #1b5e20 !important;
+	border: 1px solid rgba(27, 94, 32, 0.08) !important;
+}
+
+/* Hover & focus */
+.action-btn:hover:not(:disabled),
+.action-btn:focus-visible {
+	transform: translateY(-3px);
+	box-shadow: 0 10px 20px rgba(16, 24, 40, 0.12);
+	outline: none;
+}
+
+/* Disabled state */
+.action-btn:disabled {
+	opacity: 0.45 !important;
+	transform: none !important;
+	box-shadow: none !important;
+	cursor: not-allowed;
+}
+
+/* Make column header alignment consistent (optional; keeps header centered over buttons) */
+.modern-items-table :deep(th) {
+	/* existing rules remain — make sure actions header is centered */
+	text-align: center;
+}
+
+/* On small screens reduce gaps but keep tappable sizes */
+@media (max-width: 600px) {
+	.actions-center {
+		gap: 6px;
+	}
+	.action-btn {
+		width: 44px !important;
+		height: 44px !important;
+		min-width: 44px !important;
+	}
+}
+
 /* Enhanced negative number styling for Arabic context */
 .negative-number {
 	color: #d32f2f !important;
@@ -1270,6 +1323,102 @@ export default {
 	letter-spacing: 0.01em;
 }
 
+/* Qty control: minus - qty - plus (centered) */
+.qty-control {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 2px 4px;
+	height: 100%;
+	/* ensure it doesn't push layout */
+	box-sizing: border-box;
+}
+
+/* Buttons around qty */
+.qty-btn {
+	width: 34px !important;
+	height: 34px !important;
+	min-width: 34px !important;
+	padding: 0 !important;
+	border-radius: 8px !important;
+	display: inline-flex !important;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 6px 14px rgba(16, 24, 40, 0.06);
+	transition:
+		transform 0.12s ease,
+		box-shadow 0.12s ease;
+}
+
+/* Slight color hints (non-invasive) */
+.qty-decrease {
+	background: linear-gradient(180deg, #fff8f8, #fff0f0) !important;
+	color: #d32f2f !important;
+	border: 1px solid rgba(211, 47, 47, 0.06) !important;
+}
+.qty-decrease:disabled {
+	opacity: 0.5 !important;
+}
+
+.qty-increase {
+	background: linear-gradient(180deg, #f5fffa, #ecfff2) !important;
+	color: #1b7029 !important;
+	border: 1px solid rgba(27, 112, 41, 0.06) !important;
+}
+.qty-increase:disabled {
+	opacity: 0.5 !important;
+}
+
+/* Icon size */
+.qty-btn .v-icon {
+	font-size: 18px !important;
+}
+
+/* Qty numeric display */
+.qty-value {
+	min-width: 48px;
+	text-align: center;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 6px;
+	background: transparent;
+	font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Negative number styling (inherits your .negative-number rules) */
+.qty-control.negative-number .qty-value {
+	color: #d32f2f;
+}
+
+/* Hover/focus affordance */
+.qty-btn:hover:not(:disabled),
+.qty-btn:focus-visible {
+	transform: translateY(-2px);
+	box-shadow: 0 10px 20px rgba(16, 24, 40, 0.12);
+	outline: none;
+}
+
+/* Ensure header alignment for the qty column stays centered */
+.modern-items-table :deep(th) {
+	/* keep your existing rules; these won't override them badly
+     but ensure center alignment for qty header as well */
+	text-align: center;
+}
+
+/* Responsive tweaks - keep tap targets comfortable */
+@media (max-width: 600px) {
+	.qty-btn {
+		width: 44px !important;
+		height: 44px !important;
+		min-width: 44px !important;
+	}
+	.qty-value {
+		min-width: 56px;
+		font-size: 0.95rem;
+	}
+}
+
 /* Enhanced Arabic support for all numeric displays in the table */
 .modern-items-table :deep(td),
 .modern-items-table :deep(th) {
@@ -1283,6 +1432,14 @@ export default {
 		"kern" 1;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+}
+
+/* center header label text for all columns */
+.modern-items-table :deep(thead tr th .v-data-table-header__content) {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
 }
 
 /* Drag and drop styles */

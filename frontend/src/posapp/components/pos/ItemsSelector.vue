@@ -268,16 +268,7 @@
 														}}
 													</span>
 													<span class="price-amount">
-														{{
-															format_currency(
-																item.base_price_list_rate || item.rate,
-																item.original_currency ||
-																	pos_profile.currency,
-																ratePrecision(
-																	item.base_price_list_rate || item.rate,
-																),
-															)
-														}}
+														{{ formatByPrecision(item.base_price_list_rate || item.rate) }}
 													</span>
 												</div>
 												<div
@@ -291,17 +282,11 @@
 														currencySymbol(selected_currency)
 													}}</span>
 													<span class="price-amount">
-														{{
-															format_currency(
-																item.rate,
-																selected_currency,
-																ratePrecision(item.rate),
-															)
-														}}
+														{{ formatByPrecision(item.base_price_list_rate || item.rate) }}
 													</span>
 												</div>
 											</div>
-											<div class="card-item-stock">
+											<!-- <div class="card-item-stock">
 												<v-icon size="small" class="stock-icon"
 													>mdi-package-variant</v-icon
 												>
@@ -319,7 +304,7 @@
 													}}
 												</span>
 												<span class="stock-uom">{{ item.stock_uom || "" }}</span>
-											</div>
+											</div> -->
 										</div>
 									</div>
 								</div>
@@ -345,13 +330,9 @@
 											{{
 												currencySymbol(item.original_currency || pos_profile.currency)
 											}}
-											{{
-												format_currency(
-													item.base_price_list_rate || item.rate,
-													item.original_currency || pos_profile.currency,
-													ratePrecision(item.base_price_list_rate || item.rate),
-												)
-											}}
+											{{ 
+											formatByPrecision(item.base_price_list_rate || item.rate)
+											 }}
 										</div>
 										<div
 											v-if="
@@ -361,13 +342,8 @@
 											class="text-success"
 										>
 											{{ currencySymbol(selected_currency) }}
-											{{
-												format_currency(
-													item.rate,
-													selected_currency,
-													ratePrecision(item.rate),
-												)
-											}}
+											{{ formatByPrecision(item.rate) }}
+
 										</div>
 									</div>
 								</template>
@@ -454,7 +430,6 @@ export default {
 		pos_profile: {},
 		flags: {},
 		items_view: "list",
-		item_group: "ALL",
 		loading: false,
 		items_group: ["ALL"],
 		items: [],
@@ -525,11 +500,18 @@ export default {
 		posCart: [],
 	}),
 
+	props: {
+		item_group: {
+			type: String,
+			default: "ALL",
+		},
+	},
+
+
 	watch: {
 		// ADD THIS NEW WATCHER
 		items_view: {
 			handler(newVal) {
-				console.log("[ItemsSelector] items_view changed to:", newVal);
 				this.$nextTick(() => {
 					this.$forceUpdate();
 				});
@@ -652,19 +634,27 @@ export default {
 		new_line() {
 			this.eventBus.emit("set_new_line", this.new_line);
 		},
-		item_group(newValue, oldValue) {
-			if (this.pos_profile && this.pos_profile.pose_use_limit_search && newValue !== oldValue) {
-				if (this.pos_profile && (!this.pos_profile.posa_local_storage || !this.storageAvailable)) {
+		item_group(newVal, oldVal) {
+			if (newVal === oldVal) return;
+
+			this.searchCache.clear();
+			this.currentPage = 0;
+			this.first_search = "";
+			this.search = "";
+
+			if (this.pos_profile?.pose_use_limit_search) {
+				if (!this.pos_profile.posa_local_storage || !this.storageAvailable) {
 					this.get_items(true);
 				} else {
 					this.get_items();
 				}
-			} else if (this.pos_profile && this.pos_profile.posa_local_storage && newValue !== oldValue) {
-				if (this.storageAvailable) {
-					this.loadVisibleItems(true);
-				} else {
-					this.get_items(true);
-				}
+				return;
+			}
+
+			if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
+				this.loadVisibleItems(true);
+			} else {
+				this.get_items(true);
 			}
 		},
 		filtered_items(new_value, old_value) {
@@ -726,23 +716,22 @@ export default {
 	},
 
 	methods: {
+
+		formatByPrecision(value) {
+			const num = Number(value || 0);
+			return num.toFixed(this.decimalPrecision);
+		},
+
 		// Performance optimization: Memoized search function
-		memoizedSearch(searchTerm, itemGroup) {
-			const cacheKey = `${searchTerm || ""}_${itemGroup || "ALL"}`;
+		memoizedSearch(searchTerm) {
+			const cacheKey = searchTerm || "__all__";
 
-			// Check if we have a cached result
-			if (this.searchCache && this.searchCache.has(cacheKey)) {
-				const cachedResult = this.searchCache.get(cacheKey);
-				return cachedResult;
+			if (this.searchCache.has(cacheKey)) {
+				return this.searchCache.get(cacheKey);
 			}
 
-			// Perform the search
-			const result = this.performSearch(searchTerm, itemGroup);
-
-			// Cache the result
-			if (this.searchCache) {
-				this.searchCache.set(cacheKey, result);
-			}
+			const result = this.performSearch(searchTerm);
+			this.searchCache.set(cacheKey, result);
 
 			return result;
 		},
@@ -753,14 +742,12 @@ export default {
 		},
 
 		handleItemsViewUpdate(newView) {
-			console.log("[POS] Items view updated:", newView);
 			this.items_view = newView;
 			this.$emit("update:items_view", newView);
 			this.eventBus.emit("items_view_changed", newView);
 		},
 
 		updateViewMode(newMode) {
-			console.log("[ItemsSelector] updateViewMode called:", newMode);
 
 			// Update the view mode
 			this.items_view = newMode;
@@ -771,7 +758,6 @@ export default {
 			// Emit to parent
 			this.$emit("update-view-mode", newMode);
 
-			console.log("[ItemsSelector] View mode is now:", this.items_view);
 		},
 
 		handleAddToPOS(event) {
@@ -799,37 +785,24 @@ export default {
 			return this.posCart.reduce((sum, i) => sum + i.qty * i.rate, 0);
 		},
 
-		performSearch(searchTerm, itemGroup) {
-			if (!this.items || !this.items.length) {
-				return [];
-			}
+		performSearch(searchTerm) {
+			if (!this.items || !this.items.length) return [];
 
 			let filtered = this.items;
 
-			// Filter by item group
-			if (itemGroup !== "ALL") {
-				filtered = filtered.filter(
-					(item) =>
-						item.item_group && item.item_group.toLowerCase().includes(itemGroup.toLowerCase()),
-				);
-			}
-
-			// Filter by search term only if it exists and is long enough
-			if (searchTerm && searchTerm.trim() && searchTerm.trim().length >= 3) {
+			if (searchTerm && searchTerm.trim().length >= 3) {
 				const term = searchTerm.toLowerCase();
+
 				filtered = filtered.filter((item) => {
 					const barcodeMatch =
-						(Array.isArray(item.item_barcode) &&
-							item.item_barcode.some(
-								(b) => b.barcode && b.barcode.toLowerCase().includes(term),
-							)) ||
-						(Array.isArray(item.barcodes) &&
-							item.barcodes.some((bc) => String(bc).toLowerCase().includes(term))) ||
-						(item.barcode && String(item.barcode).toLowerCase().includes(term));
+						Array.isArray(item.item_barcode) &&
+						item.item_barcode.some(
+							(b) => b.barcode && b.barcode.toLowerCase().includes(term)
+						);
 
 					return (
-						item.item_code.toLowerCase().includes(term) ||
-						item.item_name.toLowerCase().includes(term) ||
+						item.item_code?.toLowerCase().includes(term) ||
+						item.item_name?.toLowerCase().includes(term) ||
 						barcodeMatch
 					);
 				});
@@ -1201,36 +1174,32 @@ export default {
 			await this.get_items(true);
 		},
 		async forceReloadItems() {
-			console.log("[ItemsSelector] forceReloadItems called");
 			// Clear cached price list items so the reload always
 			// fetches the latest data from the server
 			await clearPriceListCache();
-			console.log("[ItemsSelector] price list cache cleared");
 			await this.ensureStorageHealth();
-			console.log("[ItemsSelector] storage health ensured");
 			this.items_loaded = false;
 
 			// When no search term is entered, reset the search so
 			// we fetch the entire item list from the server.
 			if (!this.first_search || !this.first_search.trim()) {
-				console.log("[ItemsSelector] resetting empty search before reload");
 				this.first_search = "";
 				this.search = "";
 			}
 
-			console.log("[ItemsSelector] loading items from server");
 			await this.get_items(true);
-			console.log("[ItemsSelector] forceReloadItems finished");
 		},
 		async verifyServerItemCount() {
 			if (isOffline()) {
-				console.log("[ItemsSelector] offline, skipping server item count check");
 				return;
 			}
 			try {
 				const localCount = await getStoredItemsCount();
-				console.log("[ItemsSelector] verifying server item count", { localCount });
-				const profileGroups = (this.pos_profile?.item_groups || []).map((g) => g.item_group);
+				const profileGroups =
+					this.item_group && this.item_group !== "ALL"
+						? [this.item_group]
+						: (this.pos_profile?.item_groups || []).map((g) => g.item_group);
+
 				const res = await frappe.call({
 					method: "posawesome.posawesome.api.items.get_items_count",
 					args: {
@@ -1239,7 +1208,6 @@ export default {
 					},
 				});
 				const serverCount = res.message || 0;
-				console.log("[ItemsSelector] server item count result", { serverCount });
 				if (typeof serverCount === "number") {
 					this.totalItemCount = serverCount;
 					this.loadProgress = serverCount ? Math.round((localCount / serverCount) * 100) : 0;
@@ -1248,7 +1216,6 @@ export default {
 						const requestToken = ++this.items_request_token;
 						await this.backgroundLoadItems(null, lastSync, false, requestToken, localCount);
 					} else if (serverCount < localCount) {
-						console.log("[ItemsSelector] local cache has extra items, forcing reload");
 						await this.forceReloadItems();
 					}
 				}
@@ -1257,11 +1224,6 @@ export default {
 			}
 		},
 		async get_items(force_server = false) {
-			console.log("[ItemsSelector] get_items called", {
-				force_server,
-				first_search: this.first_search,
-				item_group: this.item_group,
-			});
 			// Ensure POS profile is available
 			if (!this.pos_profile || !this.pos_profile.name) {
 				console.warn("No POS Profile available, attempting to get it...");
@@ -1291,22 +1253,21 @@ export default {
 			const search = this.get_search(this.first_search);
 			const gr = vm.item_group !== "ALL" ? vm.item_group.toLowerCase() : "";
 			const sr = search || "";
-			const profileGroups = (vm.pos_profile?.item_groups || []).map((g) => g.item_group);
-			console.log("[ItemsSelector] prepared fetch params", { search: sr, item_group: gr });
+			const profileGroups =
+				vm.item_group && vm.item_group !== "ALL"
+					? [vm.item_group]
+					: (vm.pos_profile?.item_groups || []).map((g) => g.item_group);
 
 			// Skip if already loading the same data
 			if (!force_server && this.items_loaded && this.items.length > 0) {
-				console.log("[ItemsSelector] items already loaded, skipping fetch");
 				this.loading = false;
 				return;
 			}
 
 			this.loading = true;
 			const requestToken = ++this.items_request_token;
-			console.log("[ItemsSelector] sending request", { requestToken });
 			this.loadProgress = 0;
 			this.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
-			console.log("[ItemsSelector] data-load-progress emitted", { progress: 0 });
 
 			// Fetch total item count to calculate real-time progress
 			try {
@@ -1331,6 +1292,7 @@ export default {
 						pos_profile: JSON.stringify(vm.pos_profile),
 						price_list: vm.customer_price_list,
 						item_group: gr,
+						item_groups: profileGroups,
 						search_value: sr,
 						customer: vm.customer,
 						limit: vm.itemsPageLimit,
@@ -1339,7 +1301,6 @@ export default {
 						item_groups: profileGroups,
 					},
 				});
-				console.log("[ItemsSelector] server responded", { count: response.message?.length });
 
 				const items = response.message || [];
 
@@ -1361,14 +1322,12 @@ export default {
 				vm.items = items;
 				vm.items_loaded = true;
 				vm.eventBus.emit("set_all_items", vm.items);
-				console.log("[ItemsSelector] set_all_items emitted", { itemsLength: vm.items.length });
 
 				const hasMore = !vm.pos_profile.pose_use_limit_search && items.length === vm.itemsPageLimit;
 				vm.loadProgress = vm.totalItemCount
 					? Math.round((items.length / vm.totalItemCount) * 100)
 					: 100;
 				vm.eventBus.emit("data-load-progress", { name: "items", progress: vm.loadProgress });
-				console.log("[ItemsSelector] data-load-progress emitted", { progress: vm.loadProgress });
 
 				if (
 					vm.pos_profile &&
@@ -1378,11 +1337,9 @@ export default {
 				) {
 					try {
 						if (force_server) {
-							console.log("[ItemsSelector] clearing local items before save");
 							await clearStoredItems();
 						}
 						await saveItemsBulk(items);
-						console.log("[ItemsSelector] items persisted locally", { length: items.length });
 					} catch (e) {
 						console.error("Failed to persist items locally", e);
 						vm.markStorageUnavailable();
@@ -1391,10 +1348,6 @@ export default {
 
 				if (hasMore) {
 					const last = items[items.length - 1]?.item_name || null;
-					console.log("[ItemsSelector] more items available, starting background load", {
-						last,
-						requestToken,
-					});
 					this.backgroundLoadItems(last, null, false, requestToken, items.length);
 				}
 			} catch (error) {
@@ -1402,7 +1355,6 @@ export default {
 				frappe.msgprint(__("Failed to load items. Please try again."));
 			} finally {
 				vm.loading = false;
-				console.log("[ItemsSelector] get_items finished");
 			}
 		},
 		finishBackgroundLoad() {
@@ -1418,26 +1370,21 @@ export default {
 		},
 		async backgroundLoadItems(startAfter, syncSince, clearBefore = false, requestToken, loaded = 0) {
 			this.isBackgroundLoading = true;
-			console.log("[ItemsSelector] backgroundLoadItems called", {
-				startAfter,
-				syncSince,
-				clearBefore,
-				requestToken,
-				loaded,
-			});
 			const limit = this.itemsPageLimit;
-			const profileGroups = (this.pos_profile?.item_groups || []).map((g) => g.item_group);
+			const profileGroups =
+				this.item_group && this.item_group !== "ALL"
+					? [this.item_group]
+					: (this.pos_profile?.item_groups || []).map((g) => g.item_group);
+
 			// When the limit is extremely high, treat it as
 			// "no incremental loading" and exit early.
 			if (!limit || limit >= 10000) {
-				console.log("[ItemsSelector] background load skipped due to high limit", { limit });
 				if (loaded === 0) {
 					this.finishBackgroundLoad();
 				}
 				return;
 			}
 			if (this.items_request_token !== requestToken) {
-				console.log("[ItemsSelector] background load token mismatch, aborting");
 				if (loaded === 0) {
 					this.finishBackgroundLoad();
 				}
@@ -1462,12 +1409,8 @@ export default {
 						},
 						freeze: false,
 					});
-					console.log("[ItemsSelector] background load server response", {
-						count: res.message?.length,
-					});
 					const text = JSON.stringify(res);
 					if (this.items_request_token !== requestToken) {
-						console.log("[ItemsSelector] background load token mismatch after response");
 						if (loaded === 0) {
 							this.finishBackgroundLoad();
 						}
@@ -1477,9 +1420,6 @@ export default {
 					const count = await new Promise((resolve) => {
 						this.itemWorker.onmessage = async (ev) => {
 							if (this.items_request_token !== requestToken) {
-								console.log(
-									"[ItemsSelector] background load token mismatch during worker message",
-								);
 								if (loaded === 0) {
 									this.finishBackgroundLoad();
 								}
@@ -1495,9 +1435,6 @@ export default {
 								});
 								lastItemName = newItems[newItems.length - 1]?.item_name || null;
 								this.eventBus.emit("set_all_items", this.items);
-								console.log("[ItemsSelector] background load set_all_items emitted", {
-									length: this.items.length,
-								});
 								if (
 									this.pos_profile &&
 									this.pos_profile.posa_local_storage &&
@@ -1510,9 +1447,6 @@ export default {
 											clearBefore = false;
 										}
 										await saveItemsBulk(newItems);
-										console.log("[ItemsSelector] background load items persisted", {
-											length: newItems.length,
-										});
 									} catch (e) {
 										console.error(e);
 										this.markStorageUnavailable();
@@ -1531,7 +1465,6 @@ export default {
 						});
 					});
 					if (this.items_request_token !== requestToken) {
-						console.log("[ItemsSelector] background load token mismatch after worker");
 						if (loaded === 0) {
 							this.finishBackgroundLoad();
 						}
@@ -1543,7 +1476,6 @@ export default {
 						: Math.min(99, Math.round((newLoaded / (newLoaded + limit)) * 100));
 					this.loadProgress = progress;
 					this.eventBus.emit("data-load-progress", { name: "items", progress });
-					console.log("[ItemsSelector] background load progress", { progress });
 					if (count === limit) {
 						await this.backgroundLoadItems(
 							lastItemName,
@@ -1565,7 +1497,6 @@ export default {
 						}
 						this.loadProgress = 100;
 						this.eventBus.emit("data-load-progress", { name: "items", progress: 100 });
-						console.log("[ItemsSelector] background load completed");
 						this.items_loaded = true;
 						this.finishBackgroundLoad();
 					}
@@ -1591,23 +1522,18 @@ export default {
 					},
 					callback: async (r) => {
 						if (this.items_request_token !== requestToken) {
-							console.log("[ItemsSelector] background load token mismatch in callback");
 							if (loaded === 0) {
 								this.finishBackgroundLoad();
 							}
 							return;
 						}
 						const rows = r.message || [];
-						console.log("[ItemsSelector] background load callback items", { count: rows.length });
 						rows.forEach((it) => {
 							const existing = this.items.find((i) => i.item_code === it.item_code);
 							if (existing) Object.assign(existing, it);
 							else this.items.push(it);
 						});
 						this.eventBus.emit("set_all_items", this.items);
-						console.log("[ItemsSelector] background load set_all_items emitted", {
-							length: this.items.length,
-						});
 						if (
 							this.pos_profile &&
 							this.pos_profile.posa_local_storage &&
@@ -1620,9 +1546,6 @@ export default {
 									clearBefore = false;
 								}
 								await saveItemsBulk(rows);
-								console.log("[ItemsSelector] background load items persisted", {
-									length: rows.length,
-								});
 							} catch (e) {
 								console.error(e);
 								this.markStorageUnavailable();
@@ -1634,7 +1557,6 @@ export default {
 							: Math.min(99, Math.round((newLoaded / (newLoaded + limit)) * 100));
 						this.loadProgress = progress;
 						this.eventBus.emit("data-load-progress", { name: "items", progress });
-						console.log("[ItemsSelector] background load progress", { progress });
 						if (rows.length === limit) {
 							const nextStart = rows[rows.length - 1]?.item_name || null;
 							await this.backgroundLoadItems(
@@ -1653,7 +1575,6 @@ export default {
 							}
 							this.loadProgress = 100;
 							this.eventBus.emit("data-load-progress", { name: "items", progress: 100 });
-							console.log("[ItemsSelector] background load completed");
 							this.items_loaded = true;
 							this.finishBackgroundLoad();
 						}
@@ -1666,7 +1587,6 @@ export default {
 		},
 		get_items_groups() {
 			if (!this.pos_profile) {
-				console.log("No POS Profile");
 				return;
 			}
 			this.items_group = ["ALL"];
@@ -1705,20 +1625,20 @@ export default {
 		getItemsHeaders() {
 			const items_headers = [
 				{
-					title: __("Name"),
-					align: "start",
-					sortable: true,
-					key: "item_name",
-				},
-				{
 					title: __("Code"),
 					align: "start",
 					sortable: true,
 					key: "item_code",
 				},
+				{
+					title: __("Name"),
+					align: "start",
+					sortable: true,
+					key: "item_name",
+				},
 				{ title: __("Rate"), key: "rate", align: "start" },
-				{ title: __("Available QTY"), key: "actual_qty", align: "start" },
-				{ title: __("UOM"), key: "stock_uom", align: "start" },
+				// { title: __("Available QTY"), key: "actual_qty", align: "start" },
+				//{ title: __("UOM"), key: "stock_uom", align: "start" },
 			];
 			if (!this.pos_profile.posa_display_item_code) {
 				items_headers.splice(1, 1);
@@ -1727,7 +1647,6 @@ export default {
 			return items_headers;
 		},
 		select_item(event, item) {
-			console.log("[ItemsSelector] Card clicked:", item.item_name);
 
 			// Add visual feedback
 			const card = event.currentTarget;
@@ -1748,7 +1667,6 @@ export default {
 					this.fly(source, target, this.flyConfig);
 				}
 			} catch (e) {
-				console.log("Animation skipped:", e);
 			}
 
 			// Add the item
@@ -1773,58 +1691,52 @@ export default {
 			await this.add_item(item);
 		},
 		async add_item(item) {
-			console.log("[ItemsSelector] Adding item:", item.item_name);
 
 			item = { ...item };
 
-			if (item.has_variants) {
-				let variants = this.items.filter((it) => it.variant_of == item.item_code);
-				let attrsMeta = {};
-				if (!variants.length) {
-					try {
-						const res = await frappe.call({
-							method: "posawesome.posawesome.api.items.get_item_variants",
-							args: {
-								pos_profile: JSON.stringify(this.pos_profile),
-								parent_item_code: item.item_code,
-								price_list: this.active_price_list,
-								customer: this.customer,
-							},
-						});
-						if (res.message) {
-							variants = res.message.variants || res.message;
-							attrsMeta = res.message.attributes_meta || {};
-							this.items.push(...variants);
-						}
-					} catch (e) {
-						console.error("Failed to fetch variants", e);
-					}
-				}
-				this.eventBus.emit("show_message", {
-					title: __("This is an item template. Please choose a variant."),
-					color: "warning",
-				});
-				console.log("sending profile", this.pos_profile);
-				attrsMeta = attrsMeta || {};
-				this.eventBus.emit("open_variants_model", item, variants, this.pos_profile, attrsMeta);
-				return;
-			}
+			// ===== CARWASH SPECIFIC LOGIC =====
+			const isCarWash = item.item_group &&
+				(item.item_group.toLowerCase().includes('car wash') ||
+					item.item_group.toLowerCase().includes('carwash'));
 
-			if (item.actual_qty === 0 && this.pos_profile.posa_display_items_in_stock) {
-				this.eventBus.emit("show_message", {
-					title: `No stock available for ${item.item_name}`,
-					color: "warning",
-				});
-				await this.update_items_details([item]);
-				return;
+			if (isCarWash) {
+				// Ensure qty is a number (never string or undefined)
+				item.qty = Number(item.qty) || 1;
+				// Mark as service item and avoid stock update
+				item.is_service_item = 1;
+				item.update_stock = 0;
+
+				// If there is any local property that other code uses to detect qty changes,
+				// update it too (defensive).
+				if (typeof item._barcode_qty !== 'undefined') {
+					item._barcode_qty = false;
+				}
+			
+
+				// Set quantity for regular items (keeps your existing logic)
+				const hasBarcodeQty = item._barcode_qty;
+				if (!item.qty || (item.qty === 1 && !hasBarcodeQty)) {
+					let qtyVal = this.qty != null ? this.qty : 1;
+					qtyVal = Math.abs(qtyVal);
+					if (this.hide_qty_decimals) {
+						qtyVal = Math.trunc(qtyVal);
+					}
+					item.qty = qtyVal;
+				}
 			}
 
 			// Ensure UOMs are initialized
 			if (!item.item_uoms || item.item_uoms.length === 0) {
 				await this.update_items_details([item]);
 				if (!item.item_uoms || item.item_uoms.length === 0) {
-					item.item_uoms = [{ uom: item.stock_uom, conversion_factor: 1.0 }];
+					item.item_uoms = [{ uom: item.stock_uom || "Nos", conversion_factor: 1.0 }];
 				}
+			}
+
+			// For CarWash, ensure UOM is set to "Nos"
+			if (isCarWash && !item.uom) {
+				item.uom = "Nos";
+				item.stock_uom = "Nos";
 			}
 
 			// Apply currency conversion
@@ -1838,34 +1750,49 @@ export default {
 				item.base_price_list_rate = base_rate;
 			}
 
-			// Set quantity
-			const hasBarcodeQty = item._barcode_qty;
-			if (!item.qty || (item.qty === 1 && !hasBarcodeQty)) {
-				let qtyVal = this.qty != null ? this.qty : 1;
-				qtyVal = Math.abs(qtyVal);
-				if (this.hide_qty_decimals) {
-					qtyVal = Math.trunc(qtyVal);
-				}
-				item.qty = qtyVal;
-			}
-
+			// Prepare the payload
 			const payload = { ...item };
 			delete payload._barcode_qty;
 
-			console.log("[ItemsSelector] Emitting add_item event:", payload.item_name);
+
+			// Emit the item to the invoice component
 			this.eventBus.emit("add_item", payload);
 
 			// Show success feedback
+			const message = isCarWash
+				? `Added: ${item.item_name} (Service)`
+				: `Added: ${item.item_name}`;
 			frappe.show_alert(
 				{
-					message: `Added: ${item.item_name}`,
+					message: message,
 					indicator: "green",
 				},
 				2,
 			);
 
+			// Auto-clear search after adding item
+			this.first_search = "";
+			this.search = "";
+
+			// Reset quantity to 1 (not this.qty) for CarWash, or back to 1 for regular items
 			this.qty = 1;
+
+			// Refocus search input
+			this.$nextTick(() => {
+				if (this.$refs.debounce_search) {
+					this.$refs.debounce_search.focus();
+				}
+			});
 		},
+
+
+		// ===== HELPER METHOD: Check if item is CarWash =====
+		isCarWashItem(item) {
+			if (!item) return false;
+			return item.item_group === 'Carwash';
+		},
+
+		// ===== UPDATE: enter_event method to handle CarWash in barcode scanning =====
 		async enter_event() {
 			if (!this.filtered_items.length || !this.first_search) {
 				return;
@@ -1880,9 +1807,19 @@ export default {
 
 			const qty = parseFloat(this.get_item_qty(this.first_search));
 			const new_item = { ...this.filtered_items[0] };
-			new_item.qty = flt(qty);
-			if (isScaleBarcode) {
-				new_item._barcode_qty = true;
+
+			// ===== CARWASH HANDLING IN BARCODE SCAN =====
+			const isCarWash = this.isCarWashItem(new_item);
+			if (isCarWash) {
+				// Force qty to 1 for CarWash regardless of barcode
+				new_item.qty = 1;
+				new_item.is_service_item = 1;
+				new_item.update_stock = 0;
+			} else {
+				new_item.qty = flt(qty);
+				if (isScaleBarcode) {
+					new_item._barcode_qty = true;
+				}
 			}
 
 			let match = false;
@@ -1908,7 +1845,7 @@ export default {
 				new_item.to_set_batch_no = this.flags.batch_no;
 			}
 
-			if (match) {
+			if (match || isCarWash) {
 				await this.add_item(new_item);
 				this.flags.serial_no = null;
 				this.flags.batch_no = null;
@@ -1952,7 +1889,6 @@ export default {
 			} else if (vm.pos_profile && vm.pos_profile.posa_local_storage) {
 				if (vm.storageAvailable) {
 					await vm.loadVisibleItems(true);
-					vm.enter_event();
 				} else {
 					vm.get_items(true);
 				}
@@ -1961,7 +1897,6 @@ export default {
 				// from the server so searches aren't limited to the
 				// initially loaded set.
 				await vm.get_items(true);
-				vm.enter_event();
 
 				if (vm.filtered_items && vm.filtered_items.length > 0) {
 					setTimeout(() => {
@@ -2391,7 +2326,6 @@ export default {
 			}
 		},
 		onBarcodeScanned(scannedCode) {
-			console.log("Barcode scanned:", scannedCode);
 
 			// mark this search as coming from a scanner
 			this.search_from_scanner = true;
@@ -2441,7 +2375,6 @@ export default {
 			});
 
 			if (foundItem) {
-				console.log("Found item by processed code:", foundItem);
 				this.addScannedItemToInvoice(foundItem, searchCode, qtyFromBarcode);
 				return;
 			}
@@ -2512,55 +2445,65 @@ export default {
 			});
 		},
 		async addScannedItemToInvoice(item, scannedCode, qtyFromBarcode = null) {
-			console.log("Adding scanned item to invoice:", item, scannedCode);
 
 			// Clone the item to avoid mutating list data
 			const newItem = { ...item };
 
-			// If the scanned barcode has a specific UOM, apply it
-			if (Array.isArray(newItem.item_barcode)) {
-				const barcodeMatch = newItem.item_barcode.find((b) => b.barcode === scannedCode);
-				if (barcodeMatch && barcodeMatch.posa_uom) {
-					newItem.uom = barcodeMatch.posa_uom;
+			// ===== CARWASH HANDLING =====
+			const isCarWash = this.isCarWashItem(newItem);
+			if (isCarWash) {
+				newItem.qty = 1;
+				newItem.is_service_item = 1;
+				newItem.update_stock = 0;
+			} else {
+				// For non-CarWash items, apply barcode quantity if available
+				if (Array.isArray(newItem.item_barcode)) {
+					const barcodeMatch = newItem.item_barcode.find((b) => b.barcode === scannedCode);
+					if (barcodeMatch && barcodeMatch.posa_uom) {
+						newItem.uom = barcodeMatch.posa_uom;
 
-					// Try fetching the rate for this UOM from the active price list
-					try {
-						const res = await frappe.call({
-							method: "posawesome.posawesome.api.items.get_price_for_uom",
-							args: {
-								item_code: newItem.item_code,
-								price_list: this.active_price_list,
-								uom: barcodeMatch.posa_uom,
-							},
-						});
-						if (res.message) {
-							const price = parseFloat(res.message);
-							newItem.rate = price;
-							newItem.price_list_rate = price;
-							newItem.base_rate = price;
-							newItem.base_price_list_rate = price;
-							newItem._manual_rate_set = true;
-							newItem.skip_force_update = true;
+						// Try fetching the rate for this UOM from the active price list
+						try {
+							const res = await frappe.call({
+								method: "posawesome.posawesome.api.items.get_price_for_uom",
+								args: {
+									item_code: newItem.item_code,
+									price_list: this.active_price_list,
+									uom: barcodeMatch.posa_uom,
+								},
+							});
+							if (res.message) {
+								const price = parseFloat(res.message);
+								newItem.rate = price;
+								newItem.price_list_rate = price;
+								newItem.base_rate = price;
+								newItem.base_price_list_rate = price;
+								newItem._manual_rate_set = true;
+								newItem.skip_force_update = true;
+							}
+						} catch (e) {
+							console.error("Failed to fetch UOM price", e);
 						}
-					} catch (e) {
-						console.error("Failed to fetch UOM price", e);
 					}
 				}
-			}
 
-			// Apply quantity from scale barcode if available
-			if (qtyFromBarcode !== null && !isNaN(qtyFromBarcode)) {
-				newItem.qty = qtyFromBarcode;
-				newItem._barcode_qty = true;
+				// Apply quantity from scale barcode if available (only for non-CarWash)
+				if (qtyFromBarcode !== null && !isNaN(qtyFromBarcode)) {
+					newItem.qty = qtyFromBarcode;
+					newItem._barcode_qty = true;
+				}
 			}
 
 			// Use existing add_item method with enhanced feedback
 			await this.add_item(newItem);
 
 			// Show success message
+			const successMsg = isCarWash
+				? `Added: ${item.item_name} (Service)`
+				: `Added: ${item.item_name}`;
 			frappe.show_alert(
 				{
-					message: `Added: ${item.item_name}`,
+					message: successMsg,
 					indicator: "green",
 				},
 				3,
@@ -2611,7 +2554,7 @@ export default {
 			<div>
 				<div class="font-weight-bold">${item.item_name}</div>
 				<div class="text-muted small">${item.item_code}</div>
-				<div class="#4169E1">${this.format_currency(item.rate, this.pos_profile.currency, this.ratePrecision(item.rate))}</div>
+				<div class="#4169E1">${this.format_currency(item.rate, this.pos_profile.currency, this.formatRateByPosPrecision(item.rate))}</div>
 			</div>
 			</div>
 		</div>
@@ -2820,6 +2763,11 @@ export default {
 	},
 
 	computed: {
+
+		 decimalPrecision() {
+			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
+		},
+		
 		headers() {
 			return this.getItemsHeaders();
 		},
@@ -2862,14 +2810,6 @@ export default {
 
 					return searchFields.some((field) => field.includes(searchTerm));
 				});
-			}
-
-			// Apply item group filter
-			if (this.item_group !== "ALL") {
-				filteredItems = filteredItems.filter(
-					(item) =>
-						item.item_group && item.item_group.toLowerCase() === this.item_group.toLowerCase(),
-				);
 			}
 
 			// Apply zero rate filter
@@ -2929,8 +2869,6 @@ export default {
 	},
 
 	created() {
-		console.log("ItemsSelector created - starting initialization");
-
 		// Setup search debounce
 		this.searchDebounce = _.debounce(() => {
 			this.get_items();
@@ -2963,7 +2901,6 @@ export default {
 
 				// Load initial items if we have a profile
 				if (this.pos_profile && this.pos_profile.name) {
-					console.log("Loading items with POS Profile:", this.pos_profile.name);
 					this.get_items_groups();
 					await this.initializeItems();
 				} else {
@@ -3039,7 +2976,6 @@ export default {
 					console.error("Filename:", event.filename);
 					console.error("Line number:", event.lineno);
 				};
-				console.log("Created worker");
 			} catch (e) {
 				console.error("Failed to start item worker", e);
 				this.itemWorker = null;
@@ -3060,7 +2996,6 @@ export default {
 					console.error("Filename:", event.filename);
 					console.error("Line number:", event.lineno);
 				};
-				console.log("Created worker");
 			} catch (e) {
 				console.error("Failed to start item worker", e);
 				this.itemWorker = null;
@@ -3242,25 +3177,19 @@ export default {
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
 		sans-serif;
-	/* Force lining numbers for consistent height and alignment */
 	font-variant-numeric: lining-nums tabular-nums;
-	/* Additional OpenType features for better Arabic number rendering */
 	font-feature-settings:
 		"tnum" 1,
 		"lnum" 1,
 		"kern" 1;
-	/* Ensure crisp rendering */
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
-	/* Better number spacing */
 	letter-spacing: 0.02em;
 }
 
-/* Enhanced negative number styling for Arabic context */
 .negative-number {
 	color: #d32f2f !important;
 	font-weight: 600;
-	/* Same enhanced font stack for negative numbers */
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
 		sans-serif;
@@ -3273,11 +3202,9 @@ export default {
 	-moz-osx-font-smoothing: grayscale;
 }
 
-/* Enhanced input fields for Arabic number support */
 .v-text-field :deep(input),
 .v-select :deep(input),
 .v-autocomplete :deep(input) {
-	/* Enhanced Arabic number font stack for input fields */
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
 		sans-serif;
@@ -3291,7 +3218,6 @@ export default {
 	letter-spacing: 0.01em;
 }
 
-/* Enhanced card text for better Arabic number display */
 .dynamic-item-card .v-card-text {
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
@@ -3305,7 +3231,6 @@ export default {
 	-moz-osx-font-smoothing: grayscale;
 }
 
-/* Enhanced Card View Grid Layout - Responsive */
 .items-card-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -3328,6 +3253,29 @@ export default {
 .items-card-grid::-webkit-scrollbar-thumb {
 	background-color: rgba(0, 0, 0, 0.2);
 	border-radius: 4px;
+}
+
+.card-item-card {
+	border-radius: 12px;
+	cursor: pointer;
+	background-color: transparent;
+	transition: background-color 0.15s ease,
+	            transform 0.12s ease;
+}
+
+.sleek-data-table :deep(tbody tr:hover),
+.sleek-data-table :deep(tbody tr:hover td) {
+	background-color: #f1f5ff !important;
+	cursor: pointer;
+}
+
+.sleek-data-table :deep(tbody tr.v-data-table__tr--selected),
+.sleek-data-table :deep(tbody tr.v-data-table__tr--selected td) {
+	background-color: #f1f5ff !important;
+}
+
+.sleek-data-table :deep(tbody tr) {
+	transition: background-color 0.15s ease-in-out;
 }
 
 .card-item-card {
@@ -3598,7 +3546,6 @@ export default {
 :deep([data-theme="dark"]) .card-item-card:hover,
 :deep(.v-theme--dark) .card-item-card:hover {
 	border-color: var(--primary-color, #90caf9);
-	box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
 }
 
 :deep([data-theme="dark"]) .card-item-image-container,
@@ -3656,10 +3603,10 @@ export default {
 	flex-direction: column;
 	transition: all 0.3s ease;
 }
-
+/* 
 .sleek-data-table:hover {
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-}
+} */
 
 /* Enhanced table header styling with modern gradients and Arabic support */
 .sleek-data-table :deep(th) {
@@ -3677,7 +3624,6 @@ export default {
 	z-index: 10 !important;
 	backdrop-filter: blur(10px);
 	-webkit-backdrop-filter: blur(10px);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 	text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
 	/* Enhanced Arabic number font stack */
 	font-family:
@@ -3699,7 +3645,6 @@ export default {
 	border-bottom: 3px solid #3498db;
 	color: #ecf0f1;
 	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* Table wrapper styling */
@@ -3736,7 +3681,6 @@ export default {
 .sleek-data-table :deep(tr:hover) {
 	background-color: #f0f0f0;
 	transform: translateY(-1px);
-	box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 /* Table cell styling with Arabic number support */
@@ -3786,13 +3730,11 @@ export default {
 	text-overflow: ellipsis;
 }
 
-/* Light mode card backgrounds */
 .selection,
 .cards {
 	background-color: var(--surface-secondary) !important;
 }
 
-/* Consistent spacing with navbar and system */
 .dynamic-spacing-sm {
 	padding: var(--dynamic-sm) !important;
 }
@@ -3808,13 +3750,11 @@ export default {
 	transform: translateY(-1px) !important;
 }
 
-/* Ensure consistent spacing with navbar pattern */
 .cards {
 	margin-top: var(--dynamic-sm) !important;
 	padding: var(--dynamic-sm) !important;
 }
 
-/* Responsive adjustments */
 @media (max-width: 1400px) {
 	.items-card-grid {
 		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

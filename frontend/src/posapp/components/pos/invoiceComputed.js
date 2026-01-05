@@ -61,7 +61,8 @@ export default {
 	// Calculate grand total (net_total + taxes - discount_amount)
 	grand_total() {
 		const subtotal = this.flt(this.subtotal || 0);
-		const tax = this.flt(this.total_tax || 0);
+		const fallbackTax = this.calculate_item_tax_from_items ? this.calculate_item_tax_from_items() : 0;
+		const tax = this.flt(this.total_tax || fallbackTax || 0);
 		const discount = this.flt(this.discount_amount || 0);
 		const delivery = this.flt(this.delivery_charges_rate || 0);
 

@@ -157,7 +157,7 @@
 				</v-list-item>
 
 				<!-- Theme toggle menu item -->
-				<v-list-item @click="$emit('toggle-theme')" class="menu-item-compact info-action">
+				<!-- <v-list-item @click="$emit('toggle-theme')" class="menu-item-compact info-action">
 					<template v-slot:prepend>
 						<div class="menu-icon-wrapper-compact info-icon">
 							<v-icon color="white" size="16">{{
@@ -173,7 +173,7 @@
 							__("Switch theme appearance")
 						}}</v-list-item-subtitle>
 					</div>
-				</v-list-item>
+				</v-list-item> -->
 
 				<v-list-item @click="$emit('logout')" class="menu-item-compact danger-action">
 					<template v-slot:prepend>

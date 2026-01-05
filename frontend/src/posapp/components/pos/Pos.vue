@@ -19,7 +19,7 @@
 			<div v-show="!dialog" class="pos-layout">
 				<!-- Left Column: Drafts (25% width) -->
 				<div class="pos-column drafts-column">
-					<div v-show="!showOffers && !coupons && !payment" class="column-card drafts-card">
+					<div v-show="!showOffers && !coupons" class="column-card drafts-card">
 						<div class="column-header">
 							<v-icon left color="primary">mdi-file-document</v-icon>
 							<span>{{ __("Job orders") }}</span>
@@ -47,9 +47,6 @@
 					</div>
 					<div v-show="coupons" class="column-card offers-coupons-card">
 						<PosCoupons></PosCoupons>
-					</div>
-					<div v-show="payment" class="column-card payment-card">
-						<Payments></Payments>
 					</div>
 				</div>
 
@@ -115,6 +112,7 @@
 							<ItemsSelector
 								:initial-view-mode="items_view"
 								:view-mode="items_view"
+								:item_group="item_group" 
 								@update-view-mode="handleItemsViewUpdate"
 								:is-modal="false"
 								:hide-filters="true"
@@ -128,21 +126,19 @@
 							<v-col cols="12">
 								<v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
 									<!-- Item Group and Price List -->
-									<!-- <v-col cols="12" class="mb-2">
+									 <v-col cols="12" class="mb-2">
 										<v-row dense>
-											<v-col cols="12" md="6" class="pr-md-2">
-												<v-select
-													:items="items_group"
-													:label="__('Items Group')"
-													density="compact"
-													variant="solo"
-													hide-details
-													:model-value="item_group"
-													@update:model-value="handleItemGroupUpdate"
-												></v-select>
+											<v-col cols="12" class="px-0">
+												<v-select :items="items_group" :label="__('Items Group')"
+													density="compact" variant="solo" hide-details
+													class="items-group-full" :model-value="item_group"
+													@update:model-value="handleItemGroupUpdate" />
 											</v-col>
 
-											<v-col
+										</v-row>
+									</v-col>
+
+											<!-- <v-col
 												cols="12"
 												md="6"
 												class="pl-md-2"
@@ -161,7 +157,7 @@
 												></v-text-field>
 											</v-col>
 										</v-row>
-									</v-col> -->
+									</v-col>  -->
 
 									<!-- Offers & Coupons -->
 									<v-col cols="12" class="mt-2 mb-2">
@@ -199,6 +195,7 @@
 			</div>
 		</div>
 
+		<Payments></Payments>
 		<!-- dialogs omitted -->
 	</div>
 </template>
@@ -328,13 +325,11 @@ export default {
 		handleShowOffers() {
 			this.showOffers = true;
 			this.coupons = false;
-			this.payment = false;
 			this.eventBus.emit("show_offers", "true");
 		},
 		handleShowCoupons() {
 			this.coupons = true;
 			this.showOffers = false;
-			this.payment = false;
 			this.eventBus.emit("show_coupons", "true");
 		},
 
@@ -347,14 +342,12 @@ export default {
 		show_offers() {
 			this.showOffers = !this.showOffers;
 			this.coupons = false;
-			this.payment = false;
 			this.eventBus.emit("show_offers", this.showOffers ? "true" : "false");
 		},
 
 		show_coupons() {
 			this.coupons = !this.coupons;
 			this.showOffers = false;
-			this.payment = false;
 			this.eventBus.emit("show_coupons", this.coupons ? "true" : "false");
 		},
 
@@ -423,7 +416,6 @@ export default {
 
 				if (!this.pos_profile || !this.pos_profile.name) {
 					if (this.pos_profile === null) return;
-
 					this.eventBus.emit("show_message", {
 						title: __("POS Profile not loaded. Please refresh the page."),
 						color: "error",
@@ -448,6 +440,11 @@ export default {
 							"posting_time",
 							"grand_total",
 							"currency",
+							"custom_service_employee",
+							"custom_has_oil_item",
+							"custom_odometer_reading",
+							"custom_vehicle_no",
+							"contact_mobile",
 						],
 						limit_page_length: 500,
 						order_by: "modified desc",
@@ -506,6 +503,32 @@ export default {
 				if (r.message) {
 					this.eventBus.emit("load_invoice", r.message);
 
+					// If the loaded invoice has a service employee, tell other components.
+					if (r.message.custom_service_employee) {
+						// If server included a helper name (custom_service_employee_name) prefer that
+						this.eventBus.emit("employee_selected", {
+							employee_id: r.message.custom_service_employee,
+							employee_name: r.message.custom_service_employee_name || null,
+						});
+					}
+
+					// --- NEW: emit explicit custom field events so children can populate reliably ---
+					this.eventBus.emit("set_contact_mobile", r.message.contact_mobile || "");
+					this.eventBus.emit("set_custom_vehicle_no", r.message.custom_vehicle_no || "");
+					// keep odometer as string if present
+					this.eventBus.emit("set_custom_odometer_reading", r.message.custom_odometer_reading || "");
+					// coerce has_oil_item to boolean (1/"1" => true)
+					this.eventBus.emit(
+						"set_custom_has_oil_item",
+						Boolean(Number(r.message.custom_has_oil_item)) || false,
+					);
+
+					// Emit customer type for corporate detection
+					this.eventBus.emit("customer_selected", {
+						customer: r.message.customer,
+						customer_type: r.message.customer_type || "Individual"
+					});
+
 					this.eventBus.emit("show_message", {
 						title: __("Draft invoice {0} loaded successfully", [draft_name]),
 						color: "success",
@@ -551,21 +574,14 @@ export default {
 				this.active_price_list = this.pos_profile.selling_price_list;
 			});
 
-			this.eventBus.on("show_payment", (data) => {
-				this.payment = data === "true";
-				this.showOffers = false;
-				this.coupons = false;
-			});
 
 			this.eventBus.on("show_offers", (data) => {
 				this.showOffers = data === "true";
-				this.payment = false;
 				this.coupons = false;
 			});
 
 			this.eventBus.on("show_coupons", (data) => {
 				this.coupons = data === "true";
-				this.showOffers = false;
 				this.payment = false;
 			});
 
@@ -598,7 +614,6 @@ export default {
 		this.eventBus.off("close_opening_dialog");
 		this.eventBus.off("register_pos_data");
 		this.eventBus.off("register_pos_profile");
-		this.eventBus.off("show_payment");
 		this.eventBus.off("show_offers");
 		this.eventBus.off("show_coupons");
 		this.eventBus.off("items_loaded");
@@ -651,8 +666,52 @@ export default {
 	left: 0;
 	right: 0;
 	bottom: 0;
-	z-index: 9999;
+	z-index: 1100; /* Lower z-index - below dialogs but above normal content */
 	background: white;
+	overflow: auto;
+}
+
+/* Ensure all interactive elements work in fullscreen */
+.pos-main-container.fullscreen-mode * {
+	pointer-events: auto !important;
+}
+
+/* Ensure dropdowns and dialogs appear above fullscreen */
+.pos-main-container.fullscreen-mode .v-overlay,
+.pos-main-container.fullscreen-mode .v-menu,
+.pos-main-container.fullscreen-mode .v-dialog,
+.pos-main-container.fullscreen-mode .v-autocomplete__content,
+.pos-main-container.fullscreen-mode .v-select__content {
+	z-index: 9999 !important;
+	position: fixed !important;
+}
+
+/* Ensure invoice content is interactive */
+.pos-main-container.fullscreen-mode .invoice-wrapper,
+.pos-main-container.fullscreen-mode .invoice-card,
+.pos-main-container.fullscreen-mode .invoice-content {
+	pointer-events: auto !important;
+	position: relative;
+	z-index: auto;
+}
+
+/* Ensure input fields are clickable */
+.pos-main-container.fullscreen-mode input,
+.pos-main-container.fullscreen-mode textarea,
+.pos-main-container.fullscreen-mode button,
+.pos-main-container.fullscreen-mode .v-field,
+.pos-main-container.fullscreen-mode .v-input,
+.pos-main-container.fullscreen-mode .v-btn {
+	pointer-events: auto !important;
+	position: relative;
+	z-index: 1;
+}
+
+/* Ensure customer dropdown works */
+.pos-main-container.fullscreen-mode .v-autocomplete,
+.pos-main-container.fullscreen-mode .v-select {
+	pointer-events: auto !important;
+	z-index: 10 !important;
 }
 
 /* Flexbox layout */
@@ -671,30 +730,47 @@ export default {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
-	padding: 6px 3px;
+	padding: 8px 6px;
 	overflow: hidden;
 	min-width: 0;
+	position: relative; /* Add this */
+	pointer-events: auto; /* Add this */
+}
+
+/* Ensure columns work in fullscreen */
+.fullscreen-mode .pos-column {
+	pointer-events: auto !important;
+	overflow: visible; /* Allow dropdowns to overflow */
 }
 
 .drafts-column {
-	flex: 0 0 25%;
+	flex: 0 0 20%;
 	padding-left: 1px;
 	padding-right: 2px;
 	flex-shrink: 0;
+	pointer-events: auto; 
 }
 
 .invoice-column {
-	flex: 0 0 50%;
+	flex: 0 0 60%;
 	padding-left: 3px;
 	padding-right: 3px;
 	flex-shrink: 0;
+	pointer-events: auto;
+	z-index: 2; 
 }
 
+.invoice-column .column-card {
+	border-radius: 14px;
+}
+
+
 .items-column {
-	flex: 0 0 25%;
+	flex: 0 0 20%;
 	padding-left: 2px;
 	padding-right: 1px;
 	flex-shrink: 0;
+	pointer-events: auto; 
 }
 
 /* Column Card */
@@ -702,10 +778,10 @@ export default {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
-	border: 2px solid #e0e0e0;
-	border-radius: 8px;
+	border: 1px solid #ececec;
+	border-radius: 12px;
 	overflow: hidden;
-	background: white;
+	background: #ffffff;
 	transition: border-color 0.2s ease;
 	position: relative;
 }
@@ -739,7 +815,7 @@ export default {
 	overflow-y: auto;
 	overflow-x: hidden;
 	padding: 10px;
-	background-color: #fafafa;
+	background-color: white;
 	min-height: 0;
 }
 
@@ -771,10 +847,8 @@ export default {
 	text-transform: none !important;
 	font-weight: 800 !important;
 	color: #fff !important;
-	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12) !important;
 	transition:
-		transform 0.12s ease,
-		box-shadow 0.12s ease;
+		transform 0.12s ease;
 	overflow: visible !important;
 }
 
@@ -782,7 +856,6 @@ export default {
 .offer-style-btn:hover,
 .coupon-style-btn:hover {
 	transform: translateY(-2px);
-	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14) !important;
 }
 
 /* icon alignment (left) */
@@ -911,16 +984,18 @@ export default {
 
 /* Column Header */
 .column-header {
-	background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+	background: white;
 	padding: 10px 14px;
 	font-weight: 600;
-	font-size: 0.95rem;
+	font-size: 23px;
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	min-height: 50px;
 	flex-shrink: 0;
-	border-bottom: 1px solid #e0e0e0;
+	color: #333;
+	border-bottom: 1px solid #e5e7eb;
+
 }
 
 .column-header .v-icon {
@@ -930,10 +1005,10 @@ export default {
 /* Scrollable Content */
 .column-scroll-content {
 	flex: 1;
-	overflow-y: auto;
+	overflow-y: hidden;
 	overflow-x: hidden;
 	padding: 10px;
-	background-color: #fafafa;
+	background-color: white;
 	min-height: 0;
 }
 .pos-main-container > .v-row:nth-child(1),
@@ -957,6 +1032,14 @@ export default {
 	flex-direction: column;
 	width: 100%;
 	min-height: 0;
+	position: relative; /* Add this */
+	z-index: 1; /* Add this */
+}
+
+/* Ensure invoice content is scrollable and interactive in fullscreen */
+.fullscreen-mode .invoice-wrapper {
+	overflow: visible; /* Change from hidden */
+	pointer-events: auto !important;
 }
 
 .invoice-wrapper :deep(.invoice-container) {
@@ -964,17 +1047,19 @@ export default {
 	flex-direction: column;
 	height: 100%;
 	width: 100%;
+	pointer-events: auto; /* Add this */
 }
 
 .invoice-wrapper :deep(.invoice-content) {
 	flex: 1;
 	overflow-y: auto;
 	overflow-x: hidden;
-	padding: 10px;
-	background-color: #fafafa;
+	padding: 14px 16px;
+	background-color: #ffffff;
 	min-height: 0;
+	pointer-events: auto; /* Add this */
+	position: relative; /* Add this */
 }
-
 /* Items Footer Filters */
 .items-footer-filters {
 	position: absolute;
@@ -983,7 +1068,7 @@ export default {
 	left: 0;
 	right: 0;
 	background: white;
-	border-top: 2px solid #e0e0e0;
+	border-top: 1px solid #e5e7eb;
 	padding: 12px;
 	z-index: 100;
 }
@@ -1016,21 +1101,21 @@ export default {
 .drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar-track),
 .invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-track),
 .column-scroll-content::-webkit-scrollbar-track {
-	background: #f1f1f1;
+	background: white;
 	border-radius: 3px;
 }
 
 .drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar-thumb),
 .invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb),
 .column-scroll-content::-webkit-scrollbar-thumb {
-	background: #999;
+	background: rgba(0, 0, 0, 0.25);
 	border-radius: 3px;
 }
 
 .drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar-thumb:hover),
-invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb:hover),
+.invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb:hover),
 .column-scroll-content::-webkit-scrollbar-thumb:hover {
-	background: #666;
+	background: rgba(0, 0, 0, 0.4);
 }
 
 /* Responsive - Tablet */
@@ -1096,4 +1181,28 @@ invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb:hover),
 		display: none;
 	}
 }
+
+/* New Customer / New Vehicle dialogs not visible in fullscreen */
+
+/* FIX: Add New Customer / Add New Vehicle buttons not clickable in fullscreen */
+.fullscreen-mode .invoice-wrapper :deep(.v-input__append),
+.fullscreen-mode .invoice-wrapper :deep(.v-input__append-inner),
+.fullscreen-mode .invoice-wrapper :deep(.v-field__append-inner) {
+    position: relative !important;
+    z-index: 999999 !important;
+    pointer-events: auto !important;
+}
+
+/* Fix for autocomplete menu overlapping */
+.fullscreen-mode :deep(.v-overlay__content) {
+    z-index: 999999 !important;
+    position: fixed !important;
+}
+
+/* Ensure append icons remain clickable */
+.fullscreen-mode :deep(.v-icon) {
+    pointer-events: auto !important;
+}
+
+
 </style>
