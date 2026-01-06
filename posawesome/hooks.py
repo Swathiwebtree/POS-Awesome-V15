@@ -103,6 +103,7 @@ doc_events = {
     "Sales Invoice": {
         "validate": "posawesome.posawesome.api.invoice.validate",
         "before_submit": "posawesome.posawesome.api.invoice.before_submit",
+        "on_submit": "posawesome.posawesome.api.loyalty.on_invoice_submit", 
         "before_cancel": "posawesome.posawesome.api.invoice.before_cancel",
         "on_update": "posawesome.posawesome.api.sales_invoice.set_job_order_number",
     },

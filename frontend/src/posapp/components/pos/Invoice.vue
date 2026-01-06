@@ -1756,6 +1756,23 @@ export default {
 				invoiceData.base_discount_amount = invoiceData.discount_amount * exchangeRate;
 			}
 
+			// LOYALTY DATA 
+			if (this.customer_info?.loyalty_program) {
+				invoiceData.loyalty_program = this.customer_info.loyalty_program;
+			}
+
+			// Redeem values (safe defaults)
+			invoiceData.redeem_loyalty_points = Number(this.pointsToRedeem || 0);
+			invoiceData.loyalty_amount = Number(this.redemptionValue || 0);
+
+			// Defensive: ERPNext expects numbers
+			if (invoiceData.redeem_loyalty_points < 0) {
+				invoiceData.redeem_loyalty_points = 0;
+			}
+			if (invoiceData.loyalty_amount < 0) {
+				invoiceData.loyalty_amount = 0;
+			}
+
 			return invoiceData;
 		},
 
@@ -2031,6 +2048,13 @@ export default {
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
 			this.invoice_doc.pos_profile = this.pos_profile && this.pos_profile.name;
 			this.invoice_doc.company = this.pos_profile && this.pos_profile.company;
+			// LOYALTY FIELDS
+			if (this.customer_info?.loyalty_program) {
+				this.invoice_doc.loyalty_program = this.customer_info.loyalty_program;
+			}
+
+			this.invoice_doc.redeem_loyalty_points = Number(this.pointsToRedeem || 0);
+			this.invoice_doc.loyalty_amount = Number(this.redemptionValue || 0);
 
 			// ===== NEW: ADD ODOMETER, MOBILE, VEHICLE FIELDS =====
 			// Employee fields
@@ -2911,22 +2935,27 @@ export default {
 			deep: true
 		},
 
-		// CUSTOMER WATCH
 		customer(newVal) {
 			if (!newVal) return;
 
-			// FETCH MAX DISCOUNT HERE
 			this.$nextTick(() => {
 				this.fetchMaxDiscount();
 			});
 
-			// keep existing sync
-			if (this.invoice_doc) {
-				this.invoice_doc.customer = newVal;
+			if (!this.invoice_doc) return;
+
+			this.invoice_doc.customer = newVal;
+
+			// LOYALTY PROGRAM ATTACH
+			if (this.customer_info?.loyalty_program) {
+				this.invoice_doc.loyalty_program = this.customer_info.loyalty_program;
+			} else {
+				this.invoice_doc.loyalty_program = null;
 			}
 		},
 
-		// ITEMS WATCH (SINGLE, MERGED)
+
+		// ITEMS WATCH 
 		items: {
 			deep: true,
 			handler(newItems) {

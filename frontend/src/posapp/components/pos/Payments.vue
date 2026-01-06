@@ -760,21 +760,27 @@ export default {
 			}
 		},
 		loyalty_amount(value) {
+			if (!this.invoice_doc || !this.customer_info) return;
+
 			if (value > this.available_points_amount) {
 				this.invoice_doc.loyalty_amount = 0;
 				this.invoice_doc.redeem_loyalty_points = 0;
-				this.invoice_doc.loyalty_points = 0;
 				this.loyalty_amount = 0;
+
 				this.eventBus.emit("show_message", {
-					title: `Loyalty Amount can not be more than ${this.available_points_amount}`,
+					title: `Loyalty Amount cannot exceed ${this.available_points_amount}`,
 					color: "error",
 				});
-			} else {
-				this.invoice_doc.loyalty_amount = this.flt(this.loyalty_amount);
-				this.invoice_doc.redeem_loyalty_points = 1;
-				this.invoice_doc.loyalty_points =
-					this.flt(this.loyalty_amount) / this.customer_info.conversion_factor;
+				return;
 			}
+
+			const points = this.flt(
+				value / this.customer_info.conversion_factor,
+				this.currency_precision
+			);
+
+			this.invoice_doc.loyalty_amount = this.flt(value, this.currency_precision);
+			this.invoice_doc.redeem_loyalty_points = points;
 		},
 		redeemed_customer_credit(newVal) {
 			if (newVal > this.available_customer_credit) {
@@ -1423,6 +1429,21 @@ export default {
 					console.log('[Payment] Corrected due_date:', this.invoice_doc.due_date);
 				}
 			}
+
+			// FINAL LOYALTY 
+			if (this.customer_info?.loyalty_program) {
+				this.invoice_doc.loyalty_program = this.customer_info.loyalty_program;
+			}
+
+			this.invoice_doc.loyalty_amount = this.flt(this.loyalty_amount || 0);
+			this.invoice_doc.redeem_loyalty_points = this.flt(
+				this.invoice_doc.redeem_loyalty_points || 0
+			);
+
+			// Safety
+			if (this.invoice_doc.loyalty_amount < 0) this.invoice_doc.loyalty_amount = 0;
+			if (this.invoice_doc.redeem_loyalty_points < 0)
+				this.invoice_doc.redeem_loyalty_points = 0;
 
 			let data = {
 				total_change: !this.invoice_doc.is_return ? -this.diff_payment : 0,
@@ -2665,6 +2686,11 @@ export default {
 		this.eventBus.on("set_customer_info_to_edit", (data) => {
 			console.log("[Payment] set_customer_info_to_edit received");
 			this.customer_info = data;
+
+			// ATTACH LOYALTY PROGRAM TO INVOICE
+			if (this.invoice_doc && data?.loyalty_program) {
+				this.invoice_doc.loyalty_program = data.loyalty_program;
+			}
 		});
 
 		this.eventBus.on("set_mpesa_payment", (data) => {

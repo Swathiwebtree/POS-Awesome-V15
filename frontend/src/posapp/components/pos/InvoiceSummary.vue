@@ -813,7 +813,18 @@ export default {
 				if (this.isResetting || this.isManualEdit) return; 
 				this.manual_total = this.formatByPrecision(val);
 			},
-  },
+        },
+
+		additional_discount: {
+			immediate: true,
+			handler() {
+				if (this.isResetting || this.isManualEdit) return;
+
+				this.$nextTick(() => {
+					this.manual_total = this.formatByPrecision(this.subtotal);
+				});
+			},
+		},
 	},
 	methods: {
 

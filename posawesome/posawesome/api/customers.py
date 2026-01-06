@@ -20,6 +20,25 @@ VM_DOCTYPE = "Vehicle Master"  # Your custom Vehicle Master doctype (linked to V
 
 
 # ---------------- LOYALTY POINTS FUNCTIONS ----------------
+def auto_assign_loyalty_program(customer_doc):
+    if customer_doc.loyalty_program:
+        return customer_doc.loyalty_program
+
+    program = frappe.db.get_value(
+        "Loyalty Program",
+        {
+            "docstatus": 1,  
+            "auto_opt_in": 1,
+            "company": frappe.defaults.get_user_default("Company"),
+        },
+        "name",
+    )
+
+    if program:
+        frappe.db.set_value("Customer", customer_doc.name, "loyalty_program", program)
+        return program
+
+    return None
 
 
 def get_loyalty_points(customer_name, loyalty_program=None, company_name=None):
@@ -40,7 +59,7 @@ def get_loyalty_points(customer_name, loyalty_program=None, company_name=None):
             params["company"] = company_name
 
         # Include both draft (0) and submitted (1) entries
-        conditions.append("docstatus IN (0, 1)")
+        conditions.append("docstatus = 1")
 
         where_clause = " AND ".join(conditions)
 
@@ -64,22 +83,21 @@ def get_loyalty_points(customer_name, loyalty_program=None, company_name=None):
 
 
 @frappe.whitelist()
-def update_loyalty_points(customer_name, company_name, points_amount, entry_type="Earn"):
+def update_loyalty_points(customer_name, company_name, points_amount):
     """
-    Update customer loyalty points
-    Args:
-        customer_name: Customer ID
-        company_name: Company name
-        points_amount: Number of points to add/redeem
-        entry_type: "Earn" or "Redeem"
+    Redeem customer loyalty points ONLY.
+    Earning is handled via Sales Invoice on_submit hook.
     """
     try:
         # Validate inputs
         points_amount = flt(points_amount)
         if points_amount <= 0:
-            return {"status": "error", "message": _("Points amount must be greater than 0")}
+            return {
+                "status": "error",
+                "message": _("Points amount must be greater than 0"),
+            }
 
-        # Get customer details
+        #  Get customer & loyalty program
         customer = frappe.get_doc("Customer", customer_name)
 
         if not customer.loyalty_program:
@@ -89,65 +107,68 @@ def update_loyalty_points(customer_name, company_name, points_amount, entry_type
             }
 
         loyalty_program = customer.loyalty_program
-
-        # Get loyalty program details for conversion factor
         loyalty_program_doc = frappe.get_doc("Loyalty Program", loyalty_program)
-        conversion_factor = flt(loyalty_program_doc.conversion_factor) or 1
+        
+        redemption_amount = flt(points_amount)
+        
+        if flt(loyalty_program_doc.conversion_factor):
+            redemption_amount = flt(points_amount * loyalty_program_doc.conversion_factor)
 
-        # Calculate redemption amount
-        redemption_amount = points_amount * conversion_factor
+      
+        # Check available points (Redeem ONLY)
+       
+        current_points = get_loyalty_points(customer_name, loyalty_program, company_name)
 
-        # Check if customer has enough points for redemption
-        if entry_type == "Redeem":
-            current_points = get_loyalty_points(customer_name, loyalty_program, company_name)
-
-            frappe.logger().info(
-                f"Redemption Check - Customer: {customer_name}, Current: {current_points}, Requested: {points_amount}"
-            )
-
-            if current_points < points_amount:
-                return {
-                    "status": "error",
-                    "message": _("Insufficient loyalty points. Available: {0}, Requested: {1}").format(
-                        flt(current_points, 2), flt(points_amount, 2)
-                    ),
-                    "available_points": current_points,
-                    "requested_points": points_amount,
-                }
-
-        # Create Loyalty Point Entry
-        loyalty_point_entry = frappe.get_doc(
-            {
-                "doctype": "Loyalty Point Entry",
-                "customer": customer_name,
-                "loyalty_program": loyalty_program,
-                "company": company_name,
-                "loyalty_points": points_amount if entry_type == "Earn" else -points_amount,
-                "purchase_amount": redemption_amount if entry_type == "Redeem" else 0,
-                "expiry_date": frappe.utils.add_days(
-                    frappe.utils.nowdate(), loyalty_program_doc.expiry_duration or 365
-                ),
-                "posting_date": frappe.utils.nowdate(),
-                "posting_time": frappe.utils.nowtime(),
-            }
+        frappe.logger().info(
+            f"Redemption Check - Customer: {customer_name}, "
+            f"Available: {current_points}, Requested: {points_amount}"
         )
+
+        if current_points < points_amount:
+            return {
+                "status": "error",
+                "message": _("Insufficient loyalty points. Available: {0}, Requested: {1}").format(
+                    flt(current_points, 2), flt(points_amount, 2)
+                ),
+                "available_points": current_points,
+                "requested_points": points_amount,
+            }
+
+        
+        #   Loyalty Point Entry (NEGATIVE only)
+       
+        loyalty_point_entry = frappe.get_doc({
+            "doctype": "Loyalty Point Entry",
+            "customer": customer_name,
+            "loyalty_program": loyalty_program,
+            "company": company_name,
+            "loyalty_points": -points_amount,     
+            "purchase_amount": redemption_amount,  
+            "expiry_date": frappe.utils.add_days(
+                frappe.utils.nowdate(),
+                loyalty_program_doc.expiry_duration or 365,
+            ),
+            "posting_date": frappe.utils.nowdate(),
+            "posting_time": frappe.utils.nowtime(),
+        })
 
         loyalty_point_entry.insert(ignore_permissions=True)
         loyalty_point_entry.submit()
-
         frappe.db.commit()
 
-        # Get updated balance
+       
+        #  Return updated balance
+       
         new_balance = get_loyalty_points(customer_name, loyalty_program, company_name)
 
         frappe.logger().info(
-            f"Loyalty points updated - Entry: {loyalty_point_entry.name}, New Balance: {new_balance}"
+            f"Loyalty redeemed - Entry: {loyalty_point_entry.name}, New Balance: {new_balance}"
         )
 
         return {
             "status": "success",
-            "message": _("Loyalty points updated successfully"),
-            "points": points_amount,
+            "message": _("Loyalty points redeemed successfully"),
+            "points_redeemed": points_amount,
             "redemption_amount": redemption_amount,
             "new_balance": new_balance,
             "loyalty_point_entry": loyalty_point_entry.name,
@@ -155,12 +176,13 @@ def update_loyalty_points(customer_name, company_name, points_amount, entry_type
 
     except Exception as e:
         frappe.db.rollback()
-        error_msg = str(e)
-        frappe.log_error(frappe.get_traceback(), _("Loyalty Points Update Error"))
-        frappe.logger().error(f"Loyalty points update failed: {error_msg}")
+        frappe.log_error(frappe.get_traceback(), _("Loyalty Points Redemption Error"))
 
-        # Return error response instead of throwing
-        return {"status": "error", "message": _("Error updating loyalty points: {0}").format(error_msg)}
+        return {
+            "status": "error",
+            "message": _("Error redeeming loyalty points: {0}").format(str(e)),
+        }
+
 
 
 # ---------------- POS Customer Utilities ----------------
@@ -335,7 +357,8 @@ def get_customer_info(customer):
     res["email_id"] = getattr(customer_doc, "email_id", None)
     res["mobile_no"] = getattr(customer_doc, "mobile_no", None)
     res["image"] = getattr(customer_doc, "image", None)
-    res["loyalty_program"] = getattr(customer_doc, "loyalty_program", None)
+    loyalty_program = auto_assign_loyalty_program(customer_doc)
+    res["loyalty_program"] = loyalty_program
     res["customer_price_list"] = getattr(customer_doc, "default_price_list", None)
     res["customer_group"] = getattr(customer_doc, "customer_group", None)
     res["customer_type"] = getattr(customer_doc, "customer_type", None)
