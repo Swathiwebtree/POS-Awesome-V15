@@ -163,6 +163,178 @@
 								</v-card>
 							</v-col>
 
+							<!-- Item Group Bulk Discount Section -->
+							<v-col cols="12" v-if="itemGroupsList && itemGroupsList.length > 0">
+								<v-card class="item-group-discount-card" elevation="2">
+									<v-card-text class="pa-4">
+										<!-- Header with Icon and Title -->
+										<div class="d-flex align-center justify-space-between mb-4">
+											<div class="d-flex align-center">
+												<v-avatar color="info" size="40" class="mr-3 item-group-avatar">
+													<v-icon color="white" size="24">mdi-folder-multiple</v-icon>
+												</v-avatar>
+												<div>
+													<p class="text-subtitle-2 font-weight-bold mb-0">
+														{{ __("Item Group Discounts") }}
+													</p>
+													<p class="text-caption text-grey mb-0">
+														{{ __("Apply bulk discounts by category") }}
+													</p>
+												</div>
+											</div>
+											<v-btn size="small" color="info" variant="flat" prepend-icon="mdi-plus"
+												@click="openItemGroupDiscountDialog" class="add-discount-btn">
+												{{ __("Add") }}
+											</v-btn>
+										</div>
+
+										<!-- Active Discounts List -->
+										<div v-if="Object.keys(itemGroupDiscounts).length > 0"
+											class="discounts-list mb-3">
+											<v-chip v-for="(discount, group) in itemGroupDiscounts" :key="group"
+												closable color="info" variant="tonal" class="discount-chip mr-2 mb-2"
+												@click:close="removeItemGroupDiscount(group)">
+												<v-icon size="small" left>mdi-folder-multiple</v-icon>
+												<span class="font-weight-600">{{ group }}: {{ discount }}%</span>
+											</v-chip>
+										</div>
+
+										<!-- No Discounts Message -->
+										<div v-else class="text-center py-4">
+											<v-icon size="48" color="grey-lighten-1"
+												class="mb-2">mdi-folder-outline</v-icon>
+											<p class="text-caption text-grey mb-0">
+												{{ __("No group discounts applied yet") }}
+											</p>
+										</div>
+
+										<!-- Total Group Discount Amount -->
+										<!-- <v-divider class="my-3" />
+										<v-row align="center" no-gutters class="discount-summary">
+											<v-col cols="auto">
+												<p class="text-caption text-grey-darken-1 mb-0">
+													{{ __("Total Discount Value") }}
+												</p>
+											</v-col>
+											<v-spacer></v-spacer>
+											<v-col cols="auto" class="text-right">
+												<p class="text-h6 font-weight-bold mb-0 text-info">
+													{{ currencySymbol(displayCurrency) }}{{
+														formatFloat(total_items_discount_amount) }}
+												</p>
+											</v-col>
+										</v-row> -->
+									</v-card-text>
+								</v-card>
+							</v-col>
+
+							<!-- Item Group Discount Dialog -->
+							<v-dialog v-model="showItemGroupDiscountDialog" max-width="450px" persistent>
+								<v-card :style="isDarkTheme ? 'background-color:#1E1E1E;' : ''">
+									<v-card-title class="text-h6 pb-2 pt-4 px-6">
+										<v-row align="center" no-gutters>
+											<v-avatar color="info" size="36" class="mr-3">
+												<v-icon color="white" size="20">mdi-folder-multiple</v-icon>
+											</v-avatar>
+											<span>{{ __("Apply Group Discount") }}</span>
+											<v-spacer></v-spacer>
+											<v-btn icon size="small" variant="text"
+												@click="showItemGroupDiscountDialog = false">
+												<v-icon>mdi-close</v-icon>
+											</v-btn>
+										</v-row>
+									</v-card-title>
+
+									<v-divider></v-divider>
+
+									<v-card-text class="px-6 py-4">
+										<!-- Select Item Group -->
+										<v-select v-model="selectedItemGroupForDiscount" :items="itemGroupsList"
+											:label="__('Select Item Group')" prepend-inner-icon="mdi-folder"
+											variant="outlined" density="comfortable" color="info" class="mb-4"
+											clearable />
+
+										<!-- Discount Percentage Input -->
+										<v-text-field v-model.number="discountPercentageByGroup"
+											:label="__('Discount Percentage')" type="number" min="0" max="100"
+											step="0.5" prepend-inner-icon="mdi-percent" variant="outlined"
+											density="comfortable" color="info" suffix="%" :rules="[
+												(v) => v >= 0 || __('Cannot be negative'),
+												(v) => v <= 100 || __('Cannot exceed 100%')
+											]" />
+
+										<!-- Preview Alert -->
+										<v-alert v-if="selectedItemGroupForDiscount && discountPercentageByGroup > 0"
+											type="info" variant="tonal" density="compact" icon="mdi-information-outline"
+											class="mt-4 mb-0">
+											<p class="text-caption mb-0">
+												<strong>{{ selectedItemGroupForDiscount }}</strong> {{ __("items will receive a") }}
+												<strong>{{ discountPercentageByGroup }}%</strong> {{ __("discount") }}
+											</p>
+										</v-alert>
+
+										<!-- No Selection Alert -->
+										<v-alert v-else-if="!selectedItemGroupForDiscount" type="warning"
+											variant="tonal" density="compact" icon="mdi-alert-outline"
+											class="mt-4 mb-0">
+											<p class="text-caption mb-0">
+												{{ __("Please select an item group and enter a discount percentage") }}
+											</p>
+										</v-alert>
+									</v-card-text>
+
+									<v-divider></v-divider>
+
+									<v-card-actions class="px-6 py-4">
+										<v-spacer></v-spacer>
+										<v-btn color="error" variant="text"
+											@click="showItemGroupDiscountDialog = false">
+											{{ __("Cancel") }}
+										</v-btn>
+										<v-btn color="info" variant="flat"
+											:disabled="!selectedItemGroupForDiscount || discountPercentageByGroup <= 0"
+											@click="applyItemGroupDiscount">
+											<v-icon left>mdi-check</v-icon>
+											{{ __("Apply Discount") }}
+										</v-btn>
+									</v-card-actions>
+								</v-card>
+							</v-dialog>
+
+							<!-- Max Discount Info -->
+							<!-- <v-col cols="12" v-if="$parent.maxDiscountInfo">
+								<v-card class="max-discount-display-card" elevation="2">
+									<v-card-text class="pa-3">
+										<v-row align="center" no-gutters>
+											<v-col cols="auto" class="mr-3">
+												<v-avatar color="teal" size="40">
+													<v-icon color="white" size="22">mdi-percent</v-icon>
+												</v-avatar>
+											</v-col>
+
+											<v-col>
+												<p class="text-caption mb-0 text-grey-darken-1">
+													Customer Type
+												</p>
+												<p class="text-subtitle-1 font-weight-bold mb-0">
+													{{ $parent.maxDiscountInfo.customer_type }}
+												</p>
+											</v-col>
+
+											<v-col cols="auto" class="text-right">
+												<p class="text-caption mb-0 text-grey-darken-1">
+													Max Discount
+												</p>
+												<p class="text-h6 font-weight-bold mb-0 text-teal">
+													{{ $parent.maxDiscountInfo.invoice_max_discount }}%
+												</p>
+											</v-col>
+										</v-row>
+									</v-card-text>
+								</v-card>
+							</v-col>
+							-->
+
 							<!-- Select Sales Order Button (Conditional) -->
 							<v-col cols="12" v-if="pos_profile && pos_profile.custom_allow_select_sales_order == 1">
 								<v-btn block color="info" theme="dark" prepend-icon="mdi-book-search"
@@ -512,6 +684,13 @@ export default {
 			manual_total: 0,
 			isManualEdit: false,
 			isResetting: false,
+
+			itemGroupDiscounts: {}, 
+			availableItemGroups: [], 
+			selectedItemGroupForDiscount: null,
+			discountPercentageByGroup: 0, 
+			showItemGroupDiscountDialog: false,
+
 		};
 	},
 	emits: [
@@ -532,6 +711,37 @@ export default {
 		"apply-frequent-card",
 	],
 	computed: {
+
+		itemGroupsList() {
+			const parentItems = this.$parent?.items || [];
+
+			const blockedGroups = ["Engine Oil"];
+
+			const uniqueGroups = [...new Set(
+				parentItems
+					.map(item => (item.item_group || '').trim())
+					.filter(group => group && !blockedGroups.includes(group))
+			)];
+
+			return uniqueGroups.sort();
+		},
+
+
+		itemGroupSummary() {
+			// Calculate totals per item group for display
+			const summary = {};
+			this.items_group.forEach(group => {
+				summary[group] = {
+					discount: this.itemGroupDiscounts[group] || 0,
+					itemCount: this.countItemsByGroup(group)
+				};
+			});
+			return summary;
+		},
+
+		maxInvoiceDiscount() {
+			return this.$parent.maxDiscountInfo?.invoice_max_discount || 0;
+		},
 		decimalPrecision() {
 			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
 		},
@@ -607,6 +817,106 @@ export default {
 	},
 	methods: {
 
+		countItemsByGroup(group) {
+			// Count items in specific group
+			return this.pos_profile && Array.isArray(this.items_group)
+				? this.items_group.filter(g => g === group).length
+				: 0;
+		},
+
+		calculateGroupSubtotal(group) {
+			// Calculate directly from items instead of emitting event
+			if (!this.items || this.items.length === 0) {
+				return 0;
+			}
+
+			// Access parent's items through $parent reference
+			const parentItems = this.$parent?.items || [];
+
+			const groupTotal = parentItems.reduce((sum, item) => {
+				if ((item.item_group || '').trim() === group) {
+					return sum + (Number(item.qty || 0) * Number(item.rate || 0));
+				}
+				return sum;
+			}, 0);
+
+			return groupTotal;
+		},
+
+		openItemGroupDiscountDialog() {
+			this.showItemGroupDiscountDialog = true;
+		},
+
+		applyItemGroupDiscount() {
+
+			if (this.selectedItemGroupForDiscount === "Engine Oil") {
+				frappe.show_alert({
+					message: this.__("Discounts are not allowed for Engine Oil items"),
+					indicator: "red",
+				});
+				return;
+			}
+
+			if (!this.selectedItemGroupForDiscount) {
+				frappe.show_alert({
+					message: this.__("Please select an item group"),
+					indicator: "warning"
+				});
+				return;
+			}
+
+			const discountPct = Number(this.discountPercentageByGroup || 0);
+
+			if (discountPct < 0 || discountPct > 100) {
+				frappe.show_alert({
+					message: this.__("Discount must be between 0-100%"),
+					indicator: "error"
+				});
+				return;
+			}
+
+			// Store the discount
+			this.itemGroupDiscounts[this.selectedItemGroupForDiscount] = discountPct;
+
+			// Emit event to parent to apply discount to items
+			this.eventBus.emit('apply_group_discount', {
+				group: this.selectedItemGroupForDiscount,
+				percentage: discountPct,
+			});
+
+			// Recalculate totals
+			this.$emit('update_discount_umount');
+
+			frappe.show_alert({
+				message: this.__(
+					`${discountPct}% discount applied to ${this.selectedItemGroupForDiscount} items`
+				),
+				indicator: "green"
+			});
+
+			// Reset and close
+			this.discountPercentageByGroup = 0;
+			this.selectedItemGroupForDiscount = null;
+			this.showItemGroupDiscountDialog = false;
+		},
+
+		removeItemGroupDiscount(group) {
+			// Remove discount from specific group
+			delete this.itemGroupDiscounts[group];
+
+			// Emit event to parent to remove discount
+			this.eventBus.emit('remove_group_discount', {
+				group: group
+			});
+
+			this.$emit('update_discount_umount');
+
+			frappe.show_alert({
+				message: this.__(`Discount removed from ${group} items`),
+				indicator: "orange"
+			});
+		},
+
 		onManualTotalChange() {
 			this.isManualEdit = true;
 
@@ -640,6 +950,12 @@ export default {
 			this.showFrequentCardsDialog = false;
 			this.applyingCard = false;
 
+			// Item group discounts
+			this.itemGroupDiscounts = {};
+			this.selectedItemGroupForDiscount = null;
+			this.discountPercentageByGroup = 0;
+			this.showItemGroupDiscountDialog = false;
+
 			// UI loaders
 			this.saveLoading = false;
 			this.paymentLoading = false;
@@ -657,7 +973,22 @@ export default {
 		},
 
 		handleAdditionalDiscountPercentageUpdate(value) {
-			this.$emit("update:additional_discount_percentage", value);
+			let val = Math.max(0, Number(value || 0));
+
+			if (this.maxInvoiceDiscount && val > this.maxInvoiceDiscount) {
+				frappe.show_alert({
+					message: __(`Maximum allowed discount is ${this.maxInvoiceDiscount}%`),
+					indicator: "red",
+				});
+				val = this.maxInvoiceDiscount;
+
+				this.$nextTick(() => {
+					this.$emit("update:additional_discount_percentage", val);
+				});
+				return;
+			}
+
+			this.$emit("update:additional_discount_percentage", val);
 		},
 
 		emitOdometerData() {
@@ -1314,6 +1645,13 @@ export default {
 		this.eventBus.on("payment_completed", this.resetAfterPayment);
 
 		this.eventBus.on("confirm_cancel_sale", this.handleConfirmedCancelSale);
+
+		// Listen for item groups from parent
+		this.eventBus.on('register_item_groups', (groups) => {
+			if (Array.isArray(groups)) {
+				this.availableItemGroups = groups;
+			}
+		});
 	},
 	beforeUnmount() {
 		this.eventBus.off("item_added_to_invoice", this.checkAutoApplyCard);
@@ -1326,6 +1664,7 @@ export default {
 		this.eventBus.off("payment_completed", this.resetAfterPayment);
 		this.eventBus.off("confirm_cancel_sale", this.handleConfirmedCancelSale);
 		this.eventBus.off("reset_manual_total");
+		this.eventBus.off('register_item_groups');
 
 
 	},
@@ -1548,4 +1887,144 @@ export default {
 		height: 44px !important;
 	}
 }
+
+/* Item Group Discount Card  */
+.item-group-discount-card {
+  background: linear-gradient(
+    135deg,
+    rgba(33, 150, 243, 0.08),
+    rgba(21, 101, 192, 0.06)
+  );
+  border: 2px solid rgba(33, 150, 243, 0.25);
+  border-radius: 12px !important;
+  min-height: 96px;
+  max-height: 96px;
+
+  padding: 0 !important;
+
+  transition: all 0.3s ease;
+}
+
+:deep(.item-group-discount-card .v-avatar) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+}
+
+:deep(.item-group-discount-card .item-group-avatar) {
+  background-color: #2196f3 !important;
+}
+
+:deep(.item-group-discount-card .v-avatar .v-icon) {
+  display: inline-flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+
+  color: #ffffff !important;
+  font-size: 24px !important;
+  line-height: 1 !important;
+}
+
+/* Kill the underlay globally */
+:deep(.v-avatar__underlay) {
+  display: none !important;
+}
+
+/* Force icon above everything */
+:deep(.v-avatar .v-icon) {
+  position: relative;
+  z-index: 2;
+}
+
+/* Reduce internal padding to match loyalty card */
+.item-group-discount-card .v-card-text {
+  padding: 12px !important;
+}
+/* Hide empty state (keeps card compact) */
+.item-group-discount-card .text-center {
+  display: none !important;
+}
+
+
+.item-group-discount-card:hover {
+  border-color: rgba(33, 150, 243, 0.45);
+  box-shadow: 0 8px 24px rgba(33, 150, 243, 0.15);
+  transform: translateY(-2px);
+}
+
+:deep(.v-theme--dark) .item-group-discount-card {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.15), rgba(21, 101, 192, 0.1));
+  border-color: rgba(33, 150, 243, 0.35);
+}
+
+:deep(.v-theme--dark) .item-group-discount-card:hover {
+  border-color: rgba(33, 150, 243, 0.55);
+  box-shadow: 0 8px 24px rgba(33, 150, 243, 0.25);
+}
+
+/* Discount Chips */
+.discount-chip {
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+  padding: 6px 12px !important;
+  font-size: 0.875rem;
+}
+
+.discount-chip:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.discounts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 40px;
+  align-content: flex-start;
+}
+
+/* Compact summary like loyalty card */
+.discount-summary {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-size: 0.85rem;
+
+  display: flex;
+  align-items: center;
+}
+
+
+:deep(.v-theme--dark) .discount-summary {
+  background: rgba(33, 150, 243, 0.1);
+}
+
+.text-info {
+  color: #1976d2 !important;
+}
+
+:deep(.v-theme--dark) .text-info {
+  color: #64b5f6 !important;
+}
+
+/* Add Discount Button */
+.add-discount-btn {
+  transition: all 0.2s ease !important;
+}
+
+.add-discount-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+/* Dialog Styling */
+.item-group-discount-card ~ .v-dialog__content {
+  backdrop-filter: blur(4px);
+}
+
 </style>

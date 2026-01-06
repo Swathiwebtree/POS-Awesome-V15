@@ -1,11 +1,8 @@
 <template>
 	<div class="pos-app-container">
 		<!-- Main POS Container -->
-		<div
-			class="pos-main-container"
-			:class="[rtlClasses, { 'fullscreen-mode': isFullscreen }]"
-			:style="[responsiveStyles, rtlStyles]"
-		>
+		<div class="pos-main-container" :class="[rtlClasses, { 'fullscreen-mode': isFullscreen }]"
+			:style="[responsiveStyles, rtlStyles]">
 			<ClosingDialog></ClosingDialog>
 			<UpdateCustomer />
 			<UpdateVehicle />
@@ -24,13 +21,8 @@
 							<v-icon left color="primary">mdi-file-document</v-icon>
 							<span>{{ __("Job orders") }}</span>
 							<v-spacer></v-spacer>
-							<v-btn
-								icon
-								size="small"
-								@click="refreshDrafts"
-								:loading="loadDraftsLoading"
-								:aria-label="__('Refresh Drafts')"
-							>
+							<v-btn icon size="small" @click="refreshDrafts" :loading="loadDraftsLoading"
+								:aria-label="__('Refresh Drafts')">
 								<v-icon>mdi-refresh</v-icon>
 							</v-btn>
 						</div>
@@ -56,12 +48,8 @@
 						<v-divider></v-divider>
 
 						<div class="invoice-wrapper">
-							<Invoice
-								ref="invoiceComponent"
-								:items_group="items_group"
-								:item_group="item_group"
-								@update:item_group="handleItemGroupUpdate"
-							></Invoice>
+							<Invoice ref="invoiceComponent" :items_group="items_group" :item_group="item_group"
+								@update:item_group="handleItemGroupUpdate"></Invoice>
 						</div>
 					</div>
 				</div>
@@ -90,15 +78,8 @@
 									<v-icon>mdi-view-grid</v-icon>
 								</v-btn>
 							</v-btn-group> -->
-							<v-btn
-								icon
-								size="small"
-								color="primary"
-								variant="text"
-								@click="toggleFullscreen"
-								:title="isFullscreen ? __('Exit Fullscreen') : __('Fullscreen')"
-								class="ml-2"
-							>
+							<v-btn icon size="small" color="primary" variant="text" @click="toggleFullscreen"
+								:title="isFullscreen ? __('Exit Fullscreen') : __('Fullscreen')" class="ml-2">
 								<v-icon>{{
 									isFullscreen ? "mdi-arrow-collapse" : "mdi-arrow-expand"
 								}}</v-icon>
@@ -109,15 +90,10 @@
 						<!-- Scrollable Items List -->
 						<div class="column-scroll-content items-scroll">
 							<!-- KEY FIX: make view reactive for ItemsSelector -->
-							<ItemsSelector
-								:initial-view-mode="items_view"
-								:view-mode="items_view"
-								:item_group="item_group" 
-								@update-view-mode="handleItemsViewUpdate"
-								:is-modal="false"
-								:hide-filters="true"
-								ref="itemsSelectorComponent"
-							/>
+							<ItemsSelector :initial-view-mode="items_view" :view-mode="items_view"
+								:item_group="item_group" :external-search="first_search"
+								@update-view-mode="handleItemsViewUpdate" :is-modal="false" :hide-filters="true"
+								ref="itemsSelectorComponent" />
 						</div>
 
 						<!-- FOOTER FILTERS IN ITEMS COLUMN -->
@@ -125,8 +101,24 @@
 							<!-- Filter and Action Controls -->
 							<v-col cols="12">
 								<v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
+									<!-- SEARCH BAR - ADD THIS FIRST -->
+									<v-col cols="12" class="mb-2">
+										<v-text-field density="compact" clearable autofocus variant="solo"
+											color="#4169E1" placeholder="Search Items"
+											hint="Search by item code, serial number, batch no or barcode" hide-details
+											v-model="debounce_search" @keydown.esc="esc_event"
+											@keydown.enter="search_onchange" @click:clear="clearSearch"
+											prepend-inner-icon="mdi-magnify" ref="search_input">
+											<template v-slot:append-inner
+												v-if="pos_profile?.posa_enable_camera_scanning">
+												<v-btn icon="mdi-camera" size="small" color="primary" variant="text"
+													@click="startCameraScanning" :title="__('Scan with Camera')">
+												</v-btn>
+											</template>
+										</v-text-field>
+									</v-col>
 									<!-- Item Group and Price List -->
-									 <v-col cols="12" class="mb-2">
+									<v-col cols="12" class="mb-2">
 										<v-row dense>
 											<v-col cols="12" class="px-0">
 												<v-select :items="items_group" :label="__('Items Group')"
@@ -138,7 +130,7 @@
 										</v-row>
 									</v-col>
 
-											<!-- <v-col
+									<!-- <v-col
 												cols="12"
 												md="6"
 												class="pl-md-2"
@@ -258,6 +250,10 @@ export default {
 			offersCount: 0,
 			couponsCount: 0,
 			active_price_list: "",
+			first_search: "",
+			search: "",
+			search_backup: "",
+			search_from_scanner: false,
 		};
 	},
 
@@ -287,6 +283,15 @@ export default {
 			}
 			return this.active_price_list || "";
 		},
+
+		debounce_search: {
+			get() {
+				return this.first_search;
+			},
+			set(newValue) {
+				this.first_search = (newValue || "").trim();
+			},
+		},
 	},
 
 	watch: {
@@ -306,9 +311,68 @@ export default {
 			},
 			immediate: false,
 		},
+
+		first_search: {
+			handler(newVal) {
+				// Sync with ItemsSelector
+				if (this.$refs.itemsSelectorComponent) {
+					this.$refs.itemsSelectorComponent.first_search = newVal;
+				}
+			},
+		},
 	},
 
 	methods: {
+
+		onBarcodeScanned(scannedCode) {
+			this.search_from_scanner = true;
+			this.first_search = scannedCode;
+			this.search = scannedCode;
+
+			this.$nextTick(() => {
+				this.search_onchange();
+			});
+		},
+
+		search_onchange() {
+			const trimmedQuery = (this.first_search || "").trim();
+			if (trimmedQuery.length >= 3) {
+				// Trigger search in ItemsSelector with current item_group
+				if (this.$refs.itemsSelectorComponent) {
+					this.$refs.itemsSelectorComponent.first_search = trimmedQuery;
+					this.$refs.itemsSelectorComponent.search_onchange(trimmedQuery);
+				}
+			}
+		},
+
+		clearSearch() {
+			this.search_backup = this.first_search;
+			this.first_search = "";
+			this.search = "";
+
+			// Also clear in ItemsSelector
+			if (this.$refs.itemsSelectorComponent) {
+				this.$refs.itemsSelectorComponent.clearSearch();
+			}
+		},
+
+		esc_event() {
+			this.search = null;
+			this.first_search = null;
+			this.search_backup = null;
+
+			this.$nextTick(() => {
+				if (this.$refs.search_input) {
+					this.$refs.search_input.focus();
+				}
+			});
+		},
+
+		startCameraScanning() {
+			if (this.$refs.itemsSelectorComponent?.startCameraScanning) {
+				this.$refs.itemsSelectorComponent.startCameraScanning();
+			}
+		},
 		toggleFullscreen() {
 			this.isFullscreen = !this.isFullscreen;
 			this.$emit("toggle-fullscreen", this.isFullscreen);
@@ -382,6 +446,9 @@ export default {
 		handleItemGroupUpdate(newGroup) {
 			console.log("[POS] Item group updated:", newGroup);
 			this.item_group = newGroup;
+			// Clear search when changing group
+			this.first_search = "";
+			this.search = "";
 		},
 
 		handleItemsViewUpdate(newView) {
@@ -607,6 +674,10 @@ export default {
 			this.eventBus.on("update_coupons_counters", (data) => {
 				this.couponsCount = data.couponsCount || 0;
 			});
+
+			this.eventBus.on("barcode_scanned", (code) => {
+				this.onBarcodeScanned(code);
+			});
 		});
 	},
 
@@ -621,6 +692,7 @@ export default {
 		this.eventBus.off("draft_selected");
 		this.eventBus.off("update_offers_counters");
 		this.eventBus.off("update_coupons_counters");
+		this.eventBus.off("barcode_scanned");
 
 		if (this.isFullscreen) {
 			document.body.style.overflow = "";
@@ -666,7 +738,8 @@ export default {
 	left: 0;
 	right: 0;
 	bottom: 0;
-	z-index: 1100; /* Lower z-index - below dialogs but above normal content */
+	z-index: 1100;
+	/* Lower z-index - below dialogs but above normal content */
 	background: white;
 	overflow: auto;
 }
@@ -733,14 +806,17 @@ export default {
 	padding: 8px 6px;
 	overflow: hidden;
 	min-width: 0;
-	position: relative; /* Add this */
-	pointer-events: auto; /* Add this */
+	position: relative;
+	/* Add this */
+	pointer-events: auto;
+	/* Add this */
 }
 
 /* Ensure columns work in fullscreen */
 .fullscreen-mode .pos-column {
 	pointer-events: auto !important;
-	overflow: visible; /* Allow dropdowns to overflow */
+	overflow: visible;
+	/* Allow dropdowns to overflow */
 }
 
 .drafts-column {
@@ -748,7 +824,7 @@ export default {
 	padding-left: 1px;
 	padding-right: 2px;
 	flex-shrink: 0;
-	pointer-events: auto; 
+	pointer-events: auto;
 }
 
 .invoice-column {
@@ -757,7 +833,7 @@ export default {
 	padding-right: 3px;
 	flex-shrink: 0;
 	pointer-events: auto;
-	z-index: 2; 
+	z-index: 2;
 }
 
 .invoice-column .column-card {
@@ -770,7 +846,7 @@ export default {
 	padding-left: 2px;
 	padding-right: 1px;
 	flex-shrink: 0;
-	pointer-events: auto; 
+	pointer-events: auto;
 }
 
 /* Column Card */
@@ -870,7 +946,8 @@ export default {
 .btn-text {
 	display: flex;
 	flex-direction: column;
-	align-items: flex-start; /* left align next to icon */
+	align-items: flex-start;
+	/* left align next to icon */
 	justify-content: center;
 	line-height: 1;
 }
@@ -881,7 +958,8 @@ export default {
 	font-weight: 900;
 	line-height: 1;
 	display: inline-block;
-	white-space: nowrap; /* keep number + word on same line if space; otherwise truncate gracefully */
+	white-space: nowrap;
+	/* keep number + word on same line if space; otherwise truncate gracefully */
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
@@ -891,6 +969,7 @@ export default {
 	font-weight: 700;
 	margin-left: 6px;
 }
+
 /* Add clean spacing between Offers and Coupons buttons */
 .offer-btn-wrapper,
 .coupon-btn-wrapper {
@@ -900,11 +979,13 @@ export default {
 
 .offer-style-btn,
 .coupon-style-btn {
-	margin-right: 12px; /* spacing */
+	margin-right: 12px;
+	/* spacing */
 }
 
 .coupon-style-btn {
-	margin-left: 12px; /* spacing */
+	margin-left: 12px;
+	/* spacing */
 }
 
 /* optional subtitle (if used) */
@@ -925,6 +1006,7 @@ export default {
 
 /* Responsive: stack & full width on small screens */
 @media (max-width: 600px) {
+
 	.offer-style-btn,
 	.coupon-style-btn {
 		min-width: 100% !important;
@@ -1011,17 +1093,20 @@ export default {
 	background-color: white;
 	min-height: 0;
 }
-.pos-main-container > .v-row:nth-child(1),
-.pos-main-container > .v-row:nth-child(2),
-.pos-main-container > .v-row:nth-child(3),
-.pos-main-container > .v-row:nth-child(4),
-.pos-main-container > .v-row:nth-child(5),
-.pos-main-container > .v-row:nth-child(6) {
+
+.pos-main-container>.v-row:nth-child(1),
+.pos-main-container>.v-row:nth-child(2),
+.pos-main-container>.v-row:nth-child(3),
+.pos-main-container>.v-row:nth-child(4),
+.pos-main-container>.v-row:nth-child(5),
+.pos-main-container>.v-row:nth-child(6) {
 	display: none !important;
 }
+
 .items-scroll {
 	padding: 6px;
-	margin-bottom: 120px; /* Space for footer filters */
+	margin-bottom: 120px;
+	/* Space for footer filters */
 }
 
 /* Invoice Wrapper */
@@ -1032,13 +1117,16 @@ export default {
 	flex-direction: column;
 	width: 100%;
 	min-height: 0;
-	position: relative; /* Add this */
-	z-index: 1; /* Add this */
+	position: relative;
+	/* Add this */
+	z-index: 1;
+	/* Add this */
 }
 
 /* Ensure invoice content is scrollable and interactive in fullscreen */
 .fullscreen-mode .invoice-wrapper {
-	overflow: visible; /* Change from hidden */
+	overflow: visible;
+	/* Change from hidden */
 	pointer-events: auto !important;
 }
 
@@ -1047,7 +1135,8 @@ export default {
 	flex-direction: column;
 	height: 100%;
 	width: 100%;
-	pointer-events: auto; /* Add this */
+	pointer-events: auto;
+	/* Add this */
 }
 
 .invoice-wrapper :deep(.invoice-content) {
@@ -1057,9 +1146,12 @@ export default {
 	padding: 14px 16px;
 	background-color: #ffffff;
 	min-height: 0;
-	pointer-events: auto; /* Add this */
-	position: relative; /* Add this */
+	pointer-events: auto;
+	/* Add this */
+	position: relative;
+	/* Add this */
 }
+
 /* Items Footer Filters */
 .items-footer-filters {
 	position: absolute;
@@ -1188,21 +1280,50 @@ export default {
 .fullscreen-mode .invoice-wrapper :deep(.v-input__append),
 .fullscreen-mode .invoice-wrapper :deep(.v-input__append-inner),
 .fullscreen-mode .invoice-wrapper :deep(.v-field__append-inner) {
-    position: relative !important;
-    z-index: 999999 !important;
-    pointer-events: auto !important;
+	position: relative !important;
+	z-index: 999999 !important;
+	pointer-events: auto !important;
 }
 
 /* Fix for autocomplete menu overlapping */
 .fullscreen-mode :deep(.v-overlay__content) {
-    z-index: 999999 !important;
-    position: fixed !important;
+	z-index: 999999 !important;
+	position: fixed !important;
 }
 
 /* Ensure append icons remain clickable */
 .fullscreen-mode :deep(.v-icon) {
-    pointer-events: auto !important;
+	pointer-events: auto !important;
 }
 
+/* Footer Search Bar Styling */
+.items-footer-filters {
+	position: absolute;
+	width: 100%;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	background: white;
+	border-top: 1px solid #e5e7eb;
+	padding: 12px;
+	z-index: 100;
+}
 
+.items-footer-filters .v-text-field {
+	margin-bottom: 12px;
+}
+
+.items-footer-filters .v-text-field:deep(.v-field) {
+	border-radius: 8px;
+	background-color: white;
+}
+
+.items-footer-filters .v-text-field:deep(input) {
+	padding: 8px !important;
+}
+
+/* Ensure search input is focused when clicked */
+.items-footer-filters .v-text-field:deep(.v-field__input) {
+	cursor: text;
+}
 </style>

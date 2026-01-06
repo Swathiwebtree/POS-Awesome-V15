@@ -3,25 +3,42 @@ export function useDiscounts() {
 	// Update additional discount amount based on percentage
 	// -----------------------------
 	const updateDiscountAmount = (context) => {
-		const value = flt(context.additional_discount_percentage);
+	const value = flt(context.additional_discount_percentage);
 
-		// Guard invalid values
-		if (value < -100 || value > 100) {
-			context.additional_discount_percentage = 0;
-			context.additional_discount = 0;
-			return;
-		}
+	// Guard invalid values
+	if (value < -100 || value > 100) {
+		context.additional_discount_percentage = 0;
+		context.additional_discount = 0;
+		return;
+	}
 
-		if (context.Total && context.Total !== 0) {
-			context.additional_discount = (context.Total * value) / 100;
-		} else {
-			context.additional_discount = 0;
+	//  ENFORCE CUSTOMER-TYPE MAX DISCOUNT
+	if (context.maxDiscountInfo) {
+		const max = context.maxDiscountInfo.invoice_max_discount || 0;
+
+		if (value > max) {
+			frappe.show_alert({
+				message: __(
+					"Maximum allowed discount for this customer is {0}%",
+					[max]
+				),
+				indicator: "red",
+			});
+			context.additional_discount_percentage = max;
 		}
-	};
+	}
+
+	if (context.Total && context.Total !== 0) {
+		context.additional_discount =
+			(context.Total * context.additional_discount_percentage) / 100;
+	} else {
+		context.additional_discount = 0;
+	}
+};
+
 
 	// -----------------------------
 	// Calculate prices on field change
-	// -----------------------------
 	const calcPrices = (item, value, $event, context) => {
 		if (!item || !$event?.target?.id) return;
 
@@ -52,6 +69,46 @@ export function useDiscounts() {
 		const fieldId = $event.target.id;
 		let newValue = flt(value, context.currency_precision);
 
+		// ==================================================
+		// 🔒 CUSTOMER TYPE / MAX DISCOUNT VALIDATION (ADDED)
+		// ==================================================
+		if (
+			(fieldId === "discount_percentage" || fieldId === "discount_amount") &&
+			typeof context.validateDiscount === "function"
+		) {
+			let pct = 0;
+
+			if (fieldId === "discount_percentage") {
+				pct = flt(newValue);
+			}
+
+			if (fieldId === "discount_amount") {
+				const gross = item.price_list_rate * item.qty;
+				pct = gross ? (flt(newValue) / gross) * 100 : 0;
+			}
+
+			if (!context.validateDiscount(item, pct)) {
+				item.discount_percentage = 0;
+				item.discount_amount = 0;
+
+				// reset rate safely
+				item.rate = context.flt(item.price_list_rate, context.currency_precision);
+				item.base_rate = context.flt(
+					item.price_list_rate / (context.exchange_rate || 1),
+					context.currency_precision
+				);
+
+				item.amount = context.flt(item.qty * item.rate, context.currency_precision);
+				item.base_amount = context.flt(
+					item.amount / (context.exchange_rate || 1),
+					context.currency_precision
+				);
+
+				if (context.forceUpdate) context.forceUpdate();
+				return; // ⛔ STOP INVALID DISCOUNT
+			}
+		}
+
 		try {
 			// Mark manual rate edits
 			if (fieldId === "rate") {
@@ -73,9 +130,9 @@ export function useDiscounts() {
 			const converted_price_list_rate =
 				context.selected_currency !== baseCurrency
 					? context.flt(
-							item.price_list_rate / (context.exchange_rate || 1),
-							context.currency_precision
-					  )
+						item.price_list_rate / (context.exchange_rate || 1),
+						context.currency_precision
+					)
 					: item.price_list_rate;
 
 			switch (fieldId) {

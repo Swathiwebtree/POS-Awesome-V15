@@ -48,19 +48,20 @@
 						{{ Math.trunc(item.qty) }}
 					</div>
 
-
 					<!-- Increase -->
-					<v-btn class="qty-btn qty-increase" icon size="small" :disabled="
-							!!item.posa_is_replace ||
-							((!stock_settings.allow_negative_stock ||
+					<v-btn class="qty-btn qty-increase" icon size="small" :disabled="!!item.posa_is_replace ||
+						(
+							(!stock_settings.allow_negative_stock ||
 								pos_profile.posa_block_sale_beyond_available_qty) &&
-								item.max_qty !== undefined &&
-								item.qty >= item.max_qty)
+							item.max_qty !== undefined &&
+							item.qty >= item.max_qty
+						)
 						" @click.stop="addOne(item)" :aria-label="__('Increase quantity')" title="Increase">
 						<v-icon size="18">mdi-plus</v-icon>
 					</v-btn>
 				</div>
 			</template>
+
 
 			<!-- Rate column (hidden if shouldHidePricing is true) -->
 			<template v-if="!shouldHidePricingForItem(item)" v-slot:item.rate="{ item }">
@@ -401,11 +402,7 @@
 						!!item.posa_is_replace ||
 						!!item.posa_offer_applied ||
 						item.item_group === 'Engine Oil'
-						" @change="[
-							item.discount_percentage = Math.round($event.target.value || 0),
-							setFormatedCurrency(item, 'discount_percentage', null, false, $event),
-							this.calcPrices(item, $event.target.value, $event),
-						]" prepend-inner-icon="mdi-percent" />
+						" @input="applyItemDiscount(item, $event.target.value)" prepend-inner-icon="mdi-percent" />
 			</template>
 
 		</v-data-table-virtual>
@@ -429,6 +426,7 @@
 
 <script>
 import _ from "lodash";
+import { useDiscounts } from "@/posapp/composables/useDiscounts";
 export default {
 	name: "ItemsTable",
 	props: {
@@ -498,6 +496,78 @@ export default {
 		},
 	},
 	methods: {
+		addOne(item) {
+			item.qty = Number(item.qty || 0) + 1;
+
+			//  auto-apply bulk discount if eligible
+			this.applyAutoDiscountIfEligible(item);
+		},
+
+		subtractOne(item) {
+			if (Number(item.qty) <= 1) return;
+
+			item.qty = Number(item.qty) - 1;
+
+			//  re-check bulk condition
+			this.applyAutoDiscountIfEligible(item);
+
+		},
+
+		applyAutoDiscountIfEligible(item) {
+			const rule =
+				this.$parent.maxDiscountInfo?.item_level_caps?.[item.item_code];
+
+			if (!rule) return;
+
+			const qty = Number(item.qty) || 0;
+
+			// BULK CONDITION MET
+			if (rule.min_qty && qty >= rule.min_qty) {
+				if ((item.discount_percentage || 0) < rule.max_discount) {
+					item.discount_percentage = rule.max_discount;
+
+					this.calcPrices(
+						item,
+						item.discount_percentage,
+						{ target: { id: "discount_percentage" } },
+						this
+					);
+
+					this.calcItemPrice(item, this);
+				}
+			}
+		},
+
+		applyItemDiscount(item, value) {
+			const discount = Number(value) || 0;
+
+			// Respect max cap if present
+			const cap =
+				this.$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code]?.max_discount ??
+				this.$parent?.maxDiscountInfo?.invoice_max_discount ??
+				100;
+
+			if (discount > cap) {
+				item.discount_percentage = cap;
+
+				this.$parent.eventBus.emit("show_message", {
+					title: __("Discount limited"),
+					message: __(`Max allowed discount is ${cap}%`),
+					color: "warning",
+				});
+			} else {
+				item.discount_percentage = discount;
+			}
+
+			this.calcPrices(
+				item,
+				item.discount_percentage,
+				{ target: { id: "discount_percentage" } },
+				this
+			);
+
+			this.calcItemPrice(item, this);
+		},
 
 		shouldHidePricingForItem(item) {
 			if (!item) return false;

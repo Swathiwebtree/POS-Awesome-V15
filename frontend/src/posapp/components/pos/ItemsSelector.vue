@@ -26,7 +26,7 @@
 			<div class="dynamic-padding">
 				<div class="sticky-header">
 					<v-row class="items">
-						<v-col class="pb-0">
+						<!-- <v-col class="pb-0">
 							<v-text-field
 								density="compact"
 								clearable
@@ -56,7 +56,7 @@
 									</v-btn>
 								</template>
 							</v-text-field>
-						</v-col>
+						</v-col> -->
 						<v-col cols="3" class="pb-0" v-if="pos_profile.posa_input_qty">
 							<v-text-field
 								density="compact"
@@ -505,10 +505,20 @@ export default {
 			type: String,
 			default: "ALL",
 		},
+		externalSearch: {
+			type: String,
+			default: "",
+		},
 	},
 
 
 	watch: {
+		externalSearch(newVal) {
+			if (newVal && newVal !== this.first_search) {
+				this.first_search = newVal;
+				this.search_onchange(newVal);
+			}
+		},
 		// ADD THIS NEW WATCHER
 		items_view: {
 			handler(newVal) {
@@ -790,6 +800,15 @@ export default {
 
 			let filtered = this.items;
 
+			// FILTER BY ITEM GROUP FIRST
+			if (this.item_group && this.item_group !== "ALL") {
+				filtered = filtered.filter((item) => {
+					return item.item_group &&
+						item.item_group.toLowerCase() === this.item_group.toLowerCase();
+				});
+			}
+
+			// THEN APPLY SEARCH TERM
 			if (searchTerm && searchTerm.trim().length >= 3) {
 				const term = searchTerm.toLowerCase();
 
@@ -2779,7 +2798,15 @@ export default {
 			const searchTerm = this.get_search(this.first_search).trim().toLowerCase();
 			let filteredItems = [...this.items];
 
-			// Apply search filter only for queries with at least three characters
+			// STEP 1: FILTER BY ITEM GROUP
+			if (this.item_group && this.item_group !== "ALL") {
+				filteredItems = filteredItems.filter((item) => {
+					return item.item_group &&
+						item.item_group.toLowerCase() === this.item_group.toLowerCase();
+				});
+			}
+
+			// STEP 2: APPLY SEARCH FILTER
 			if (searchTerm.length >= 3) {
 				filteredItems = filteredItems.filter((item) => {
 					const barcodeList = [];
@@ -2812,21 +2839,21 @@ export default {
 				});
 			}
 
-			// Apply zero rate filter
+			// STEP 3: APPLY ZERO RATE FILTER
 			if (this.hide_zero_rate_items) {
 				filteredItems = filteredItems.filter((item) => parseFloat(item.rate || 0) > 0);
 			}
 
-			// Apply template/variant filter
+			// STEP 4: APPLY TEMPLATE/VARIANT FILTER
 			if (this.pos_profile?.posa_hide_variants_items) {
 				filteredItems = filteredItems.filter((item) => !item.variant_of);
 			}
 
-			// Apply pagination
+			// STEP 5: APPLY PAGINATION
 			const limit = this.enable_custom_items_per_page ? this.items_per_page : this.itemsPerPage;
 			filteredItems = filteredItems.slice(0, limit);
 
-			// Ensure quantities are defined
+			// STEP 6: ENSURE QUANTITIES ARE DEFINED
 			filteredItems.forEach((item) => {
 				if (item.actual_qty === undefined || item.actual_qty === null) {
 					item.actual_qty = 0;

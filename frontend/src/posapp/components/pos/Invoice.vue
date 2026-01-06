@@ -304,6 +304,8 @@
 		<!-- Fixed Footer Controls -->
 		<div class="invoice-controls">
 			<InvoiceSummary
+			    @apply-group-discount="applyItemGroupDiscount"
+			    :maxDiscountInfo="maxDiscountInfo"
 				:pos_profile="pos_profile"
 				:total_qty="total_qty"
 				:additional_discount="additional_discount"
@@ -442,6 +444,7 @@ export default {
 			available_columns: [], // All available columns
 			show_column_selector: false, // Column selector dialog visibility
 			invoice_instance_id: null,
+			maxDiscountInfo: null,
 		};
 	},
 
@@ -470,6 +473,25 @@ export default {
 		handleItemGroupUpdate(newGroup) {
 			this.item_group = newGroup;
 		},
+
+		async fetchMaxDiscount() {
+			if (!this.customer) {
+				this.maxDiscountInfo = null;
+				return;
+			}
+
+			const res = await frappe.call({
+				method: "posawesome.posawesome.api.discounts.get_max_discount",
+				args: {
+					customer: this.customer,
+				},
+			});
+
+			this.maxDiscountInfo = res.message || null;
+
+			console.log("[MAX DISCOUNT]", this.maxDiscountInfo);
+		},
+
 
 		recalculateTotals() {
 			const precision = this.currency_precision;
@@ -568,6 +590,91 @@ export default {
 				});
 			}
 		},
+
+		validateDiscount(item, discountPercentage) {
+			// No discount info yet → allow temporarily
+			if (!this.maxDiscountInfo) return true;
+
+			// ENGINE OIL — HARD BLOCK
+			if ((item.item_group || "").trim() === "Engine Oil") {
+				frappe.show_alert({
+					message: __("Discount not allowed for Engine Oil items"),
+					indicator: "red",
+				});
+				return false;
+			}
+
+			const invoiceCap = this.maxDiscountInfo.invoice_max_discount || 0;
+
+			//  CUSTOMER-TYPE MAX DISCOUNT
+			if (discountPercentage > invoiceCap) {
+				frappe.show_alert({
+					message: __(
+						"Maximum allowed discount for this customer is {0}%",
+						[invoiceCap]
+					),
+					indicator: "red",
+				});
+				return false;
+			}
+
+			return true;
+		},
+
+
+
+		applyItemGroupDiscount({ group, percentage }) {
+
+			//  ENGINE OIL BLOCK
+			if ((group || "").trim() === "Engine Oil") {
+				frappe.show_alert({
+					message: __("Group discount is not allowed for Engine Oil items"),
+					indicator: "red",
+				});
+				return;
+			}
+
+			// Store group discount (UI chips)
+			if (percentage > 0) {
+				this.itemGroupDiscounts[group] = percentage;
+			} else {
+				delete this.itemGroupDiscounts[group];
+			}
+
+			this.items.forEach(item => {
+
+				if ((item.item_group || "").trim() !== group) return;
+
+				// VALIDATION (IMPORTANT)
+				if (!this.validateDiscount(item, percentage)) {
+					return;
+				}
+
+				const gross = item.price_list_rate * item.qty;
+
+				item.discount_percentage = percentage;
+
+				item.discount_amount = this.flt(
+					(gross * percentage) / 100,
+					this.currency_precision
+				);
+
+				item.rate = this.flt(
+					(gross - item.discount_amount) / item.qty,
+					this.currency_precision
+				);
+
+				item.amount = this.flt(item.qty * item.rate, this.currency_precision);
+			});
+
+			this.$nextTick(() => {
+				this.update_totals();
+				this.apply_additional_discount();
+				this.$forceUpdate();
+			});
+		},
+
+
 
 		checkForEngineOilItem() {
 
@@ -700,14 +807,31 @@ export default {
 			});
 		},
 
-		// Recalculate subtotal and total qty
 		update_totals() {
-              this.subtotal = this.items.reduce((sum, i) => sum + i.qty * i.rate, 0);			
-			 this.total_qty = this.items.reduce(
+			// Subtotal AFTER discounts
+			this.subtotal = this.flt(
+				this.items.reduce((sum, i) => sum + i.qty * i.rate, 0),
+				this.currency_precision
+			);
+
+			// Total qty
+			this.total_qty = this.items.reduce(
 				(sum, i) => sum + Math.trunc(i.qty),
 				0
 			);
+
+			//  TOTAL ITEMS DISCOUNT (CRITICAL FIX)
+			this.total_items_discount_amount = this.flt(
+				this.items.reduce((sum, i) => sum + (i.discount_amount || 0), 0),
+				this.currency_precision
+			);
+
+			// Sync into invoice_doc
+			if (this.invoice_doc) {
+				this.invoice_doc.discount_amount = this.total_items_discount_amount;
+			}
 		},
+
 
 		// Handle item dropped from ItemsSelector to ItemsTable
 		handleItemDrop(item) {
@@ -1451,6 +1575,8 @@ export default {
 					// flags
 					row.is_service_item = row.is_service_item ? 1 : 0;
 					row.update_stock = typeof row.update_stock !== 'undefined' ? row.update_stock : (row.is_service_item ? 0 : 1);
+					row.group_discount_percentage = it.group_discount_percentage || 0;
+					row.group_discount_applied = it.group_discount_applied || '';
 
 					return row;
 				});
@@ -2320,6 +2446,98 @@ export default {
 
 	mounted() {
 
+		// Get items by group for discount calculation
+		this.eventBus.on('get_items_by_group', (data) => {
+			const { group, callback } = data;
+			const itemsInGroup = this.items.filter(item => {
+				return (item.item_group || '').trim() === group;
+			});
+			if (typeof callback === 'function') {
+				callback(itemsInGroup);
+			}
+		});
+
+		// Apply group discount to all items in that group
+		this.eventBus.on('apply_group_discount', (data) => {
+			const { group } = data;
+			const rawDiscount =
+				typeof data.discountPercentage === "number"
+					? data.discountPercentage
+					: Number(data.percentage || 0);
+			const discountPercentage = Number.isFinite(rawDiscount) ? rawDiscount : 0;
+
+			console.log('[GroupDiscount] Applying to group:', group, 'discount:', discountPercentage);
+
+			let itemsUpdated = 0;
+
+			this.items.forEach(item => {
+				if ((item.item_group || '').trim() === group) {
+					// Store original values if not stored
+					if (!item.original_rate) {
+						item.original_rate = item.rate;
+						item.original_price_list_rate = item.price_list_rate;
+					}
+					if (item.original_discount_amount === undefined || item.original_discount_amount === null) {
+						item.original_discount_amount = item.discount_amount || 0;
+					}
+					if (item.original_price_list_rate === undefined || item.original_price_list_rate === null) {
+						item.original_price_list_rate = item.price_list_rate || item.original_rate || 0;
+					}
+
+					// Calculate discount from original rate
+					const discountAmount = (Number(item.original_rate) * discountPercentage) / 100;
+
+					// Update item
+					item.discount_percentage = discountPercentage;
+					item.discount_amount = Number(item.original_discount_amount) + discountAmount;
+					item.rate = Number(item.original_rate) - discountAmount;
+					item.amount = Number(item.qty || 0) * Number(item.rate);
+					item.group_discount_percentage = discountPercentage;
+					item.group_discount_applied = group;
+
+					itemsUpdated++;
+				}
+			});
+
+			console.log('[GroupDiscount] Updated', itemsUpdated, 'items');
+
+			this.$nextTick(() => {
+				this.apply_additional_discount();
+				this.$forceUpdate();
+			});
+		});
+
+		// Remove group discount
+		this.eventBus.on('remove_group_discount', (data) => {
+			const { group } = data;
+
+			console.log('[GroupDiscount] Removing from group:', group);
+
+			this.items.forEach(item => {
+				if ((item.item_group || '').trim() === group && item.group_discount_applied) {
+					// Restore original values
+					if (item.original_rate) {
+						item.rate = item.original_rate;
+						item.price_list_rate = item.original_price_list_rate || item.rate;
+						item.discount_amount = item.original_discount_amount || 0;
+						item.discount_percentage = 0;
+					}
+
+					// Clear group discount markers
+					item.group_discount_percentage = 0;
+					item.group_discount_applied = null;
+
+					// Recalculate amount
+					item.amount = Number(item.qty || 0) * Number(item.rate);
+				}
+			});
+
+			this.$nextTick(() => {
+				this.apply_additional_discount();
+				this.$forceUpdate();
+			});
+		});
+
 		this.eventBus.on("force_payment_refresh", () => {
 			this.recalculateTotals();
 		});
@@ -2509,6 +2727,17 @@ export default {
 
 			this.fetch_price_lists();
 			this.update_price_list();
+
+			
+          // Emit item groups immediately after profile is registered
+			this.$nextTick(() => {
+				const groups = [...new Set(
+					(this.items || [])
+						.map(item => (item.item_group || '').trim())
+						.filter(Boolean)
+				)];
+				this.eventBus.emit('register_item_groups', groups);
+			});
 		});
 
 		this.eventBus.on("add_item", (item) => {
@@ -2647,6 +2876,10 @@ export default {
 		this.eventBus.off("update_odometer_data");
         this.eventBus.off("update_customer_details");
 		this.eventBus.off("update_manual_round_off");
+
+		this.eventBus.off('get_items_by_group');
+		this.eventBus.off('apply_group_discount');
+		this.eventBus.off('remove_group_discount');
 	},
 
 	// Register global keyboard shortcuts when component is created
@@ -2668,7 +2901,129 @@ export default {
 	watch: {
 		...invoiceWatchers,
 
-		// Watch invoice_doc changes and broadcast them
+		items_group: {
+			handler(newVal) {
+				if (Array.isArray(newVal)) {
+					// Update available item groups
+					this.availableItemGroups = newVal;
+				}
+			},
+			deep: true
+		},
+
+		// CUSTOMER WATCH
+		customer(newVal) {
+			if (!newVal) return;
+
+			// FETCH MAX DISCOUNT HERE
+			this.$nextTick(() => {
+				this.fetchMaxDiscount();
+			});
+
+			// keep existing sync
+			if (this.invoice_doc) {
+				this.invoice_doc.customer = newVal;
+			}
+		},
+
+		// ITEMS WATCH (SINGLE, MERGED)
+		items: {
+			deep: true,
+			handler(newItems) {
+
+				if (this.invoice_doc) {
+					this.invoice_doc.items = newItems;
+				}
+
+				const hasOilItem = this.checkForEngineOilItem();
+				this.eventBus.emit("show_odometer_field", hasOilItem);
+
+				if (!hasOilItem) {
+					this.custom_odometer_reading = null;
+					if (this.invoice_doc) {
+						this.invoice_doc.custom_has_oil_item = 0;
+						this.invoice_doc.custom_odometer_reading = null;
+					}
+				} else if (this.invoice_doc) {
+					this.invoice_doc.custom_has_oil_item = 1;
+				}
+
+				const hasCarWashService = this.checkForCarWashServices();
+				this.eventBus.emit("show_employee_selection", hasCarWashService);
+
+				if (!hasCarWashService && this.service_employee) {
+					this.clearServiceEmployee();
+				}
+
+				// Update item groups when items change
+				this.$nextTick(() => {
+					const groups = [...new Set(
+						(newItems || [])
+							.map(item => (item.item_group || '').trim())
+							.filter(Boolean)
+					)];
+					console.log('[Invoice] Emitting item groups:', groups);
+					this.eventBus.emit('register_item_groups', groups);
+				});
+
+				this.$nextTick(() => {
+					if (this.invoice_doc) {
+						this.invoice_doc.net_total = this.subtotal;
+						this.invoice_doc.grand_total = this.grand_total;
+						this.invoice_doc.rounded_total = this.rounded_total;
+						this.invoice_doc.total_qty = this.total_qty;
+
+						this.invoice_doc.custom_odometer_reading =
+							this.custom_odometer_reading ||
+							this.invoice_doc.custom_odometer_reading ||
+							null;
+
+						this.invoice_doc.contact_mobile =
+							this.contact_mobile ||
+							this.invoice_doc.contact_mobile ||
+							"";
+
+						this.invoice_doc.custom_vehicle_no =
+							this.custom_vehicle_no ||
+							this.invoice_doc.custom_vehicle_no ||
+							"";
+					}
+
+
+					//  RE-VALIDATE DISCOUNTS ON QTY / ITEM CHANGE
+					this.$nextTick(() => {
+						if (!this.maxDiscountInfo) return;
+
+						this.items.forEach(item => {
+							if (item.discount_percentage > 0) {
+								if (!this.validateDiscount(item, item.discount_percentage)) {
+									item.discount_percentage = 0;
+									item.discount_amount = 0;
+
+									item.rate = this.flt(item.price_list_rate, this.currency_precision);
+									item.base_rate = this.flt(
+										item.price_list_rate / (this.exchange_rate || 1),
+										this.currency_precision
+									);
+
+									item.amount = this.flt(item.qty * item.rate, this.currency_precision);
+									item.base_amount = this.flt(
+										item.amount / (this.exchange_rate || 1),
+										this.currency_precision
+									);
+								}
+							}
+						});
+					});
+
+					this.$forceUpdate();
+					this.apply_additional_discount();
+
+				});
+			},
+		},
+
+		// OTHER WATCHERS (UNCHANGED)
 		invoice_doc: {
 			handler(newVal) {
 				if (newVal) {
@@ -2678,81 +3033,11 @@ export default {
 			deep: true,
 		},
 
-		// Watch items changes and update invoice_doc (single consolidated watcher)
-		items: {
-			handler(newItems, oldItems) {
-
-				// Update invoice_doc items (keep invoice_doc in sync)
-				if (this.invoice_doc) {
-					this.invoice_doc.items = newItems;
-				}
-
-				// --- Engine oil / odometer handling ---
-				const hasOilItem = this.checkForEngineOilItem();
-				// Notify InvoiceSummary (or other listeners) whether to show odometer
-				this.eventBus.emit("show_odometer_field", hasOilItem);
-
-				// If no engine-oil items, clear only the odometer reading (keep mobile/vehicle)
-				if (!hasOilItem) {
-					this.custom_odometer_reading = null;
-					if (this.invoice_doc) {
-						// use 0/false depending what backend expects
-						this.invoice_doc.custom_has_oil_item = 0;
-						this.invoice_doc.custom_odometer_reading = null;
-					}
-				} else {
-					// if has oil, ensure invoice_doc flag is set so load/save knows about it
-					if (this.invoice_doc) {
-						this.invoice_doc.custom_has_oil_item = 1;
-					}
-				}
-
-				// --- Car wash / employee handling ---
-				const hasCarWashService = this.checkForCarWashServices();
-				// Emit event to show/hide employee selection in summary
-				this.eventBus.emit("show_employee_selection", hasCarWashService);
-
-				// If no car wash services, clear any selected employee
-				if (!hasCarWashService && this.service_employee) {
-					this.clearServiceEmployee();
-				}
-
-				// --- Force Vue to recalculate computed properties and re-sync totals ---
-				this.$nextTick(() => {
-					// Sync all computed totals to invoice_doc
-					if (this.invoice_doc) {
-						this.invoice_doc.net_total = this.subtotal;
-						this.invoice_doc.grand_total = this.grand_total;
-						this.invoice_doc.rounded_total = this.rounded_total;
-						this.invoice_doc.total_qty = this.total_qty;
-
-						// Also keep odometer/mobile/vehicle in invoice_doc if present in component state
-						// (do not overwrite mobile/vehicle when odometer cleared earlier)
-						this.invoice_doc.custom_odometer_reading = this.custom_odometer_reading || this.invoice_doc.custom_odometer_reading || null;
-						this.invoice_doc.contact_mobile = this.contact_mobile || this.invoice_doc.contact_mobile || "";
-						this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no || this.invoice_doc.custom_vehicle_no || "";
-					}
-
-					// Force UI update
-					this.$forceUpdate();
-
-					// Recalculate discounts
-					this.apply_additional_discount();
-				});
-			},
-			deep: true,
-			immediate: false,
-		},
-
-		// Watch totals and sync to invoice_doc
 		grand_total(newVal) {
 			if (this.invoice_doc) {
 				this.invoice_doc.grand_total = newVal;
 				this.invoice_doc.rounded_total = this.rounded_total;
 			}
-		},
-
-		total_qty(newVal) {
 		},
 
 		subtotal(newVal) {
@@ -2761,16 +3046,9 @@ export default {
 			}
 		},
 
-		// WATCH DISCOUNT
 		discount_amount(newVal) {
 			if (this.invoice_doc) {
 				this.invoice_doc.discount_amount = newVal;
-			}
-		},
-
-		customer(newVal) {
-			if (this.invoice_doc) {
-				this.invoice_doc.customer = newVal;
 			}
 		},
 
@@ -2788,9 +3066,9 @@ export default {
 					this.updateServiceEmployeeInDoc();
 				}
 			},
-			immediate: false,
 		},
 	},
+
 
 };
 </script>
@@ -3072,6 +3350,28 @@ export default {
 	justify-content: center; /* center horizontally inside the column */
 	gap: 8px;
 	min-width: 120px; /* helps keep column width stable */
+}
+
+.item-group-discount-card {
+  background: linear-gradient(135deg, rgba(25, 118, 210, 0.08), rgba(66, 165, 245, 0.04));
+  border: 1px solid rgba(25, 118, 210, 0.2);
+  border-radius: 12px !important;
+  transition: all 0.3s ease;
+}
+
+.item-group-discount-card:hover {
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
+}
+
+.discounts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:deep(.v-theme--dark) .item-group-discount-card {
+  background: linear-gradient(135deg, rgba(144, 202, 249, 0.08), rgba(66, 165, 245, 0.04));
+  border-color: rgba(144, 202, 249, 0.2);
 }
 
 /* tighten button sizes and ensure good tap targets */

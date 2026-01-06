@@ -4,7 +4,7 @@
 		<v-dialog v-model="closingDialog" max-width="900px" persistent attach="body">
 			<v-card elevation="8" class="closing-dialog-card">
 				<!-- Header -->
-				<v-card-title class="closing-header pa-6 d-flex align-center">
+				<v-card-title class="closing-header d-flex align-center">
 					<div class="header-content">
 						<div class="header-icon-wrapper">
 							<v-icon class="header-icon" size="40">mdi-store-clock-outline</v-icon>
@@ -47,7 +47,6 @@
 
 								<!-- Data table -->
 								<v-data-table
-									:headers="headers"
 									:items="dialog_data.payment_reconciliation"
 									item-key="mode_of_payment"
 									class="elevation-0 rounded-lg white-table"
@@ -55,44 +54,62 @@
 									hide-default-footer
 									density="compact"
 								>
-									<!-- mode label cell -->
+
+								<template #headers>
+										<tr>
+											<th class="text-left">Mode of Payment</th>
+											<th class="text-right">Opening Amount</th>
+											<th class="text-right">Expected Amount</th>
+											<th class="text-right">Closing Amount</th>
+											<th class="text-right">Difference</th>
+										</tr>
+									</template>
+
+									<!-- Mode -->
 									<template v-slot:item.mode_of_payment="{ item }">
 										<div class="mode-cell">{{ item.mode_of_payment }}</div>
 									</template>
 
-									<!-- editable closing amount with number modifier -->
-									<template v-slot:item.closing_amount="props">
-										<v-text-field
-											v-model.number="props.item.closing_amount"
-											:rules="[closingAmountRule]"
-											single-line
-											type="number"
-											density="compact"
-											variant="outlined"
-											color="primary"
-											class="pos-themed-input closing-input"
-											hide-details
-											:prefix="companyCurrencySymbol"
-										/>
-									</template>
-
+									<!-- Opening -->
 									<template v-slot:item.opening_amount="{ item }">
-										{{ companyCurrencySymbol }}{{ formatCurrency(item.opening_amount) }}
+										{{ companyCurrencySymbol }}{{ formatCurrency(item.opening_amount || 0) }}
 									</template>
 
+									<!-- Expected -->
 									<template v-slot:item.expected_amount="{ item }">
-										{{ companyCurrencySymbol }}{{ formatCurrency(item.expected_amount) }}
+										{{ companyCurrencySymbol }}{{ formatCurrency(item.expected_amount || 0) }}
 									</template>
 
-									<template v-slot:item.difference="{ item }">
-										{{ companyCurrencySymbol
-										}}{{
-											formatCurrency(
-												(Number(item.expected_amount) || 0) -
-													(Number(item.closing_amount) || 0),
-											)
-										}}
+									<!-- Closing (INPUT) -->
+									<template v-slot:item.closing_amount="{ item }">
+										<v-text-field v-model.number="item.closing_amount" single-line type="number"
+											density="compact" variant="outlined" hide-details
+											:prefix="companyCurrencySymbol" />
 									</template>
+
+									<!-- Difference -->
+									<template v-slot:item.difference="{ item }">
+										<div :class="{
+											'difference-cell-warning':
+												(Number(item.expected_amount) || 0) -
+												(Number(item.closing_amount) || 0) > 0,
+
+											'difference-cell-excess':
+												(Number(item.expected_amount) || 0) -
+												(Number(item.closing_amount) || 0) < 0
+										}">
+											{{ companyCurrencySymbol }}
+											{{
+												formatCurrency(
+													(Number(item.expected_amount) || 0) -
+													(Number(item.closing_amount) || 0)
+											)
+											}}
+										</div>
+									</template>
+
+
+
 								</v-data-table>
 								<!-- Grand totals -->
 								<v-divider class="my-4" />
@@ -122,7 +139,7 @@
 						class="pos-action-btn submit-action-btn"
 						size="large"
 						elevation="2"
-						:disabled="isSubmitting"
+						:disabled="isSubmitting || hasAnyDifference"
 					>
 						<v-icon start>mdi-check-circle-outline</v-icon>
 						<span>{{ isSubmitting ? __("Processing...") : __("Submit") }}</span>
@@ -190,6 +207,14 @@ export default {
 
 	computed: {
 
+		hasAnyDifference() {
+			return (this.dialog_data.payment_reconciliation || []).some((p) => {
+				const expected = Number(p.expected_amount) || 0;
+				const closing = Number(p.closing_amount) || 0;
+				return expected - closing !== 0;
+			});
+		},
+
 		totalExpectedAmount() {
 			return (this.dialog_data.payment_reconciliation || []).reduce(
 				(sum, p) => sum + (Number(p.expected_amount) || 0),
@@ -210,6 +235,29 @@ export default {
 			const symbol = this.currencySymbol(currency);
 			return symbol || currency || "";
 		},
+
+		paymentShortfalls() {
+			return (this.dialog_data.payment_reconciliation || []).map((p) => {
+				const expected = Number(p.expected_amount) || 0;
+				const closing = Number(p.closing_amount) || 0;
+				const difference = expected - closing;
+				return {
+					mode: p.mode_of_payment,
+					difference: difference,
+					hasShortfall: difference > 0,
+					expected: expected,
+					closing: closing,
+				};
+			});
+		},
+
+		hasAnyShortfall() {
+			return this.paymentShortfalls.some((s) => s.hasShortfall);
+		},
+
+		shortfallPayments() {
+			return this.paymentShortfalls.filter((s) => s.hasShortfall);
+		},
 	},
 
 	methods: {
@@ -224,20 +272,34 @@ export default {
 			}
 
 			const reconciliation = this.dialog_data?.payment_reconciliation || [];
+
+			// 1. Validate closing amounts are valid numbers
 			const invalid = reconciliation.some((p) => isNaN(parseFloat(p.closing_amount)));
 			if (invalid) {
 				alert(this.__("Invalid closing amount"));
 				return;
 			}
-			if (this.totalExpectedAmount !== this.totalClosingAmount) {
+
+			// Positive difference = Expected - Closing > 0 (means closing is LESS than expected)
+			const hasAnyDifference = reconciliation.some((p) => {
+				const expected = Number(p.expected_amount) || 0;
+				const closing = Number(p.closing_amount) || 0;
+				return expected - closing !== 0; 
+			});
+
+			if (hasAnyDifference) {
 				frappe.show_alert({
-					message: this.__("Total closing amount does not match expected total"),
+					message: this.__(
+						"Closing amount must exactly match expected amount for all payment modes before closing the shift."
+					),
 					indicator: "red",
 				});
 				frappe.utils.play_sound("error");
 				return;
 			}
 
+
+			// 3. Prepare payload
 			const balance_details = reconciliation.map((p) => ({
 				mode_of_payment: p.mode_of_payment,
 				closing_amount: Number(p.closing_amount) || 0,
@@ -251,31 +313,33 @@ export default {
 
 				const resp = await frappe.call({
 					method: "posawesome.posawesome.api.shifts.close_shift_with_reconciliation",
-					args: { balance_details: JSON.stringify(balance_details) },
+					args: {
+						balance_details: JSON.stringify(balance_details),
+					},
 				});
 
 				const result = resp?.message ?? resp;
+
 				if (result && (result.success === true || result === true)) {
 					this.closingDialog = false;
 
-					// notify others before clearing cache
+					// Notify listeners
 					try {
 						this.eventBus?.emit("shift_closed", result);
 					} catch (e) {
 						console.warn("Event bus error:", e);
 					}
 
-					// Clear all caches and reload
+					// Clear caches
 					await this.clearPOSCacheCompletely();
 
-					// Reload page after cache is cleared
+					// Reload POS
 					setTimeout(() => {
 						window.location.href = "/app";
 					}, 800);
 				} else {
 					this.isSubmitting = false;
-					const errMsg = result?.message || this.__("Failed to close shift");
-					alert(errMsg);
+					alert(result?.message || this.__("Failed to close shift"));
 				}
 			} catch (err) {
 				this.isSubmitting = false;
@@ -283,7 +347,6 @@ export default {
 				alert(this.__("Failed to close shift: ") + (err?.message || err));
 			}
 		},
-
 		async clearPOSCacheCompletely() {
 			try {
 				// 1. Remove all localStorage entries
@@ -412,14 +475,24 @@ export default {
 			}
 
 			// ensure numeric types and canonical keys
-			recon = (recon || []).map((p) => ({
-				mode_of_payment: p.mode_of_payment || p.mode || p.name || "",
-				opening_amount: Number(p.opening_amount || p.amount || 0),
-				expected_amount: Number(p.expected_amount || p.amount || 0),
-				closing_amount: Number(p.closing_amount || 0),
-				currency:
-					p.currency || data.currency || (this.pos_profile && this.pos_profile.currency) || "",
-			}));
+			recon = (recon || []).map((p) => {
+				const expected = Number(p.expected_amount || p.amount || 0);
+				const closing = Number(p.closing_amount || 0);
+
+				return {
+					mode_of_payment: p.mode_of_payment || p.mode || p.name || "",
+					opening_amount: Number(p.opening_amount || p.amount || 0),
+					expected_amount: expected,
+					closing_amount: closing,
+					difference: 0,
+					currency:
+						p.currency ||
+						data.currency ||
+						(this.pos_profile && this.pos_profile.currency) ||
+						"",
+				};
+			});
+
 
 			data.payment_reconciliation = recon;
 
@@ -486,49 +559,76 @@ export default {
 </script>
 
 <style scoped>
-/* Card header */
+/* Card header - FIXED */
 .closing-header {
 	background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
 	border-bottom: 1px solid #e0e0e0;
-	padding: 16px 24px !important;
+	padding: 12px 24px !important;
+	min-height: auto !important;
+	height: auto !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 16px !important;
 }
+
 .header-content {
 	display: flex;
 	align-items: center;
-	gap: 18px;
-	width: 100%;
+	gap: 12px;
+	flex: 1;
+	min-width: 0;
 }
+
 .header-icon-wrapper {
-	width: 56px;
-	height: 56px;
-	border-radius: 12px;
+	width: 44px;
+	height: 44px;
+	border-radius: 10px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
-	box-shadow: 0 8px 18px rgba(25, 118, 210, 0.16);
+	box-shadow: 0 4px 12px rgba(25, 118, 210, 0.16);
+	flex-shrink: 0;
+	position: relative;
+	z-index: 11;
 }
+
 .header-icon {
 	color: #fff !important;
+	font-size: 28px !important;
 }
+
 .header-text {
 	flex: 1;
+	min-width: 0;
+	position: relative;
+	z-index: 11;
 }
+
 .header-title {
 	font-size: 1.25rem;
 	margin: 0;
-	font-weight: 600;
-	color: #111;
-}
-.header-subtitle {
-	margin: 0;
-	color: #666;
-	font-size: 0.9rem;
+	font-weight: 700;
+	color: #222;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
-/* close button style */
+.header-subtitle {
+	margin: 4px 0 0 0;
+	color: #555;
+	font-size: 0.88rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .header-close-btn {
 	color: #6b7280 !important;
+	flex-shrink: 0;
+	position: relative;
+	z-index: 11;
 }
 
 /* Body - limit height and allow internal scrolling so overlay remains centered */
@@ -537,6 +637,8 @@ export default {
 	overflow: auto;
 	padding: 0;
 	background: var(--pos-card-bg, #fff);
+	position: relative;
+	z-index: 1;
 }
 
 /* Table visuals */
@@ -567,6 +669,12 @@ export default {
 	width: 260px;
 }
 
+/* Difference cell warning style - RED for shortfall */
+.difference-cell-warning {
+	color: #d32f2f;
+	font-weight: 600;
+}
+
 /* Action buttons */
 .dialog-actions-container {
 	background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
@@ -583,16 +691,20 @@ export default {
 	padding: 10px 26px;
 	color: #fff !important;
 }
+
 .submit-action-btn {
 	background: linear-gradient(135deg, #388e3c 0%, #2e7d32 100%) !important;
 }
+
 .submit-action-btn:disabled {
 	opacity: 0.7 !important;
 	cursor: not-allowed !important;
 }
+
 .cancel-action-btn {
 	background: linear-gradient(135deg, #d32f2f 0%, #c62828 100%) !important;
 }
+
 .cancel-action-btn:disabled {
 	opacity: 0.7 !important;
 	cursor: not-allowed !important;
@@ -602,9 +714,11 @@ export default {
 :deep(.v-overlay__scrim) {
 	z-index: 100999 !important;
 }
+
 :deep(.v-overlay__content) {
 	z-index: 101000 !important;
 }
+
 :deep(.v-dialog) {
 	z-index: 101001 !important;
 }
@@ -615,15 +729,35 @@ export default {
 		width: 100%;
 		min-width: unset;
 	}
+
 	.dialog-body {
 		max-height: calc(100vh - 140px);
 		padding-left: 12px;
 		padding-right: 12px;
 	}
+
 	.header-title {
-		font-size: 1.1rem;
+		font-size: 1rem;
+	}
+
+	.header-icon-wrapper {
+		width: 40px;
+		height: 40px;
 	}
 }
+
+/* RED = shortage */
+.difference-cell-warning {
+	color: #d32f2f;
+	font-weight: 600;
+}
+
+/* GREEN = excess */
+.difference-cell-excess {
+	color: #2e7d32;
+	font-weight: 600;
+}
+
 
 /* ensure overlay visually hides underlying UI a bit more */
 :deep(.v-overlay__scrim) {

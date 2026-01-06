@@ -175,15 +175,35 @@ export default {
 		this.total_tax = 0;
 		this.total_items_discount_amount = 0;
 
+		// ==================================================
+		//  CLEAR CUSTOMER / DISCOUNT STATE (ADD THIS)
+		// ==================================================
+		this.maxDiscountInfo = null;         
+		this.customer = null;
+		this.customer_info = null;
+		this.customer_balance = 0;
+
+		this.additional_discount = 0;
+		this.additional_discount_percentage = 0;
+
+		// Clear group discounts
+		this.itemGroupDiscounts = {};
+
 		if (this.invoice_doc) {
 			this.invoice_doc.rounding_adjustment = 0;
 			this.invoice_doc.net_total = 0;
 			this.invoice_doc.grand_total = 0;
 			this.invoice_doc.rounded_total = 0;
+
+			// ⬇ clear discount values in doc too
+			this.invoice_doc.discount_amount = 0;
+			this.invoice_doc.additional_discount = 0;
+			this.invoice_doc.additional_discount_percentage = 0;
 		}
 
 		this.eventBus.emit("reset_manual_total");
 	},
+
 
 
 	// Fetch customer balance from backend or cache
