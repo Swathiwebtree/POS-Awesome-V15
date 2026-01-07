@@ -37,7 +37,7 @@
 					<div v-show="showOffers" class="column-card offers-coupons-card">
 						<PosOffers></PosOffers>
 					</div>
-					<div v-show="coupons" class="column-card offers-coupons-card">
+					<div v-show="showCoupons" class="column-card offers-coupons-card">
 						<PosCoupons></PosCoupons>
 					</div>
 				</div>
@@ -154,8 +154,8 @@
 									<!-- Offers & Coupons -->
 									<v-col cols="12" class="mt-2 mb-2">
 										<v-row dense align="center">
-											<v-col cols="12" sm="4" class="py-1">
-												<v-btn class="offer-style-btn" @click="handleShowOffers">
+											<v-col cols="12" md="6" class="py-1">
+												<v-btn class="offer-style-btn" block @click="handleShowOffers">
 													<v-icon left size="18">mdi-tag-multiple</v-icon>
 													<div class="btn-text">
 														<div class="btn-title">
@@ -165,10 +165,9 @@
 												</v-btn>
 											</v-col>
 
-											<v-col sm="2"></v-col>
 
-											<v-col cols="12" sm="4" class="py-1 text-right">
-												<v-btn class="coupon-style-btn" @click="handleShowCoupons">
+											<v-col cols="12" md="6" class="py-1">
+												<v-btn class="coupon-style-btn" block @click="handleShowCoupons">
 													<v-icon left size="18">mdi-ticket-percent</v-icon>
 													<div class="btn-text">
 														<div class="btn-title">
@@ -241,7 +240,9 @@ export default {
 			pos_opening_shift: null,
 			payment: false,
 			showOffers: false,
-			coupons: false,
+			showCoupons: false,
+			posOffers: [],
+			posCoupons: [],  
 			itemsLoaded: false,
 			customersLoaded: false,
 			isFullscreen: false,
@@ -314,10 +315,24 @@ export default {
 
 		first_search: {
 			handler(newVal) {
-				// Sync with ItemsSelector
 				if (this.$refs.itemsSelectorComponent) {
 					this.$refs.itemsSelectorComponent.first_search = newVal;
 				}
+			},
+		},
+
+		offers: {
+			immediate: true,
+			deep: true,
+			handler(val) {
+				this.offersCount = Array.isArray(val) ? val.length : 0;
+
+				this.eventBus.emit("update_pos_offers", val || []);
+				this.eventBus.emit("update_offers_counters", {
+					offersCount: this.offersCount,
+				});
+
+				console.log("[POS] Offers pushed to PosOffers:", val);
 			},
 		},
 	},
@@ -388,14 +403,15 @@ export default {
 		// Footer buttons -> open panels like before
 		handleShowOffers() {
 			this.showOffers = true;
-			this.coupons = false;
+			this.showCoupons = false;
 			this.eventBus.emit("show_offers", "true");
 		},
 		handleShowCoupons() {
-			this.coupons = true;
+			this.showCoupons = true;
 			this.showOffers = false;
 			this.eventBus.emit("show_coupons", "true");
 		},
+
 
 		selectItemGroup(group) {
 			this.item_group = group;
@@ -825,6 +841,7 @@ export default {
 	padding-right: 2px;
 	flex-shrink: 0;
 	pointer-events: auto;
+	min-width: 260px;
 }
 
 .invoice-column {
@@ -834,6 +851,7 @@ export default {
 	flex-shrink: 0;
 	pointer-events: auto;
 	z-index: 2;
+	min-width: 520px;
 }
 
 .invoice-column .column-card {
@@ -847,6 +865,7 @@ export default {
 	padding-right: 1px;
 	flex-shrink: 0;
 	pointer-events: auto;
+	min-width: 300px;
 }
 
 /* Column Card */
@@ -914,8 +933,8 @@ export default {
 	box-sizing: border-box;
 
 	/* fixed/consistent sizing */
-	min-width: 170px;
-	max-width: 210px;
+	min-width: 0;
+	max-width: 100%;
 	height: 48px !important;
 	padding: 8px 14px !important;
 
@@ -977,16 +996,6 @@ export default {
 	justify-content: center;
 }
 
-.offer-style-btn,
-.coupon-style-btn {
-	margin-right: 12px;
-	/* spacing */
-}
-
-.coupon-style-btn {
-	margin-left: 12px;
-	/* spacing */
-}
 
 /* optional subtitle (if used) */
 .btn-sub {
@@ -1105,8 +1114,6 @@ export default {
 
 .items-scroll {
 	padding: 6px;
-	margin-bottom: 120px;
-	/* Space for footer filters */
 }
 
 /* Invoice Wrapper */
@@ -1152,18 +1159,35 @@ export default {
 	/* Add this */
 }
 
-/* Items Footer Filters */
-.items-footer-filters {
-	position: absolute;
-	width: 100%;
-	bottom: 0;
-	left: 0;
-	right: 0;
-	background: white;
-	border-top: 1px solid #e5e7eb;
-	padding: 12px;
-	z-index: 100;
+.items-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
+
+.column-scroll-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Footer should be sticky */
+.items-footer-filters {
+  position: sticky;
+  padding: 12px 14px;
+  bottom: 0;
+  background: #fff;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.invoice-wrapper :deep(.total),
+.invoice-wrapper :deep(.grand-total),
+.invoice-wrapper :deep(.net-total) {
+	font-size: 16px !important;
+	white-space: nowrap;
+	line-height: 1.2;
+}
+
 
 .filter-row {
 	margin-bottom: 0 !important;
@@ -1296,18 +1320,6 @@ export default {
 	pointer-events: auto !important;
 }
 
-/* Footer Search Bar Styling */
-.items-footer-filters {
-	position: absolute;
-	width: 100%;
-	bottom: 0;
-	left: 0;
-	right: 0;
-	background: white;
-	border-top: 1px solid #e5e7eb;
-	padding: 12px;
-	z-index: 100;
-}
 
 .items-footer-filters .v-text-field {
 	margin-bottom: 12px;

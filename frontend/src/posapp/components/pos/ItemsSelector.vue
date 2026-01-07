@@ -1879,17 +1879,14 @@ export default {
 
 			vm.cancelItemDetailsRequest();
 
-			// Determine the actual query string and trim whitespace
 			const query = typeof newSearchTerm === "string" ? newSearchTerm : vm.first_search;
 			const trimmedQuery = (query || "").trim();
 
-			// Require a minimum of three characters before running a search
 			if (!trimmedQuery || trimmedQuery.length < 3) {
 				vm.search_from_scanner = false;
 				return;
 			}
 
-			// If background loading is in progress, defer the search without changing the active query
 			if (vm.isBackgroundLoading) {
 				vm.pendingItemSearch = trimmedQuery;
 				return;
@@ -1912,9 +1909,6 @@ export default {
 					vm.get_items(true);
 				}
 			} else {
-				// When local storage is disabled, always fetch items
-				// from the server so searches aren't limited to the
-				// initially loaded set.
 				await vm.get_items(true);
 
 				if (vm.filtered_items && vm.filtered_items.length > 0) {
@@ -1923,8 +1917,6 @@ export default {
 					}, 300);
 				}
 			}
-
-			// Clear the input only when triggered via scanner
 			if (fromScanner) {
 				vm.clearSearch();
 				vm.$refs.debounce_search && vm.$refs.debounce_search.focus();
