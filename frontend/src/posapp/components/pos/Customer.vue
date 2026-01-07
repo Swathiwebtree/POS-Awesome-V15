@@ -48,7 +48,7 @@
 				clearable
 				variant="solo"
 				color="#4169E1"
-				:label="frappe._('Customer')"
+				:label="frappe._('Customer / Mobile No')"
 				v-model="internalCustomer"
 				:items="filteredCustomers"
 				item-title="customer_name"
