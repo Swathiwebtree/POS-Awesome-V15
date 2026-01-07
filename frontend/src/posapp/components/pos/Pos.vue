@@ -37,7 +37,7 @@
 					<div v-show="showOffers" class="column-card offers-coupons-card">
 						<PosOffers></PosOffers>
 					</div>
-					<div v-show="showCoupons" class="column-card offers-coupons-card">
+					<div v-show="coupons" class="column-card offers-coupons-card">
 						<PosCoupons></PosCoupons>
 					</div>
 				</div>
@@ -154,8 +154,8 @@
 									<!-- Offers & Coupons -->
 									<v-col cols="12" class="mt-2 mb-2">
 										<v-row dense align="center">
-											<v-col cols="12" md="6" class="py-1">
-												<v-btn class="offer-style-btn" block @click="handleShowOffers">
+											<v-col cols="12" sm="4" class="py-1">
+												<v-btn class="offer-style-btn" @click="handleShowOffers">
 													<v-icon left size="18">mdi-tag-multiple</v-icon>
 													<div class="btn-text">
 														<div class="btn-title">
@@ -165,9 +165,10 @@
 												</v-btn>
 											</v-col>
 
+											<v-col sm="2"></v-col>
 
-											<v-col cols="12" md="6" class="py-1">
-												<v-btn class="coupon-style-btn" block @click="handleShowCoupons">
+											<v-col cols="12" sm="4" class="py-1 text-right">
+												<v-btn class="coupon-style-btn" @click="handleShowCoupons">
 													<v-icon left size="18">mdi-ticket-percent</v-icon>
 													<div class="btn-text">
 														<div class="btn-title">
@@ -240,9 +241,7 @@ export default {
 			pos_opening_shift: null,
 			payment: false,
 			showOffers: false,
-			showCoupons: false,
-			posOffers: [],
-			posCoupons: [],  
+			coupons: false,
 			itemsLoaded: false,
 			customersLoaded: false,
 			isFullscreen: false,
@@ -322,17 +321,30 @@ export default {
 		},
 
 		offers: {
-			immediate: true,
 			deep: true,
 			handler(val) {
 				this.offersCount = Array.isArray(val) ? val.length : 0;
 
-				this.eventBus.emit("update_pos_offers", val || []);
+				this.eventBus.emit("set_offers", val || []);
 				this.eventBus.emit("update_offers_counters", {
 					offersCount: this.offersCount,
 				});
 
-				console.log("[POS] Offers pushed to PosOffers:", val);
+				console.log("[POS] Offers synced:", val);
+			},
+		},
+
+		coupons: {
+			deep: true,
+			handler(val) {
+				this.couponsCount = Array.isArray(val) ? val.length : 0;
+
+				this.eventBus.emit("set_coupons", val || []);
+				this.eventBus.emit("update_coupons_counters", {
+					couponsCount: this.couponsCount,
+				});
+
+				console.log("[POS] Coupons synced:", val);
 			},
 		},
 	},
@@ -403,15 +415,14 @@ export default {
 		// Footer buttons -> open panels like before
 		handleShowOffers() {
 			this.showOffers = true;
-			this.showCoupons = false;
+			this.coupons = false;
 			this.eventBus.emit("show_offers", "true");
 		},
 		handleShowCoupons() {
-			this.showCoupons = true;
+			this.coupons = true;
 			this.showOffers = false;
 			this.eventBus.emit("show_coupons", "true");
 		},
-
 
 		selectItemGroup(group) {
 			this.item_group = group;
@@ -996,6 +1007,16 @@ export default {
 	justify-content: center;
 }
 
+.offer-style-btn,
+.coupon-style-btn {
+	margin-right: 12px;
+	/* spacing */
+}
+
+.coupon-style-btn {
+	margin-left: 12px;
+	/* spacing */
+}
 
 /* optional subtitle (if used) */
 .btn-sub {
@@ -1115,7 +1136,6 @@ export default {
 .items-scroll {
 	padding: 6px;
 }
-
 /* Invoice Wrapper */
 .invoice-wrapper {
 	flex: 1;
@@ -1173,19 +1193,10 @@ export default {
 /* Footer should be sticky */
 .items-footer-filters {
   position: sticky;
-  padding: 12px 14px;
   bottom: 0;
   background: #fff;
   z-index: 10;
   flex-shrink: 0;
-}
-
-.invoice-wrapper :deep(.total),
-.invoice-wrapper :deep(.grand-total),
-.invoice-wrapper :deep(.net-total) {
-	font-size: 16px !important;
-	white-space: nowrap;
-	line-height: 1.2;
 }
 
 
