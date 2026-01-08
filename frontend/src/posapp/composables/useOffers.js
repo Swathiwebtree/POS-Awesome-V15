@@ -37,11 +37,17 @@ export function useOffers() {
 				//   offers: [],
 				//   coupons: []
 				// }
+				const normalized = Array.isArray(r.message)
+					? { offers: r.message, coupons: [] }
+					: {
+							offers: r.message.offers || [],
+							coupons: r.message.coupons || [],
+						};
 
-				offers.value = r.message.offers || [];
-				coupons.value = r.message.coupons || [];
+				offers.value = normalized.offers;
+				coupons.value = normalized.coupons;
 
-				saveOffers(r.message);
+				saveOffers(normalized);
 
 				eventBus?.emit("set_offers", offers.value);
 				eventBus?.emit("set_coupons", coupons.value);

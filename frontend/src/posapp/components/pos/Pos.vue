@@ -16,7 +16,7 @@
 			<div v-show="!dialog" class="pos-layout">
 				<!-- Left Column: Drafts (25% width) -->
 				<div class="pos-column drafts-column">
-					<div v-show="!showOffers && !coupons" class="column-card drafts-card">
+					<div v-show="!showOffers && !showCoupons" class="column-card drafts-card">
 						<div class="column-header">
 							<v-icon left color="primary">mdi-file-document</v-icon>
 							<span>{{ __("Job orders") }}</span>
@@ -37,7 +37,7 @@
 					<div v-show="showOffers" class="column-card offers-coupons-card">
 						<PosOffers></PosOffers>
 					</div>
-					<div v-show="coupons" class="column-card offers-coupons-card">
+					<div v-show="showCoupons" class="column-card offers-coupons-card">
 						<PosCoupons></PosCoupons>
 					</div>
 				</div>
@@ -154,7 +154,7 @@
 									<!-- Offers & Coupons -->
 									<v-col cols="12" class="mt-2 mb-2">
 										<v-row dense align="center">
-											<v-col cols="12" sm="4" class="py-1">
+											<v-col cols="6" class="py-1">
 												<v-btn class="offer-style-btn" @click="handleShowOffers">
 													<v-icon left size="18">mdi-tag-multiple</v-icon>
 													<div class="btn-text">
@@ -165,9 +165,7 @@
 												</v-btn>
 											</v-col>
 
-											<v-col sm="2"></v-col>
-
-											<v-col cols="12" sm="4" class="py-1 text-right">
+											<v-col cols="6" class="py-1">
 												<v-btn class="coupon-style-btn" @click="handleShowCoupons">
 													<v-icon left size="18">mdi-ticket-percent</v-icon>
 													<div class="btn-text">
@@ -241,7 +239,7 @@ export default {
 			pos_opening_shift: null,
 			payment: false,
 			showOffers: false,
-			coupons: false,
+			showCoupons: false,
 			itemsLoaded: false,
 			customersLoaded: false,
 			isFullscreen: false,
@@ -415,13 +413,20 @@ export default {
 		// Footer buttons -> open panels like before
 		handleShowOffers() {
 			this.showOffers = true;
-			this.coupons = false;
+			this.showCoupons = false;
+
 			this.eventBus.emit("show_offers", "true");
+			this.eventBus.emit("set_offers", this.offers || []);
+			this.eventBus.emit("update_pos_offers", this.offers || []);
 		},
+
 		handleShowCoupons() {
-			this.coupons = true;
+			this.showCoupons = true;
 			this.showOffers = false;
+
 			this.eventBus.emit("show_coupons", "true");
+			this.eventBus.emit("set_coupons", this.coupons || []);
+			this.eventBus.emit("set_pos_coupons", this.coupons || []);
 		},
 
 		selectItemGroup(group) {
@@ -432,14 +437,14 @@ export default {
 
 		show_offers() {
 			this.showOffers = !this.showOffers;
-			this.coupons = false;
+			this.showCoupons = false;
 			this.eventBus.emit("show_offers", this.showOffers ? "true" : "false");
 		},
 
 		show_coupons() {
-			this.coupons = !this.coupons;
+			this.showCoupons = !this.showCoupons;
 			this.showOffers = false;
-			this.eventBus.emit("show_coupons", this.coupons ? "true" : "false");
+			this.eventBus.emit("show_coupons", this.showCoupons ? "true" : "false");
 		},
 
 		create_opening_voucher() {
@@ -661,6 +666,7 @@ export default {
 
 			this.eventBus.on("register_pos_profile", async (data) => {
 				this.pos_profile = data.pos_profile;
+				this.get_offers(this.pos_profile.name, this.pos_profile);
 				this.get_items_groups();
 				this.refreshDrafts();
 				await this.initializeItems();
@@ -671,11 +677,11 @@ export default {
 
 			this.eventBus.on("show_offers", (data) => {
 				this.showOffers = data === "true";
-				this.coupons = false;
+				this.showCoupons = false;
 			});
 
 			this.eventBus.on("show_coupons", (data) => {
-				this.coupons = data === "true";
+				this.showCoupons = data === "true";
 				this.payment = false;
 			});
 
@@ -1349,4 +1355,10 @@ export default {
 .items-footer-filters .v-text-field:deep(.v-field__input) {
 	cursor: text;
 }
+
+.offer-style-btn,
+.coupon-style-btn {
+  width: 100% !important;
+}
+
 </style>

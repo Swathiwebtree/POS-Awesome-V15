@@ -97,9 +97,15 @@
 							</v-col>
 
 							<!-- Total -->
-							<v-text-field v-model="manual_total" :label="__('Total')" prepend-inner-icon="mdi-cash"
-								variant="solo" density="compact" color="success" class="summary-field" type="number"
-								:prefix="currencySymbol(displayCurrency)" @change="onManualTotalChange" />
+							<v-text-field :model-value="formatByPrecision(finalTotal)" :label="__('Total')"
+								prepend-inner-icon="mdi-cash" variant="solo" density="compact" color="success"
+								class="summary-field" readonly :prefix="currencySymbol(displayCurrency)" />
+
+							<!-- Manual Round Off -->
+							<v-text-field v-model.number="manual_round_off" :label="__('Manual Round Off')"
+								prepend-inner-icon="mdi-plus-minus" variant="solo" density="compact" color="info"
+								class="summary-field" type="number" :prefix="currencySymbol(displayCurrency)"
+								@change="onManualRoundOffChange" />
 
 
 							<!-- Frequent Cards Button (LEFT SIDE) -->
@@ -681,8 +687,8 @@ export default {
 			vehicleNumber: "",
 			mobileNumber: "",
 
-			manual_total: 0,
-			isManualEdit: false,
+			manualRoundApplied: false,
+			manual_round_off: 0,
 			isResetting: false,
 
 			itemGroupDiscounts: {}, 
@@ -711,6 +717,11 @@ export default {
 		"apply-frequent-card",
 	],
 	computed: {
+		finalTotal() {
+			const base = Number(this.subtotal || 0);
+			const roundOff = Number(this.manual_round_off || 0);
+			return Number((base + roundOff).toFixed(3));
+		},
 
 		itemGroupsList() {
 			const parentItems = this.$parent?.items || [];
@@ -807,26 +818,64 @@ export default {
 			immediate: true,
 		},
 
-		 subtotal: {
-			immediate: true,
-			handler(val) {
-				if (this.isResetting || this.isManualEdit) return; 
-				this.manual_total = this.formatByPrecision(val);
-			},
-        },
+		subtotal() {
+			this.manual_round_off = 0;
+
+			this.eventBus.emit(
+				"update_rounded_total",
+				this.finalTotal
+			);
+		},
+
 
 		additional_discount: {
 			immediate: true,
 			handler() {
-				if (this.isResetting || this.isManualEdit) return;
+				if (this.isResetting) return;
 
-				this.$nextTick(() => {
-					this.manual_total = this.formatByPrecision(this.subtotal);
-				});
+				const base = this.getAutoRoundedBase();
+
+				if (!this.manualRoundApplied) {
+					this.manual_total = base;
+				}
+
+				this.emitRoundedTotal();
 			},
 		},
 	},
 	methods: {
+
+		getAutoRoundedBase() {
+			return this.roundByLastTwoDecimals(this.subtotal || 0);
+		},
+		emitRoundedTotal() {
+			this.eventBus.emit("update_rounded_total", this.manual_total);
+		},
+
+		roundByLastTwoDecimals(value) {
+			const num = Number(value || 0);
+
+			const intPart = Math.floor(num);
+			const decimals = Math.round((num - intPart) * 1000); // 0–999
+			const lastTwo = decimals % 100;
+
+			let roundedDecimals;
+
+			if (lastTwo >= 50) {
+				// round UP last two digits
+				roundedDecimals = decimals + (100 - lastTwo);
+			} else {
+				// round DOWN last two digits
+				roundedDecimals = decimals - lastTwo;
+			}
+
+			// handle carry to next integer
+			if (roundedDecimals >= 1000) {
+				return Number((intPart + 1).toFixed(3));
+			}
+
+			return Number((intPart + roundedDecimals / 1000).toFixed(3));
+		},
 
 		countItemsByGroup(group) {
 			// Count items in specific group
@@ -928,18 +977,20 @@ export default {
 			});
 		},
 
-		onManualTotalChange() {
-			this.isManualEdit = true;
+		onManualRoundOffChange() {
+			const roundOff = Number(this.manual_round_off || 0);
 
-			const enteredTotal = Number(this.manual_total || 0);
-			const calculatedTotal = Number(this.subtotal || 0);
-
-			const roundOff = enteredTotal - calculatedTotal;
-
+			// Manual round off is ONLY a delta
 			this.eventBus.emit("update_manual_round_off", roundOff);
 
+			// Tell payment & backend the final total
+			this.eventBus.emit("update_rounded_total", this.finalTotal);
+
+			// Refresh payment UI
 			this.eventBus.emit("force_payment_refresh");
 		},
+
+
 		resetAfterPayment() {
 			// Core sale state
 			this.selectedEmployee = null;
@@ -1582,15 +1633,16 @@ export default {
 	mounted() {
 
 		this.eventBus.on("reset_manual_total", () => {
-			this.isResetting = true;
+			this.manual_round_off = 0;
 
-			this.manual_total = 0;
-			this.isManualEdit = false;
+			this.eventBus.emit(
+				"update_rounded_total",
+				this.finalTotal
+			);
 
-			this.$nextTick(() => {
-				this.isResetting = false;
-			});
+			this.eventBus.emit("force_payment_refresh");
 		});
+
 
 		if (this.selectedCustomerId) {
 			this.fetchLoyaltyPoints();

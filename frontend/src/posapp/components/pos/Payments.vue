@@ -162,7 +162,11 @@
 												:label="frappe._('Net Total')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field"
-												:model-value="formatCurrency(invoice_doc.net_total, displayCurrency)"
+												:model-value="formatCurrency(
+													invoice_doc.rounded_total ?? invoice_doc.grand_total,
+													displayCurrency
+												)
+													"
 												readonly :prefix="currencySymbol()" persistent-placeholder />
 										</v-col>
 
@@ -636,7 +640,7 @@ export default {
 				}
 			}
 
-			return this.roundByLastDigit(total, this.currency_precision);
+			return this.flt(total, this.currency_precision);
 		},
 
 		diff_payment() {
@@ -655,7 +659,7 @@ export default {
 				);
 			}
 
-			let diff = this.roundByLastDigit(invoice_total - this.total_payments, this.currency_precision);
+			let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
 
 			if (this.invoice_doc.is_return) {
 				return diff >= 0 ? diff : 0;
@@ -678,7 +682,7 @@ export default {
 				);
 			}
 
-			let change = this.roundByLastDigit(this.total_payments - invoice_total, this.currency_precision);
+			let change = this.flt(this.total_payments - invoice_total, this.currency_precision);
 
 			return change > 0 ? change : 0;
 		},
@@ -900,25 +904,6 @@ export default {
 			this.$nextTick(() => {
 				this.$forceUpdate();
 			});
-		},
-		roundByLastDigit(value, precision) {
-			if (value === null || value === undefined || isNaN(value)) return 0;
-
-			const factor = Math.pow(10, precision);
-			const shifted = value * factor;
-
-			const integerPart = Math.floor(shifted);
-			const decimalPart = shifted - integerPart;
-
-			// get next digit (N+1)
-			const nextDigit = Math.floor(decimalPart * 10);
-
-			// MAIN RULE
-			if (nextDigit > 5) {
-				return (integerPart + 1) / factor;
-			}
-
-			return integerPart / factor;
 		},
 
 		resetPaymentData() {
@@ -2516,8 +2501,11 @@ export default {
 			} else if (this.invoice_doc) {
 				// Keep totals in sync even when dialog is already open
 				this.invoice_doc.grand_total = invoiceData.grand_total || 0;
-				this.invoice_doc.rounded_total =
-					invoiceData.rounded_total || invoiceData.grand_total || 0;
+				if (invoiceData.rounded_total !== undefined && invoiceData.rounded_total !== null) {
+					this.invoice_doc.rounded_total = invoiceData.rounded_total;
+				} else {
+					this.invoice_doc.rounded_total = null;
+				}
 				if (invoiceData.items) {
 					this.invoice_doc.items = invoiceData.items;
 				}
