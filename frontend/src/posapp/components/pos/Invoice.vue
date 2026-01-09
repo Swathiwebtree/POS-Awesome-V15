@@ -2470,6 +2470,18 @@ export default {
 
 	mounted() {
 
+		this.eventBus.on("update_manual_round_off", (value) => {
+			if (!this.invoice_doc) return;
+
+			this.invoice_doc.rounding_adjustment = this.flt(value || 0);
+
+			// ensure rounding is enabled
+			this.invoice_doc.disable_rounded_total = 0;
+
+			// OPTIONAL: recalc totals immediately
+			this.recalculateTotals();
+		});
+
 		// Get items by group for discount calculation
 		this.eventBus.on('get_items_by_group', (data) => {
 			const { group, callback } = data;
