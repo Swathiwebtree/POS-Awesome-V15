@@ -293,22 +293,6 @@ export default {
 	},
 
 	watch: {
-		// Watch items_view and sync with ItemsSelector
-		items_view: {
-			handler(newVal, oldVal) {
-				console.log("[POS] items_view watcher triggered:", { from: oldVal, to: newVal });
-
-				if (newVal !== oldVal) {
-					this.$nextTick(() => {
-						if (this.$refs.itemsSelectorComponent) {
-							console.log("[POS] Calling updateViewMode from watcher:", newVal);
-							this.$refs.itemsSelectorComponent.updateViewMode(newVal);
-						}
-					});
-				}
-			},
-			immediate: false,
-		},
 
 		first_search: {
 			handler(newVal) {
@@ -360,14 +344,17 @@ export default {
 		},
 
 		search_onchange() {
-			const trimmedQuery = (this.first_search || "").trim();
-			if (trimmedQuery.length >= 3) {
-				// Trigger search in ItemsSelector with current item_group
-				if (this.$refs.itemsSelectorComponent) {
-					this.$refs.itemsSelectorComponent.first_search = trimmedQuery;
-					this.$refs.itemsSelectorComponent.search_onchange(trimmedQuery);
-				}
-			}
+			const query = (this.first_search || "").trim();
+
+			if (query.length < 3) return;
+
+			if (!this.$refs.itemsSelectorComponent) return;
+
+			this.$refs.itemsSelectorComponent.fetchItems({
+				search: query,
+				item_group: this.item_group,
+				reset: true
+			});
 		},
 
 		clearSearch() {
@@ -476,38 +463,29 @@ export default {
 		},
 
 		handleItemGroupUpdate(newGroup) {
-			console.log("[POS] Item group updated:", newGroup);
 			this.item_group = newGroup;
-			// Clear search when changing group
 			this.first_search = "";
 			this.search = "";
-		},
 
-		handleItemsViewUpdate(newView) {
-			console.log("[POS] Items view update requested:", newView);
-
-			// Prevent unnecessary updates
-			if (this.items_view === newView) {
-				console.log("[POS] Already in this view, skipping");
-				return;
-			}
-
-			// Update local state
-			this.items_view = newView;
-
-			// Wait for DOM update, then force ItemsSelector to update
 			this.$nextTick(() => {
 				if (this.$refs.itemsSelectorComponent) {
-					console.log("[POS] Updating ItemsSelector view to:", newView);
-					this.$refs.itemsSelectorComponent.updateViewMode(newView);
+					// Force ItemsSelector to reload with new group
+					this.$refs.itemsSelectorComponent.item_group = newGroup;
+					this.$refs.itemsSelectorComponent.currentPage = 0;
+					this.$refs.itemsSelectorComponent.items = [];
+
+					if (this.$refs.itemsSelectorComponent.pos_profile?.posa_local_storage &&
+						this.$refs.itemsSelectorComponent.storageAvailable) {
+						this.$refs.itemsSelectorComponent.loadVisibleItems(true);
+					} else {
+						this.$refs.itemsSelectorComponent.get_items(true);
+					}
 				}
-
-				// Broadcast to other components
-				this.eventBus.emit("update:items_view", newView);
-				this.eventBus.emit("items_view_changed", newView);
-
-				console.log("[POS] Items view is now:", this.items_view);
 			});
+		},
+		handleItemsViewUpdate(newView) {
+			if (this.items_view === newView) return;
+			this.items_view = newView;
 		},
 		async refreshDrafts() {
 			try {
@@ -650,10 +628,6 @@ export default {
 
 			this.eventBus.on("close_opening_dialog", () => {
 				this.dialog = false;
-			});
-
-			this.eventBus.on("update:items_view", (newView) => {
-				this.items_view = newView;
 			});
 
 			this.eventBus.on("register_pos_data", (data) => {

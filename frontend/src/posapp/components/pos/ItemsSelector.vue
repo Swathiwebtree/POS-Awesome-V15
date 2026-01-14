@@ -227,7 +227,7 @@
 								:class="{ 'item-container': isOverflowing }"
 							>
 								<div
-									v-for="item in filtered_items"
+									v-for="item in displayed_items"
 									:key="item.item_code"
 									class="card-item-card"
 									@click="select_item($event, item)"
@@ -313,7 +313,7 @@
 						<div v-else class="items-table-container">
 							<v-data-table-virtual
 								:headers="headers"
-								:items="filtered_items"
+								:items="displayed_items"
 								class="sleek-data-table overflow-y-auto"
 								:style="{ height: 'calc(100% - 80px)' }"
 								item-key="item_code"
@@ -497,7 +497,6 @@ export default {
 		pendingItemSearch: null,
 		loadProgress: 0,
 		totalItemCount: 0,
-		posCart: [],
 	}),
 
 	props: {
@@ -519,21 +518,12 @@ export default {
 				this.search_onchange(newVal);
 			}
 		},
-		// ADD THIS NEW WATCHER
-		items_view: {
-			handler(newVal) {
-				this.$nextTick(() => {
-					this.$forceUpdate();
-				});
-			},
-			immediate: false,
-		},
 		customer: _.debounce(function () {
 			if (this.pos_profile.posa_force_reload_items) {
 				if (this.pos_profile.posa_smart_reload_mode) {
 					// When limit search is enabled there may be no items yet.
 					// Fallback to full reload if nothing is loaded
-					if (!this.items_loaded || !this.filtered_items.length) {
+					if (!this.items_loaded || !this.items.length) {
 						this.items_loaded = false;
 						if (!isOffline()) {
 							this.get_items(true);
@@ -571,7 +561,7 @@ export default {
 			}
 			// When the customer changes, avoid reloading all items.
 			// Simply refresh prices for visible items only
-			if (this.items_loaded && this.filtered_items && this.filtered_items.length > 0) {
+			if (this.items_loaded && this.items && this.items.length > 0) {
 				this.$nextTick(() => this.refreshPricesForVisibleItems());
 			} else {
 				if (this.pos_profile && (!this.pos_profile.posa_local_storage || !this.storageAvailable)) {
@@ -647,36 +637,20 @@ export default {
 		item_group(newVal, oldVal) {
 			if (newVal === oldVal) return;
 
+			// RESET EVERYTHING FIRST
 			this.searchCache.clear();
 			this.currentPage = 0;
 			this.first_search = "";
 			this.search = "";
+			this.items = [];
+			this.items_loaded = false;
 
-			if (this.pos_profile?.pose_use_limit_search) {
-				if (!this.pos_profile.posa_local_storage || !this.storageAvailable) {
-					this.get_items(true);
-				} else {
-					this.get_items();
-				}
-				return;
-			}
-
+			// LOAD FROM ONLY ONE SOURCE
 			if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
 				this.loadVisibleItems(true);
 			} else {
 				this.get_items(true);
 			}
-		},
-		filtered_items(new_value, old_value) {
-			// Update item details if items changed
-			if (
-				this.pos_profile &&
-				!this.pos_profile.pose_use_limit_search &&
-				new_value.length !== old_value.length
-			) {
-				this.update_items_details(new_value);
-			}
-			this.$nextTick(this.checkItemContainerOverflow);
 		},
 		// Automatically search when the query has at least 3 characters
 		first_search: _.debounce(function (val, oldVal) {
@@ -752,49 +726,9 @@ export default {
 		},
 
 		handleItemsViewUpdate(newView) {
+			if (this.items_view === newView) return;
 			this.items_view = newView;
-			this.$emit("update:items_view", newView);
-			this.eventBus.emit("items_view_changed", newView);
 		},
-
-		updateViewMode(newMode) {
-
-			// Update the view mode
-			this.items_view = newMode;
-
-			// Force update to re-render with new mode
-			this.$forceUpdate();
-
-			// Emit to parent
-			this.$emit("update-view-mode", newMode);
-
-		},
-
-		handleAddToPOS(event) {
-			const item = event.detail;
-			const existing = this.posCart.find((i) => i.item_code === item.item_code);
-			if (existing) {
-				existing.qty += item.qty || 1;
-				existing.rate = item.rate || existing.rate;
-			} else {
-				this.posCart.push({
-					item_code: item.item_code,
-					item_name: item.item_name,
-					qty: item.qty || 1,
-					rate: item.rate || 0,
-				});
-			}
-		},
-
-		removeItem(item) {
-			const index = this.posCart.indexOf(item);
-			if (index > -1) this.posCart.splice(index, 1);
-		},
-
-		getTotalAmount() {
-			return this.posCart.reduce((sum, i) => sum + i.qty * i.rate, 0);
-		},
-
 		performSearch(searchTerm) {
 			if (!this.items || !this.items.length) return [];
 
@@ -829,6 +763,58 @@ export default {
 
 			return filtered;
 		},
+
+		async fetchItems({ search = "", item_group = "ALL", reset = false } = {}) {
+		if (reset) {
+			this.items = [];
+			this.page = 1;
+			this.hasMore = true;
+		}
+
+		if (!this.hasMore) return;
+
+		this.loading = true;
+
+		const filters = [];
+
+		if (item_group && item_group !== "ALL") {
+			filters.push(["item_group", "=", item_group]);
+		}
+
+		if (search) {
+			filters.push([
+				"name",
+				"like",
+				`%${search}%`
+			]);
+		}
+
+		const r = await frappe.call({
+			method: "frappe.client.get_list",
+			args: {
+				doctype: "Item",
+				fields: [
+					"name",
+					"item_name",
+					"item_group",
+					"image",
+					"stock_uom"
+				],
+				filters,
+				limit_page_length: 50,
+				limit_start: (this.page - 1) * 50
+			}
+		});
+
+		if (r.message && r.message.length) {
+			this.items.push(...r.message);
+			this.page++;
+		} else {
+			this.hasMore = false;
+		}
+
+		this.loading = false;
+	},
 
 		async fetchServerItemsTimestamp() {
 			try {
@@ -969,12 +955,22 @@ export default {
 		onListScroll(event) {
 			if (this.scrollThrottle) return;
 
-			this.scrollThrottle = requestAnimationFrame(() => {
+			this.scrollThrottle = requestAnimationFrame(async () => {
 				try {
 					const el = event.target;
 					if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
+						// Prevent duplicate calls
+						if (this.loading || this.isBackgroundLoading) return;
+
 						this.currentPage += 1;
-						this.loadVisibleItems();
+
+						// ALWAYS fetch from server for list view
+						if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
+							await this.loadVisibleItems();
+						} else {
+							await this.get_items(true);
+						}
+
 					}
 				} catch (error) {
 					console.error("Error in list scroll handler:", error);
@@ -1073,11 +1069,11 @@ export default {
 		},
 		async refreshPricesForVisibleItems() {
 			const vm = this;
-			if (!vm.filtered_items || vm.filtered_items.length === 0) return;
+			if (!vm.items || vm.items.length === 0) return;
 
 			vm.loading = true;
 
-			const itemCodes = vm.filtered_items.map((it) => it.item_code);
+			const itemCodes = vm.items.map((it) => it.item_code);
 			const cacheResult = await getCachedItemDetails(
 				vm.pos_profile.name,
 				vm.active_price_list,
@@ -1086,7 +1082,7 @@ export default {
 			const updates = [];
 
 			cacheResult.cached.forEach((det) => {
-				const item = vm.filtered_items.find((it) => it.item_code === det.item_code);
+				const item = vm.items.find((it) => it.item_code === det.item_code);
 				if (item) {
 					const upd = { actual_qty: det.actual_qty };
 					if (det.item_uoms && det.item_uoms.length > 0) {
@@ -1115,12 +1111,12 @@ export default {
 				return;
 			}
 
-			const itemsToFetch = vm.filtered_items.filter((it) => cacheResult.missing.includes(it.item_code));
+			const itemsToFetch = vm.items.filter((it) => cacheResult.missing.includes(it.item_code));
 
 			try {
 				const details = await vm.fetchItemDetails(itemsToFetch);
 				details.forEach((updItem) => {
-					const item = vm.filtered_items.find((it) => it.item_code === updItem.item_code);
+					const item = vm.items.find((it) => it.item_code === updItem.item_code);
 					if (item) {
 						const upd = { actual_qty: updItem.actual_qty };
 						if (updItem.item_uoms && updItem.item_uoms.length > 0) {
@@ -1774,9 +1770,6 @@ export default {
 			delete payload._barcode_qty;
 
 
-			// Emit the item to the invoice component
-			this.eventBus.emit("add_item", payload);
-
 			// Show success feedback
 			const message = isCarWash
 				? `Added: ${item.item_name} (Service)`
@@ -1813,7 +1806,7 @@ export default {
 
 		// ===== UPDATE: enter_event method to handle CarWash in barcode scanning =====
 		async enter_event() {
-			if (!this.filtered_items.length || !this.first_search) {
+			if (!this.items.length || !this.first_search) {
 				return;
 			}
 
@@ -1825,7 +1818,7 @@ export default {
 			this.search = search;
 
 			const qty = parseFloat(this.get_item_qty(this.first_search));
-			const new_item = { ...this.filtered_items[0] };
+			const new_item = { ...this.items[0] };
 
 			// ===== CARWASH HANDLING IN BARCODE SCAN =====
 			const isCarWash = this.isCarWashItem(new_item);
@@ -1894,29 +1887,23 @@ export default {
 
 			vm.search = trimmedQuery;
 
+			// RESET items before searching
+			vm.items = [];
+			vm.currentPage = 0;
+
 			const fromScanner = vm.search_from_scanner;
 
-			if (vm.pos_profile && vm.pos_profile.pose_use_limit_search) {
-				if (vm.pos_profile && (!vm.pos_profile.posa_local_storage || !vm.storageAvailable)) {
-					vm.get_items(true);
-				} else {
-					vm.get_items();
-				}
-			} else if (vm.pos_profile && vm.pos_profile.posa_local_storage) {
+			// ALWAYS fetch from server with search term
+			if (vm.pos_profile && (!vm.pos_profile.posa_local_storage || !vm.storageAvailable)) {
+				vm.get_items(true);
+			} else {
 				if (vm.storageAvailable) {
 					await vm.loadVisibleItems(true);
 				} else {
 					vm.get_items(true);
 				}
-			} else {
-				await vm.get_items(true);
-
-				if (vm.filtered_items && vm.filtered_items.length > 0) {
-					setTimeout(() => {
-						vm.update_items_details(vm.filtered_items);
-					}, 300);
-				}
 			}
+
 			if (fromScanner) {
 				vm.clearSearch();
 				vm.$refs.debounce_search && vm.$refs.debounce_search.focus();
@@ -2161,8 +2148,8 @@ export default {
 			};
 		},
 		update_cur_items_details() {
-			if (this.filtered_items && this.filtered_items.length > 0) {
-				this.update_items_details(this.filtered_items);
+			if (this.items && this.items.length > 0) {
+				this.update_items_details(this.items);
 			}
 		},
 		async prePopulateStockCache(items) {
@@ -2266,7 +2253,7 @@ export default {
 			this.search = sCode;
 
 			this.$nextTick(() => {
-				if (this.filtered_items.length == 0) {
+				if (this.items.length == 0) {
 					this.eventBus.emit("show_message", {
 						title: `No Item has this barcode "${sCode}"`,
 						color: "error",
@@ -2307,10 +2294,15 @@ export default {
 			this.search_backup = this.first_search;
 			this.first_search = "";
 			this.search = "";
-			// Reset the visible items to the full list
-			this.loadVisibleItems(true);
-			// Refresh items from the server if needed
-			this.get_items();
+			this.items = [];
+			this.currentPage = 0;
+			this.items_loaded = false;
+
+			if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
+				this.loadVisibleItems(true);
+			} else {
+				this.get_items(true);
+			}
 		},
 
 		restoreSearch() {
@@ -2617,15 +2609,15 @@ export default {
 
 		// Force load quantities for all visible items
 		forceLoadQuantities() {
-			if (this.filtered_items && this.filtered_items.length > 0) {
+			if (this.items && this.items.length > 0) {
 				// Set default quantities if not available
-				this.filtered_items.forEach((item) => {
+				this.items.forEach((item) => {
 					if (item.actual_qty === undefined || item.actual_qty === null) {
 						item.actual_qty = 0;
 					}
 				});
 				// Force update quantities from server
-				this.update_items_details(this.filtered_items);
+				this.update_items_details(this.items);
 			}
 		},
 
@@ -2638,8 +2630,8 @@ export default {
 					}
 				});
 			}
-			if (this.filtered_items && this.filtered_items.length > 0) {
-				this.filtered_items.forEach((item) => {
+			if (this.items && this.items.length > 0) {
+				this.items.forEach((item) => {
 					if (item.actual_qty === undefined || item.actual_qty === null) {
 						item.actual_qty = 0;
 					}
@@ -2743,34 +2735,6 @@ export default {
 				console.error("Failed to load item selector settings:", e);
 			}
 		},
-
-		// Add item to POS cart
-		addToPOS(item) {
-			// Dispatch custom event to main POS component
-			const posItem = {
-				item_code: item.item_code,
-				item_name: item.item_name,
-				qty: this.qty || 1,
-				rate: item.base_price_list_rate || item.rate || 0,
-			};
-			window.dispatchEvent(new CustomEvent("add-item-to-pos", { detail: posItem }));
-
-			// Optionally, maintain a local cart in this component
-			const existing = this.posCart.find((i) => i.item_code === posItem.item_code);
-			if (existing) {
-				existing.qty += posItem.qty;
-			} else {
-				this.posCart.push(posItem);
-			}
-
-			// Reset qty input if needed
-			if (this.pos_profile.posa_input_qty) this.qty = 1;
-		},
-
-		// Call this from your existing select_item
-		select_item(event, item) {
-			this.addToPOS(item); // sends item to POS
-		},
 	},
 
 	computed: {
@@ -2782,77 +2746,18 @@ export default {
 		headers() {
 			return this.getItemsHeaders();
 		},
-		filtered_items() {
-			if (!this.items || this.items.length === 0) {
-				return [];
-			}
+		displayed_items() {
+			if (!Array.isArray(this.items)) return [];
 
-			const searchTerm = this.get_search(this.first_search).trim().toLowerCase();
-			let filteredItems = [...this.items];
+			let items = this.items;
 
-			// STEP 1: FILTER BY ITEM GROUP
+			// FILTER BY ITEM GROUP (SAFETY)
 			if (this.item_group && this.item_group !== "ALL") {
-				filteredItems = filteredItems.filter((item) => {
-					return item.item_group &&
-						item.item_group.toLowerCase() === this.item_group.toLowerCase();
-				});
+				items = items.filter(
+					i => i.item_group?.toLowerCase() === this.item_group.toLowerCase()
+				);
 			}
-
-			// STEP 2: APPLY SEARCH FILTER
-			if (searchTerm.length >= 3) {
-				filteredItems = filteredItems.filter((item) => {
-					const barcodeList = [];
-					if (Array.isArray(item.item_barcode)) {
-						barcodeList.push(...item.item_barcode.map((b) => b.barcode).filter(Boolean));
-					} else if (item.item_barcode) {
-						barcodeList.push(String(item.item_barcode));
-					}
-					if (Array.isArray(item.barcodes)) {
-						barcodeList.push(...item.barcodes.map((b) => String(b)).filter(Boolean));
-					}
-
-					const searchFields = [
-						item.item_code,
-						item.item_name,
-						item.barcode,
-						item.description,
-						...barcodeList,
-						...(this.pos_profile?.posa_search_serial_no && Array.isArray(item.serial_no_data)
-							? item.serial_no_data.map((s) => s.serial_no)
-							: []),
-						...(this.pos_profile?.posa_search_batch_no && Array.isArray(item.batch_no_data)
-							? item.batch_no_data.map((b) => b.batch_no)
-							: []),
-					]
-						.filter(Boolean)
-						.map((field) => field.toLowerCase());
-
-					return searchFields.some((field) => field.includes(searchTerm));
-				});
-			}
-
-			// STEP 3: APPLY ZERO RATE FILTER
-			if (this.hide_zero_rate_items) {
-				filteredItems = filteredItems.filter((item) => parseFloat(item.rate || 0) > 0);
-			}
-
-			// STEP 4: APPLY TEMPLATE/VARIANT FILTER
-			if (this.pos_profile?.posa_hide_variants_items) {
-				filteredItems = filteredItems.filter((item) => !item.variant_of);
-			}
-
-			// STEP 5: APPLY PAGINATION
-			const limit = this.enable_custom_items_per_page ? this.items_per_page : this.itemsPerPage;
-			filteredItems = filteredItems.slice(0, limit);
-
-			// STEP 6: ENSURE QUANTITIES ARE DEFINED
-			filteredItems.forEach((item) => {
-				if (item.actual_qty === undefined || item.actual_qty === null) {
-					item.actual_qty = 0;
-				}
-			});
-
-			return filteredItems;
+			return items;
 		},
 		debounce_search: {
 			get() {
@@ -3025,7 +2930,7 @@ export default {
 		// Trigger an immediate refresh once items are available
 		this.update_cur_items_details();
 		this.refresh_interval = setInterval(() => {
-			if (this.filtered_items && this.filtered_items.length > 0) {
+			if (this.items && this.items.length > 0) {
 				this.update_cur_items_details();
 			}
 		}, 30000); // Refresh every 30 seconds after the initial fetch
@@ -3071,8 +2976,6 @@ export default {
 		this.itemsPerPage = this.items_per_page;
 		window.addEventListener("resize", this.checkItemContainerOverflow);
 		this.$nextTick(this.checkItemContainerOverflow);
-
-		window.addEventListener("add-item-to-pos", this.handleAddToPOS);
 	},
 
 	beforeUnmount() {
@@ -3110,14 +3013,11 @@ export default {
 		this.eventBus.off("register_pos_profile");
 		this.eventBus.off("update_cur_items_details");
 		this.eventBus.off("update_offers_counters");
-		a;
 		this.eventBus.off("update_coupons_counters");
 		this.eventBus.off("update_customer_price_list");
 		this.eventBus.off("update_customer");
 		this.eventBus.off("force_reload_items");
 		window.removeEventListener("resize", this.checkItemContainerOverflow);
-
-		window.removeEventListener("add-item-to-pos", this.handleAddToPOS);
 	},
 };
 </script>

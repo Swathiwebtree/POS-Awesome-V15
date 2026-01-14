@@ -8,7 +8,9 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 
 	// Ensure frappe.PosApp is available before using it
 	if (!frappe.PosApp || !frappe.PosApp.posapp) {
-		console.error(" frappe.PosApp.posapp is not defined. Check if posawesome.umd.js is loaded properly.");
+		console.error(
+			"frappe.PosApp.posapp is not defined. Check if posawesome.umd.js is loaded properly."
+		);
 		return;
 	}
 
@@ -20,27 +22,38 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 
 	// Load CSS dynamically
 	$("head").append(
-		"<link href='/assets/posawesome/node_modules/vuetify/dist/vuetify.min.css' rel='stylesheet'>",
+		"<link href='/assets/posawesome/node_modules/vuetify/dist/vuetify.min.css' rel='stylesheet'>"
 	);
 	$("head").append(
-		"<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css'>",
+		"<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css'>"
 	);
 	$("head").append("<link rel='preconnect' href='https://fonts.googleapis.com'>");
 	$("head").append("<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>");
 	$("head").append(
-		"<link rel='preload' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900' as='style'>",
+		"<link rel='preload' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900' as='style'>"
 	);
 	$("head").append(
-		"<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900'>",
+		"<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900'>"
 	);
 
-	// Function to handle tax inclusive updates
-	const update_totals_based_on_tax_inclusive = () => {
+	// ---- SAFE HANDLER (no logic changed) ----
+	const update_totals_based_on_tax_inclusive = async () => {
 		console.log("Updating totals based on tax inclusive settings");
-		const posProfile = page.$PosApp.pos_profile;
+
+		//  Wait until Vue sets pos_profile
+		let retries = 0;
+		while (
+			(!page.$PosApp || !page.$PosApp.posProfile) &&
+			retries < 20
+		) {
+			await new Promise((r) => setTimeout(r, 300));
+			retries++;
+		}
+
+		const posProfile = page.$PosApp?.posProfile?.name;
 
 		if (!posProfile) {
-			console.error("POS Profile is not set.");
+			console.warn("POS Profile not yet available. Skipping tax update.");
 			return;
 		}
 
@@ -51,63 +64,67 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 			const totalAmountField = document.getElementById("input-v-25");
 			const grandTotalField = document.getElementById("input-v-29");
 
-			if (totalAmountField && grandTotalField) {
-				if (taxInclusive) {
-					totalAmountField.value = grandTotalField.value;
-					console.log("Total amount copied from grand total:", grandTotalField.value);
-				} else {
-					totalAmountField.value = "";
-					console.log("Total amount cleared because checkbox is unchecked.");
-				}
+			if (!totalAmountField || !grandTotalField) {
+				console.warn("Total / Grand Total fields not found yet");
+				return;
+			}
+
+			if (taxInclusive) {
+				totalAmountField.value = grandTotalField.value;
+				console.log("Total copied from grand total:", grandTotalField.value);
 			} else {
-				console.error("Could not find total amount or grand total field by ID.");
+				totalAmountField.value = "";
+				console.log("Total cleared (tax exclusive)");
 			}
 		};
 
 		const fetchAndCache = () => {
 			frappe.call({
-				method: "posawesome.posawesome.api.utilities.get_pos_profile_tax_inclusive",
+				method:
+					"posawesome.posawesome.api.utilities.get_pos_profile_tax_inclusive",
 				args: { pos_profile: posProfile },
 				callback: (response) => {
-					if (response.message !== undefined) {
+					if (response?.message !== undefined) {
 						const posa_tax_inclusive = response.message;
+
 						try {
-							localStorage.setItem(cacheKey, JSON.stringify(posa_tax_inclusive));
+							localStorage.setItem(
+								cacheKey,
+								JSON.stringify(posa_tax_inclusive)
+							);
 						} catch (err) {
 							console.warn("Failed to cache tax inclusive setting", err);
 						}
+
 						applySetting(posa_tax_inclusive);
+
 						import("/assets/posawesome/dist/js/offline/index.js")
-							.then((m) => m?.setTaxInclusiveSetting?.(posa_tax_inclusive))
+							.then((m) =>
+								m?.setTaxInclusiveSetting?.(posa_tax_inclusive)
+							)
 							.catch(() => {});
-					} else {
-						console.error("Error fetching POS Profile or POS Profile not found.");
 					}
 				},
 			});
 		};
 
-		if (navigator.onLine) {
-			fetchAndCache();
-			return;
-		}
-
-		if (cachedValue !== null) {
+		if (!navigator.onLine && cachedValue) {
 			try {
 				const val = JSON.parse(cachedValue);
 				applySetting(val);
 				import("/assets/posawesome/dist/js/offline/index.js")
 					.then((m) => m?.setTaxInclusiveSetting?.(val))
 					.catch(() => {});
-			} catch (e) {
-				console.warn("Failed to parse cached tax inclusive value", e);
-			}
-			return;
+				return;
+			} catch {}
 		}
 
 		fetchAndCache();
 	};
 
 	// Listen for realtime profile registration
-	frappe.realtime.on("pos_profile_registered", update_totals_based_on_tax_inclusive);
+	frappe.realtime.on(
+		"pos_profile_registered",
+		update_totals_based_on_tax_inclusive
+	);
 };
