@@ -1769,6 +1769,10 @@ export default {
 			const payload = { ...item };
 			delete payload._barcode_qty;
 
+			this.eventBus.emit("add_item", payload);
+
+			/* OPTIONAL (safe) */
+			this.eventBus.emit("item-added");
 
 			// Show success feedback
 			const message = isCarWash
