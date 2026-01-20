@@ -17,6 +17,7 @@
 			<template v-slot:item.item_name="{ item }">
 				<div class="d-flex align-center">
 					<span>{{ item.item_name }}</span>
+
 					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">{{
 						__("Bundle")
 						}}</v-chip>
@@ -402,7 +403,7 @@
 						!!item.posa_is_replace ||
 						!!item.posa_offer_applied ||
 						item.item_group === 'Engine Oil'
-						" @input="applyItemDiscount(item, $event.target.value)" prepend-inner-icon="mdi-percent" />
+						" @input="applyItemDiscount(item, $event.target.value)" @click.stop @focus.stop prepend-inner-icon="mdi-percent" />
 			</template>
 
 		</v-data-table-virtual>
@@ -496,6 +497,21 @@ export default {
 		},
 	},
 	methods: {
+		notifyAutoDiscount(item) {
+			if (item._auto_discount_notified) return;
+
+			this.$set
+				? this.$set(item, "_auto_discount_notified", true)
+				: (item._auto_discount_notified = true);
+
+			this.$nextTick(() => {
+				this.$parent?.eventBus?.emit("show_message", {
+					title: __("Auto Discount Applied"),
+					color: "success",
+				});
+			});
+		},
+
 		addOne(item) {
 			item.qty = Number(item.qty || 0) + 1;
 
@@ -522,46 +538,42 @@ export default {
 			const qty = Number(item.qty) || 0;
 
 			// BULK CONDITION MET
-			if (rule.min_qty && qty >= rule.min_qty) {
-				if ((item.discount_percentage || 0) < rule.max_discount) {
+			if (qty >= rule.min_qty) {
+				if (item.discount_percentage !== rule.max_discount) {
 					item.discount_percentage = rule.max_discount;
 
 					this.calcPrices(
 						item,
-						item.discount_percentage,
+						rule.max_discount,
 						{ target: { id: "discount_percentage" } },
 						this
 					);
 
 					this.calcItemPrice(item, this);
+					this.notifyAutoDiscount(item);
 				}
 			}
 		},
 
 		applyItemDiscount(item, value) {
-			const discount = Number(value) || 0;
+			let discount = Number(value) || 0;
 
-			// Respect max cap if present
-			const cap =
-				this.$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code]?.max_discount ??
-				this.$parent?.maxDiscountInfo?.invoice_max_discount ??
-				100;
+			const rule =
+				this.$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code];
 
-			if (discount > cap) {
-				item.discount_percentage = cap;
+			if (rule) {
+				const min = Number(rule.min || 0);
+				const max = Number(rule.max || 0);
 
-				this.$parent.eventBus.emit("show_message", {
-					title: __("Discount limited"),
-					message: __(`Max allowed discount is ${cap}%`),
-					color: "warning",
-				});
-			} else {
-				item.discount_percentage = discount;
+				if (discount < min) discount = min;
+				if (max && discount > max) discount = max;
 			}
+
+			item.discount_percentage = discount;
 
 			this.calcPrices(
 				item,
-				item.discount_percentage,
+				discount,
 				{ target: { id: "discount_percentage" } },
 				this
 			);
@@ -751,6 +763,32 @@ export default {
 				console.error("Error parsing drag data:", error);
 			}
 		},
+
+		autoApplyVehicleDiscount(item) {
+			const rule =
+				this.$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code];
+
+			if (!rule) return;
+
+			// 🔒 Only auto-apply when backend explicitly allows it
+			if (!rule.auto_apply) return;
+
+			// Do not override user-entered discount
+			if (Number(item.discount_percentage || 0) > 0) return;
+
+			// Auto apply MIN discount
+			item.discount_percentage = rule.min_discount;
+
+			this.calcPrices(
+				item,
+				rule.min_discount,
+				{ target: { id: "discount_percentage" } },
+				this
+			);
+
+			this.notifyAutoDiscount(item);
+		},
+
 		addItem(newItem) {
 			// safe merge: match by item_code + uom + rate if possible
 			const match = this.items.find(
@@ -761,40 +799,59 @@ export default {
 			);
 
 			if (match) {
-				// If found, increment quantity (ensure numeric)
 				match.qty = Number(match.qty) + (Number(newItem.qty) || 1);
 				match.amount = Number(match.qty) * Number(match.rate || 0);
 				this.$forceUpdate && this.$forceUpdate();
 				return;
 			}
 
-			// If no exact match, attempt to find by item_code and merge safely
+			// If no exact match, attempt to find by item_code
 			const idx = this.items.findIndex(i => i.item_code === newItem.item_code);
 			if (idx !== -1) {
-				// merge rates safely using helper if rates present on newItem
 				if (newItem.rate !== undefined || newItem.base_rate !== undefined) {
 					this.applyRatesToItem(this.items[idx], newItem);
-					// merge non-rate fields carefully
-					this.items[idx].description = newItem.description ?? this.items[idx].description;
-					this.items[idx].price_list_rate = newItem.price_list_rate ?? this.items[idx].price_list_rate;
-					this.$forceUpdate && this.$forceUpdate();
+					this.items[idx].description =
+						newItem.description ?? this.items[idx].description;
+					this.items[idx].price_list_rate =
+						newItem.price_list_rate ?? this.items[idx].price_list_rate;
 				} else {
-					// just update qty if that's the purpose
-					this.items[idx].qty = (Number(this.items[idx].qty) || 0) + (Number(newItem.qty) || 1);
+					this.items[idx].qty =
+						(Number(this.items[idx].qty) || 0) + (Number(newItem.qty) || 1);
 				}
+				this.$forceUpdate && this.$forceUpdate();
 				return;
 			}
 
-			// If genuinely a new item: ensure qty is correct (service->1 else numeric)
 			const newItemCopy = { ...newItem };
-			const isService = newItemCopy.is_service_item === 1 || /carwash|car wash|bike wash|bikewash/i.test(newItemCopy.item_group || newItemCopy.item_name || '');
-			newItemCopy.qty = isService ? (Number(newItemCopy.qty) || 1) : (Number(newItemCopy.qty) || 0);
-			newItemCopy.is_service_item = isService ? 1 : (newItemCopy.is_service_item ? 1 : 0);
-			newItemCopy.update_stock = isService ? 0 : (typeof newItemCopy.update_stock !== 'undefined' ? newItemCopy.update_stock : 1);
+			const isService =
+				newItemCopy.is_service_item === 1 ||
+				/carwash|car wash|bike wash|bikewash/i.test(
+					newItemCopy.item_group || newItemCopy.item_name || ''
+				);
+
+			newItemCopy.qty = isService
+				? (Number(newItemCopy.qty) || 1)
+				: (Number(newItemCopy.qty) || 0);
+
+			newItemCopy.is_service_item = isService ? 1 : 0;
+			newItemCopy.update_stock = isService ? 0 : 1;
 
 			this.items.push(newItemCopy);
+
+			this.$nextTick(() => {
+				this.autoApplyVehicleDiscount(newItemCopy);
+			});
+
+			if (
+				newItemCopy.discount_percentage > 0 &&
+				!newItemCopy._auto_discount_notified
+			) {
+				this.notifyAutoDiscount(newItemCopy);
+			}
+
 			this.$forceUpdate && this.$forceUpdate();
 		},
+
 		addItemDebounced: _.debounce(function (item) {
 			this.addItem(item);
 		}, 50),
@@ -1578,4 +1635,17 @@ export default {
 .expanded-row {
 	background-color: var(--surface-secondary);
 }
+
+.auto-discount-badge {
+	display: inline-block;
+	padding: 2px 6px;
+	background: #e6f4ea;
+	color: #1e7e34;
+	border-radius: 6px;
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+	line-height: 1.2;
+}
+
 </style>

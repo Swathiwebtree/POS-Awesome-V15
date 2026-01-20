@@ -993,7 +993,7 @@
     "type": "Link"
    }
   ],
-  "modified": "2025-12-10 11:26:26.162606",
+  "modified": "2025-12-29 12:39:26.735106",
   "module": "Accounts",
   "name": "Accounting",
   "number_cards": [
@@ -1031,7 +1031,7 @@
   "quick_lists": [],
   "restrict_to_domain": "",
   "roles": [],
-  "sequence_id": 4.0,
+  "sequence_id": 5.0,
   "shortcuts": [
    {
     "color": "Grey",

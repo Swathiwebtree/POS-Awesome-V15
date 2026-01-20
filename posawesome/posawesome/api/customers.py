@@ -125,14 +125,10 @@ def update_loyalty_points(customer_name, company_name, points_amount):
         )
 
         if current_points < points_amount:
-            return {
-                "status": "error",
-                "message": _("Insufficient loyalty points. Available: {0}, Requested: {1}").format(
-                    flt(current_points, 2), flt(points_amount, 2)
-                ),
-                "available_points": current_points,
-                "requested_points": points_amount,
-            }
+           frappe.throw(_("Insufficient loyalty points. Available: {0}, Requested: {1}")
+                        .format(current_points, points_amount),
+                        frappe.ValidationError,
+                        )
 
         
         #   Loyalty Point Entry (NEGATIVE only)

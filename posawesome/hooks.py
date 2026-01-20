@@ -119,6 +119,9 @@ doc_events = {
     "Purchase Receipt": {
         "on_submit": "posawesome.posawesome.api.purchase_receipt.create_stock_entry_from_pr"
     },
+    "Loyalty Point Entry": {
+        "validate": "posawesome.posawesome.api.loyalty.validate_loyalty_redeem"
+    }
 }
 
 # Scheduled Tasks

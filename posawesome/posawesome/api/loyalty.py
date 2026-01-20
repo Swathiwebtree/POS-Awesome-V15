@@ -48,3 +48,27 @@ def on_invoice_submit(doc, method):
 
     entry.insert(ignore_permissions=True)
     entry.submit()
+
+def validate_loyalty_redeem(doc, method=None):
+    if flt(doc.loyalty_points) >= 0:
+        return
+
+    current_points = frappe.db.sql(
+        """
+        SELECT IFNULL(SUM(loyalty_points), 0)
+        FROM `tabLoyalty Point Entry`
+        WHERE customer=%s
+          AND loyalty_program=%s
+          AND company=%s
+          AND docstatus=1
+          AND name!=%s
+        """,
+        (doc.customer, doc.loyalty_program, doc.company, doc.name),
+    )[0][0]
+
+    if abs(doc.loyalty_points) > flt(current_points):
+        frappe.throw(
+            _("Insufficient loyalty points. Available: {0}, Tried: {1}")
+            .format(current_points, abs(doc.loyalty_points)),
+            frappe.ValidationError,
+        )

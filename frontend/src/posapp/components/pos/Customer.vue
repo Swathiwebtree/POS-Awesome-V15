@@ -1209,9 +1209,7 @@ export default {
 					this.selectedVehicle = this.vehicles[0].name;
 					this.eventBus.emit("vehicle_selected", this.selectedVehicle);
 					this.vehicle_no = this.vehicles[0].vehicle_no;
-				} else if (this.vehicles.length > 1) {
-					this.vehicles.unshift({ name: null, vehicle_no: frappe._("Select Vehicle...") });
-				} else {
+				}else {
 					this.eventBus.emit("vehicle_selected", null);
 				}
 			} catch (err) {

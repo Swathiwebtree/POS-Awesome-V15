@@ -492,6 +492,73 @@ export default {
 			console.log("[MAX DISCOUNT]", this.maxDiscountInfo);
 		},
 
+		async applyVehicleAutoDiscount(itemRow) {
+			if (!itemRow || !itemRow.item_code || !this.custom_vehicle_no) return;
+
+			//prevent infinite loop
+			if (itemRow._vehicle_discount_loading) return;
+
+			itemRow._vehicle_discount_loading = true;
+
+			try {
+				const res = await frappe.call({
+					method: "posawesome.posawesome.api.discounts.get_vehicle_item_discount",
+					args: {
+						vehicle_no: this.custom_vehicle_no,
+						item_code: itemRow.item_code,
+					},
+				});
+
+				const rule = res.message;
+				if (!rule) return;
+
+				// 🔹 Store rule for later (VERY IMPORTANT)
+				itemRow._vehicle_discount_rule = rule;
+
+				// ❌ Do not auto apply if backend says no
+				if (!rule.auto_apply) return;
+
+				// ❌ Prevent double apply
+				if (itemRow.auto_discount_applied) return;
+
+				// ❌ Do not override manual discount
+				if (Number(itemRow.discount_percentage || 0) > 0) return;
+
+				// Apply discount %
+				itemRow.discount_percentage = Number(rule.auto_apply_value || 0);
+				itemRow.auto_discount_applied = true;
+
+				// 🔥 CALCULATE DISCOUNT AMOUNT MANUALLY
+				const gross = Number(itemRow.price_list_rate || 0) * Number(itemRow.qty || 1);
+
+				itemRow.discount_amount = this.flt(
+					(gross * itemRow.discount_percentage) / 100,
+					this.currency_precision
+				);
+
+				// 🔥 UPDATE RATE & AMOUNT
+				itemRow.rate = this.flt(
+					(gross - itemRow.discount_amount) / itemRow.qty,
+					this.currency_precision
+				);
+
+				itemRow.amount = this.flt(
+					itemRow.qty * itemRow.rate,
+					this.currency_precision
+				);
+
+				// 🔥 NOW totals will work
+				this.$nextTick(() => {
+					this.update_totals();
+					this.apply_additional_discount();
+					this.$forceUpdate();
+				});
+
+			} catch (e) {
+				console.error("[AutoDiscount] Failed:", e);
+			}
+		},
+
 
 		recalculateTotals() {
 			const precision = this.currency_precision;
@@ -1746,6 +1813,16 @@ export default {
 				invoiceData.additional_discount_percentage = this.additional_discount_percentage || 0;
 			}
 
+			if (
+				(invoiceData.discount_amount > 0 ||
+					invoiceData.additional_discount > 0 ||
+					invoiceData.additional_discount_percentage > 0) &&
+				!invoiceData.apply_discount_on
+			) {
+				invoiceData.apply_discount_on = "Net Total";
+			}
+
+
 			// Recalculate base currency amounts
 			const exchangeRate = this.exchange_rate || this.conversion_rate || 1;
 			invoiceData.base_total = invoiceData.total * exchangeRate;
@@ -2042,6 +2119,15 @@ export default {
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
 			this.invoice_doc.additional_discount = this.additional_discount || 0;
 			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
+			if (
+				(this.invoice_doc.discount_amount > 0 ||
+					this.invoice_doc.additional_discount > 0 ||
+					this.invoice_doc.additional_discount_percentage > 0) &&
+				!this.invoice_doc.apply_discount_on
+			) {
+				this.invoice_doc.apply_discount_on = "Grand Total";
+			}
+
 			this.invoice_doc.grand_total = this.grand_total || this.subtotal || 0;
 			this.invoice_doc.rounded_total = this.rounded_total || this.invoice_doc.grand_total;
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
@@ -2778,7 +2864,15 @@ export default {
 
 		this.eventBus.on("add_item", (item) => {
 			this.add_item(item);
+
+			this.$nextTick(() => {
+				const lastItem = this.items[this.items.length - 1];
+				if (lastItem) {
+					this.applyVehicleAutoDiscount(lastItem);
+				}
+			});
 		});
+
 		this.eventBus.on("update_customer", (customer) => {
 			this.customer = customer;
 
@@ -2936,6 +3030,23 @@ export default {
 
 	watch: {
 		...invoiceWatchers,
+		custom_vehicle_no: {
+			immediate: true,
+			handler(newVal) {
+				if (!newVal) return;
+
+				this.$nextTick(() => {
+					this.fetchMaxDiscount();
+				});
+
+				this.$nextTick(() => {
+					(this.items || []).forEach(item => {
+						item.discount_locked = 0;
+						this.applyVehicleAutoDiscount(item);
+					});
+				});
+			}
+		},
 
 		items_group: {
 			handler(newVal) {
@@ -3060,6 +3171,12 @@ export default {
 					this.$forceUpdate();
 					this.apply_additional_discount();
 
+				});
+
+				newItems.forEach(item => {
+					if (!item.discount_locked && this.custom_vehicle_no) {
+						this.applyVehicleAutoDiscount(item);
+					}
 				});
 			},
 		},
