@@ -365,6 +365,7 @@ export default {
 	mixins: [format],
 	data() {
 		return {
+			_discount_loading: false,
 			loaded_draft_name: null,
 			// POS profile settings
 			pos_profile: "",
@@ -472,6 +473,261 @@ export default {
 
 		handleItemGroupUpdate(newGroup) {
 			this.item_group = newGroup;
+		},
+
+		async applyVehicleDiscountsToAllItems() {
+			if (!this.custom_vehicle_no || !this.items || this.items.length === 0) {
+				console.log('[Discount] No vehicle or no items to apply discount');
+				return;
+			}
+
+			if (this._discount_loading) {
+				console.log('[Discount] Already loading discounts, skipping');
+				return;
+			}
+
+			this._discount_loading = true;
+
+			console.log('[Discount] Applying discounts to', this.items.length, 'items');
+
+			try {
+				for (const item of this.items) {
+					// Skip if user has manually set discount
+					if (item._manual_discount_set) {
+						console.log('[Discount] Skipping', item.item_code, '- manual discount set');
+						continue;
+					}
+
+					// Apply discount to this item
+					await this.applyVehicleDiscountToItem(item);
+				}
+
+				// Recalculate totals after all discounts applied
+				this.$nextTick(() => {
+					this.update_totals();
+					this.apply_additional_discount();
+					this.$forceUpdate();
+				});
+
+			} catch (e) {
+				console.error('[Discount] Error applying discounts:', e);
+			} finally {
+				this._discount_loading = false;
+			}
+		},
+
+		async applyVehicleDiscountToItem(item) {
+			if (!item || !item.item_code || !this.custom_vehicle_no) {
+				return;
+			}
+
+			// Prevent duplicate processing
+			if (item._discount_processing) {
+				return;
+			}
+
+			item._discount_processing = true;
+
+			try {
+				console.log('[Discount] Processing item:', item.item_code);
+
+				const res = await frappe.call({
+					method: "posawesome.posawesome.api.discounts.get_vehicle_item_discount",
+					args: {
+						vehicle_no: this.custom_vehicle_no,
+						item_code: item.item_code,
+					},
+				});
+
+				const rule = res.message;
+
+				if (!rule) {
+					console.log('[Discount] No rule for item:', item.item_code);
+					return;
+				}
+
+				console.log('[Discount] Rule for', item.item_code, ':', rule);
+
+				// Store rule for validation
+				item._vehicle_discount_rule = rule;
+
+				// Engine Oil - NO DISCOUNT
+				if (rule.item_type === 'engine_oil') {
+					item.discount_percentage = 0;
+					item.discount_amount = 0;
+					item._discount_locked = true;
+					console.log('[Discount] Engine Oil - no discount');
+					return;
+				}
+
+				// Check if auto-apply is enabled
+				if (!rule.auto_apply) {
+					console.log('[Discount] Auto-apply disabled, max allowed:', rule.max_discount);
+					item._max_discount_allowed = rule.max_discount || 0;
+					return;
+				}
+
+				// AUTO-APPLY the default max discount
+				const discountToApply = Number(rule.auto_apply_value || 0);
+
+				if (discountToApply <= 0) {
+					console.log('[Discount] No discount value to apply');
+					return;
+				}
+
+				console.log('[Discount] Auto-applying', discountToApply, '% to', item.item_code);
+
+				// Calculate discount
+				const gross = Number(item.price_list_rate || 0) * Number(item.qty || 1);
+
+				item.discount_percentage = discountToApply;
+				item.discount_amount = this.flt(
+					(gross * discountToApply) / 100,
+					this.currency_precision
+				);
+
+				// Update rate and amount
+				item.rate = this.flt(
+					(gross - item.discount_amount) / (item.qty || 1),
+					this.currency_precision
+				);
+
+				item.amount = this.flt(
+					item.qty * item.rate,
+					this.currency_precision
+				);
+
+				// Mark as auto-applied
+				item._auto_discount_applied = true;
+				item._max_discount_allowed = rule.max_discount || discountToApply;
+
+				console.log('[Discount] Applied', discountToApply, '% to', item.item_code);
+
+			} catch (e) {
+				console.error('[Discount] Error applying discount to item:', e);
+			} finally {
+				item._discount_processing = false;
+			}
+		},
+
+		async validateAndApplyManualDiscount(item, discountPercentage) {
+			if (!this.custom_vehicle_no || !item.item_code) {
+				// No vehicle context, allow discount
+				item.discount_percentage = Number(discountPercentage || 0);
+				this.recalculateItemPrice(item);
+				return true;
+			}
+
+			const discount = Number(discountPercentage || 0);
+
+			// Zero discount is always valid
+			if (discount <= 0) {
+				item.discount_percentage = 0;
+				item.discount_amount = 0;
+				this.recalculateItemPrice(item);
+				return true;
+			}
+
+			try {
+				const res = await frappe.call({
+					method: "posawesome.posawesome.api.discounts.validate_discount",
+					args: {
+						vehicle_no: this.custom_vehicle_no,
+						item_code: item.item_code,
+						discount_percentage: discount,
+					},
+				});
+
+				const validation = res.message;
+
+				if (!validation.is_valid) {
+					// Show error
+					frappe.show_alert({
+						message: validation.message,
+						indicator: 'red'
+					});
+
+					// Revert to previous valid discount
+					if (item._auto_discount_applied && item._vehicle_discount_rule) {
+						const rule = item._vehicle_discount_rule;
+						item.discount_percentage = rule.auto_apply_value || 0;
+					} else {
+						item.discount_percentage = 0;
+					}
+
+					this.recalculateItemPrice(item);
+					return false;
+				}
+
+				// Valid discount - apply it
+				item.discount_percentage = discount;
+				item._manual_discount_set = true; // Mark as manually set
+				item._max_discount_allowed = validation.max_allowed;
+
+				this.recalculateItemPrice(item);
+
+				console.log('[Discount] Manual discount applied:', discount, '%');
+				return true;
+
+			} catch (e) {
+				console.error('[Discount] Validation error:', e);
+				frappe.show_alert({
+					message: 'Error validating discount',
+					indicator: 'red'
+				});
+				return false;
+			}
+		},
+
+		recalculateItemPrice(item) {
+			const gross = Number(item.price_list_rate || 0) * Number(item.qty || 1);
+			const discountPct = Number(item.discount_percentage || 0);
+
+			item.discount_amount = this.flt(
+				(gross * discountPct) / 100,
+				this.currency_precision
+			);
+
+			item.rate = this.flt(
+				(gross - item.discount_amount) / (item.qty || 1),
+				this.currency_precision
+			);
+
+			item.amount = this.flt(
+				item.qty * item.rate,
+				this.currency_precision
+			);
+
+			this.$nextTick(() => {
+				this.update_totals();
+				this.apply_additional_discount();
+				this.$forceUpdate();
+			});
+		},
+
+		clearVehicleDiscounts() {
+			console.log('[Discount] Clearing all vehicle discounts');
+			
+			this.items.forEach(item => {
+				if (item._auto_discount_applied) {
+					item.discount_percentage = 0;
+					item.discount_amount = 0;
+					item._auto_discount_applied = false;
+					item._vehicle_discount_rule = null;
+					item._max_discount_allowed = 0;
+					
+					// Recalculate price
+					const gross = Number(item.price_list_rate || 0) * Number(item.qty || 1);
+					item.rate = this.flt(gross / (item.qty || 1), this.currency_precision);
+					item.amount = this.flt(item.qty * item.rate, this.currency_precision);
+				}
+			});
+
+			this.$nextTick(() => {
+				this.update_totals();
+				this.apply_additional_discount();
+				this.$forceUpdate();
+			});
 		},
 
 		async fetchMaxDiscount() {
@@ -2556,6 +2812,55 @@ export default {
 
 	mounted() {
 
+		this.eventBus.on('apply_vehicle_discount', async (data) => {
+			console.log('[Discount] Apply vehicle discount event received:', data);
+			
+			if (data && data.vehicle_no) {
+				// Set vehicle number if not already set
+				if (!this.custom_vehicle_no) {
+					this.custom_vehicle_no = data.vehicle_no;
+					
+					if (this.invoice_doc) {
+						this.invoice_doc.custom_vehicle_no = data.vehicle_no;
+					}
+				}
+				
+				// Apply discounts to all items
+				await this.applyVehicleDiscountsToAllItems();
+			}
+		});
+
+		this.eventBus.on('clear_vehicle_discounts', () => {
+			this.clearVehicleDiscounts();
+		});
+
+		// const originalAddItem = this.eventBus._events?.add_item?.[0];
+		// this.eventBus.off('add_item');
+		
+		// this.eventBus.on('add_item', async (item) => {
+		// 	// Call original add_item handler if exists
+		// 	if (originalAddItem) {
+		// 		originalAddItem(item);
+		// 	} else {
+		// 		this.add_item(item);
+		// 	}
+
+		// 	// Apply vehicle discount if available
+		// 	if (this.custom_vehicle_no) {
+		// 		this.$nextTick(async () => {
+		// 			const addedItem = this.items.find(i => i.item_code === item.item_code);
+		// 			if (addedItem && !addedItem._manual_discount_set) {
+		// 				await this.applyVehicleDiscountToItem(addedItem);
+		// 			}
+		// 		});
+		// 	}
+		// });
+
+		this.eventBus.on('validate_item_discount', async (data) => {
+			const { item, discount } = data;
+			await this.validateAndApplyManualDiscount(item, discount);
+		});
+
 		this.eventBus.on("update_manual_round_off", (value) => {
 			if (!this.invoice_doc) return;
 
@@ -2862,16 +3167,34 @@ export default {
 			});
 		});
 
-		this.eventBus.on("add_item", (item) => {
+		this.eventBus.on("add_item", async (item) => {
 			this.add_item(item);
 
-			this.$nextTick(() => {
-				const lastItem = this.items[this.items.length - 1];
-				if (lastItem) {
-					this.applyVehicleAutoDiscount(lastItem);
+			this.$nextTick(async () => {
+				const addedItem = this.items[this.items.length - 1];
+				if (!addedItem) return;
+
+				if (!addedItem.posa_row_id) {
+					addedItem.posa_row_id = this.makeid(20);
+				}
+
+				// Apply vehicle discount if needed
+				if (this.custom_vehicle_no && !addedItem._manual_discount_set) {
+					await this.applyVehicleDiscountToItem(addedItem);
 				}
 			});
 		});
+
+		// this.eventBus.on("add_item", (item) => {
+		// 	this.add_item(item);
+
+		// 	this.$nextTick(() => {
+		// 		const lastItem = this.items[this.items.length - 1];
+		// 		if (lastItem) {
+		// 			this.applyVehicleAutoDiscount(lastItem);
+		// 		}
+		// 	});
+		// });
 
 		this.eventBus.on("update_customer", (customer) => {
 			this.customer = customer;
@@ -3010,6 +3333,10 @@ export default {
 		this.eventBus.off('get_items_by_group');
 		this.eventBus.off('apply_group_discount');
 		this.eventBus.off('remove_group_discount');
+
+		this.eventBus.off('apply_vehicle_discount');
+		this.eventBus.off('clear_vehicle_discounts');
+		this.eventBus.off('validate_item_discount');
 	},
 
 	// Register global keyboard shortcuts when component is created

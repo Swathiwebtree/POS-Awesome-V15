@@ -416,7 +416,7 @@ export default {
 				this.customer = val;
 				this.eventBus.emit("update_customer", val);
 				this.fetchAndEmitCustomerDetails(val);
-				this.fetchVehiclesForCustomer(val);
+				this.fetchVehiclesForCustomer(val); 
 				this.selectedVehicle = null;
 			}
 
@@ -428,12 +428,15 @@ export default {
 				this.eventBus.emit("update_customer", null);
 				this.eventBus.emit("vehicle_selected", null);
 				this.selected_customer_is_corporate = false;
+				
 				// EMIT EMPTY CUSTOMER DETAILS
 				this.eventBus.emit("update_customer_details", {
 					contact_mobile: "",
 					custom_vehicle_no: "",
 					is_corporate: false,
 				});
+				
+				this.eventBus.emit("clear_vehicle_discounts");
 			}
 		},
 
@@ -643,6 +646,11 @@ export default {
 						if (existingVehicle) {
 							this.selectedVehicle = vehicleData.name;
 						}
+
+						this.eventBus.emit("apply_vehicle_discount", {
+							customer: customerName,
+							vehicle_no: vehicleData.vehicle_no
+						});
 					} else {
 						this.selectedVehicle = null;
 						this.eventBus.emit("vehicle_selected", null);
@@ -669,6 +677,7 @@ export default {
 				this.loadingVehicles = false;
 			}
 		},
+	
 
 		edit_vehicle() {
 			const vehicle_to_edit =
@@ -1185,7 +1194,6 @@ export default {
 					});
 					const serverVehicles = res?.message || [];
 
-					// Merge/Deduplicate server results with local results
 					const localNames = new Set(fetchedVehicles.map((v) => v.name));
 					for (const v of serverVehicles) {
 						if (!localNames.has(v.name)) {
@@ -1209,7 +1217,12 @@ export default {
 					this.selectedVehicle = this.vehicles[0].name;
 					this.eventBus.emit("vehicle_selected", this.selectedVehicle);
 					this.vehicle_no = this.vehicles[0].vehicle_no;
-				}else {
+					
+					this.eventBus.emit("apply_vehicle_discount", {
+						customer: customerName,
+						vehicle_no: this.vehicles[0].vehicle_no
+					});
+				} else {
 					this.eventBus.emit("vehicle_selected", null);
 				}
 			} catch (err) {
@@ -1220,12 +1233,13 @@ export default {
 			}
 		},
 
-		// Duplicate-safe onVehicleSelect for other listeners (kept for compatibility)
 		onVehicleSelect(val) {
 			if (!val) {
 				this.selectedVehicle = null;
 				this.vehicle_no = "";
 				this.eventBus.emit("vehicle_selected", null);
+
+				this.eventBus.emit("clear_vehicle_discounts");
 				return;
 			}
 
@@ -1240,6 +1254,11 @@ export default {
 					this.internalCustomer = vehicle.customer;
 					this.eventBus.emit("update_customer", vehicle.customer);
 				}
+
+				this.eventBus.emit("apply_vehicle_discount", {
+					customer: this.customer || vehicle.customer,
+					vehicle_no: vehicle.vehicle_no
+				});
 			}
 		},
 	},
@@ -1321,6 +1340,7 @@ export default {
 			this.tempSelectedCustomer = null;
 			this.selectedVehicle = null;
 			this.vehicle_no = "";
+			this.vehicles = [];
 		});
 
 		this.effectiveReadonly = this.readonly && navigator.onLine;
@@ -1407,7 +1427,11 @@ export default {
 					await this.get_customer_names();
 				});
 
-				this.eventBus.on("add_vehicle_to_list", (vehicle) => {
+				this.eventBus.on("add_vehicle_to_list", async (vehicle) => {
+					if (!this.customer) return;
+
+					await this.fetchVehiclesForCustomer(this.customer);
+
 					if (vehicle.customer === this.customer) {
 						this.vehicles = this.vehicles.filter(v => v.name !== vehicle.name);
 
@@ -1426,6 +1450,7 @@ export default {
 						this.eventBus.emit("vehicle_selected", vehicle.name);
 					}
 				});
+
 
 				this.eventBus.on("set_vehicle", (vehicle_name) => {
 					this.selectedVehicle = vehicle_name;

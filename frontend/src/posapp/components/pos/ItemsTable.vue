@@ -403,7 +403,14 @@
 						!!item.posa_is_replace ||
 						!!item.posa_offer_applied ||
 						item.item_group === 'Engine Oil'
-						" @input="applyItemDiscount(item, $event.target.value)" @click.stop @focus.stop prepend-inner-icon="mdi-percent" />
+						" @input="
+							$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code]
+								? handleDiscountInput(item, $event)
+								: applyItemDiscount(item, $event.target.value)
+							"
+							 @click.stop
+							 @focus.stop 
+							 prepend-inner-icon="mdi-percent" />
 			</template>
 
 		</v-data-table-virtual>
@@ -429,6 +436,7 @@
 import _ from "lodash";
 import { useDiscounts } from "@/posapp/composables/useDiscounts";
 export default {
+	inject: ["eventBus"],
 	name: "ItemsTable",
 	props: {
 		headers: Array,
@@ -471,6 +479,7 @@ export default {
 			editNameDialog: false,
 			editNameTarget: null,
 			editedName: "",
+			_vehicleDiscountMessageShown: false,
 		};
 	},
 	computed: {
@@ -498,17 +507,20 @@ export default {
 	},
 	methods: {
 		notifyAutoDiscount(item) {
-			if (item._auto_discount_notified) return;
+			// show only once per invoice
+			if (this._vehicleDiscountMessageShown) return;
 
-			this.$set
-				? this.$set(item, "_auto_discount_notified", true)
-				: (item._auto_discount_notified = true);
+			// make sure this is actually an auto-applied discount
+			if (!item || Number(item.discount_percentage || 0) <= 0) return;
 
-			this.$nextTick(() => {
-				this.$parent?.eventBus?.emit("show_message", {
-					title: __("Auto Discount Applied"),
-					color: "success",
-				});
+			this._vehicleDiscountMessageShown = true;
+
+			this.eventBus.emit("show_message", {
+				title: __("Vehicle Discount Applied"),
+				message: __(
+					"Default vehicle discount has been automatically applied to eligible items."
+				),
+				color: "success",
 			});
 		},
 
@@ -554,6 +566,66 @@ export default {
 				}
 			}
 		},
+
+		handleDiscountInput(item, event) {
+			const value = event.target.value;
+
+			// Emit to parent for validation
+			this.eventBus.emit('validate_item_discount', {
+				item: item,
+				discount: value
+			});
+		},
+
+		/**
+		 * Check if discount field should be disabled
+		 */
+		isDiscountDisabled(item) {
+			// Always disable for Engine Oil
+			if ((item.item_group || '').trim() === 'Engine Oil') {
+				return true;
+			}
+
+			// Disable if locked by vehicle discount system
+			if (item._discount_locked) {
+				return true;
+			}
+
+			// Check other conditions from parent
+			if (!this.pos_profile.posa_allow_user_to_edit_item_discount) {
+				return true;
+			}
+
+			if (item.posa_is_replace) {
+				return true;
+			}
+
+			if (item.posa_offer_applied) {
+				return true;
+			}
+
+			return false;
+		},
+
+		/**
+		 * Show discount info tooltip
+		 */
+		getDiscountTooltip(item) {
+			if ((item.item_group || '').trim() === 'Engine Oil') {
+				return 'Discount not allowed for Engine Oil';
+			}
+
+			if (item._auto_discount_applied) {
+				return `Auto-applied discount (Max: ${item._max_discount_allowed || 0}%)`;
+			}
+
+			if (item._max_discount_allowed) {
+				return `Maximum allowed: ${item._max_discount_allowed}%`;
+			}
+
+			return 'Enter discount percentage';
+		},
+	
 
 		applyItemDiscount(item, value) {
 			let discount = Number(value) || 0;

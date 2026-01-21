@@ -2,7 +2,7 @@
  "actions": [],
  "allow_rename": 1,
  "autoname": "field:vehicle_no",
- "creation": "2026-01-06 17:36:11.585757",
+ "creation": "2026-01-20 15:03:17.260634",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
@@ -33,10 +33,10 @@
   "location",
   "sales_rep",
   "comments",
-  "default_min_discount_",
-  "default_max_discount_",
-  "min_discount_",
-  "max_discount_"
+  "default_discount_stock_item",
+  "default_discount_service_item",
+  "max_discount_stock_item",
+  "max_discount_service_item"
  ],
  "fields": [
   {
@@ -179,30 +179,30 @@
    "label": "Comments"
   },
   {
-   "fieldname": "default_min_discount_",
+   "fieldname": "default_discount_stock_item",
    "fieldtype": "Float",
-   "label": "Default Min Discount %"
+   "label": "Default Discount % - Stock Items"
   },
   {
-   "fieldname": "default_max_discount_",
+   "fieldname": "default_discount_service_item",
    "fieldtype": "Float",
-   "label": "Default Max Discount %"
+   "label": "Default Discount % - Service Items"
   },
   {
-   "fieldname": "min_discount_",
+   "fieldname": "max_discount_stock_item",
    "fieldtype": "Float",
-   "label": "Min Discount %"
+   "label": "Max Discount % - Stock Items"
   },
   {
-   "fieldname": "max_discount_",
+   "fieldname": "max_discount_service_item",
    "fieldtype": "Float",
-   "label": "Max Discount %"
+   "label": "Max Discount % - Service Items"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-19 18:30:25.577414",
+ "modified": "2026-01-21 10:48:05.382982",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Vehicle Master",
