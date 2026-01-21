@@ -915,10 +915,14 @@ export default {
 		},
 
 		validateDiscount(item, discountPercentage) {
-			// No discount info yet → allow temporarily
+
+			if (item._auto_discount_applied || item._vehicle_discount_rule) {
+				return true;
+			}
+
 			if (!this.maxDiscountInfo) return true;
 
-			// ENGINE OIL — HARD BLOCK
+			// ENGINE OIL
 			if ((item.item_group || "").trim() === "Engine Oil") {
 				frappe.show_alert({
 					message: __("Discount not allowed for Engine Oil items"),
@@ -929,7 +933,6 @@ export default {
 
 			const invoiceCap = this.maxDiscountInfo.invoice_max_discount || 0;
 
-			//  CUSTOMER-TYPE MAX DISCOUNT
 			if (discountPercentage > invoiceCap) {
 				frappe.show_alert({
 					message: __(
@@ -3474,22 +3477,15 @@ export default {
 						if (!this.maxDiscountInfo) return;
 
 						this.items.forEach(item => {
+							if (item._auto_discount_applied) return;
+
 							if (item.discount_percentage > 0) {
 								if (!this.validateDiscount(item, item.discount_percentage)) {
 									item.discount_percentage = 0;
 									item.discount_amount = 0;
 
 									item.rate = this.flt(item.price_list_rate, this.currency_precision);
-									item.base_rate = this.flt(
-										item.price_list_rate / (this.exchange_rate || 1),
-										this.currency_precision
-									);
-
 									item.amount = this.flt(item.qty * item.rate, this.currency_precision);
-									item.base_amount = this.flt(
-										item.amount / (this.exchange_rate || 1),
-										this.currency_precision
-									);
 								}
 							}
 						});
