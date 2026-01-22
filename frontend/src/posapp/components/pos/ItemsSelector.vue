@@ -637,7 +637,9 @@ export default {
 		item_group(newVal, oldVal) {
 			if (newVal === oldVal) return;
 
-			// RESET EVERYTHING FIRST
+			this.loading = true;
+
+			// Reset state
 			this.searchCache.clear();
 			this.currentPage = 0;
 			this.first_search = "";
@@ -645,13 +647,21 @@ export default {
 			this.items = [];
 			this.items_loaded = false;
 
-			// LOAD FROM ONLY ONE SOURCE
-			if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
-				this.loadVisibleItems(true);
-			} else {
-				this.get_items(true);
-			}
+			// Let Vue render spinner BEFORE heavy work
+			this.$nextTick(async () => {
+				try {
+					if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
+						await this.loadVisibleItems(true);
+					} else {
+						await this.get_items(true);
+					}
+				} finally {
+					this.loading = false;
+				}
+			});
 		},
+
+
 		// Automatically search when the query has at least 3 characters
 		first_search: _.debounce(function (val, oldVal) {
 			const newLen = (val || "").trim().length;
@@ -734,15 +744,6 @@ export default {
 
 			let filtered = this.items;
 
-			// FILTER BY ITEM GROUP FIRST
-			if (this.item_group && this.item_group !== "ALL") {
-				filtered = filtered.filter((item) => {
-					return item.item_group &&
-						item.item_group.toLowerCase() === this.item_group.toLowerCase();
-				});
-			}
-
-			// THEN APPLY SEARCH TERM
 			if (searchTerm && searchTerm.trim().length >= 3) {
 				const term = searchTerm.toLowerCase();
 
@@ -2752,16 +2753,7 @@ export default {
 		},
 		displayed_items() {
 			if (!Array.isArray(this.items)) return [];
-
-			let items = this.items;
-
-			// FILTER BY ITEM GROUP (SAFETY)
-			if (this.item_group && this.item_group !== "ALL") {
-				items = items.filter(
-					i => i.item_group?.toLowerCase() === this.item_group.toLowerCase()
-				);
-			}
-			return items;
+			return this.items;
 		},
 		debounce_search: {
 			get() {

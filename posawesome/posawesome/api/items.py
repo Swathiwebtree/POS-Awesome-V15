@@ -111,11 +111,15 @@ def get_items(
     if ttl:
         ttl = int(ttl) * 60
 
+    # ----------------------------------------------------
+    # POS PROFILE ITEM GROUPS
+    # ----------------------------------------------------
     if isinstance(item_groups, str):
         try:
             item_groups = json.loads(item_groups)
         except Exception:
             item_groups = []
+
     item_groups = item_groups or get_item_groups(pos_profile_name)
     item_groups = expand_item_groups(item_groups)
     item_groups_tuple = tuple(sorted(item_groups)) if item_groups else tuple()
@@ -151,6 +155,9 @@ def get_items(
             list(item_groups_tuple),
         )
 
+    # ====================================================
+    # INTERNAL IMPLEMENTATION
+    # ====================================================
     def _get_items(
         pos_profile,
         price_list,
@@ -177,7 +184,6 @@ def get_items(
             price_list = pos_profile.get("selling_price_list")
 
         def _to_positive_int(value):
-            """Convert the input to a non-negative integer if possible."""
             try:
                 ivalue = int(value)
                 return ivalue if ivalue >= 0 else None
@@ -187,58 +193,61 @@ def get_items(
         limit = _to_positive_int(limit)
         offset = _to_positive_int(offset)
 
-        search_limit = 0
-        if use_limit_search:
-            search_limit = pos_profile.get("posa_search_limit") or 500
-
         result = []
 
-        # Build ORM filters
-        filters = {"disabled": 0, "is_sales_item": 1, "is_fixed_asset": 0}
+        # ------------------------------------------------
+        # BASE FILTERS
+        # ------------------------------------------------
+        filters = {
+            "disabled": 0,
+            "is_sales_item": 1,
+            "is_fixed_asset": 0,
+        }
+
         if start_after:
             filters["item_name"] = [">", start_after]
+
         if modified_after:
-            try:
-                parsed_modified_after = get_datetime(modified_after)
-            except Exception:
-                frappe.throw(_("modified_after must be a valid ISO datetime"))
+            parsed_modified_after = get_datetime(modified_after)
             filters["modified"] = [">", parsed_modified_after.isoformat()]
 
-        # Add item group filter
-        if item_groups:
-            filters["item_group"] = ["in", item_groups]
+        # ------------------------------------------------
+        # ✅ FIX 1: UNIFIED ITEM GROUP FILTER (CRITICAL)
+        # ------------------------------------------------
+        final_item_groups = set()
 
-        # Add search conditions
+        # POS Profile allowed groups
+        if item_groups:
+            final_item_groups.update(item_groups)
+
+        # Selected group overrides (with children)
+        if item_group and item_group.upper() != "ALL":
+            final_item_groups = set(expand_item_groups([item_group]))
+
+        if final_item_groups:
+            filters["item_group"] = ["in", list(final_item_groups)]
+
+        # ------------------------------------------------
+        # SEARCH FILTERS
+        # ------------------------------------------------
         or_filters = []
         item_code_for_search = None
-        data = {}
+
         if search_value:
-            data = search_serial_or_batch_or_barcode_number(search_value, search_serial_no, search_batch_no)
-            item_code = data.get("item_code") if data.get("item_code") else search_value
-            min_search_len = 2
+            data = search_serial_or_batch_or_barcode_number(
+                search_value, search_serial_no, search_batch_no
+            )
+            item_code = data.get("item_code") or search_value
 
-            if use_limit_search:
-                if len(search_value) >= min_search_len:
-                    or_filters = [
-                        ["name", "like", f"{item_code}%"],
-                        ["item_name", "like", f"{item_code}%"],
-                        ["item_code", "like", f"%{item_code}%"],
-                    ]
-                    item_code_for_search = item_code
-
-                # Prefer exact match when barcode/serial/batch resolves to item_code
-                if data.get("item_code"):
-                    filters["item_code"] = data.get("item_code")
-                    or_filters = []
-                    item_code_for_search = None
-                elif len(search_value) < min_search_len:
-                    # For short inputs, only attempt exact matches
-                    filters["item_code"] = item_code
-            elif data.get("item_code"):
-                filters["item_code"] = data.get("item_code")
-
-        if item_group and item_group.upper() != "ALL":
-            filters["item_group"] = ["in", expand_item_groups([item_group])]
+            if data.get("item_code"):
+                filters["item_code"] = data["item_code"]
+            else:
+                or_filters = [
+                    ["name", "like", f"%{item_code}%"],
+                    ["item_name", "like", f"%{item_code}%"],
+                    ["item_code", "like", f"%{item_code}%"],
+                ]
+                item_code_for_search = item_code
 
         if not posa_show_template_items:
             filters.update(HAS_VARIANTS_EXCLUSION)
@@ -246,23 +255,19 @@ def get_items(
         if pos_profile.get("posa_hide_variants_items"):
             filters["variant_of"] = ["is", "not set"]
 
-        # Determine limit
+        # ------------------------------------------------
+        # ✅ FIX 2: LOAD ALL ITEMS INITIALLY
+        # ------------------------------------------------
         limit_page_length = None
         limit_start = None
-        order_by = "item_name asc"
 
-        # When a specific search term is provided, fetch all matching
-        # items. Applying a limit in this scenario can truncate results
-        # and prevent relevant items from appearing in the item selector.
-        if not search_value:
-            if limit is not None:
-                limit_page_length = limit
-                if offset and not start_after:
-                    limit_start = offset
-            elif use_limit_search:
-                limit_page_length = search_limit
-                if pos_profile.get("posa_force_reload_items"):
-                    limit_page_length = None
+        if search_value:
+            limit_page_length = None
+        elif limit is not None:
+            limit_page_length = limit
+            limit_start = offset
+        else:
+            limit_page_length = None  # 🔥 LOAD ALL ITEMS
 
         fields = [
             "name",
@@ -279,37 +284,26 @@ def get_items(
             "max_discount",
             "brand",
         ]
-        fields += ["description"] if include_description else []
-        fields += ["image"] if include_image else []
+
+        if include_description:
+            fields.append("description")
+        if include_image:
+            fields.append("image")
 
         page_start = limit_start or 0
-        page_size = limit_page_length or 100
+        page_size = limit_page_length or 500
+        order_by = "item_name asc"
 
         while True:
             items_data = frappe.get_all(
                 "Item",
                 filters=filters,
-                or_filters=or_filters if or_filters else None,
+                or_filters=or_filters or None,
                 fields=fields,
                 limit_start=page_start,
                 limit_page_length=page_size,
                 order_by=order_by,
             )
-
-            if not items_data and item_code_for_search and page_start == (limit_start or 0):
-                items_data = frappe.get_all(
-                    "Item",
-                    filters=filters,
-                    or_filters=[
-                        ["name", "like", f"%{item_code_for_search}%"],
-                        ["item_name", "like", f"%{item_code_for_search}%"],
-                        ["item_code", "like", f"%{item_code_for_search}%"],
-                    ],
-                    fields=fields,
-                    limit_start=page_start,
-                    limit_page_length=page_size,
-                    order_by=order_by,
-                )
 
             if not items_data:
                 break
@@ -323,49 +317,26 @@ def get_items(
             detail_map = {d["item_code"]: d for d in details}
 
             for item in items_data:
-                item_code = item.item_code
-                detail = detail_map.get(item_code, {})
+                detail = detail_map.get(item.item_code, {})
 
-                attributes = ""
-                if pos_profile.get("posa_show_template_items") and item.has_variants:
-                    attributes = get_item_attributes(item.name)
-                item_attributes = ""
-                if pos_profile.get("posa_show_template_items") and item.variant_of:
-                    item_attributes = frappe.get_all(
-                        "Item Variant Attribute",
-                        fields=["attribute", "attribute_value"],
-                        filters={"parent": item.name, "parentfield": "attributes"},
-                    )
-
-                if (
-                    posa_display_items_in_stock
-                    and (not detail.get("actual_qty") or detail.get("actual_qty") < 0)
-                    and not item.has_variants
-                ):
-                    continue
+                if posa_display_items_in_stock:
+                    if not detail.get("actual_qty") and not item.has_variants:
+                        continue
 
                 row = {}
                 row.update(item)
                 row.update(detail)
-                row.update(
-                    {
-                        "attributes": attributes or "",
-                        "item_attributes": item_attributes or "",
-                    }
-                )
                 result.append(row)
-                if limit_page_length and len(result) >= limit_page_length:
-                    break
-
-            if limit_page_length and len(result) >= limit_page_length:
-                break
 
             page_start += len(items_data)
             if len(items_data) < page_size:
                 break
 
-        return result[:limit_page_length] if limit_page_length else result
+        return result
 
+    # ====================================================
+    # ENTRY POINT
+    # ====================================================
     if use_price_list:
         return __get_items(
             pos_profile_name,
@@ -398,7 +369,6 @@ def get_items(
             item_groups,
         )
 
-
 @frappe.whitelist()
 def get_items_groups():
     return frappe.db.sql(
@@ -415,16 +385,20 @@ def get_items_count(pos_profile, item_groups=None):
     if isinstance(item_groups, str):
         item_groups = json.loads(item_groups)
 
-    item_groups = expand_item_groups(item_groups or [])
+    if not item_groups:
+        item_groups = get_item_groups(pos_profile.get("name"))
 
-    filters = {
-        "disabled": 0,
-        "is_sales_item": 1,
-        "is_fixed_asset": 0,
-        "item_group": ["in", item_groups],
-    }
+    item_groups = expand_item_groups(item_groups)
 
-    return frappe.db.count("Item", filters)
+    return frappe.db.count(
+        "Item",
+        {
+            "disabled": 0,
+            "is_sales_item": 1,
+            "is_fixed_asset": 0,
+            "item_group": ["in", item_groups],
+        },
+    )
 
 
 

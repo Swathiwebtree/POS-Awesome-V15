@@ -294,14 +294,6 @@ export default {
 
 	watch: {
 
-		first_search: {
-			handler(newVal) {
-				if (this.$refs.itemsSelectorComponent) {
-					this.$refs.itemsSelectorComponent.first_search = newVal;
-				}
-			},
-		},
-
 		offers: {
 			deep: true,
 			handler(val) {
@@ -344,17 +336,7 @@ export default {
 		},
 
 		search_onchange() {
-			const query = (this.first_search || "").trim();
-
-			if (query.length < 3) return;
-
-			if (!this.$refs.itemsSelectorComponent) return;
-
-			this.$refs.itemsSelectorComponent.fetchItems({
-				search: query,
-				item_group: this.item_group,
-				reset: true
-			});
+			this.first_search = (this.first_search || "").trim();
 		},
 
 		clearSearch() {
