@@ -238,7 +238,7 @@ def get_items(
                 filters["item_code"] = data.get("item_code")
 
         if item_group and item_group.upper() != "ALL":
-            filters["item_group"] = ["like", f"%{item_group}%"]
+            filters["item_group"] = ["in", expand_item_groups([item_group])]
 
         if not posa_show_template_items:
             filters.update(HAS_VARIANTS_EXCLUSION)
@@ -411,17 +411,21 @@ def get_items_groups():
 @frappe.whitelist()
 def get_items_count(pos_profile, item_groups=None):
     pos_profile = json.loads(pos_profile)
+
     if isinstance(item_groups, str):
-        try:
-            item_groups = json.loads(item_groups)
-        except Exception:
-            item_groups = []
-    item_groups = item_groups or get_item_groups(pos_profile.get("name"))
-    item_groups = expand_item_groups(item_groups)
-    filters = {"disabled": 0, "is_sales_item": 1, "is_fixed_asset": 0}
-    if item_groups:
-        filters["item_group"] = ["in", item_groups]
+        item_groups = json.loads(item_groups)
+
+    item_groups = expand_item_groups(item_groups or [])
+
+    filters = {
+        "disabled": 0,
+        "is_sales_item": 1,
+        "is_fixed_asset": 0,
+        "item_group": ["in", item_groups],
+    }
+
     return frappe.db.count("Item", filters)
+
 
 
 @frappe.whitelist()

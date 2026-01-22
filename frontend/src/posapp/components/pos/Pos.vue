@@ -463,25 +463,11 @@ export default {
 		},
 
 		handleItemGroupUpdate(newGroup) {
+			if (this.item_group === newGroup) return;
+
 			this.item_group = newGroup;
 			this.first_search = "";
 			this.search = "";
-
-			this.$nextTick(() => {
-				if (this.$refs.itemsSelectorComponent) {
-					// Force ItemsSelector to reload with new group
-					this.$refs.itemsSelectorComponent.item_group = newGroup;
-					this.$refs.itemsSelectorComponent.currentPage = 0;
-					this.$refs.itemsSelectorComponent.items = [];
-
-					if (this.$refs.itemsSelectorComponent.pos_profile?.posa_local_storage &&
-						this.$refs.itemsSelectorComponent.storageAvailable) {
-						this.$refs.itemsSelectorComponent.loadVisibleItems(true);
-					} else {
-						this.$refs.itemsSelectorComponent.get_items(true);
-					}
-				}
-			});
 		},
 		handleItemsViewUpdate(newView) {
 			if (this.items_view === newView) return;

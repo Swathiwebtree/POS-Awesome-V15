@@ -1313,7 +1313,7 @@ export default {
 						limit: vm.itemsPageLimit,
 						start_after: null,
 						include_image: 1,
-						item_groups: profileGroups,
+						
 					},
 				});
 
