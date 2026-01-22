@@ -215,6 +215,11 @@
 				</div>
 				<v-row class="items">
 					<v-col cols="12" class="pt-0 mt-0">
+						<div class="items-content-wrapper">
+						<!--REAL CENTER SPINNER -->
+						<div v-if="loading" class="items-spinner-overlay">
+							<v-progress-circular indeterminate size="48" width="4" color="primary" />
+						</div>
 						<div v-if="items_view == 'card'" class="items-card-container">
 							<div v-if="loading" class="items-card-grid">
 								<Skeleton v-for="n in 8" :key="n" class="mb-4" height="120" />
@@ -355,6 +360,7 @@
 									>
 								</template>
 							</v-data-table-virtual>
+						</div>
 						</div>
 					</v-col>
 				</v-row>
@@ -3735,4 +3741,24 @@ export default {
 		font-size: 0.9rem;
 	}
 }
+.items-spinner-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+:deep([data-theme="dark"]) .items-spinner-overlay,
+:deep(.v-theme--dark) .items-spinner-overlay {
+  background: rgba(18, 18, 18, 0.6);
+}
+.items-content-wrapper {
+  position: relative;
+  height: 100%;
+}
+
+
 </style>
