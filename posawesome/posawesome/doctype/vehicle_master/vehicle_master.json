@@ -181,28 +181,32 @@
   {
    "fieldname": "default_discount_stock_item",
    "fieldtype": "Float",
-   "label": "Default Discount % - Stock Items"
+   "in_list_view": 1,
+   "label": "Default Discount % - Stock Items "
   },
   {
    "fieldname": "default_discount_service_item",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Default Discount % - Service Items"
   },
   {
    "fieldname": "max_discount_stock_item",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Max Discount % - Stock Items"
   },
   {
    "fieldname": "max_discount_service_item",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "Max Discount % - Service Items"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-21 10:48:05.382982",
+ "modified": "2026-01-22 10:46:59.713509",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Vehicle Master",
