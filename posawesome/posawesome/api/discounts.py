@@ -53,7 +53,7 @@ def get_max_discount(customer):
     if not customer:
         return {
             "customer_type": None,
-            "invoice_max_discount": 0,
+            "invoice_max_discount": None,  
         }
 
     customer_type = frappe.db.get_value(
@@ -63,10 +63,9 @@ def get_max_discount(customer):
     if not customer_type:
         return {
             "customer_type": None,
-            "invoice_max_discount": 0,
+            "invoice_max_discount": None,  
         }
 
-    # Get highest priority rule for customer type
     rule = frappe.get_all(
         "POS Discount Rule",
         filters={
@@ -78,10 +77,17 @@ def get_max_discount(customer):
         limit=1,
     )
 
+    if not rule:
+        return {
+            "customer_type": customer_type,
+            "invoice_max_discount": None,  
+        }
+
     return {
         "customer_type": customer_type,
-        "invoice_max_discount": rule[0].max_discount_ if rule else 0,
+        "invoice_max_discount": float(rule[0].max_discount_ or 0),
     }
+
 
 
 @frappe.whitelist()

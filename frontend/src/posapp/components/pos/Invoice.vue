@@ -931,9 +931,9 @@ export default {
 				return false;
 			}
 
-			const invoiceCap = this.maxDiscountInfo.invoice_max_discount || 0;
+			const invoiceCap = this.maxDiscountInfo.invoice_max_discount;
 
-			if (discountPercentage > invoiceCap) {
+			if (invoiceCap !== null && discountPercentage > invoiceCap) {
 				frappe.show_alert({
 					message: __(
 						"Maximum allowed discount for this customer is {0}%",
