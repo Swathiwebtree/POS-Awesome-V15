@@ -167,12 +167,12 @@
   "doctype_or_field": "DocType",
   "field_name": null,
   "is_system_generated": 0,
-  "modified": "2026-01-22 10:59:08.726573",
+  "modified": "2026-01-22 11:11:44.394124",
   "module": "POSAwesome",
   "name": "Vehicle Master-main-field_order",
   "property": "field_order",
   "property_type": "Data",
   "row_name": null,
-  "value": "[\"trans_number\", \"vehicle_no\", \"customer\", \"model\", \"chasis_no\", \"color\", \"reg_no\", \"warranty\", \"odometer\", \"date\", \"engine\", \"body\", \"year\", \"division\", \"address\", \"po_box\", \"city\", \"tin\", \"tel_mobile\", \"office_tel\", \"home_tel\", \"bill_to\", \"stationed\", \"location\", \"sales_rep\", \"comments\", \"default_discount_stock_item\", \"default_discount_service_item\", \"max_discount_stock_item\", \"max_discount_service_item\", \"test\"]"
+  "value": "[\"trans_number\", \"vehicle_no\", \"customer\", \"model\", \"chasis_no\", \"color\", \"reg_no\", \"warranty\", \"odometer\", \"date\", \"engine\", \"body\", \"year\", \"division\", \"address\", \"po_box\", \"city\", \"tin\", \"tel_mobile\", \"office_tel\", \"home_tel\", \"bill_to\", \"stationed\", \"location\", \"sales_rep\", \"comments\", \"custom_default_discount___stock_items\", \"default_discount__-_service_items\", \"max_discount__-_stock_items\", \"max_discount__-_service_items\"]"
  }
 ]

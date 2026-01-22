@@ -126,10 +126,10 @@ def get_vehicle_item_discount(vehicle_no, item_code):
         "Vehicle Master",
         vehicle_no,
         [
-            "default_discount_stock_item",
-            "default_discount_service_item",
-            "max_discount_stock_item",
-            "max_discount_service_item",
+            "custom_default_discount___stock_items",
+            "custom_default_discount___service_items",
+            "custom_max_discount___stock_items",
+            "custom_max_discount___service_items",
         ],
         as_dict=True,
     )
@@ -139,12 +139,12 @@ def get_vehicle_item_discount(vehicle_no, item_code):
         return result
 
     if is_service:
-        default_max_discount = vehicle.default_discount_service_item or 0
-        manual_max_discount = vehicle.max_discount_service_item or 0
+        default_max_discount = vehicle.custom_default_discount___service_items or 0
+        manual_max_discount = vehicle.custom_max_discount___service_items or 0
         field_type = "service"
     else: 
-        default_max_discount = vehicle.default_discount_stock_item or 0
-        manual_max_discount = vehicle.max_discount_stock_item or 0
+        default_max_discount = vehicle.custom_default_discount___stock_items or 0
+        manual_max_discount = vehicle.custom_max_discount___stock_items or 0
         field_type = "stock"
 
     if manual_max_discount and manual_max_discount > 0:
@@ -242,10 +242,10 @@ def get_vehicle_by_customer(customer):
             "name",
             "vehicle_no",
             "model",
-            "default_discount_stock_item",
-            "default_discount_service_item",
-            "max_discount_stock_item",
-            "max_discount_service_item"
+            "custom_default_discount___stock_items",
+            "custom_default_discount___service_items",
+            "custom_max_discount___stock_items",
+            "custom_max_discount___service_items",
         ],
         limit=1
     )

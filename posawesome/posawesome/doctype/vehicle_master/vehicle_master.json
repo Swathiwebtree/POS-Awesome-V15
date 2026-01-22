@@ -32,11 +32,7 @@
   "stationed",
   "location",
   "sales_rep",
-  "comments",
-  "default_discount_stock_item",
-  "default_discount_service_item",
-  "max_discount_stock_item",
-  "max_discount_service_item"
+  "comments"
  ],
  "fields": [
   {
@@ -177,36 +173,12 @@
    "fieldname": "comments",
    "fieldtype": "Small Text",
    "label": "Comments"
-  },
-  {
-   "fieldname": "default_discount_stock_item",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Default Discount % - Stock Items "
-  },
-  {
-   "fieldname": "default_discount_service_item",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Default Discount % - Service Items"
-  },
-  {
-   "fieldname": "max_discount_stock_item",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Max Discount % - Stock Items"
-  },
-  {
-   "fieldname": "max_discount_service_item",
-   "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Max Discount % - Service Items"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-22 10:46:59.713509",
+ "modified": "2026-01-22 11:05:13.022230",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "Vehicle Master",

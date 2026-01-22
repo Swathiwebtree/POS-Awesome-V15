@@ -300,7 +300,10 @@ fixtures = [
                     "Item Group-custom_enable_discount",
                     "Sales Invoice-custom_job_order_number",
                     "Company-custom_warehouse",
-                    "Vehicle Master-custom_test"
+                    "Vehicle Master-custom_default_discount___service_items",
+                    "Vehicle Master-custom_default_discount___stock_items",
+                    "Vehicle Master-custom_max_discount___service_items",
+                    "Vehicle Master-custom_max_discount___stock_items",
                 ],
             ]
         ],
