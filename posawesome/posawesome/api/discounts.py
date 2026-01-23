@@ -1,6 +1,5 @@
 import frappe
-from posawesome.posawesome.utils import expand_item_groups
-
+from posawesome.posawesome.api.utils import expand_item_groups
 
 SERVICE_ROOT_GROUPS = ["Services"]
 STOCK_ROOT_GROUPS = ["Products"]
