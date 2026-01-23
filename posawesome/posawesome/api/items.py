@@ -222,7 +222,7 @@ def get_items(
 
         # Selected group overrides (with children)
         if item_group and item_group.upper() != "ALL":
-            final_item_groups = set(expand_item_groups([item_group]))
+           final_item_groups = set(expand_item_groups([item_group]))
 
         if final_item_groups:
             filters["item_group"] = ["in", list(final_item_groups)]
@@ -320,9 +320,8 @@ def get_items(
                 detail = detail_map.get(item.item_code, {})
 
                 if posa_display_items_in_stock:
-                    if not detail.get("actual_qty") and not item.has_variants:
+                    if item.is_stock_item and not detail.get("actual_qty") and not item.has_variants:
                         continue
-
                 row = {}
                 row.update(item)
                 row.update(detail)
@@ -880,8 +879,11 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
         doc,
         overwrite_warehouse=False,
     )
+    
     if item.get("is_stock_item") and warehouse:
         res["actual_qty"] = get_stock_availability(item_code, warehouse)
+    else:
+        res["actual_qty"] = 999999
     res["max_discount"] = max_discount
     res["batch_no_data"] = batch_no_data
     res["serial_no_data"] = serial_no_data

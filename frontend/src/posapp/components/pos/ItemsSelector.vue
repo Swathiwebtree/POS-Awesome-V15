@@ -231,15 +231,17 @@
 								@scroll.passive="onCardScroll"
 								:class="{ 'item-container': isOverflowing }"
 							>
-								<div
-									v-for="item in displayed_items"
-									:key="item.item_code"
-									class="card-item-card"
-									@click="select_item($event, item)"
-									:draggable="true"
-									@dragstart="onDragStart($event, item)"
-									@dragend="onDragEnd"
-								>
+  							<div v-if="!loading && displayed_items.length === 0" class="no-items-found">
+										{{ __("No items found") }}
+									</div>
+
+									 <template v-else>
+										<div v-for="item in displayed_items" :key="item.item_code"
+											class="card-item-card" @click="select_item($event, item)" :draggable="true"
+											@dragstart="onDragStart($event, item)" @dragend="onDragEnd">
+
+
+
 									<div class="card-item-image-container">
 										<v-img
 											:src="item.image || placeholderImage"
@@ -313,6 +315,7 @@
 										</div>
 									</div>
 								</div>
+							</template>
 							</div>
 						</div>
 						<div v-else class="items-table-container">
@@ -433,6 +436,7 @@ export default {
 		Skeleton,
 	},
 	data: () => ({
+		itemGroupCache: new Map(),	
 		pos_profile: {},
 		flags: {},
 		items_view: "list",
@@ -640,33 +644,30 @@ export default {
 		new_line() {
 			this.eventBus.emit("set_new_line", this.new_line);
 		},
-		item_group(newVal, oldVal) {
+		async item_group(newVal, oldVal) {
 			if (newVal === oldVal) return;
 
 			this.loading = true;
-
-			// Reset state
-			this.searchCache.clear();
 			this.currentPage = 0;
-			this.first_search = "";
-			this.search = "";
 			this.items = [];
-			this.items_loaded = false;
 
-			// Let Vue render spinner BEFORE heavy work
-			this.$nextTick(async () => {
-				try {
-					if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
-						await this.loadVisibleItems(true);
-					} else {
-						await this.get_items(true);
-					}
-				} finally {
-					this.loading = false;
-				}
-			});
+			if (this.itemGroupCache.has(newVal)) {
+				this.items = this.itemGroupCache.get(newVal);
+				this.items_loaded = true;
+				this.loading = false;
+				return;
+			}
+
+			await this.$nextTick();
+
+			try {
+				await this.get_items(true);
+
+				this.itemGroupCache.set(newVal, [...this.items]);
+			} finally {
+				this.loading = false;
+			}
 		},
-
 
 		// Automatically search when the query has at least 3 characters
 		first_search: _.debounce(function (val, oldVal) {
@@ -3758,6 +3759,14 @@ export default {
 .items-content-wrapper {
   position: relative;
   height: 100%;
+}
+
+.no-items-found {
+  width: 100%;
+  text-align: center;
+  padding: 48px 16px;
+  color: #9e9e9e;
+  font-size: 0.95rem;
 }
 
 

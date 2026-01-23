@@ -1,18 +1,14 @@
 import frappe
 from posawesome.utils import expand_item_groups
 
-# ------------------------------------------------------------
-# ROOT ITEM GROUPS (ONLY TOP LEVEL – AUTO EXPANDS CHILDREN)
-# ------------------------------------------------------------
+
 SERVICE_ROOT_GROUPS = ["Services"]
 STOCK_ROOT_GROUPS = ["Products"]
 
 ENGINE_OIL_GROUP = "Engine Oil"
 
 
-# ------------------------------------------------------------
-# INTERNAL HELPERS (AUTO LOAD ALL ITEM GROUPS)
-# ------------------------------------------------------------
+
 def get_all_service_groups():
     """Return ALL service item groups (tree expanded)"""
     return set(expand_item_groups(SERVICE_ROOT_GROUPS))
@@ -29,9 +25,7 @@ def get_item_group(item_code=None, item_group=None):
     return item_group.strip() if item_group else None
 
 
-# ------------------------------------------------------------
-# ITEM TYPE CHECKS (NO LOGIC CHANGE)
-# ------------------------------------------------------------
+
 def is_service_item(item_code=None, item_group=None):
     item_group = get_item_group(item_code, item_group)
     if not item_group:
@@ -54,9 +48,6 @@ def is_stock_item(item_code=None, item_group=None):
     return item_group in get_all_stock_groups()
 
 
-# ------------------------------------------------------------
-# CUSTOMER MAX DISCOUNT
-# ------------------------------------------------------------
 @frappe.whitelist()
 def get_max_discount(customer):
     if not customer:
@@ -80,9 +71,7 @@ def get_max_discount(customer):
     }
 
 
-# ------------------------------------------------------------
-# VEHICLE + ITEM DISCOUNT LOGIC (UNCHANGED)
-# ------------------------------------------------------------
+
 @frappe.whitelist()
 def get_vehicle_item_discount(vehicle_no, item_code):
 
@@ -166,9 +155,7 @@ def get_vehicle_item_discount(vehicle_no, item_code):
     return result
 
 
-# ------------------------------------------------------------
-# DISCOUNT VALIDATION
-# ------------------------------------------------------------
+
 @frappe.whitelist()
 def validate_discount(vehicle_no, item_code, discount_percentage):
 
@@ -198,9 +185,7 @@ def validate_discount(vehicle_no, item_code, discount_percentage):
     }
 
 
-# ------------------------------------------------------------
-# VEHICLE / CUSTOMER HELPERS
-# ------------------------------------------------------------
+
 @frappe.whitelist()
 def get_vehicle_by_customer(customer):
     if not customer:
