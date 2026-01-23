@@ -400,9 +400,10 @@
 			<template v-slot:item.discount_percentage="{ item }">
 				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" hide-details class="discount-input"
 					:model-value="Math.round(item.discount_percentage || 0)" :disabled="!pos_profile.posa_allow_user_to_edit_item_discount ||
+						item.discount_locked === 1 ||
+						item.allow_discount === false ||
 						!!item.posa_is_replace ||
-						!!item.posa_offer_applied ||
-						item.item_group === 'Engine Oil'
+						!!item.posa_offer_applied
 						" @input="
 							$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code]
 								? handleDiscountInput(item, $event)
@@ -587,7 +588,7 @@ export default {
 			}
 
 			// Disable if locked by vehicle discount system
-			if (item._discount_locked) {
+			if (item.discount_locked) {
 				return true;
 			}
 
@@ -859,6 +860,10 @@ export default {
 			);
 
 			this.notifyAutoDiscount(item);
+
+			item.allow_discount = true;
+            item.discount_locked = 0;
+
 		},
 
 		addItem(newItem) {
@@ -909,6 +914,14 @@ export default {
 			newItemCopy.update_stock = isService ? 0 : 1;
 
 			this.items.push(newItemCopy);
+
+			newItemCopy.allow_discount = true;
+			newItemCopy.discount_locked = 0;
+
+			if ((newItemCopy.item_group || '').trim() === 'Engine Oil') {
+				newItemCopy.allow_discount = false;
+				newItemCopy.discount_locked = 1;
+			}
 
 			this.$nextTick(() => {
 				this.autoApplyVehicleDiscount(newItemCopy);

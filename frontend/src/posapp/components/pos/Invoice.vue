@@ -551,21 +551,30 @@ export default {
 				// Store rule for validation
 				item._vehicle_discount_rule = rule;
 
-				// Engine Oil - NO DISCOUNT
-				if (rule.item_type === 'engine_oil') {
+				// ENGINE OIL 
+				if ((item.item_group || '').trim() === 'Engine Oil') {
 					item.discount_percentage = 0;
 					item.discount_amount = 0;
-					item._discount_locked = true;
-					console.log('[Discount] Engine Oil - no discount');
+
+					item.allow_discount = false;
+					item.discount_locked = 1;
+
+					console.log('[Discount] Engine Oil item — discount disabled');
 					return;
 				}
 
-				// Check if auto-apply is enabled
+
 				if (!rule.auto_apply) {
 					console.log('[Discount] Auto-apply disabled, max allowed:', rule.max_discount);
+
 					item._max_discount_allowed = rule.max_discount || 0;
+
+					item.allow_discount = item._max_discount_allowed > 0;
+					item.discount_locked = item.allow_discount ? 0 : 1;
+
 					return;
 				}
+
 
 				// AUTO-APPLY the default max discount
 				const discountToApply = Number(rule.auto_apply_value || 0);
@@ -600,6 +609,10 @@ export default {
 				// Mark as auto-applied
 				item._auto_discount_applied = true;
 				item._max_discount_allowed = rule.max_discount || discountToApply;
+
+				item.allow_discount = true;
+				item.discount_locked = 0;
+
 
 				console.log('[Discount] Applied', discountToApply, '% to', item.item_code);
 
@@ -3181,12 +3194,17 @@ export default {
 					addedItem.posa_row_id = this.makeid(20);
 				}
 
-				// Apply vehicle discount if needed
+				if ((addedItem.item_group || '').trim() !== 'Engine Oil') {
+					addedItem.allow_discount = true;
+					addedItem.discount_locked = 0;
+				}
+
 				if (this.custom_vehicle_no && !addedItem._manual_discount_set) {
 					await this.applyVehicleDiscountToItem(addedItem);
 				}
 			});
 		});
+
 
 		// this.eventBus.on("add_item", (item) => {
 		// 	this.add_item(item);

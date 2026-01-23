@@ -1,5 +1,5 @@
 import frappe
-from posawesome.utils import expand_item_groups
+from posawesome.posawesome.utils import expand_item_groups
 
 
 SERVICE_ROOT_GROUPS = ["Services"]
