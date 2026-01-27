@@ -836,6 +836,9 @@ export default {
 		},
 
 		autoApplyVehicleDiscount(item) {
+
+            if ((item.item_group || '').trim() === 'Engine Oil') return;
+			
 			const rule =
 				this.$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code];
 
