@@ -15,8 +15,8 @@
 			" :search="itemSearch">
 			<!-- Item name column -->
 			<template v-slot:item.item_name="{ item }">
-				<div class="names d-flex align-center">
-					<span>{{ item.item_name }}</span>
+				<div class="d-flex align-center">
+					<span class="names">{{ item.item_name }}</span>
 
 					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">{{
 						__("Bundle")
