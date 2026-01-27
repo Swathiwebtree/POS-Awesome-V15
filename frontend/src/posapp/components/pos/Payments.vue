@@ -380,7 +380,7 @@
 										class="mt-1 mb-1 text-subtitle-2">
 										{{ sales_persons.length }} sales persons found
 									</p>
-									<p v-else class="mt-1 mb-1 text-subtitle-2 text-red">No sales persons found</p>
+									<p v-else class="mt-1 mb-1 text-subtitle-2 text-red d-none">No sales persons found</p>
 									<v-select density="compact" clearable variant="solo" color="primary"
 										:label="frappe._('Sales Person')" v-model="sales_person" :items="sales_persons"
 										item-title="title" item-value="value"
