@@ -174,6 +174,36 @@ export default {
 		},
 	},
 
+	watch: {
+		async customer(newCustomer) {
+			if (!newCustomer) {
+				this.mobile_no = "";
+				return;
+			}
+
+			try {
+				const res = await frappe.call({
+					method: "frappe.client.get",
+					args: {
+						doctype: "Customer",
+						name: newCustomer,
+					},
+				});
+
+				if (res?.message) {
+					this.mobile_no =
+						res.message.mobile_no ||
+						res.message.mobile_number ||
+						res.message.phone ||
+						"";
+				}
+			} catch (e) {
+				console.warn("Failed to fetch customer mobile:", e);
+			}
+		},
+	},
+
+
 	methods: {
 		reset_dialog() {
 			this.vehicle_id = null;
