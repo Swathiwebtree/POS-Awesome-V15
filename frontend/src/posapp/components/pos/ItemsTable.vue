@@ -226,10 +226,8 @@
 													$event,
 												),
 												calcPrices(item, $event.target.value, $event),
-											]" :disabled="!pos_profile.posa_allow_user_to_edit_item_discount ||
-												!!item.posa_is_replace ||
-												!!item.posa_offer_applied
-												" prepend-inner-icon="mdi-tag-minus"></v-text-field>
+											]" :disabled="isDiscountDisabled(item)"
+											prepend-inner-icon="mdi-tag-minus"></v-text-field>
 									</div>
 								</div>
 								<div class="form-row">
@@ -399,12 +397,8 @@
 			</template>
 			<template v-slot:item.discount_percentage="{ item }">
 				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" hide-details class="discount-input"
-					:model-value="Math.round(item.discount_percentage || 0)" :disabled="!pos_profile.posa_allow_user_to_edit_item_discount ||
-						item.discount_locked === 1 ||
-						item.allow_discount === false ||
-						!!item.posa_is_replace ||
-						!!item.posa_offer_applied
-						" @input="
+					:model-value="Math.round(item.discount_percentage || 0)" :disabled="isDiscountDisabled(item)"
+					@input="
 							$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code]
 								? handleDiscountInput(item, $event)
 								: applyItemDiscount(item, $event.target.value)
@@ -589,6 +583,10 @@ export default {
 
 			// Disable if locked by vehicle discount system
 			if (item.discount_locked) {
+				return true;
+			}
+
+			if (item.allow_discount === false) {
 				return true;
 			}
 
