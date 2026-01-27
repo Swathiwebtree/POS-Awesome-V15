@@ -49,7 +49,7 @@
 							</v-col>
 
 							<v-col cols="6">
-								<v-autocomplete density="compact" color="primary" :label="frappe._('Make')"
+								<v-autocomplete density="compact" color="primary" :label="frappe._('Make')+ ' *'"
 									v-model="make" :items="make_list" :loading="loading_makes"
 									@update:search="search_makes" clearable>
 									<template #no-data>
@@ -62,7 +62,7 @@
 							</v-col>
 
 							<v-col cols="6">
-								<v-text-field density="compact" color="primary" :label="frappe._('Model No')"
+								<v-text-field density="compact" color="primary" :label="frappe._('Model No')+ ' *'"
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" hide-details class="dark-field"
 									v-model="model" />
 							</v-col>
