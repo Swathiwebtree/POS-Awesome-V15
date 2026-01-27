@@ -15,7 +15,7 @@
 			" :search="itemSearch">
 			<!-- Item name column -->
 			<template v-slot:item.item_name="{ item }">
-				<div class="d-flex align-center">
+				<div class="names d-flex align-center">
 					<span>{{ item.item_name }}</span>
 
 					<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">{{
@@ -1731,6 +1731,13 @@ export default {
 	font-weight: 600;
 	white-space: nowrap;
 	line-height: 1.2;
+}
+
+.names{
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    max-width: 100px;
 }
 
 </style>

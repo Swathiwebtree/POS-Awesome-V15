@@ -374,7 +374,7 @@
 
 
 							<!-- Sales Person Selection -->
-							<v-row class="pb-0 mb-2" align="start">
+							<!-- <v-row class="pb-0 mb-2" align="start">
 								<v-col cols="12">
 									<p v-if="sales_persons && sales_persons.length > 0"
 										class="mt-1 mb-1 text-subtitle-2">
@@ -388,7 +388,7 @@
 										:no-data-text="__('Sales Person not found')" hide-details
 										:disabled="readonly"></v-select>
 								</v-col>
-							</v-row>
+							</v-row> -->
 						</div>
 
 						<div class="card-footer">
