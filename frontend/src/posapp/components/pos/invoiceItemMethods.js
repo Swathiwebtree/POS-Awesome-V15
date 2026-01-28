@@ -423,8 +423,12 @@ export default {
 		});
 		if (data.customer) {
 			console.log("[Invoice] Emitting load_invoice_customer event:", data.customer);
-			// Emit event to Customer component to update customer and vehicle
-			this.eventBus.emit("load_invoice_customer", data.customer);
+			// Emit event to Customer component to update customer and vehicle without overwriting invoice data
+			this.eventBus.emit("load_invoice_customer", {
+				customer: data.customer,
+				contact_mobile: data.contact_mobile || "",
+				custom_vehicle_no: data.custom_vehicle_no || "",
+			});
 		}
 
 		// Also ensure customer is synced to local state:

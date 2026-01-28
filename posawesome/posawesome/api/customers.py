@@ -345,9 +345,68 @@ def _existing_fields(doctype, candidates):
 
 @frappe.whitelist()
 def get_customer_info(customer):
-    """Get comprehensive customer information including vehicles."""
-    customer_doc = frappe.get_doc("Customer", customer)
+    """Get comprehensive customer information including vehicles.
+    
+    Args:
+        customer: Customer name (string). Handles both string and JSON object inputs for robustness.
+    """
+    
+    original_input = customer
+    
+    if isinstance(customer, str):
+        try:
+            # Try to parse as JSON in case it's a stringified object
+            customer_data = json.loads(customer)
+            if isinstance(customer_data, dict):
+                # Extract the actual customer name from the object
+                customer = (
+                    customer_data.get("customer") 
+                    or customer_data.get("customer_name") 
+                    or customer_data.get("name")
+                )
+                if customer:
+                    frappe.logger().warning(
+                        f"[get_customer_info] Received JSON object instead of string. Extracted customer: '{customer}' from {original_input}"
+                    )
+        except (json.JSONDecodeError, TypeError, ValueError):
+            # Not JSON, use the string as-is
+            pass
+    
+    elif isinstance(customer, dict):
+        # If it's already a dict, extract the customer name
+        customer = (
+            customer.get("customer") 
+            or customer.get("customer_name") 
+            or customer.get("name")
+        )
+        if customer:
+            frappe.logger().warning(
+                f"[get_customer_info] Received dict instead of string. Extracted customer: '{customer}'"
+            )
+    
+    # Validate we have a valid customer name string
+    if not customer or not isinstance(customer, str) or not str(customer).strip():
+        frappe.throw(
+            _("Invalid customer identifier provided: {0}").format(original_input),
+            frappe.ValidationError
+        )
+    
+    customer = str(customer).strip()
+    
+    try:
+        customer_doc = frappe.get_doc("Customer", customer)
+    except frappe.DoesNotExistError:
+        frappe.throw(
+            _("Customer '{0}' not found in the system").format(customer),
+            frappe.DoesNotExistError
+        )
+    except Exception as e:
+        frappe.throw(
+            _("Error loading customer '{0}': {1}").format(customer, str(e)),
+            frappe.ValidationError
+        )
 
+    # ✅ REST OF THE FUNCTION (unchanged)
     res = {"loyalty_points": 0, "conversion_factor": 0}
 
     # --- Standard fields ---
@@ -387,7 +446,7 @@ def get_customer_info(customer):
             customer_doc.name, customer_doc.loyalty_program, current_company
         )
 
-    # --- Address (unchanged) ---
+    # --- Address ---
     addresses = frappe.db.sql(
         """
         SELECT
@@ -419,7 +478,7 @@ def get_customer_info(customer):
         res["state"] = addr.state or ""
         res["country"] = addr.country or ""
 
-  
+    # --- Vehicles ---
     vehicles = frappe.db.sql(
         """
         SELECT

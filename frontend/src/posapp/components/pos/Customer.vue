@@ -6,7 +6,6 @@
 			<v-autocomplete ref="vehicleDropdown" class="vehicle-autocomplete sleek-field" density="compact"
 				variant="solo" clearable :loading="loadingVehicles" :items="vehicleItems" item-title="vehicle_no"
 				item-value="name" :label="__('Vehicle No')" v-model="selectedVehicle" hide-details
-				:open-on-focus="false" :menu-props="{ openOnClick: false }" :no-filter="true" hide-no-data
 				@update:search="onVehicleSearch" @update:modelValue="onVehicleSelect">
 				<template #prepend-inner>
 					<v-icon class="icon-button" @click.stop="edit_vehicle">
@@ -299,11 +298,17 @@ export default {
 			return this.isCustomerBackgroundLoading ? [] : this.customers;
 		},
 		vehicleItems() {
-			if (!this.vehicleSearchTerm || this.vehicleSearchTerm.length < 2) {
-				return [];
+			// When customer is selected and vehicles are loaded
+			if (this.customer && this.vehicles.length) {
+				return this.vehicles;
 			}
 
-			return this.vehicleSearchResults;
+			// When searching manually
+			if (this.vehicleSearchTerm && this.vehicleSearchTerm.length >= 2) {
+				return this.vehicleSearchResults;
+			}
+
+			return [];
 		}
 
 	},
@@ -413,30 +418,35 @@ export default {
 			}
 
 			try {
+				let customerNameString = customerName;
 
+				if (typeof customerName === 'object' && customerName !== null) {
+					customerNameString = customerName.customer || customerName.customer_name || customerName.name;
+				}
+
+				customerNameString = String(customerNameString).trim();
+				if (!customerNameString) return;
+
+				// ✅ CHANGE THIS LINE - Use extracted string instead of object
 				const response = await frappe.call({
 					method: "posawesome.posawesome.api.customers.get_customer_info",
 					args: {
-						customer: customerName,
+						customer: customerNameString,  // ✅ NOW it's always just a string!
 					},
 				});
 
 				if (response && response.message) {
 					const customerData = response.message;
 
-
-					// Extract mobile and vehicle number
 					const mobile = customerData.mobile_no || "";
 					const vehicleNo = customerData.vehicle_no ||
 						(customerData.vehicles && customerData.vehicles.length > 0
 							? customerData.vehicles[0].vehicle_no
 							: "");
 
-					// Normalize corporate flag and set component state
 					const isCorporate = !!(customerData.is_corporate || customerData.is_company);
 					this.selected_customer_is_corporate = isCorporate;
 
-					//  EMIT CUSTOMER DETAILS TO INVOICE SUMMARY (and other listeners)
 					this.eventBus.emit("update_customer_details", {
 						contact_mobile: mobile,
 						custom_vehicle_no: vehicleNo,
@@ -1297,6 +1307,11 @@ export default {
 				} else {
 					this.eventBus.emit("vehicle_selected", null);
 				}
+				if (this.vehicles.length > 1) {
+					this.$nextTick(() => {
+						this.$refs.vehicleDropdown?.focus();
+					});
+				}
 			} catch (err) {
 				console.error("Failed to fetch vehicles:", err);
 				this.vehicles = [];
@@ -1358,28 +1373,40 @@ export default {
 			this.effectiveReadonly = this.readonly && navigator.onLine;
 		});
 
-		this.eventBus.on("load_invoice_customer", async (customerName) => {
-			if (!customerName) {
+		this.eventBus.on("load_invoice_customer", async (payload) => {
+			if (!payload || !payload.customer) {
 				this.customer = null;
 				this.internalCustomer = null;
 				this.selectedVehicle = null;
-				this.eventBus.emit("update_customer_details", {
-					contact_mobile: "",
-					custom_vehicle_no: "",
-				});
 				return;
 			}
 
+			const customerName = payload.customer;
+
+			// ✅ SET STRING (this is the key)
 			this.customer = customerName;
 			this.internalCustomer = customerName;
 
+			// ✅ Load customer details (mobile, corporate flag, etc.)
 			await this.fetchAndEmitCustomerDetails(customerName);
+
+			// ✅ Load vehicles
 			await this.fetchVehiclesForCustomer(customerName);
 
-			this.$nextTick(() => {
-				this.$forceUpdate();
-			});
+			// ✅ Auto-select vehicle if present in draft
+			if (payload.custom_vehicle_no && this.vehicles.length) {
+				const matchedVehicle = this.vehicles.find(
+					(v) => v.vehicle_no === payload.custom_vehicle_no
+				);
+
+				if (matchedVehicle) {
+					this.selectedVehicle = matchedVehicle.name;
+					this.eventBus.emit("vehicle_selected", matchedVehicle.name);
+				}
+			}
 		});
+
+
 
 		this.searchDebounce = _.debounce(async (val) => {
 			this.searchTerm = val || "";

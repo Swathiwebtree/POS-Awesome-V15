@@ -588,6 +588,9 @@ export default {
 						title: __("Draft invoice {0} loaded successfully", [draft_name]),
 						color: "success",
 					});
+
+					// Auto-reload job orders after a draft is loaded
+					this.refreshDrafts();
 				}
 			} catch (error) {
 				console.error("Error loading draft invoice:", error);
@@ -652,6 +655,10 @@ export default {
 				this.load_selected_draft(draft_name);
 			});
 
+			this.eventBus.on("refresh_drafts", () => {
+				this.refreshDrafts();
+			});
+
 			this.eventBus.on("update_offers_counters", (data) => {
 				this.offersCount = data.offersCount || 0;
 			});
@@ -675,6 +682,7 @@ export default {
 		this.eventBus.off("items_loaded");
 		this.eventBus.off("customers_loaded");
 		this.eventBus.off("draft_selected");
+		this.eventBus.off("refresh_drafts");
 		this.eventBus.off("update_offers_counters");
 		this.eventBus.off("update_coupons_counters");
 		this.eventBus.off("barcode_scanned");

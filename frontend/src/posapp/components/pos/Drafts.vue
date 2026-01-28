@@ -247,6 +247,7 @@ export default {
 			return this.$parent?.loaded_draft_name === draftName;
 		},
 
+		// ✅ FIXED: Only emit the draft name, not the whole object
 		submit_selection() {
 			if (this.selected.length > 0) {
 				const draftName = this.selected[0].name;
@@ -266,6 +267,7 @@ export default {
 			this.eventBus.emit("close_drafts");
 		},
 
+		// ✅ FIXED: Only emit the draft name, not the whole object
 		submit_dialog() {
 			if (this.selected.length > 0) {
 				const draftName = this.selected[0].name;
@@ -488,6 +490,68 @@ export default {
 	},
 
 	created() {
+
+		this.eventBus.on("draft_selected", async (draftName) => {
+        console.log("[Invoice] Draft selected event received:", draftName);
+        
+        if (!draftName) {
+            console.error("[Invoice] No draft name provided");
+            return;
+        }
+        
+        try {
+            // Load the draft invoice
+            const response = await frappe.call({
+                method: "frappe.client.get",
+                args: {
+                    doctype: "Sales Invoice",
+                    name: draftName,
+                },
+            });
+            
+            if (response && response.message) {
+                const invoice = response.message;
+                
+                console.log("[Invoice] Draft loaded:", invoice);
+                
+                // ✅ SET THE INVOICE DOC
+                this.invoice_doc = invoice;
+                this.loaded_draft_name = draftName;
+                
+                // ✅ EMIT TO LOAD CUSTOMER & VEHICLE
+                this.eventBus.emit("load_invoice_customer", {
+                    customer: invoice.customer,
+                    customer_name: invoice.customer_name || invoice.customer,
+                    contact_mobile: invoice.contact_mobile || "",
+                    custom_vehicle_no: invoice.custom_vehicle_no || "",
+                });
+                
+                // ✅ EMIT TO LOAD ITEMS
+                if (invoice.items && invoice.items.length > 0) {
+                    this.eventBus.emit("load_invoice_items", invoice.items);
+                }
+                
+                // Show success message
+                frappe.show_alert({
+                    message: `Draft invoice ${draftName} loaded successfully`,
+                    indicator: "green",
+                });
+                
+                console.log("[Invoice] Draft loading completed");
+            } else {
+                frappe.show_alert({
+                    message: "Failed to load draft invoice",
+                    indicator: "red",
+                });
+            }
+        } catch (err) {
+            console.error("[Invoice] Error loading draft:", err);
+            frappe.show_alert({
+                message: "Error loading draft invoice",
+                indicator: "red",
+            });
+        }
+    });
 		this.eventBus.on("open_drafts", async (data) => {
 			if (Array.isArray(data) && data.length) {
 				const normalized = this._normalizeAndSort(data);
@@ -562,6 +626,24 @@ export default {
 			}
 		});
 
+		// ✅ NEW: Listen for draft deletion event
+		this.eventBus.on("draft_deleted", (draftName) => {
+			if (!draftName) return;
+			
+			// Remove the deleted draft from the dialog data
+			this.dialog_data = this.dialog_data.filter((d) => d.name !== draftName);
+			
+			console.log("[Drafts] Draft removed from list:", draftName);
+			
+			// Show message if no more drafts
+			if (this.dialog_data.length === 0) {
+				this.eventBus.emit("show_message", {
+					title: __("All invoices completed. No more drafts."),
+					color: "success",
+				});
+			}
+		});
+
 		this.fetchDrafts();
 	},
 
@@ -569,7 +651,9 @@ export default {
 		this.eventBus.off("open_drafts");
 		this.eventBus.off("close_drafts");
 		this.eventBus.off("draft_saved");
+		this.eventBus.off("draft_deleted"); // ✅ Clean up draft deletion listener
 		this.eventBus.off("invoice_saved_successfully");
+		this.eventBus.off("draft_selected");
 	},
 };
 </script>

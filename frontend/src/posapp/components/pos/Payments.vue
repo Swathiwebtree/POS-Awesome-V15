@@ -1553,6 +1553,7 @@ export default {
 					frappe.utils.play_sound("submit");
 					
 					updateLocalStock(vm.invoice_doc.items || []);
+					vm.eventBus.emit("refresh_drafts");
 					vm.addresses = [];
 					vm.eventBus.emit("clear_invoice");
 					vm.eventBus.emit("reset_posting_date");
