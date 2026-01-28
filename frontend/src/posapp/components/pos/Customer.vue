@@ -555,10 +555,11 @@ export default {
 					if ((!filtered || filtered.length === 0) && term) {
 						try {
 							const resp = await frappe.call({
-								method: "posawesome.posawesome.api.vehicles.search_vehicles",
+								method: "posawesome.posawesome.api.customers.get_vehicles_by_search",
 								args: {
 									search_term: term,
 									limit: this.pageSize || 50,
+									customer: this.customer || null,
 								},
 							});
 							if (resp && resp.message && resp.message.length) {
@@ -630,12 +631,15 @@ export default {
 
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.vehicles.search_vehicles",
+					method: "posawesome.posawesome.api.customers.get_vehicles_by_search",
 					args: {
 						search_term: term,
+						customer: this.customer || null,
 						limit: 20,
 					},
 				});
+
+				this.vehicleSearchResults = [];
 
 				this.vehicleSearchResults = (res.message || []).map(v => ({
 					name: v.name,
@@ -651,6 +655,7 @@ export default {
 				this.loadingVehicles = false;
 			}
 		}, 300),
+
 
 
 		async onVehicleNoEnter() {
@@ -685,7 +690,7 @@ export default {
 				if (!customerName && navigator.onLine) {
 					const res = await frappe.call({
 						method: "posawesome.posawesome.api.vehicles.get_vehicles_by_search",
-						args: { search_term: vehicleNo },
+						args: { search_term: vehicleNo, customer: this.customer || null },
 					});
 					const payload = res?.message || {};
 					if (payload.customer && payload.customer.name) {
@@ -1318,13 +1323,24 @@ export default {
 
 			this.eventBus.emit("vehicle_selected", vehicle.name);
 
-			if (!this.customer && vehicle.customer) {
-				this.customer = vehicle.customer;
-				this.internalCustomer = vehicle.customer;
+			if (!this.customer) {
+				if (vehicle.customer) {
+					this.customer = vehicle.customer;
+					this.internalCustomer = vehicle.customer;
 
-				this.eventBus.emit("update_customer", vehicle.customer);
+					this.eventBus.emit("update_customer", vehicle.customer);
 
-				this.fetchVehiclesForCustomer(vehicle.customer);
+					// load vehicles ONLY ONCE after auto-customer set
+					this.fetchVehiclesForCustomer(vehicle.customer);
+				}
+			} else {
+				if (vehicle.customer && vehicle.customer !== this.customer) {
+					frappe.show_alert({
+						message: __("This vehicle belongs to another customer"),
+						indicator: "orange",
+					});
+					return;
+				}
 			}
 
 			this.eventBus.emit("apply_vehicle_discount", {
@@ -1332,6 +1348,7 @@ export default {
 				vehicle_no: vehicle.vehicle_no,
 			});
 		}
+
 
 	},
 

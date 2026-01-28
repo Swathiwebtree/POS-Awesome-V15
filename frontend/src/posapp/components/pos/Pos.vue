@@ -107,7 +107,7 @@
 											color="#4169E1" placeholder="Search Items"
 											hint="Search by item code, serial number, batch no or barcode" hide-details
 											v-model="debounce_search" @keydown.esc="esc_event"
-											@keydown.enter="search_onchange" @click:clear="clearSearch"
+											@keydown.enter="search_onchange" @click:clear="handleSearchClear"
 											prepend-inner-icon="mdi-magnify" ref="search_input">
 											<template v-slot:append-inner
 												v-if="pos_profile?.posa_enable_camera_scanning">
@@ -324,6 +324,16 @@ export default {
 	},
 
 	methods: {
+
+		async handleSearchClear() {
+			console.log("[POS] Search clear clicked");
+			this.first_search = "";
+			this.search = "";
+
+			if (this.$refs.itemsSelectorComponent) {
+				await this.$refs.itemsSelectorComponent.clearSearch();
+			}
+		},
 
 		onBarcodeScanned(scannedCode) {
 			this.search_from_scanner = true;

@@ -8,6 +8,7 @@ from erpnext.accounts.doctype.loyalty_program.loyalty_program import (
     get_loyalty_program_details_with_points,
 )
 from frappe.utils.caching import redis_cache
+from posawesome.posawesome.api import customer
 from .utils import get_active_pos_profile
 from .vehicles import create_vehicle
 from frappe.exceptions import ValidationError, LinkValidationError, DoesNotExistError
@@ -1680,7 +1681,7 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
     search_term = (search_term or "").strip()
     limit = int(limit or 20)
 
- 
+    # No search term → simple get_all
     if not search_term:
         filters = {}
         if customer:
@@ -1701,11 +1702,18 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
             order_by="modified desc",
         )
 
-    like_pattern = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
+    # SAFE like pattern
+    like_pattern = f"%{search_term}%"
 
     where_clause = "1=1"
+    params = {
+        "like": like_pattern,
+        "limit": limit,
+    }
+
     if customer:
-        where_clause += f" AND vm.customer = '{frappe.db.escape(customer)}'"
+        where_clause += " AND vm.customer = %(customer)s"
+        params["customer"] = customer
 
     try:
         vehicles = frappe.db.sql(
@@ -1714,12 +1722,12 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
                 vm.name,
                 vm.vehicle_no,
                 vm.model,
-                v.make,            
+                v.make,
                 vm.customer,
                 vm.odometer,
                 vm.chasis_no
             FROM `tabVehicle Master` vm
-            LEFT JOIN `tabVehicle` v ON v.name = vm.name   
+            LEFT JOIN `tabVehicle` v ON v.name = vm.name
             WHERE {where_clause}
             AND (
                 vm.vehicle_no LIKE %(like)s
@@ -1729,13 +1737,12 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
             ORDER BY vm.modified DESC
             LIMIT %(limit)s
             """,
-            {"like": like_pattern, "limit": limit},
+            params,  
             as_dict=True,
         )
 
         return vehicles
 
-    except Exception as e:
+    except Exception:
         frappe.log_error(frappe.get_traceback(), "Vehicle Search Error")
         return []
-

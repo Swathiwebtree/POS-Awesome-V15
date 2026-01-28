@@ -680,14 +680,31 @@ export default {
 		first_search: _.debounce(function (val, oldVal) {
 			const newLen = (val || "").trim().length;
 			const oldLen = (oldVal || "").trim().length;
+
 			if (newLen >= 3) {
-				// Call without arguments so search_onchange treats it like an Enter key
 				this.search_onchange();
 			} else if (oldLen >= 3 && newLen === 0) {
-				// Reset items only when search is fully cleared
 				this.clearSearch();
 			}
 		}, 300),
+
+		debounce_search: _.debounce(function (val, oldVal) {
+			const newLen = (val || "").trim().length;
+			const oldLen = (oldVal || "").trim().length;
+
+			if (newLen >= 3) {
+				console.log("[Search] typing:", val);
+				this.search = val;
+				this.search_onchange();
+			}
+
+			if (oldLen >= 3 && newLen === 0) {
+				console.log("[Search] manually cleared");
+				this.search = "";
+				this.clearSearch();
+			}
+		}, 300),
+
 
 		// Refresh item prices whenever the user changes currency
 		selected_currency() {
@@ -2578,18 +2595,33 @@ export default {
 
 			return combinations;
 		},
-		clearSearch() {
+		async clearSearch() {
 			this.search_backup = this.first_search;
 			this.first_search = "";
 			this.search = "";
 			this.items = [];
 			this.currentPage = 0;
 			this.items_loaded = false;
+			this.totalItemCount = 0;
 
-			if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
-				this.loadVisibleItems(true);
-			} else {
-				this.get_items(true);
+			try {
+				console.log("[ItemsSelector] clearSearch: Reloading items for group:", this.item_group);
+				await this.get_items_from_custom_api(true);
+			} catch (error) {
+				console.error("[ItemsSelector] clearSearch failed:", error);
+				try {
+					if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
+						await this.loadVisibleItems(true);
+					} else {
+						await this.get_items(true);
+					}
+				} catch (fallbackError) {
+					console.error("[ItemsSelector] Fallback failed:", fallbackError);
+					frappe.show_alert({
+						message: "Failed to reload items",
+						indicator: "red"
+					}, 2);
+				}
 			}
 		},
 
