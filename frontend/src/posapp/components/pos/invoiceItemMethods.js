@@ -308,7 +308,9 @@ export default {
 			items_count: data.items ? data.items.length : 0,
 		});
 
-		this.clear_invoice();
+		// Skip clearing customer/vehicle in Customer.vue because load_invoice
+		// will re-populate them via load_invoice_customer event immediately after.
+		this.clear_invoice({ skipCustomerClear: true });
 		if (data.is_return) {
 			console.log("Processing return invoice");
 			// For return without invoice case, check if there's a return_against

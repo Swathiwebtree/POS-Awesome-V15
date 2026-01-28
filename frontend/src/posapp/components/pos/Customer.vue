@@ -1383,17 +1383,36 @@ export default {
 
 			const customerName = payload.customer;
 
-			// ✅ SET STRING (this is the key)
+			// Set customer state
 			this.customer = customerName;
 			this.internalCustomer = customerName;
 
-			// ✅ Load customer details (mobile, corporate flag, etc.)
+			// Emit update_customer so Invoice.vue stays in sync
+			// (clear_invoice may have reset it via onCustomerChange(null) side-effect)
+			this.eventBus.emit("update_customer", customerName);
+
+			// Ensure the customer exists in the autocomplete items list
+			// so Vuetify can display it. If not present, inject a temporary entry.
+			const existsInList = this.customers.some((c) => c.name === customerName);
+			if (!existsInList) {
+				this.customers.unshift({
+					name: customerName,
+					customer_name: customerName,
+					mobile_no: "",
+					email_id: "",
+					vehicle_no: "",
+					tax_id: "",
+					is_corporate: false,
+				});
+			}
+
+			// Load customer details (mobile, corporate flag, etc.)
 			await this.fetchAndEmitCustomerDetails(customerName);
 
-			// ✅ Load vehicles
+			// Load vehicles
 			await this.fetchVehiclesForCustomer(customerName);
 
-			// ✅ Auto-select vehicle if present in draft
+			// Auto-select vehicle if present in draft
 			if (payload.custom_vehicle_no && this.vehicles.length) {
 				const matchedVehicle = this.vehicles.find(
 					(v) => v.vehicle_no === payload.custom_vehicle_no
@@ -1404,6 +1423,11 @@ export default {
 					this.eventBus.emit("vehicle_selected", matchedVehicle.name);
 				}
 			}
+
+			// Force Vue to re-render the autocomplete with the loaded customer
+			this.$nextTick(() => {
+				this.internalCustomer = customerName;
+			});
 		});
 
 

@@ -2770,7 +2770,7 @@ export default {
 			});
 		},
 
-		clear_invoice() {
+		clear_invoice({ skipCustomerClear = false } = {}) {
 
 			// Reset all data
 			this.invoice_doc = null;
@@ -2797,9 +2797,17 @@ export default {
 			// Emit events to clear UI components
 			this.eventBus.emit("invoice_cleared");
 			this.eventBus.emit("clear_employee_selection");
-			this.eventBus.emit("clear_customer");
-			this.eventBus.emit("clear_vehicle_number");
-			this.eventBus.emit("clear_all_fields");
+
+			// When called from load_invoice(), skip clearing customer/vehicle
+			// because load_invoice will re-populate them via load_invoice_customer event.
+			// This prevents a race condition where clear events wipe the Customer.vue
+			// state right before it gets re-set, causing the autocomplete to lose
+			// the customer display (especially for non-car-wash items).
+			if (!skipCustomerClear) {
+				this.eventBus.emit("clear_customer");
+				this.eventBus.emit("clear_vehicle_number");
+				this.eventBus.emit("clear_all_fields");
+			}
 
 		},
 		// Handle item reordering from drag and drop
