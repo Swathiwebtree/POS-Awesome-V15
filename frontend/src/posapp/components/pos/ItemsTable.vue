@@ -500,6 +500,14 @@ export default {
 	},
 	methods: {
 
+		isEngineOil(item) {
+			const row = item?.raw || item;
+			const ig = (row.item_group || '').toLowerCase();
+			const name = (row.item_name || '').toLowerCase();
+
+			return ig.includes('engine oil') || name.includes('engine oil');
+		},
+
 	   getRowItem(item) {
 			return item?.raw || item;
 		},
@@ -581,7 +589,7 @@ export default {
 		isDiscountDisabled(item) {
 			const row = item?.raw || item;
 
-			if ((row.item_group || '').trim() === 'Engine Oil') {
+			if (this.isEngineOil(row)) {
 				return true;
 			}
 
@@ -614,7 +622,7 @@ export default {
 		 * Show discount info tooltip
 		 */
 		getDiscountTooltip(item) {
-			if ((item.item_group || '').trim() === 'Engine Oil') {
+			if (this.isEngineOil(item)) {
 				return 'Discount not allowed for Engine Oil';
 			}
 
@@ -659,13 +667,13 @@ export default {
 		shouldHidePricingForItem(item) {
 			if (!item) return false;
 
-			return (item.item_group || "").trim() === "Engine Oil";
+			return this.isEngineOil(item);
 		},
 
 		formatByPrecision(value, item = null) {
 			const num = Number(value || 0);
 
-			if (item && item.item_group === "Engine Oil") {
+			if (item && this.isEngineOil(item)) {
 				const precision =
 					this.pos_profile?.posa_decimal_precision ?? this.decimalPrecision;
 				return num.toFixed(precision);
@@ -841,7 +849,7 @@ export default {
 
 		autoApplyVehicleDiscount(item) {
 
-            if ((item.item_group || '').trim() === 'Engine Oil') return;
+            if (this.isEngineOil(item)) return;
 			
 			const rule =
 				this.$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code];
@@ -923,7 +931,7 @@ export default {
 			newItemCopy.allow_discount = true;
 			newItemCopy.discount_locked = 0;
 
-			if ((newItemCopy.item_group || '').trim() === 'Engine Oil') {
+			if (this.isEngineOil(newItemCopy)) {
 				newItemCopy.allow_discount = false;
 				newItemCopy.discount_locked = 1;
 			}
