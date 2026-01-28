@@ -1101,3 +1101,199 @@ def get_item_tax_template(item_code):
         {"parent": item_code},
         "item_tax_template"
     )
+    
+@frappe.whitelist()
+def get_item_prices_custom(
+    item_group=None,
+    limit_start=0,
+    limit_page_length=10,
+    search_value="",
+    pos_profile=None,
+    price_list=None,
+    warehouse=None,
+    customer=None
+):
+    """
+    Custom API for faster item loading with prices and stock.
+    Optimized for POS Awesome item selector.
+    """
+    try:
+        limit_start = int(limit_start or 0)
+        limit_page_length = int(limit_page_length or 10)
+    except (TypeError, ValueError):
+        limit_start = 0
+        limit_page_length = 10
+
+    # Parse POS Profile
+    if isinstance(pos_profile, str):
+        try:
+            pos_profile = json.loads(pos_profile)
+        except:
+            pass
+    
+    if not pos_profile:
+        frappe.throw(_("POS Profile is required"))
+    
+    # Get configuration
+    price_list = price_list or pos_profile.get("selling_price_list")
+    warehouse = warehouse or pos_profile.get("warehouse")
+    currency = pos_profile.get("currency")
+    
+    # Build filters
+    filters = {
+        "disabled": 0,
+        "is_sales_item": 1,
+        "is_fixed_asset": 0,
+    }
+    
+    # Handle item group with hierarchy
+    if item_group and item_group.upper() != "ALL":
+        item_groups = [item_group]
+        child_groups = frappe.db.get_descendants("Item Group", item_group)
+        if child_groups:
+            item_groups.extend(child_groups)
+        filters["item_group"] = ["in", item_groups]
+    
+    # Handle search
+    or_filters = []
+    if search_value:
+        search_value = search_value.strip()
+        
+        # Check barcode first
+        barcode_item = frappe.db.get_value(
+            "Item Barcode",
+            {"barcode": search_value},
+            "parent"
+        )
+        
+        if barcode_item:
+            filters["name"] = barcode_item
+        else:
+            or_filters = [
+                ["name", "like", f"%{search_value}%"],
+                ["item_name", "like", f"%{search_value}%"],
+                ["item_code", "like", f"%{search_value}%"],
+            ]
+    
+    # Get total count
+    total_count = frappe.db.count("Item", filters=filters)
+    
+    # Get items
+    items = frappe.get_all(
+        "Item",
+        filters=filters,
+        or_filters=or_filters if or_filters else None,
+        fields=[
+            "name as item_code",
+            "item_name",
+            "stock_uom",
+            "is_stock_item",
+            "has_variants",
+            "variant_of",
+            "item_group",
+            "idx",
+            "has_batch_no",
+            "has_serial_no",
+            "max_discount",
+            "brand",
+            "image",
+        ],
+        limit_start=limit_start,
+        limit_page_length=limit_page_length,
+        order_by="item_name asc",
+    )
+    
+    if not items:
+        return {
+            "items": [],
+            "total_count": 0,
+            "has_more": False,
+        }
+    
+    # Get item codes
+    item_codes = [item.item_code for item in items]
+    
+    # Get prices in bulk
+    prices = frappe.get_all(
+        "Item Price",
+        filters={
+            "item_code": ["in", item_codes],
+            "price_list": price_list,
+            "selling": 1,
+        },
+        fields=["item_code", "price_list_rate", "uom"]
+    )
+    price_map = {p.item_code: p.price_list_rate for p in prices}
+    
+    # Get stock in bulk
+    stock_map = {}
+    if warehouse:
+        stocks = frappe.get_all(
+            "Bin",
+            filters={
+                "item_code": ["in", item_codes],
+                "warehouse": warehouse,
+            },
+            fields=["item_code", "actual_qty"]
+        )
+        stock_map = {s.item_code: s.actual_qty for s in stocks}
+    
+    # Get barcodes in bulk
+    barcodes = frappe.get_all(
+        "Item Barcode",
+        filters={"parent": ["in", item_codes]},
+        fields=["parent", "barcode", "posa_uom"]
+    )
+    barcode_map = {}
+    for b in barcodes:
+        if b.parent not in barcode_map:
+            barcode_map[b.parent] = []
+        barcode_map[b.parent].append({
+            "barcode": b.barcode,
+            "posa_uom": b.posa_uom
+        })
+    
+    # Get UOMs in bulk
+    uoms = frappe.get_all(
+        "UOM Conversion Detail",
+        filters={"parent": ["in", item_codes]},
+        fields=["parent", "uom", "conversion_factor"]
+    )
+    uom_map = {}
+    for u in uoms:
+        if u.parent not in uom_map:
+            uom_map[u.parent] = []
+        uom_map[u.parent].append({
+            "uom": u.uom,
+            "conversion_factor": u.conversion_factor
+        })
+    
+    # Enrich items
+    enriched_items = []
+    for item in items:
+        item_code = item.item_code
+        
+        # Get UOMs
+        item_uoms = uom_map.get(item_code, [])
+        stock_uom = item.get("stock_uom")
+        if stock_uom and not any(u.get("uom") == stock_uom for u in item_uoms):
+            item_uoms.insert(0, {"uom": stock_uom, "conversion_factor": 1.0})
+        
+        enriched_item = {
+            **item,
+            "rate": price_map.get(item_code, 0),
+            "price_list_rate": price_map.get(item_code, 0),
+            "actual_qty": stock_map.get(item_code, 0) if warehouse else 999999,
+            "item_barcode": barcode_map.get(item_code, []),
+            "item_uoms": item_uoms,
+            "currency": currency,
+        }
+        enriched_items.append(enriched_item)
+    
+    has_more = (limit_start + limit_page_length) < total_count
+    
+    return {
+        "items": enriched_items,
+        "total_count": total_count,
+        "has_more": has_more,
+    }

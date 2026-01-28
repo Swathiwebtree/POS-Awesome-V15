@@ -650,20 +650,27 @@ export default {
 			this.loading = true;
 			this.currentPage = 0;
 			this.items = [];
-
-			if (this.itemGroupCache.has(newVal)) {
-				this.items = this.itemGroupCache.get(newVal);
-				this.items_loaded = true;
-				this.loading = false;
-				return;
-			}
+			this.totalItemCount = 0;
 
 			await this.$nextTick();
 
 			try {
-				await this.get_items(true);
+				console.log("Loading item group with custom API:", newVal);
+				await this.get_items_from_custom_api(true);
+				this.items_loaded = true;
 
-				this.itemGroupCache.set(newVal, [...this.items]);
+			} catch (error) {
+				console.error("Failed to load item group:", error);
+
+				try {
+					await this.get_items(true);
+				} catch (fallbackError) {
+					console.error("Fallback also failed:", fallbackError);
+					frappe.show_alert({
+						message: "Failed to load items. Please try again.",
+						indicator: "red"
+					}, 3);
+				}
 			} finally {
 				this.loading = false;
 			}
@@ -846,7 +853,7 @@ export default {
 		onCardScroll() {
 			if (this.scrollThrottle) return;
 
-			this.scrollThrottle = requestAnimationFrame(() => {
+			this.scrollThrottle = requestAnimationFrame(async () => {
 				try {
 					const el = this.$refs.itemsContainer;
 					if (!el) return;
@@ -855,10 +862,10 @@ export default {
 					const clientHeight = el.clientHeight;
 					const scrollHeight = el.scrollHeight;
 
-					// Only trigger load more if we're near the bottom
-					if (scrollTop + clientHeight >= scrollHeight - 50) {
-						this.currentPage += 1;
-						this.loadVisibleItems();
+					// Trigger load more when near bottom (100px threshold)
+					if (scrollTop + clientHeight >= scrollHeight - 100) {
+						console.log("Card scroll: Reached bottom, loading more items");
+						await this.loadMoreItems();
 					}
 
 					this.lastScrollTop = scrollTop;
@@ -966,19 +973,19 @@ export default {
 			this.scrollThrottle = requestAnimationFrame(async () => {
 				try {
 					const el = event.target;
-					if (el.scrollTop + el.clientHeight >= el.scrollHeight - 50) {
-						// Prevent duplicate calls
-						if (this.loading || this.isBackgroundLoading) return;
+					const threshold = 50;
 
-						this.currentPage += 1;
+					const isNearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
 
-						// ALWAYS fetch from server for list view
-						if (this.pos_profile?.posa_local_storage && this.storageAvailable) {
-							await this.loadVisibleItems();
-						} else {
-							await this.get_items(true);
+					if (isNearBottom) {
+						console.log("List scroll: Reached bottom, loading more items");
+
+						if (this.loading || this.isBackgroundLoading) {
+							console.log("Already loading, skipping");
+							return;
 						}
 
+						await this.loadMoreItems();
 					}
 				} catch (error) {
 					console.error("Error in list scroll handler:", error);
@@ -987,6 +994,7 @@ export default {
 				}
 			});
 		},
+
 
 		checkItemContainerOverflow() {
 			const el = this.$refs.itemsContainer;
@@ -1185,16 +1193,31 @@ export default {
 		},
 		async initializeItems() {
 			await this.ensureStorageHealth();
-			if (this.pos_profile && this.pos_profile.posa_local_storage && this.storageAvailable) {
-				const localCount = await getStoredItemsCount();
-				if (localCount > 0) {
-					await this.loadVisibleItems(true);
-					this.items_loaded = true;
-					await this.verifyServerItemCount();
-					return;
+
+			// Try to use custom API first for faster loading
+			try {
+				console.log("Using custom API for initial load...");
+				await this.get_items_from_custom_api(true);
+
+				// Successfully loaded with custom API
+				return;
+			} catch (error) {
+				console.error("Custom API failed during init:", error);
+
+				// Fallback to old method
+				if (this.pos_profile && this.pos_profile.posa_local_storage && this.storageAvailable) {
+					const localCount = await getStoredItemsCount();
+					if (localCount > 0) {
+						await this.loadVisibleItems(true);
+						this.items_loaded = true;
+						await this.verifyServerItemCount();
+						return;
+					}
 				}
+
+				// Final fallback to standard get_items
+				await this.get_items(true);
 			}
-			await this.get_items(true);
 		},
 		async forceReloadItems() {
 			// Clear cached price list items so the reload always
@@ -1608,6 +1631,251 @@ export default {
 				});
 			}
 		},
+		async get_items_from_custom_api(force_server = false) {
+			const vm = this;
+
+			if (!vm.pos_profile || !vm.pos_profile.name) {
+				console.warn("No POS Profile available");
+				return;
+			}
+
+			const search = vm.get_search(vm.first_search);
+			const itemGroup = vm.item_group !== "ALL" ? vm.item_group : null;
+
+			// Skip if already loading the same data
+			if (!force_server && vm.items_loaded && vm.items.length > 0 && !search) {
+				vm.loading = false;
+				return;
+			}
+
+			vm.loading = true;
+			vm.loadProgress = 0;
+			vm.eventBus.emit("data-load-progress", { name: "items", progress: 0 });
+
+			const requestToken = ++vm.items_request_token;
+
+			try {
+				// Call custom API
+				const response = await frappe.call({
+					method: "posawesome.posawesome.api.items.get_item_prices_custom",
+					args: {
+						pos_profile: JSON.stringify(vm.pos_profile),
+						item_group: itemGroup,
+						limit_start: vm.currentPage * vm.itemsPerPage,
+						limit_page_length: vm.itemsPerPage,
+						search_value: search || "",
+						price_list: vm.customer_price_list || vm.pos_profile.selling_price_list,
+						warehouse: vm.pos_profile.warehouse,
+						customer: vm.customer
+					},
+					freeze: false
+				});
+
+				const data = response.message;
+
+				if (!data || !data.items) {
+					throw new Error("Invalid response from server");
+				}
+
+				// Check if request is still valid
+				if (vm.items_request_token !== requestToken) {
+					return;
+				}
+
+				// Process items
+				const processedItems = data.items.map(item => {
+					// Ensure UOMs
+					if (!item.item_uoms || item.item_uoms.length === 0) {
+						item.item_uoms = [{
+							uom: item.stock_uom || "Nos",
+							conversion_factor: 1.0
+						}];
+					}
+
+					// Set default quantity
+					if (item.actual_qty === undefined) {
+						item.actual_qty = 0;
+					}
+
+					// Ensure barcodes array
+					if (!item.item_barcode) {
+						item.item_barcode = [];
+					}
+
+					return item;
+				});
+
+				// Update component state
+				if (vm.currentPage === 0) {
+					vm.items = processedItems;
+				} else {
+					vm.items.push(...processedItems);
+				}
+
+				vm.totalItemCount = data.total_count;
+				vm.items_loaded = true;
+
+				// Emit events
+				vm.eventBus.emit("set_all_items", vm.items);
+
+				// Update progress
+				const progress = vm.totalItemCount
+					? Math.round((vm.items.length / vm.totalItemCount) * 100)
+					: 100;
+				vm.loadProgress = progress;
+				vm.eventBus.emit("data-load-progress", {
+					name: "items",
+					progress
+				});
+
+				// Show message if no results for search
+				if (vm.items.length === 0 && search) {
+					frappe.show_alert({
+						message: `${frappe._("No items found for")} "${search}"`,
+						indicator: "orange"
+					}, 3);
+				}
+
+				console.log(`✓ Loaded ${vm.items.length} of ${vm.totalItemCount} items`);
+
+			} catch (error) {
+				console.error("Failed to load items from custom API:", error);
+
+				// Show user-friendly error
+				frappe.show_alert({
+					message: frappe._("Failed to load items. Using fallback method..."),
+					indicator: "orange"
+				}, 3);
+
+				// Fallback to original method
+				if (typeof vm.get_items === "function") {
+					console.log("Falling back to original get_items method");
+					await vm.get_items(force_server);
+				}
+
+			} finally {
+				vm.loading = false;
+			}
+		},
+
+		async loadMoreItems() {
+			// Guard: Check if already loading
+			if (this.loading || this.isBackgroundLoading) {
+				console.log("Already loading, skipping loadMoreItems");
+				return;
+			}
+
+			// Guard: Check if initial load is complete
+			if (!this.items_loaded) {
+				console.log("Items not loaded yet, skipping loadMoreItems");
+				return;
+			}
+
+			// Guard: Check if we have more items to load
+			if (this.items.length >= this.totalItemCount) {
+				console.log("All items already loaded");
+				return;
+			}
+
+			// Guard: Verify we have valid totalItemCount
+			if (this.totalItemCount === 0) {
+				console.log("No items in total, skipping load");
+				return;
+			}
+
+			const nextPage = this.currentPage + 1;
+			const totalPages = Math.ceil(this.totalItemCount / this.itemsPerPage);
+
+			console.log(`Loading page ${nextPage} (Total Pages: ${totalPages})`);
+
+			try {
+				this.loading = true;
+				this.currentPage = nextPage;
+
+				const response = await frappe.call({
+					method: "posawesome.posawesome.api.items.get_item_prices_custom",
+					args: {
+						pos_profile: JSON.stringify(this.pos_profile),
+						item_group: this.item_group !== "ALL" ? this.item_group : null,
+						limit_start: this.currentPage * this.itemsPerPage,
+						limit_page_length: this.itemsPerPage,
+						search_value: this.get_search(this.first_search) || "",
+						price_list: this.customer_price_list || this.pos_profile.selling_price_list,
+						warehouse: this.pos_profile.warehouse,
+						customer: this.customer
+					},
+					freeze: false
+				});
+
+				if (!response.message || !response.message.items) {
+					throw new Error("Invalid response from API");
+				}
+
+				const newItems = response.message.items;
+
+				if (newItems.length === 0) {
+					console.log("No more items to load");
+					return;
+				}
+
+				// Process and append items
+				newItems.forEach(item => {
+					// Ensure UOMs
+					if (!item.item_uoms || item.item_uoms.length === 0) {
+						item.item_uoms = [{
+							uom: item.stock_uom || "Nos",
+							conversion_factor: 1.0
+						}];
+					}
+
+					// Ensure barcode array
+					if (!item.item_barcode) {
+						item.item_barcode = [];
+					}
+
+					// Ensure quantity
+					if (item.actual_qty === undefined) {
+						item.actual_qty = 0;
+					}
+				});
+
+				// Append to existing items (don't replace)
+				this.items.push(...newItems);
+
+				// Update total count
+				this.totalItemCount = response.message.total_count || this.totalItemCount;
+
+				// Emit event for parent components
+				this.eventBus.emit("set_all_items", this.items);
+
+				// Update progress
+				const progress = this.totalItemCount
+					? Math.round((this.items.length / this.totalItemCount) * 100)
+					: 100;
+				this.loadProgress = progress;
+				this.eventBus.emit("data-load-progress", {
+					name: "items",
+					progress
+				});
+
+				console.log(`✓ Loaded ${newItems.length} items. Total: ${this.items.length}/${this.totalItemCount}`);
+
+			} catch (error) {
+				console.error("Error loading more items:", error);
+
+				// Revert page increment
+				this.currentPage -= 1;
+
+				// Show user-friendly error
+				frappe.show_alert({
+					message: "Failed to load more items. Please scroll again.",
+					indicator: "orange"
+				}, 2);
+
+			} finally {
+				this.loading = false;
+			}
+		},
 		get_items_groups() {
 			if (!this.pos_profile) {
 				return;
@@ -1899,20 +2167,27 @@ export default {
 
 			vm.search = trimmedQuery;
 
-			// RESET items before searching
+			// Reset items before searching
 			vm.items = [];
 			vm.currentPage = 0;
 
 			const fromScanner = vm.search_from_scanner;
 
-			// ALWAYS fetch from server with search term
-			if (vm.pos_profile && (!vm.pos_profile.posa_local_storage || !vm.storageAvailable)) {
-				vm.get_items(true);
-			} else {
-				if (vm.storageAvailable) {
-					await vm.loadVisibleItems(true);
-				} else {
+			// TRY custom API first, fallback to original if it fails
+			try {
+				console.log("Searching with custom API:", trimmedQuery);
+				await vm.get_items_from_custom_api(true);
+			} catch (error) {
+				console.error("Custom API search failed, using fallback:", error);
+				// Fallback to original method
+				if (vm.pos_profile && (!vm.pos_profile.posa_local_storage || !vm.storageAvailable)) {
 					vm.get_items(true);
+				} else {
+					if (vm.storageAvailable) {
+						await vm.loadVisibleItems(true);
+					} else {
+						vm.get_items(true);
+					}
 				}
 			}
 
@@ -1922,6 +2197,7 @@ export default {
 				vm.search_from_scanner = false;
 			}
 		}, 300),
+
 		get_item_qty(first_search) {
 			const qtyVal = this.qty != null ? this.qty : 1;
 			let scal_qty = Math.abs(qtyVal);

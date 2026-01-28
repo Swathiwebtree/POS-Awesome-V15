@@ -2,40 +2,27 @@
 	<div class="customer-vehicle-row" style="display: flex; gap: 12px; align-items: flex-start">
 		<div style="flex: 1 1 0">
 			<!-- VEHICLE INPUT -->
-			<Skeleton v-if="loadingVehicles" height="58" class="w-100" />
 
-			<v-autocomplete v-else-if="vehicles.length > 1" ref="vehicleDropdown"
-				class="vehicle-autocomplete sleek-field" density="compact" clearable variant="solo"
-				:label="__('Vehicle No')" v-model="selectedVehicle" :items="vehicleItems" item-title="vehicle_no"
-				item-value="name" :search="vehicleSearchTerm" hide-details @update:search="onVehicleSearch"
-				@update:modelValue="onVehicleSelect">
+			<v-autocomplete ref="vehicleDropdown" class="vehicle-autocomplete sleek-field" density="compact"
+				variant="solo" clearable :loading="loadingVehicles" :items="vehicleItems" item-title="vehicle_no"
+				item-value="name" :label="__('Vehicle No')" v-model="selectedVehicle" hide-details
+				:open-on-focus="false" :menu-props="{ openOnClick: false }" :no-filter="true" hide-no-data
+				@update:search="onVehicleSearch" @update:modelValue="onVehicleSelect">
 				<template #prepend-inner>
-					<v-icon class="icon-button" @click.stop="edit_vehicle">mdi-car-edit</v-icon>
+					<v-icon class="icon-button" @click.stop="edit_vehicle">
+						mdi-car-edit
+					</v-icon>
 				</template>
 
 				<template #append-inner>
-					<v-icon class="icon-button" @click.stop="new_vehicle">mdi-plus</v-icon>
+					<v-progress-circular v-if="loadingVehicles" indeterminate size="20" width="2" color="primary" />
+
+					<v-icon v-else class="icon-button" @click.stop="new_vehicle">
+						mdi-plus
+					</v-icon>
 				</template>
 			</v-autocomplete>
 
-			<v-text-field v-else-if="vehicles.length === 1 && vehicles[0].name" readonly density="compact"
-				variant="solo" :label="__('Vehicle No')" v-model="vehicle_no">
-				<template #prepend-inner>
-					<v-icon class="icon-button" @click.stop="edit_vehicle">mdi-car-edit</v-icon>
-				</template>
-
-				<template #append-inner>
-					<v-icon class="icon-button" @click.stop="new_vehicle">mdi-plus</v-icon>
-				</template>
-			</v-text-field>
-
-			<v-text-field v-else density="compact" variant="solo" :label="__('Vehicle No')"
-				placeholder="Enter vehicle no and press Enter" v-model="vehicle_no"
-				@keydown.enter.prevent="onVehicleNoEnter" hide-details>
-				<template #append-inner>
-					<v-icon class="icon-button" @click.stop="new_vehicle">mdi-plus</v-icon>
-				</template>
-			</v-text-field>
 		</div>
 
 		<div style="flex: 1 1 0">
@@ -178,6 +165,64 @@
 	opacity: 1;
 	color: var(--v-theme-primary);
 }
+/* Input background */
+.vehicle-autocomplete .v-field,
+.customer-autocomplete .v-field {
+	background-color: #ffffff !important;
+	border: 1px solid #d0d5dd;
+}
+
+/* Input text */
+.v-field__input input {
+	color: #1f2937 !important; /* dark gray */
+	font-weight: 500;
+}
+
+/* Placeholder */
+.v-field__input input::placeholder {
+	color: #6b7280; /* medium gray */
+	opacity: 1;
+}
+.v-card,
+.job-orders,
+.search-items {
+	background: #ffffff;
+	border: 1px solid #e5e7eb;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+header,
+.app-header {
+	color: #111827;
+}
+
+header .v-icon {
+	color: #374151;
+	opacity: 1;
+}
+.v-field:hover {
+	border-color: #3b82f6;
+}
+
+.v-field--focused {
+	border-color: #2563eb !important;
+	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+/* 🔒 Fix disabled autocomplete background + opacity */
+:deep(.v-input--disabled) {
+  opacity: 1 !important; /* remove faded look */
+}
+
+:deep(.v-input--disabled .v-field) {
+  background-color: #ffffff !important;
+}
+
+:deep(.v-input--disabled .v-field__input),
+:deep(.v-input--disabled input),
+:deep(.v-input--disabled .v-label) {
+  color: #1f2937 !important;
+}
+
+
 </style>
 
 <script>
@@ -254,10 +299,13 @@ export default {
 			return this.isCustomerBackgroundLoading ? [] : this.customers;
 		},
 		vehicleItems() {
-			return this.vehicleSearchTerm
-				? this.vehicleSearchResults
-				: this.vehicles;
-		},
+			if (!this.vehicleSearchTerm || this.vehicleSearchTerm.length < 2) {
+				return [];
+			}
+
+			return this.vehicleSearchResults;
+		}
+
 	},
 
 	watch: {
@@ -423,6 +471,7 @@ export default {
 			if (!val) {
 				this.customer = null;
 				this.internalCustomer = null;
+				this.vehicles = [];
 				this.selectedVehicle = null;
 				this.vehicle_no = "";
 				this.eventBus.emit("update_customer", null);
@@ -568,22 +617,39 @@ export default {
 			}
 		},
 
-		onVehicleSearch: _.debounce(function (val) {
-			this.vehicleSearchTerm = (val || "").toLowerCase();
+		onVehicleSearch: _.debounce(async function (val) {
+			const term = (val || "").trim().toLowerCase();
+			this.vehicleSearchTerm = term;
 
-			if (!this.vehicleSearchTerm) {
+			if (!term || term.length < 2) {
 				this.vehicleSearchResults = [];
 				return;
 			}
 
-			this.vehicleSearchResults = this.vehicles.filter((v) => {
-				return (
-					v.vehicle_no?.toLowerCase().includes(this.vehicleSearchTerm) ||
-					v.customer_name?.toLowerCase().includes(this.vehicleSearchTerm) ||
-					v.mobile_no?.toLowerCase().includes(this.vehicleSearchTerm)
-				);
-			});
+			this.loadingVehicles = true;
 
+			try {
+				const res = await frappe.call({
+					method: "posawesome.posawesome.api.vehicles.search_vehicles",
+					args: {
+						search_term: term,
+						limit: 20,
+					},
+				});
+
+				this.vehicleSearchResults = (res.message || []).map(v => ({
+					name: v.name,
+					vehicle_no: v.vehicle_no,
+					customer: v.customer,
+					customer_name: v.customer_name || "",
+					mobile_no: v.mobile_no || "",
+				}));
+			} catch (e) {
+				console.error("Vehicle search failed", e);
+				this.vehicleSearchResults = [];
+			} finally {
+				this.loadingVehicles = false;
+			}
 		}, 300),
 
 
@@ -1212,6 +1278,7 @@ export default {
 
 				this.vehicles = fetchedVehicles;
 				this.selectedVehicle = null;
+				this.vehicle_no = "";
 
 				if (this.vehicles.length === 1) {
 					this.selectedVehicle = this.vehicles[0].name;
@@ -1237,30 +1304,35 @@ export default {
 			if (!val) {
 				this.selectedVehicle = null;
 				this.vehicle_no = "";
-				this.eventBus.emit("vehicle_selected", null);
 
+				this.eventBus.emit("vehicle_selected", null);
 				this.eventBus.emit("clear_vehicle_discounts");
 				return;
 			}
 
-			const vehicle = (this.vehicles || []).find((v) => v.name === val);
-			if (vehicle) {
-				this.selectedVehicle = val;
-				this.vehicle_no = vehicle.vehicle_no || "";
-				this.eventBus.emit("vehicle_selected", vehicle.name);
+			const vehicle = (this.vehicleItems || []).find(v => v.name === val);
+			if (!vehicle) return;
 
-				if (!this.customer && vehicle.customer) {
-					this.customer = vehicle.customer;
-					this.internalCustomer = vehicle.customer;
-					this.eventBus.emit("update_customer", vehicle.customer);
-				}
+			this.selectedVehicle = val;
+			this.vehicle_no = vehicle.vehicle_no || "";
 
-				this.eventBus.emit("apply_vehicle_discount", {
-					customer: this.customer || vehicle.customer,
-					vehicle_no: vehicle.vehicle_no
-				});
+			this.eventBus.emit("vehicle_selected", vehicle.name);
+
+			if (!this.customer && vehicle.customer) {
+				this.customer = vehicle.customer;
+				this.internalCustomer = vehicle.customer;
+
+				this.eventBus.emit("update_customer", vehicle.customer);
+
+				this.fetchVehiclesForCustomer(vehicle.customer);
 			}
-		},
+
+			this.eventBus.emit("apply_vehicle_discount", {
+				customer: this.customer || vehicle.customer,
+				vehicle_no: vehicle.vehicle_no,
+			});
+		}
+
 	},
 
 	created() {
@@ -1469,7 +1541,6 @@ export default {
 			}
 		});
 
-	    this.loadAllVehicles();
 	},
 	beforeUnmount() {
 		// Clean up event listeners

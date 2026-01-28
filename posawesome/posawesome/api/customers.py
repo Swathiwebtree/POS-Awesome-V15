@@ -344,7 +344,7 @@ def _existing_fields(doctype, candidates):
 
 @frappe.whitelist()
 def get_customer_info(customer):
-    """Get comprehensive customer information including vehicles (defensive about missing fields)."""
+    """Get comprehensive customer information including vehicles."""
     customer_doc = frappe.get_doc("Customer", customer)
 
     res = {"loyalty_points": 0, "conversion_factor": 0}
@@ -359,20 +359,23 @@ def get_customer_info(customer):
     res["customer_group"] = getattr(customer_doc, "customer_group", None)
     res["customer_type"] = getattr(customer_doc, "customer_type", None)
     res["territory"] = getattr(customer_doc, "territory", None)
+
     is_company_val = getattr(customer_doc, "is_company", 0)
     res["is_corporate"] = bool(is_company_val)
     res["is_company"] = bool(is_company_val)
+
     res["birthday"] = getattr(customer_doc, "posa_birthday", None)
     res["gender"] = getattr(customer_doc, "gender", None)
     res["tax_id"] = getattr(customer_doc, "tax_id", None)
     res["posa_discount"] = getattr(customer_doc, "posa_discount", None)
     res["name"] = customer_doc.name
     res["customer_name"] = customer_doc.customer_name
+
     res["customer_group_price_list"] = frappe.get_value(
         "Customer Group", customer_doc.customer_group, "default_price_list"
     )
 
-    # Loyalty Points
+    # --- Loyalty Points ---
     if customer_doc.loyalty_program:
         current_company = frappe.db.get_single_value("Global Defaults", "default_company") or "webtree"
         conversion_factor = frappe.db.get_value(
@@ -383,20 +386,18 @@ def get_customer_info(customer):
             customer_doc.name, customer_doc.loyalty_program, current_company
         )
 
-    # --- Address Query (unchanged) ---
+    # --- Address (unchanged) ---
     addresses = frappe.db.sql(
         """
         SELECT
-            address.name as address_name,
             address.address_line1,
             address.address_line2,
             address.city,
             address.state,
-            address.country,
-            address.address_type
+            address.country
         FROM `tabAddress` address
         INNER JOIN `tabDynamic Link` link
-            ON (address.name = link.parent)
+            ON address.name = link.parent
         WHERE
             link.link_doctype = 'Customer'
             AND link.link_name = %s
@@ -417,51 +418,37 @@ def get_customer_info(customer):
         res["state"] = addr.state or ""
         res["country"] = addr.country or ""
 
-    # --- Vehicles with customer details (defensive) ---
-    candidates = ["name", "vehicle_no", "model", "make", "odometer", "chasis_no"]
+  
+    vehicles = frappe.db.sql(
+        """
+        SELECT
+            vm.name,
+            vm.vehicle_no,
+            vm.model,
+            v.make,
+            vm.odometer,
+            vm.chasis_no
+        FROM `tabVehicle Master` vm
+        LEFT JOIN `tabVehicle` v ON v.name = vm.name
+        WHERE vm.customer = %s
+        LIMIT 10
+        """,
+        (customer_doc.name,),
+        as_dict=True,
+    )
 
-    vehicles = []
-    # Try VM_DOCTYPE first (Vehicle Master)
-    try:
-        fields = _existing_fields(VM_DOCTYPE, candidates)
-        if fields:
-            vehicles = frappe.get_all(
-                VM_DOCTYPE, filters={"customer": customer_doc.name}, fields=fields, limit_page_length=10
-            )
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "Error fetching vehicles from VM_DOCTYPE")
-        vehicles = []
-
-    # Fallback: try standard VEHICLE_DOCTYPE
-    if not vehicles:
-        try:
-            fallback_doctype = VEHICLE_DOCTYPE or "Vehicle"
-            fields = _existing_fields(fallback_doctype, candidates)
-            if fields:
-                vehicles = frappe.get_all(
-                    fallback_doctype,
-                    filters={"customer": customer_doc.name},
-                    fields=fields,
-                    limit_page_length=10,
-                )
-        except Exception:
-            frappe.log_error(frappe.get_traceback(), "Error fetching vehicles from fallback Vehicle doctype")
-            vehicles = []
-
-    # Normalize response
     res["vehicles"] = []
     for v in vehicles:
-        vehicle_no = v.get("vehicle_no") or v.get("name")
-        if not vehicle_no:
+        if not v.get("vehicle_no"):
             continue
         res["vehicles"].append(
             {
                 "name": v.get("name"),
-                "vehicle_no": vehicle_no,
-                "model": v.get("model", "") if isinstance(v, dict) else "",
-                "make": v.get("make", "") if isinstance(v, dict) else "",
-                "odometer": v.get("odometer", "") if isinstance(v, dict) else "",
-                "chasis_no": v.get("chasis_no", "") if isinstance(v, dict) else "",
+                "vehicle_no": v.get("vehicle_no"),
+                "model": v.get("model", ""),
+                "make": v.get("make", ""),   
+                "odometer": v.get("odometer", ""),
+                "chasis_no": v.get("chasis_no", ""),
                 "customer_name": customer_doc.customer_name,
                 "mobile_no": customer_doc.mobile_no,
                 "customer": customer_doc.name,
@@ -469,9 +456,10 @@ def get_customer_info(customer):
         )
 
     if res["vehicles"]:
-        res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
+        res["vehicle_no"] = res["vehicles"][0]["vehicle_no"]
 
     return res
+
 
 
 @frappe.whitelist()
@@ -531,7 +519,6 @@ def search_customers_new(query=None, limit=20):
 def _build_customer_info(customer_name):
     """
     Helper: build the same detailed customer response you used in get_customer_info.
-    Reuse or replace this with your existing builder if you already have one.
     """
     customer_doc = frappe.get_doc("Customer", customer_name)
 
@@ -540,49 +527,40 @@ def _build_customer_info(customer_name):
     # --- Standard fields ---
     res["email_id"] = customer_doc.email_id
     res["mobile_no"] = customer_doc.mobile_no
-    # res["image"] = customer_doc.image
     res["loyalty_program"] = customer_doc.loyalty_program
-    # res["customer_price_list"] = customer_doc.default_price_list
-    # res["customer_group"] = customer_doc.customer_group
     res["customer_type"] = customer_doc.customer_type
     res["territory"] = customer_doc.territory
     res["is_corporate"] = bool(getattr(customer_doc, "is_company", False))
-    # res["birthday"] = customer_doc.posa_birthday
-    # res["gender"] = customer_doc.gender
-    # res["tax_id"] = customer_doc.tax_id
-    # res["posa_discount"] = customer_doc.posa_discount
     res["name"] = customer_doc.name
     res["customer_name"] = customer_doc.customer_name
+
     res["customer_group_price_list"] = frappe.get_value(
         "Customer Group", customer_doc.customer_group, "default_price_list"
     )
 
-    # Loyalty Points
+    # --- Loyalty Points ---
     if customer_doc.loyalty_program:
         current_company = frappe.db.get_single_value("Global Defaults", "default_company") or "webtree"
-
         conversion_factor = frappe.db.get_value(
             "Loyalty Program", customer_doc.loyalty_program, "conversion_factor"
         )
         res["conversion_factor"] = flt(conversion_factor) or 1
+        res["loyalty_points"] = get_loyalty_points(
+            customer_doc.name, customer_doc.loyalty_program, current_company
+        )
 
-        loyalty_points = get_loyalty_points(customer_doc.name, customer_doc.loyalty_program, current_company)
-        res["loyalty_points"] = loyalty_points
-
-    # --- Address Query (shipping) ---
+    # --- Address (unchanged) ---
     addresses = frappe.db.sql(
         """
         SELECT
-            address.name as address_name,
             address.address_line1,
             address.address_line2,
             address.city,
             address.state,
-            address.country,
-            address.address_type
+            address.country
         FROM `tabAddress` address
         INNER JOIN `tabDynamic Link` link
-            ON (address.name = link.parent)
+            ON address.name = link.parent
         WHERE
             link.link_doctype = 'Customer'
             AND link.link_name = %s
@@ -603,20 +581,31 @@ def _build_customer_info(customer_name):
         res["state"] = addr.state or ""
         res["country"] = addr.country or ""
 
-    # --- Vehicles with customer details ---
-    vehicles = frappe.get_all(
-        VM_DOCTYPE,
-        filters={"customer": customer_doc.name},
-        fields=["name", "vehicle_no", "model", "make", "chasis_no", "odometer"],
-        limit_page_length=10,
+   
+    vehicles = frappe.db.sql(
+        """
+        SELECT
+            vm.name,
+            vm.vehicle_no,
+            vm.model,
+            v.make,
+            vm.chasis_no,
+            vm.odometer
+        FROM `tabVehicle Master` vm
+        LEFT JOIN `tabVehicle` v ON v.name = vm.name
+        WHERE vm.customer = %s
+        LIMIT 10
+        """,
+        (customer_doc.name,),
+        as_dict=True,
     )
 
     res["vehicles"] = [
         {
-            "name": v.name,
-            "vehicle_no": v.vehicle_no,
+            "name": v.get("name"),
+            "vehicle_no": v.get("vehicle_no"),
             "model": v.get("model", ""),
-            "make": v.get("make", ""),
+            "make": v.get("make", ""),   
             "chasis_no": v.get("chasis_no", ""),
             "odometer": v.get("odometer", ""),
             "customer_name": customer_doc.customer_name,
@@ -631,6 +620,7 @@ def _build_customer_info(customer_name):
         res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
 
     return res
+
 
 
 @frappe.whitelist()
@@ -1030,8 +1020,6 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                     if vehicle_doc and frappe.db.exists(VM_DOCTYPE, vehicle_doc.name):
                         vm_doc = frappe.get_doc(VM_DOCTYPE, vehicle_doc.name)
                         try:
-                            if vehicle_data.get("make") is not None and hasattr(vm_doc, "make"):
-                                vm_doc.make = vehicle_data.get("make")
                             if vehicle_data.get("model") is not None and hasattr(vm_doc, "model"):
                                 try:
                                     if frappe.db.exists("Vehicle Model", vehicle_data.get("model")):
@@ -1072,8 +1060,6 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                                 )
                             if hasattr(vm, "customer"):
                                 vm.customer = customer_doc.name
-                            if vehicle_data.get("make") is not None and hasattr(vm, "make"):
-                                vm.make = vehicle_data.get("make")
                             if vehicle_data.get("model") is not None and hasattr(vm, "model"):
                                 vm.model = vehicle_data.get("model")
                             if vehicle_data.get("mobile_no") is not None and hasattr(vm, "tel_mobile"):
@@ -1134,33 +1120,25 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         }
 
         vehicle_response = None
-        if vm_doc:
+        if vehicle_doc:
             vehicle_response = {
-                "name": getattr(vm_doc, "name", None),
-                "vehicle_no": getattr(vm_doc, "vehicle_no", None) or getattr(vm_doc, "name", None),
-                "make": getattr(vm_doc, "make", None),
-                "model": getattr(vm_doc, "model", None),
-                "mobile_no": getattr(vm_doc, "tel_mobile", None) or getattr(vm_doc, "mobile_no", None),
-                "customer": getattr(vm_doc, "customer", None),
-                "odometer": getattr(vm_doc, "odometer", None),
-            }
-        elif vehicle_doc:
-            vehicle_response = {
-                "name": getattr(vehicle_doc, "name", None),
-                "vehicle_no": getattr(vehicle_doc, "vehicle_no", None) or getattr(vehicle_doc, "name", None),
-                "make": getattr(vehicle_doc, "make", None),
-                "model": getattr(vehicle_doc, "model", None),
-                "mobile_no": getattr(vehicle_doc, "tel_mobile", None)
-                or getattr(vehicle_doc, "mobile_no", None),
-                "customer": getattr(vehicle_doc, "customer", None),
-                "odometer": getattr(vehicle_doc, "odometer", None),
-            }
+        "name": getattr(vehicle_doc, "name", None),
+        "vehicle_no": getattr(vehicle_doc, "vehicle_no", None)
+            or getattr(vehicle_doc, "name", None),
+        "make": getattr(vehicle_doc, "make", None),
+        "model": getattr(vehicle_doc, "model", None),
+        "mobile_no": getattr(vehicle_doc, "tel_mobile", None)
+            or getattr(vehicle_doc, "mobile_no", None),
+        "customer": getattr(vehicle_doc, "customer", None),
+        "odometer": getattr(vehicle_doc, "odometer", None),
+    }
+
 
         return {"customer": customer_response, "vehicle": vehicle_response}
 
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "create_customer_with_vehicle - Unexpected")
-        frappe.throw(_("Failed to create/update customer: {0}").format(str(e)))
+        frappe.throw(_("Failed to create/update customer: {0}").format(cstr(e)))
 
 
 @frappe.whitelist()
@@ -1578,7 +1556,7 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
                 vm.vehicle_no,
                 vm.customer,
                 vm.model,
-                vm.make
+                v.make
             FROM `tabVehicle Master` vm
             WHERE vm.vehicle_no LIKE %(like)s
             AND vm.customer IS NOT NULL
@@ -1658,51 +1636,40 @@ def search_customers(search_term="", pos_profile=None, limit=20):
 
 @frappe.whitelist()
 def search_vehicles(search_term="", limit=20):
-    """
-    Search vehicles by vehicle number, model, make, or customer
-    Returns vehicles with customer information
-    """
     search_term = (search_term or "").strip()
     limit = int(limit or 20)
 
     if not search_term:
         return []
 
-    like_pattern = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
+    like = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
 
-    try:
-        vehicles = frappe.db.sql(
-            """
-            SELECT 
-                vm.name,
-                vm.vehicle_no,
-                vm.model,
-                vm.make,
-                vm.customer,
-                vm.odometer,
-                vm.chasis_no,
-                c.customer_name,
-                c.mobile_no
-            FROM `tabVehicle Master` vm
-            LEFT JOIN `tabCustomer` c ON vm.customer = c.name
-            WHERE (
-                vm.vehicle_no LIKE %(like)s
-                OR vm.model LIKE %(like)s
-                OR vm.make LIKE %(like)s
-                OR c.customer_name LIKE %(like)s
-            )
-            ORDER BY vm.modified DESC
-            LIMIT %(limit)s
-            """,
-            {"like": like_pattern, "limit": limit},
-            as_dict=1,
+    query = """
+        SELECT
+            vm.name,
+            vm.vehicle_no,
+            vm.model,
+            v.make,
+            vm.customer,
+            vm.odometer,
+            vm.chasis_no,
+            c.customer_name,
+            c.mobile_no
+        FROM `tabVehicle Master` vm
+        LEFT JOIN `tabVehicle` v ON v.name = vm.name
+        LEFT JOIN `tabCustomer` c ON vm.customer = c.name
+        WHERE (
+            vm.vehicle_no LIKE %(like)s
+            OR vm.model LIKE %(like)s
+            OR v.make LIKE %(like)s
+            OR c.customer_name LIKE %(like)s
         )
+        ORDER BY vm.modified DESC
+        LIMIT %(limit)s
+    """
 
-        return vehicles
+    return frappe.db.sql(query, {"like": like, "limit": limit}, as_dict=1)
 
-    except Exception as e:
-        frappe.log_error(f"Error searching vehicles: {str(e)}", "Vehicle Search Error")
-        return []
 
 
 @frappe.whitelist()
@@ -1713,15 +1680,23 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
     search_term = (search_term or "").strip()
     limit = int(limit or 20)
 
-    filters = {}
-    if customer:
-        filters["customer"] = customer
-
+ 
     if not search_term:
+        filters = {}
+        if customer:
+            filters["customer"] = customer
+
         return frappe.get_all(
             "Vehicle Master",
             filters=filters,
-            fields=["name", "vehicle_no", "model", "make", "customer", "odometer"],
+            fields=[
+                "name",
+                "vehicle_no",
+                "model",
+                "customer",
+                "odometer",
+                "chasis_no",
+            ],
             limit_page_length=limit,
             order_by="modified desc",
         )
@@ -1739,26 +1714,28 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
                 vm.name,
                 vm.vehicle_no,
                 vm.model,
-                vm.make,
+                v.make,            
                 vm.customer,
                 vm.odometer,
                 vm.chasis_no
             FROM `tabVehicle Master` vm
+            LEFT JOIN `tabVehicle` v ON v.name = vm.name   
             WHERE {where_clause}
             AND (
                 vm.vehicle_no LIKE %(like)s
                 OR vm.model LIKE %(like)s
-                OR vm.make LIKE %(like)s
+                OR v.make LIKE %(like)s
             )
             ORDER BY vm.modified DESC
             LIMIT %(limit)s
             """,
             {"like": like_pattern, "limit": limit},
-            as_dict=1,
+            as_dict=True,
         )
 
         return vehicles
 
     except Exception as e:
-        frappe.log_error(f"Error searching vehicles: {str(e)}", "Vehicle Search Error")
+        frappe.log_error(frappe.get_traceback(), "Vehicle Search Error")
         return []
+
