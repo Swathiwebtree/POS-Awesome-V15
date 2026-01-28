@@ -2353,7 +2353,7 @@ export default {
 				return null;
 			}
 
-			if (!hasOnlyServiceItems) {
+			/*if (!hasOnlyServiceItems) {
 				// Validate stock for non-service items
 				const insufficientStockItems = this.items.filter(item => {
 					// Only check stock for non-carwash items
@@ -2368,7 +2368,7 @@ export default {
 					});
 					return null;
 				}
-			}
+			}*/
 
 			// Ensure invoice_doc exists
 			if (!this.invoice_doc) {
