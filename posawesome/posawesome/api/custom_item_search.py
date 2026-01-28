@@ -7,25 +7,22 @@ def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=
     """
     Get Item Prices with filtering by item_code, item_name, and item_group
     Supports hierarchical item groups (includes child groups)
-    
-    Args:
-        item_code: Filter by item code (supports wildcard %)
-        item_name: Filter by item name (supports wildcard %)
-        item_group: Filter by item group (includes child groups if is_group=1)
-        price_list: Filter by specific price list
-        limit_start: Offset for pagination (default: 0)
-        limit_page_length: Number of records to return (default: 20)
-    
-    Returns:
-        Dict with data, total count, and pagination info
     """
     
     conditions = []
-    values = {
-        'limit_start': int(limit_start) if limit_start else 0,
-        'limit_page_length': int(limit_page_length) if limit_page_length else 20
-    }
+    values = {}
     
+    # Convert limit parameters to integers
+    limit_start = int(limit_start) if limit_start else 0
+    limit_page_length = int(limit_page_length) if limit_page_length else 20
+    
+    # Strip and check if parameters are actually provided (not empty strings)
+    item_code = item_code.strip() if item_code else None
+    item_name = item_name.strip() if item_name else None
+    item_group = item_group.strip() if item_group else None
+    price_list = price_list.strip() if price_list else None
+    
+    # Build filters - only add if value is not empty
     if item_code:
         conditions.append("ip.item_code LIKE %(item_code)s")
         values['item_code'] = f"%{item_code}%"
@@ -35,9 +32,12 @@ def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=
         values['item_name'] = f"%{item_name}%"
     
     if item_group:
-        # Get all descendant groups (includes the parent itself)
-        item_groups = get_child_item_groups_recursive(item_group)
-        item_groups.append(item_group)
+        # Get all descendant groups using cached/optimized function
+        item_groups = get_all_child_item_groups(item_group)
+        
+        # Ensure we have at least the parent group
+        if not item_groups:
+            item_groups = [item_group]
         
         conditions.append("i.item_group IN %(item_groups)s")
         values['item_groups'] = item_groups
@@ -48,7 +48,7 @@ def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=
     
     where_clause = " AND ".join(conditions) if conditions else "1=1"
     
-    # Get total count (for pagination info)
+    # Get total count
     count_query = f"""
         SELECT COUNT(DISTINCT ip.name) as total
         FROM `tabItem Price` ip
@@ -56,8 +56,16 @@ def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=
         WHERE {where_clause}
     """
     
-    total_result = frappe.db.sql(count_query, values=values, as_dict=1)
-    total = total_result[0].total if total_result else 0
+    try:
+        total_result = frappe.db.sql(count_query, values=values, as_dict=1)
+        total = total_result[0].total if total_result else 0
+    except Exception as e:
+        frappe.log_error(f"Count query failed: {str(e)}", "Item Price Count Error")
+        total = 0
+    
+    # Add limit values to the values dict
+    values['limit_start'] = limit_start
+    values['limit_page_length'] = limit_page_length
     
     # Get paginated data
     query = f"""
@@ -82,59 +90,105 @@ def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=
         LIMIT %(limit_start)s, %(limit_page_length)s
     """
     
-    data = frappe.db.sql(query, values=values, as_dict=1)
+    try:
+        data = frappe.db.sql(query, values=values, as_dict=1)
+    except Exception as e:
+        frappe.log_error(f"Data query failed: {str(e)}", "Item Price Data Error")
+        data = []
     
     return {
         'data': data,
         'total': total,
-        'limit_start': values['limit_start'],
-        'limit_page_length': values['limit_page_length'],
-        'has_more': (values['limit_start'] + values['limit_page_length']) < total
+        'limit_start': limit_start,
+        'limit_page_length': limit_page_length,
+        'has_more': (limit_start + limit_page_length) < total
     }
 
 
-def get_child_item_groups_recursive(parent_group):
+def get_all_child_item_groups(parent_group):
+    """
+    Get all child item groups including parent using optimized nested set query
+    Falls back to recursive if nested set fails
+    """
+    
+    # Try to get from cache first (lasts 5 minutes)
+    cache_key = f"item_group_hierarchy_{parent_group}"
+    cached_groups = frappe.cache().get(cache_key)
+    
+    if cached_groups:
+        return cached_groups
+    
+    try:
+        # Method 1: Use nested set (lft, rgt) - much faster for deep hierarchies
+        parent = frappe.db.get_value('Item Group', parent_group, ['lft', 'rgt'], as_dict=1)
+        
+        if parent and parent.lft and parent.rgt:
+            # Get all groups within the lft-rgt range (includes parent and all descendants)
+            groups = frappe.db.sql("""
+                SELECT name
+                FROM `tabItem Group`
+                WHERE lft >= %(lft)s AND rgt <= %(rgt)s
+                ORDER BY lft
+            """, {'lft': parent.lft, 'rgt': parent.rgt}, as_list=1)
+            
+            group_list = [g[0] for g in groups]
+            
+            # Cache for 5 minutes
+            frappe.cache().set(cache_key, group_list, expires_in_sec=300)
+            
+            return group_list
+    
+    except Exception as e:
+        frappe.log_error(f"Nested set query failed for {parent_group}: {str(e)}", "Item Group Nested Set Error")
+    
+    # Method 2: Fallback to recursive
+    try:
+        item_groups = get_child_item_groups_recursive(parent_group)
+        item_groups.append(parent_group)
+        
+        # Cache for 5 minutes
+        frappe.cache().set(cache_key, item_groups, expires_in_sec=300)
+        
+        return item_groups
+    
+    except Exception as e:
+        frappe.log_error(f"Recursive query failed for {parent_group}: {str(e)}", "Item Group Recursive Error")
+        # Last resort: just return the parent group
+        return [parent_group]
+
+
+def get_child_item_groups_recursive(parent_group, visited=None):
     """
     Recursively get all child item groups under a parent
-    
-    Args:
-        parent_group: Parent Item Group name
-    
-    Returns:
-        List of all child item group names
+    Added visited set to prevent infinite loops
     """
+    if visited is None:
+        visited = set()
+    
+    # Prevent infinite recursion
+    if parent_group in visited:
+        return []
+    
+    visited.add(parent_group)
     all_children = []
     
-    # Get direct children using lft and rgt for nested set
-    children = frappe.db.sql("""
-        SELECT name, is_group
-        FROM `tabItem Group`
-        WHERE parent_item_group = %(parent)s
-    """, {'parent': parent_group}, as_dict=1)
-    
-    for child in children:
-        all_children.append(child.name)
+    try:
+        # Get direct children
+        children = frappe.db.sql("""
+            SELECT name, is_group
+            FROM `tabItem Group`
+            WHERE parent_item_group = %(parent)s
+        """, {'parent': parent_group}, as_dict=1)
         
-        # If this child is also a group, get its children recursively
-        if child.is_group:
-            all_children.extend(get_child_item_groups_recursive(child.name))
+        for child in children:
+            if child.name not in visited:
+                all_children.append(child.name)
+                
+                # If this child is also a group, get its children recursively
+                if child.is_group:
+                    all_children.extend(get_child_item_groups_recursive(child.name, visited))
+    
+    except Exception as e:
+        frappe.log_error(f"Error getting children for {parent_group}: {str(e)}", "Item Group Children Error")
     
     return all_children
-
-
-# Alternative using nested set (more efficient for large hierarchies)
-def get_child_item_groups_nested_set(parent_group):
-    """
-    Get all child item groups using nested set model (lft, rgt)
-    More efficient than recursive queries
-    """
-    parent = frappe.get_doc('Item Group', parent_group)
-    
-    # Get all descendants using lft and rgt
-    descendants = frappe.db.sql("""
-        SELECT name
-        FROM `tabItem Group`
-        WHERE lft > %(lft)s AND rgt < %(rgt)s
-    """, {'lft': parent.lft, 'rgt': parent.rgt}, as_list=1)
-    
-    return [d[0] for d in descendants]
