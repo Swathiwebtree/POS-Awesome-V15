@@ -459,6 +459,11 @@ export default {
 		},
 
 		onCustomerChange(val) {
+			// When loading from a draft, internalCustomer is set programmatically
+			// which may trigger this. Skip to avoid showing false "already selected" error.
+			if (this._skipNextCustomerSearch) {
+				return;
+			}
 			if (val && val === this.customer) {
 				this.internalCustomer = this.customer;
 				this.eventBus.emit("show_message", {
@@ -500,6 +505,11 @@ export default {
 		},
 
 		onCustomerSearch(val) {
+			// Skip search when loading from a draft to prevent the debounced
+			// search from clearing this.customers[] and blanking the autocomplete
+			if (this._skipNextCustomerSearch) {
+				return;
+			}
 			if (this.isCustomerBackgroundLoading) {
 				this.pendingCustomerSearch = val;
 				return;
@@ -1383,12 +1393,21 @@ export default {
 
 			const customerName = payload.customer;
 
+			// Prevent the debounced search from firing after we set internalCustomer.
+			// When internalCustomer changes, Vuetify's v-autocomplete fires @update:search
+			// which triggers searchDebounce. After 500ms, the debounce clears this.customers = []
+			// which causes the autocomplete to lose the customer display.
+			// Cancel any pending debounce and set a flag to skip the next search trigger.
+			if (this.searchDebounce && this.searchDebounce.cancel) {
+				this.searchDebounce.cancel();
+			}
+			this._skipNextCustomerSearch = true;
+
 			// Set customer state
 			this.customer = customerName;
 			this.internalCustomer = customerName;
 
 			// Emit update_customer so Invoice.vue stays in sync
-			// (clear_invoice may have reset it via onCustomerChange(null) side-effect)
 			this.eventBus.emit("update_customer", customerName);
 
 			// Ensure the customer exists in the autocomplete items list
@@ -1427,6 +1446,10 @@ export default {
 			// Force Vue to re-render the autocomplete with the loaded customer
 			this.$nextTick(() => {
 				this.internalCustomer = customerName;
+				// Clear the skip flag after the autocomplete has settled
+				setTimeout(() => {
+					this._skipNextCustomerSearch = false;
+				}, 600);
 			});
 		});
 
