@@ -107,23 +107,17 @@ def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=
 
 def get_all_child_item_groups(parent_group):
     """
-    Get all child item groups including parent using optimized nested set query
-    Falls back to recursive if nested set fails
+    Get all child item groups including parent
+    Simplified version without caching
     """
-    
-    # Try to get from cache first (lasts 5 minutes)
-    cache_key = f"item_group_hierarchy_{parent_group}"
-    cached_groups = frappe.cache().get(cache_key)
-    
-    if cached_groups:
-        return cached_groups
+    if not parent_group:
+        return []
     
     try:
-        # Method 1: Use nested set (lft, rgt) - much faster for deep hierarchies
+        # Direct query without caching
         parent = frappe.db.get_value('Item Group', parent_group, ['lft', 'rgt'], as_dict=1)
         
         if parent and parent.lft and parent.rgt:
-            # Get all groups within the lft-rgt range (includes parent and all descendants)
             groups = frappe.db.sql("""
                 SELECT name
                 FROM `tabItem Group`
@@ -131,31 +125,13 @@ def get_all_child_item_groups(parent_group):
                 ORDER BY lft
             """, {'lft': parent.lft, 'rgt': parent.rgt}, as_list=1)
             
-            group_list = [g[0] for g in groups]
-            
-            # Cache for 5 minutes
-            frappe.cache().set(cache_key, group_list, expires_in_sec=300)
-            
-            return group_list
+            return [g[0] for g in groups] if groups else [parent_group]
+        else:
+            return [parent_group]
     
     except Exception as e:
-        frappe.log_error(f"Nested set query failed for {parent_group}: {str(e)}", "Item Group Nested Set Error")
-    
-    # Method 2: Fallback to recursive
-    try:
-        item_groups = get_child_item_groups_recursive(parent_group)
-        item_groups.append(parent_group)
-        
-        # Cache for 5 minutes
-        frappe.cache().set(cache_key, item_groups, expires_in_sec=300)
-        
-        return item_groups
-    
-    except Exception as e:
-        frappe.log_error(f"Recursive query failed for {parent_group}: {str(e)}", "Item Group Recursive Error")
-        # Last resort: just return the parent group
+        frappe.log_error(f"Error getting item groups for {parent_group}: {str(e)}")
         return [parent_group]
-
 
 def get_child_item_groups_recursive(parent_group, visited=None):
     """
