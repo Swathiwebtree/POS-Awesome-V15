@@ -18,56 +18,67 @@ def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=
     item_group = item_group.strip() if item_group else None
     price_list = price_list.strip() if price_list else None
     
-    # Use frappe.qb for safer queries
-    ip = frappe.qb.DocType('Item Price')
-    i = frappe.qb.DocType('Item')
+    # Build conditions and values
+    conditions = []
+    values = {}
     
-    query = (
-        frappe.qb.from_(ip)
-        .inner_join(i)
-        .on(ip.item_code == i.name)
-        .select(
-            ip.name,
-            ip.item_code,
-            i.item_name,
-            i.item_group,
-            i.stock_uom,
-            ip.price_list,
-            ip.price_list_rate,
-            ip.currency,
-            ip.valid_from,
-            ip.valid_upto,
-            i.disabled,
-            i.has_variants,
-            i.image
-        )
-    )
-    
-    # Apply filters
     if item_code:
-        query = query.where(ip.item_code.like(f"%{item_code}%"))
+        conditions.append("ip.item_code LIKE %(item_code)s")
+        values['item_code'] = f"%{item_code}%"
     
     if item_name:
-        query = query.where(i.item_name.like(f"%{item_name}%"))
+        conditions.append("i.item_name LIKE %(item_name)s")
+        values['item_name'] = f"%{item_name}%"
     
     if item_group:
         item_groups = get_all_child_item_groups(item_group)
         if not item_groups:
             item_groups = [item_group]
-        query = query.where(i.item_group.isin(item_groups))
+        conditions.append("i.item_group IN %(item_groups)s")
+        values['item_groups'] = item_groups
     
     if price_list:
-        query = query.where(ip.price_list == price_list)
+        conditions.append("ip.price_list = %(price_list)s")
+        values['price_list'] = price_list
     
-    # Order and limit
-    query = query.orderby(i.item_name).limit(limit_page_length).offset(limit_start)
+    where_clause = " AND ".join(conditions) if conditions else "1=1"
     
     try:
-        data = query.run(as_dict=True)
-        
         # Get total count
-        count_query = query.select(frappe.qb.functions.Count(ip.name))
-        total = count_query.run()[0][0]
+        count_query = f"""
+            SELECT COUNT(DISTINCT ip.name) as total
+            FROM `tabItem Price` ip
+            INNER JOIN `tabItem` i ON ip.item_code = i.name
+            WHERE {where_clause}
+        """
+        
+        total_result = frappe.db.sql(count_query, values=values, as_dict=1)
+        total = total_result[0].total if total_result else 0
+        
+        # Get data with pagination
+        data_query = f"""
+            SELECT 
+                ip.name,
+                ip.item_code,
+                i.item_name,
+                i.item_group,
+                i.stock_uom,
+                ip.price_list,
+                ip.price_list_rate,
+                ip.currency,
+                ip.valid_from,
+                ip.valid_upto,
+                i.disabled,
+                i.has_variants,
+                i.image
+            FROM `tabItem Price` ip
+            INNER JOIN `tabItem` i ON ip.item_code = i.name
+            WHERE {where_clause}
+            ORDER BY i.item_name ASC
+            LIMIT {limit_start}, {limit_page_length}
+        """
+        
+        data = frappe.db.sql(data_query, values=values, as_dict=1)
         
         return {
             'data': data,
@@ -79,6 +90,8 @@ def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=
         
     except Exception as e:
         frappe.log_error(f"Query failed: {str(e)}", "Item Price Query Error")
+        frappe.log_error(f"Where clause: {where_clause}", "Item Price Query Error")
+        frappe.log_error(f"Values: {values}", "Item Price Query Error")
         return {
             'data': [],
             'total': 0,
@@ -91,13 +104,12 @@ def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=
 def get_all_child_item_groups(parent_group):
     """
     Get all child item groups including parent
-    Simplified version without caching
     """
     if not parent_group:
         return []
     
     try:
-        # Direct query without caching
+        # Simple query without caching
         parent = frappe.db.get_value('Item Group', parent_group, ['lft', 'rgt'], as_dict=1)
         
         if parent and parent.lft and parent.rgt:
@@ -105,7 +117,6 @@ def get_all_child_item_groups(parent_group):
                 SELECT name
                 FROM `tabItem Group`
                 WHERE lft >= %(lft)s AND rgt <= %(rgt)s
-                ORDER BY lft
             """, {'lft': parent.lft, 'rgt': parent.rgt}, as_list=1)
             
             return [g[0] for g in groups] if groups else [parent_group]
@@ -115,39 +126,3 @@ def get_all_child_item_groups(parent_group):
     except Exception as e:
         frappe.log_error(f"Error getting item groups for {parent_group}: {str(e)}")
         return [parent_group]
-
-def get_child_item_groups_recursive(parent_group, visited=None):
-    """
-    Recursively get all child item groups under a parent
-    Added visited set to prevent infinite loops
-    """
-    if visited is None:
-        visited = set()
-    
-    # Prevent infinite recursion
-    if parent_group in visited:
-        return []
-    
-    visited.add(parent_group)
-    all_children = []
-    
-    try:
-        # Get direct children
-        children = frappe.db.sql("""
-            SELECT name, is_group
-            FROM `tabItem Group`
-            WHERE parent_item_group = %(parent)s
-        """, {'parent': parent_group}, as_dict=1)
-        
-        for child in children:
-            if child.name not in visited:
-                all_children.append(child.name)
-                
-                # If this child is also a group, get its children recursively
-                if child.is_group:
-                    all_children.extend(get_child_item_groups_recursive(child.name, visited))
-    
-    except Exception as e:
-        frappe.log_error(f"Error getting children for {parent_group}: {str(e)}", "Item Group Children Error")
-    
-    return all_children
