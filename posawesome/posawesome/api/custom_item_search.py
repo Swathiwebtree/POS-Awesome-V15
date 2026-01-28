@@ -5,71 +5,28 @@ from frappe import _
 def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=None, 
                     limit_start=0, limit_page_length=20):
     """
-    Get Item Prices with filtering by item_code, item_name, and item_group
-    Supports hierarchical item groups (includes child groups)
+    Get Item Prices with filtering
     """
     
-    conditions = []
-    values = {}
-    
-    # Convert limit parameters to integers
+    # Convert limit parameters
     limit_start = int(limit_start) if limit_start else 0
     limit_page_length = int(limit_page_length) if limit_page_length else 20
     
-    # Strip and check if parameters are actually provided (not empty strings)
+    # Clean inputs
     item_code = item_code.strip() if item_code else None
     item_name = item_name.strip() if item_name else None
     item_group = item_group.strip() if item_group else None
     price_list = price_list.strip() if price_list else None
     
-    # Build filters - only add if value is not empty
-    if item_code:
-        conditions.append("ip.item_code LIKE %(item_code)s")
-        values['item_code'] = f"%{item_code}%"
+    # Use frappe.qb for safer queries
+    ip = frappe.qb.DocType('Item Price')
+    i = frappe.qb.DocType('Item')
     
-    if item_name:
-        conditions.append("i.item_name LIKE %(item_name)s")
-        values['item_name'] = f"%{item_name}%"
-    
-    if item_group:
-        # Get all descendant groups using cached/optimized function
-        item_groups = get_all_child_item_groups(item_group)
-        
-        # Ensure we have at least the parent group
-        if not item_groups:
-            item_groups = [item_group]
-        
-        conditions.append("i.item_group IN %(item_groups)s")
-        values['item_groups'] = item_groups
-    
-    if price_list:
-        conditions.append("ip.price_list = %(price_list)s")
-        values['price_list'] = price_list
-    
-    where_clause = " AND ".join(conditions) if conditions else "1=1"
-    
-    # Get total count
-    count_query = f"""
-        SELECT COUNT(DISTINCT ip.name) as total
-        FROM `tabItem Price` ip
-        INNER JOIN `tabItem` i ON ip.item_code = i.name
-        WHERE {where_clause}
-    """
-    
-    try:
-        total_result = frappe.db.sql(count_query, values=values, as_dict=1)
-        total = total_result[0].total if total_result else 0
-    except Exception as e:
-        frappe.log_error(f"Count query failed: {str(e)}", "Item Price Count Error")
-        total = 0
-    
-    # Add limit values to the values dict
-    values['limit_start'] = limit_start
-    values['limit_page_length'] = limit_page_length
-    
-    # Get paginated data
-    query = f"""
-        SELECT 
+    query = (
+        frappe.qb.from_(ip)
+        .inner_join(i)
+        .on(ip.item_code == i.name)
+        .select(
             ip.name,
             ip.item_code,
             i.item_name,
@@ -83,26 +40,52 @@ def get_item_prices(item_code=None, item_name=None, item_group=None, price_list=
             i.disabled,
             i.has_variants,
             i.image
-        FROM `tabItem Price` ip
-        INNER JOIN `tabItem` i ON ip.item_code = i.name
-        WHERE {where_clause}
-        ORDER BY i.item_name ASC
-        LIMIT %(limit_start)s, %(limit_page_length)s
-    """
+        )
+    )
+    
+    # Apply filters
+    if item_code:
+        query = query.where(ip.item_code.like(f"%{item_code}%"))
+    
+    if item_name:
+        query = query.where(i.item_name.like(f"%{item_name}%"))
+    
+    if item_group:
+        item_groups = get_all_child_item_groups(item_group)
+        if not item_groups:
+            item_groups = [item_group]
+        query = query.where(i.item_group.isin(item_groups))
+    
+    if price_list:
+        query = query.where(ip.price_list == price_list)
+    
+    # Order and limit
+    query = query.orderby(i.item_name).limit(limit_page_length).offset(limit_start)
     
     try:
-        data = frappe.db.sql(query, values=values, as_dict=1)
+        data = query.run(as_dict=True)
+        
+        # Get total count
+        count_query = query.select(frappe.qb.functions.Count(ip.name))
+        total = count_query.run()[0][0]
+        
+        return {
+            'data': data,
+            'total': total,
+            'limit_start': limit_start,
+            'limit_page_length': limit_page_length,
+            'has_more': (limit_start + limit_page_length) < total
+        }
+        
     except Exception as e:
-        frappe.log_error(f"Data query failed: {str(e)}", "Item Price Data Error")
-        data = []
-    
-    return {
-        'data': data,
-        'total': total,
-        'limit_start': limit_start,
-        'limit_page_length': limit_page_length,
-        'has_more': (limit_start + limit_page_length) < total
-    }
+        frappe.log_error(f"Query failed: {str(e)}", "Item Price Query Error")
+        return {
+            'data': [],
+            'total': 0,
+            'limit_start': limit_start,
+            'limit_page_length': limit_page_length,
+            'has_more': False
+        }
 
 
 def get_all_child_item_groups(parent_group):
