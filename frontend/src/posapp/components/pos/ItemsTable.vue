@@ -396,17 +396,15 @@
 				</td>
 			</template>
 			<template v-slot:item.discount_percentage="{ item }">
-				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" hide-details class="discount-input"
-					:model-value="Math.round(item.discount_percentage || 0)" :disabled="isDiscountDisabled(item)"
-					@input="
-							$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code]
-								? handleDiscountInput(item, $event)
-								: applyItemDiscount(item, $event.target.value)
-							"
-							 @click.stop
-							 @focus.stop 
-							 prepend-inner-icon="mdi-percent" />
+				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" hide-details
+					class="discount-input" :model-value="Math.round((item.raw || item).discount_percentage || 0)"
+					:disabled="isDiscountDisabled(item)" @input="
+						$parent?.maxDiscountInfo?.item_level_caps?.[(item.raw || item).item_code]
+							? handleDiscountInput(item.raw || item, $event)
+							: applyItemDiscount(item.raw || item, $event.target.value)
+						" @click.stop @focus.stop prepend-inner-icon="mdi-percent" />
 			</template>
+
 
 		</v-data-table-virtual>
 		<v-dialog v-model="editNameDialog" max-width="400">
@@ -501,6 +499,11 @@ export default {
 		},
 	},
 	methods: {
+
+	   getRowItem(item) {
+			return item?.raw || item;
+		},
+
 		notifyAutoDiscount(item) {
 			// show only once per invoice
 			if (this._vehicleDiscountMessageShown) return;
@@ -576,17 +579,18 @@ export default {
 		 * Check if discount field should be disabled
 		 */
 		isDiscountDisabled(item) {
-			// Always disable for Engine Oil
-			if ((item.item_group || '').trim() === 'Engine Oil') {
+			const row = item?.raw || item;
+
+			if ((row.item_group || '').trim() === 'Engine Oil') {
 				return true;
 			}
 
 			// Disable if locked by vehicle discount system
-			if (item.discount_locked) {
+			if (row.discount_locked) {
 				return true;
 			}
 
-			if (item.allow_discount === false) {
+			if (row.allow_discount === false) {
 				return true;
 			}
 
@@ -595,11 +599,11 @@ export default {
 				return true;
 			}
 
-			if (item.posa_is_replace) {
+			if (row.posa_is_replace) {
 				return true;
 			}
 
-			if (item.posa_offer_applied) {
+			if (row.posa_offer_applied) {
 				return true;
 			}
 
