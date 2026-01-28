@@ -471,6 +471,19 @@ export default {
 		...offerMethods,
 		...invoiceItemMethods,
 
+		isEngineOil(item) {
+			const row = item?.raw || item;
+			const ig = (row?.item_group || '').toLowerCase();
+			const name = (row?.item_name || '').toLowerCase();
+			const code = (row?.item_code || '').toLowerCase();
+
+			return (
+				ig.includes('engine oil') ||
+				name.includes('engine oil') ||
+				code.includes('engine oil')
+			);
+		},
+
 		handleItemGroupUpdate(newGroup) {
 			this.item_group = newGroup;
 		},
@@ -532,9 +545,9 @@ export default {
 				console.log('[Discount] Processing item:', item.item_code);
 
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.discounts.get_vehicle_item_discount",
+					method: "posawesome.posawesome.api.discounts.get_customer_item_discount",
 					args: {
-						vehicle_no: this.custom_vehicle_no,
+						customer: this.customer,
 						item_code: item.item_code,
 					},
 				});
@@ -552,7 +565,7 @@ export default {
 				item._vehicle_discount_rule = rule;
 
 				// ENGINE OIL 
-				if ((item.item_group || '').trim() === 'Engine Oil') {
+				if (this.isEngineOil(item)) {
 					item.discount_percentage = 0;
 					item.discount_amount = 0;
 
@@ -645,7 +658,7 @@ export default {
 				const res = await frappe.call({
 					method: "posawesome.posawesome.api.discounts.validate_discount",
 					args: {
-						vehicle_no: this.custom_vehicle_no,
+						customer: this.customer,
 						item_code: item.item_code,
 						discount_percentage: discount,
 					},
@@ -771,9 +784,9 @@ export default {
 
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.discounts.get_vehicle_item_discount",
+					method: "posawesome.posawesome.api.discounts.get_customer_item_discount",
 					args: {
-						vehicle_no: this.custom_vehicle_no,
+						customer: this.customer,
 						item_code: itemRow.item_code,
 					},
 				});
@@ -936,7 +949,7 @@ export default {
 			if (!this.maxDiscountInfo) return true;
 
 			// ENGINE OIL
-			if ((item.item_group || "").trim() === "Engine Oil") {
+			if (this.isEngineOil(item)) {
 				frappe.show_alert({
 					message: __("Discount not allowed for Engine Oil items"),
 					indicator: "red",
@@ -965,7 +978,7 @@ export default {
 		applyItemGroupDiscount({ group, percentage }) {
 
 			//  ENGINE OIL BLOCK
-			if ((group || "").trim() === "Engine Oil") {
+			if (group && group.toLowerCase().includes('engine oil')) {
 				frappe.show_alert({
 					message: __("Group discount is not allowed for Engine Oil items"),
 					indicator: "red",
@@ -1022,7 +1035,7 @@ export default {
 			}
 
 			const hasOilItem = this.items.some((item) => {
-				return (item.item_group || "").trim() === "Engine Oil";
+				return this.isEngineOil(item);
 			});
 
 
@@ -1654,7 +1667,7 @@ export default {
 					item.base_amount = this.flt(qtyNum * baseRateNum, this.currency_precision);
 
 					// Engine oil
-					if ((item.item_group || "").trim() === "Engine Oil") {
+					if (this.isEngineOil(item)) {
 						const precision =
 							this.pos_profile?.posa_decimal_precision ?? this.currency_precision;
 
@@ -2437,14 +2450,8 @@ export default {
 			}
 
 			// Set oil item flag based on items
-			const hasOilItem = this.items.some(item =>
-				item.item_code && (
-					item.item_code.toLowerCase().includes('engine oil') ||
-					item.item_code.toLowerCase().includes('oil change') ||
-					item.item_name?.toLowerCase().includes('engine oil') ||
-					item.item_name?.toLowerCase().includes('oil change')
-				)
-			);
+			const hasOilItem = this.items.some(item => this.isEngineOil(item));
+
 			this.invoice_doc.custom_has_oil_item = hasOilItem ? 1 : 0;
 			
 
@@ -2914,7 +2921,7 @@ export default {
 			let itemsUpdated = 0;
 
 			this.items.forEach(item => {
-				if ((item.item_group || '').trim() === group) {
+				if ((item.item_group || '').trim() === group && !this.isEngineOil(item)) {
 					// Store original values if not stored
 					if (!item.original_rate) {
 						item.original_rate = item.rate;
@@ -3194,10 +3201,14 @@ export default {
 					addedItem.posa_row_id = this.makeid(20);
 				}
 
-				if ((addedItem.item_group || '').trim() !== 'Engine Oil') {
+				if (!this.isEngineOil(addedItem)) {
 					addedItem.allow_discount = true;
 					addedItem.discount_locked = 0;
+				} else {
+					addedItem.allow_discount = false;
+					addedItem.discount_locked = 1;
 				}
+
 
 				if (this.custom_vehicle_no && !addedItem._manual_discount_set) {
 					await this.applyVehicleDiscountToItem(addedItem);

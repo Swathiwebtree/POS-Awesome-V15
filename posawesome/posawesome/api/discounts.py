@@ -4,17 +4,12 @@ from posawesome.posawesome.api.utils import expand_item_groups
 SERVICE_ROOT_GROUPS = ["Services"]
 STOCK_ROOT_GROUPS = ["Products"]
 
-ENGINE_OIL_GROUP = "Engine Oil"
-
-
 
 def get_all_service_groups():
-    """Return ALL service item groups (tree expanded)"""
     return set(expand_item_groups(SERVICE_ROOT_GROUPS))
 
 
 def get_all_stock_groups():
-    """Return ALL stock item groups (tree expanded)"""
     return set(expand_item_groups(STOCK_ROOT_GROUPS))
 
 
@@ -24,27 +19,42 @@ def get_item_group(item_code=None, item_group=None):
     return item_group.strip() if item_group else None
 
 
+def is_engine_oil(item_group: str) -> bool:
+    return bool(item_group and "engine oil" in item_group.lower())
+
 
 def is_service_item(item_code=None, item_group=None):
     item_group = get_item_group(item_code, item_group)
-    if not item_group:
-        return False
-
-    if item_group == ENGINE_OIL_GROUP:
-        return False
-
-    return item_group in get_all_service_groups()
+    return bool(
+        item_group
+        and not is_engine_oil(item_group)
+        and item_group in get_all_service_groups()
+    )
 
 
 def is_stock_item(item_code=None, item_group=None):
     item_group = get_item_group(item_code, item_group)
-    if not item_group:
-        return False
+    return bool(
+        item_group
+        and not is_engine_oil(item_group)
+        and item_group in get_all_stock_groups()
+    )
 
-    if item_group == ENGINE_OIL_GROUP:
-        return False
 
-    return item_group in get_all_stock_groups()
+
+def get_customer_discount_config(customer):
+    return frappe.db.get_value(
+        "Customer",
+        customer,
+        [
+            "custom_custom_default_discount___service_items",
+            "custom_custom_default_discount___stock_items",
+            "custom_custom_max_discount___service_items",
+            "custom_custom_max_discount___stock_items",
+        ],
+        as_dict=True,
+    )
+
 
 
 @frappe.whitelist()
@@ -72,98 +82,82 @@ def get_max_discount(customer):
 
 
 @frappe.whitelist()
-def get_vehicle_item_discount(vehicle_no, item_code):
+def get_customer_item_discount(customer, item_code):
 
     result = {
         "max_discount": 0,
         "auto_apply": False,
         "auto_apply_value": 0,
-        "source": None,
-        "message": None,
         "item_type": None,
+        "message": None,
     }
 
-    if not vehicle_no or not item_code:
+    if not customer or not item_code:
         return result
 
     item_group = get_item_group(item_code=item_code)
     if not item_group:
         return result
 
-    if item_group == ENGINE_OIL_GROUP:
-        result.update({
+    if is_engine_oil(item_group):
+        return {
+            "item_type": "engine_oil",
+            "max_discount": 0,
+            "auto_apply": False,
             "message": "Engine Oil items are not eligible for discount",
-            "item_type": "engine_oil"
-        })
-        return result
+        }
 
     is_service = is_service_item(item_group=item_group)
     is_stock = is_stock_item(item_group=item_group)
 
     if not is_service and not is_stock:
-        result["message"] = f"Item group '{item_group}' not configured for discounts"
         return result
 
-    result["item_type"] = "service" if is_service else "stock"
-
-    vehicle = frappe.db.get_value(
-        "Vehicle Master",
-        vehicle_no,
-        [
-            "custom_default_discount___stock_items",
-            "custom_default_discount___service_items",
-            "custom_max_discount___stock_items",
-            "custom_max_discount___service_items",
-        ],
-        as_dict=True,
-    )
-
-    if not vehicle:
-        result["message"] = f"Vehicle {vehicle_no} not found"
+    discounts = get_customer_discount_config(customer)
+    if not discounts:
         return result
 
     if is_service:
-        default_max = vehicle.custom_default_discount___service_items or 0
-        manual_max = vehicle.custom_max_discount___service_items or 0
-        field = "service"
+        default_max = discounts.custom_custom_default_discount___service_items or 0
+        manual_max = discounts.custom_custom_max_discount___service_items or 0
+        item_type = "service"
     else:
-        default_max = vehicle.custom_default_discount___stock_items or 0
-        manual_max = vehicle.custom_max_discount___stock_items or 0
-        field = "stock"
+        default_max = discounts.custom_custom_default_discount___stock_items or 0
+        manual_max = discounts.custom_custom_max_discount___stock_items or 0
+        item_type = "stock"
 
+    # Manual override
     if manual_max > 0:
         return {
+            "item_type": item_type,
             "max_discount": float(manual_max),
             "auto_apply": False,
-            "source": f"vehicle_manual_max_{field}",
             "message": f"Manual discount allowed up to {manual_max}%",
-            "item_type": result["item_type"],
         }
 
+    # Auto apply
     if default_max > 0:
         return {
+            "item_type": item_type,
             "max_discount": float(default_max),
             "auto_apply": True,
             "auto_apply_value": float(default_max),
-            "source": f"vehicle_default_max_{field}",
             "message": f"Auto-applied {default_max}%",
-            "item_type": result["item_type"],
         }
 
-    result["message"] = f"No discount configured for {field} items"
     return result
 
 
 
 @frappe.whitelist()
-def validate_discount(vehicle_no, item_code, discount_percentage):
+def validate_discount(customer, item_code, discount_percentage):
 
     discount_percentage = float(discount_percentage or 0)
 
     if discount_percentage <= 0:
-        return {"is_valid": True, "message": "No discount applied"}
+        return {"is_valid": True}
 
-    rules = get_vehicle_item_discount(vehicle_no, item_code)
+    rules = get_customer_item_discount(customer, item_code)
 
     if rules.get("item_type") == "engine_oil":
         return {"is_valid": False, "message": "Discount not allowed for Engine Oil"}
@@ -177,37 +171,5 @@ def validate_discount(vehicle_no, item_code, discount_percentage):
             "max_allowed": max_allowed,
         }
 
-    return {
-        "is_valid": True,
-        "message": f"Discount {discount_percentage}% is valid",
-        "max_allowed": max_allowed,
-    }
+    return {"is_valid": True, "max_allowed": max_allowed}
 
-
-
-@frappe.whitelist()
-def get_vehicle_by_customer(customer):
-    if not customer:
-        return None
-
-    vehicles = frappe.get_all(
-        "Vehicle Master",
-        filters={"customer": customer},
-        fields=[
-            "name",
-            "vehicle_no",
-            "model",
-            "custom_default_discount___stock_items",
-            "custom_default_discount___service_items",
-            "custom_max_discount___stock_items",
-            "custom_max_discount___service_items",
-        ],
-        limit=1,
-    )
-
-    return vehicles[0] if vehicles else None
-
-
-@frappe.whitelist()
-def get_customer_by_vehicle(vehicle_no):
-    return frappe.db.get_value("Vehicle Master", vehicle_no, "customer")
