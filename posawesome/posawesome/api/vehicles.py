@@ -21,168 +21,214 @@ def create_vehicle(
     make=None,
     chasis_no=None,
     color=None,
+    registration_number=None,
     mobile_no=None,
     method="create",
     vehicle_id=None,
 ):
+    """
+    Creates or updates a Vehicle Master record based on the 'method' parameter.
+
+    FIX: Restructures error handling to explicitly re-raise Frappe validation
+    exceptions, preventing the BrokenPipeError during error response packaging.
+    """
+
+    # 1. Sanitize/Normalize inputs
     vehicle_no = (vehicle_no or "").upper().strip()
     customer = customer or ""
 
-    if not vehicle_no:
-        frappe.throw(_("Vehicle No is required"))
-    if not customer:
-        frappe.throw(_("Customer is required"))
-    if not make:
-        frappe.throw(_("Make is required"))
-
+    # Use empty string for DocType fields if None is passed from frontend
     model = model or ""
+    make = make or ""
     chasis_no = chasis_no or ""
     color = color or ""
+    registration_number = registration_number or ""
     mobile_no = mobile_no or ""
 
+    # 2. Aggressive Pre-Validation for required fields
+    # This prevents the call from hitting the internal Frappe Naming logic
+    # if basic mandatory fields are missing (like the one used for DocType name).
+    if not vehicle_no:
+        frappe.throw(_("Vehicle No. is mandatory."), title=_("Validation Error"))
+    if not customer:
+        frappe.throw(_("Customer is mandatory."), title=_("Validation Error"))
+
+    # We use a try block specifically around document operations
     try:
         if method == "create":
-            if frappe.db.exists("Vehicle", {"license_plate": vehicle_no}):
-                frappe.throw(_("Vehicle already exists"))
+            # Check for existing vehicle using vehicle_no as the unique key
+            if frappe.db.exists(VEHICLE_DOCTYPE, vehicle_no):
+                frappe.throw(
+                    _("Vehicle No. {0} already exists in the system.").format(vehicle_no),
+                    title=_("Already Exists"),
+                )
 
-            vehicle = frappe.get_doc({
-                "doctype": "Vehicle",
-                "license_plate": vehicle_no,
-                "make": make,
+            # Create a new document dictionary
+            doc_data = {
+                "doctype": VEHICLE_DOCTYPE,
+                # Setting 'name' is crucial if the DocType is configured for AutoName: field:vehicle_no
+                "customer": customer,
+                "vehicle_no": vehicle_no,
                 "model": model,
-                "chassis_no": chasis_no,
+                "make": make,
+                "chasis_no": chasis_no,
                 "color": color,
-                "customer": customer
-            })
+                "registration_number": registration_number,
+                "mobile_no": mobile_no,
+            }
+
+            # Insert the new document (ignore_mandatory=True removed for better validation)
+            vehicle = frappe.get_doc(doc_data)
             vehicle.insert(ignore_permissions=True)
 
-        else:
-            vehicle = frappe.get_doc("Vehicle", vehicle_id)
-            vehicle.make = make
-            vehicle.model = model
-            vehicle.chassis_no = chasis_no
-            vehicle.color = color
+        elif method == "update" and vehicle_id:
+            # Update an existing document
+            vehicle = frappe.get_doc(VEHICLE_DOCTYPE, vehicle_id)
+
+            # Update fields based on incoming data
             vehicle.customer = customer
+            vehicle.model = model
+            vehicle.make = make
+            vehicle.chasis_no = chasis_no
+            vehicle.color = color
+            vehicle.registration_number = registration_number
+            vehicle.mobile_no = mobile_no
+
+            # Save the document (ignore_mandatory=True removed for better validation)
             vehicle.save(ignore_permissions=True)
 
-        if frappe.db.exists("Vehicle Master", vehicle.name):
-            vm = frappe.get_doc("Vehicle Master", vehicle.name)
         else:
-            vm = frappe.get_doc({
-                "doctype": "Vehicle Master",
-                "name": vehicle.name
-            })
+            frappe.throw(_("Invalid method or missing vehicle ID for update."), title=_("API Error"))
 
-        vm.vehicle_no = vehicle_no
-        vm.customer = customer
-        vm.model = model
-        vm.chasis_no = chasis_no
-        vm.color = color
-        vm.tel_mobile = mobile_no
-
-        if vm.is_new():
-            vm.insert(ignore_permissions=True)
-        else:
-            vm.save(ignore_permissions=True)
-
+        # Commit changes and return the document
         frappe.db.commit()
+        return vehicle.as_dict()
 
-        return {
-            "vehicle": vehicle.as_dict(),
-            "vehicle_master": vm.as_dict()
-        }
+    # CRITICAL FIX: Explicitly catch Frappe-specific exceptions and re-raise them.
+    # This pattern lets the Frappe framework handle the response properly.
+    except (ValidationError, DoesNotExistError, NameError) as e:
+        # Log the error for server-side debugging
+        frappe.log_error(message=frappe.get_traceback(), title="POS Awesome Validation/Data Error")
+        # Re-raise the original Frappe exception immediately
+        raise
 
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "create_vehicle failed")
-        frappe.throw(_("Failed to create vehicle"))
-
+    except Exception as e:
+        # Catch all other unexpected errors
+        frappe.log_error(message=frappe.get_traceback(), title="POS Awesome Vehicle API General Error")
+        # Throw a simple, generic error message only as a last resort
+        frappe.throw(
+            _("An unexpected server error occurred while processing the vehicle request."),
+            title=_("Server Error"),
+        )
 
 
 @frappe.whitelist()
 def get_vehicle_and_customer(vehicle_no):
+    """
+    Fetches vehicle and linked customer data based on vehicle_no.
+    """
     if not vehicle_no:
         return {}
 
-    vehicle_no_clean = str(vehicle_no).strip().upper()
+    vehicle_no = vehicle_no.strip()
+    vehicle = {}  # Initialize vehicle dictionary
 
     try:
-        vm = frappe.get_doc("Vehicle Master", {"vehicle_no": vehicle_no_clean})
+        # 1. Try to get the vehicle document
+        vehicle_doc = frappe.get_doc(VEHICLE_DOCTYPE, vehicle_no)
+        vehicle = vehicle_doc.as_dict()
 
-        vehicle = frappe.db.get_value(
-            "Vehicle",
-            {"license_plate": vehicle_no_clean},
-            ["name", "make"],
-            as_dict=True,
-        )
+        customer_name = vehicle.get("customer")
+        cust_doc = frappe.new_doc(CUSTOMER_DOCTYPE)  # Default to an empty customer doc
 
-        customer = (
-            frappe.get_doc("Customer", vm.customer)
-            if vm.customer and frappe.db.exists("Customer", vm.customer)
-            else None
-        )
+        # 2. Try to fetch the linked customer document if the link field is populated
+        if customer_name:
+            try:
+                cust_doc = frappe.get_doc(CUSTOMER_DOCTYPE, customer_name)
+            except DoesNotExistError:
+                frappe.log_error(
+                    f"Customer {customer_name} linked to Vehicle {vehicle_no} does not exist.",
+                    "Vehicle Lookup - Missing Customer",
+                )
+                # Keep cust_doc as a new empty document to prevent subsequent errors
 
+        # 3. Compile the response data
         return {
             "vehicle": {
-                "name": vm.name,
-                "vehicle_no": vm.vehicle_no,
-                "make": vehicle.make if vehicle else "",
-                "model": vm.model,
-                "chasis_no": vm.chasis_no,
-                "color": vm.color,
-                "mobile_no": vm.tel_mobile,
+                "name": vehicle.get("name"),
+                "vehicle_no": vehicle.get("vehicle_no"),
+                "model": vehicle.get("model"),
+                "make": vehicle.get("make"),
+                "chasis_no": vehicle.get("chasis_no"),
+                "color": vehicle.get("color"),
+                "registration_number": vehicle.get("registration_number"),
+                "mobile_no": vehicle.get("mobile_no"),
             },
             "customer": {
-                "name": customer.name,
-                "customer_name": customer.customer_name,
-                "mobile_no": customer.mobile_no,
-                "email_id": customer.email_id,
-            } if customer else {},
+                "name": cust_doc.name,
+                "customer_name": getattr(cust_doc, "customer_name", ""),
+                "email_id": getattr(cust_doc, "email_id", ""),
+                "mobile_no": getattr(cust_doc, "mobile_no", ""),
+                "tax_id": getattr(cust_doc, "tax_id", ""),
+                "customer_group": getattr(cust_doc, "customer_group", ""),
+                "territory": getattr(cust_doc, "territory", ""),
+                "posa_discount": getattr(cust_doc, "posa_discount", 0),
+            },
         }
+    except DoesNotExistError:
+        # Handles case where the Vehicle Master document itself is missing
+        return {"vehicle": {"vehicle_no": vehicle_no}, "customer": {}}
 
-    except frappe.DoesNotExistError:
-        return {"vehicle": {"vehicle_no": vehicle_no_clean}, "customer": {}}
-
+    except Exception:
+        # Catches other unexpected errors
+        frappe.log_error(frappe.get_traceback(), "Vehicle Lookup Error - General Failure")
+        return {}
 
 
 @frappe.whitelist()
 def get_all_vehicles_for_customer(customer_name):
+    """
+    Get all vehicles for a customer (no pagination).
+    """
+    # ... (Keep the rest of the function body)
     if not customer_name:
         return []
 
-    return frappe.get_all(
+    vehicles = frappe.get_all(
         VEHICLE_DOCTYPE,
         filters={"customer": customer_name},
         fields=[
             "name",
             "vehicle_no",
             "model",
+            "make",
             "chasis_no",
-            "tel_mobile",
+            "mobile_no",
             "customer",
         ],
         order_by="creation desc",
     )
-
+    return vehicles
 
 
 @frappe.whitelist()
 def search_vehicles(search_term, limit=50):
+    """
+    Search vehicles by: 1. vehicle_no (license plate) 2. Customer mobile_no
+    """
     if not search_term or len(search_term) < 2:
         frappe.throw(_("Search term must be at least 2 characters"))
 
-    return frappe.get_all(
+    search_term = search_term.strip()
+
+    vehicles_by_number = frappe.get_all(
         VEHICLE_DOCTYPE,
-        filters={"vehicle_no": ["like", f"%{search_term.strip()}%"]},
-        fields=[
-            "name",
-            "vehicle_no",
-            "model",
-            "chasis_no",
-            "tel_mobile",
-            "customer",
-        ],
+        filters={"vehicle_no": ["like", f"%{search_term}%"]},
+        fields=["name", "vehicle_no", "customer", "model", "chasis_no", "make", "mobile_no"],
         limit_page_length=int(limit),
     )
+    return vehicles_by_number
+
 
 @frappe.whitelist()
 def get_vehicles_by_customer(customer_name, limit=200, start_after=None):
@@ -246,61 +292,101 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None):
 
 @frappe.whitelist()
 def get_vehicle_models(search_term=""):
-    filters = []
+    """
+    Search and return a distinct list of Vehicle Model names for autocomplete.
+    """
+    filters = {}
     if search_term:
+        # Correctly format filter for a single field search
         filters = [["model", "like", f"%{search_term}%"]]
 
-    rows = frappe.get_all(
+    models = frappe.get_all(
         VEHICLE_DOCTYPE,
         filters=filters,
         fields=["DISTINCT model"],
         order_by="model asc",
         limit_page_length=20,
     )
-    return [r.model for r in rows if r.model]
+
+    # Return a list of strings (model names)
+    return [d.get("model") for d in models if d.get("model")]
 
 
 @frappe.whitelist()
 def get_customer_by_vehicle(vehicle_no):
+    """
+    Return customer details for a vehicle number (exact match).
+    Defensive: tries Vehicle Master then Vehicle; normalizes vehicle_no and logs findings.
+    """
     if not vehicle_no:
+        frappe.logger().warning("get_customer_by_vehicle called without vehicle_no")
         frappe.throw(_("Vehicle number is required"))
 
+    # normalize common input issues
     vehicle_no_clean = str(vehicle_no).strip().upper()
 
+    frappe.logger().info(f"get_customer_by_vehicle lookup starting for: {vehicle_no_clean}")
+
+    # try Vehicle Master first, then Vehicle
+    doctype_candidates = ["Vehicle Master", "Vehicle"]
     vehicle = None
+    vehicle_doc = None
 
-    found = frappe.get_all(
-        "Vehicle Master",
-        filters={"vehicle_no": vehicle_no_clean},
-        fields=["name", "customer", "model", "chasis_no", "vehicle_no"],
-        limit_page_length=1,
-    )
-
-    if found:
-        vehicle = found[0]
-
-    if not vehicle:
-        found = frappe.get_all(
-            "Vehicle",
-            filters={"license_plate": vehicle_no_clean},
-            fields=["name", "customer", "model", "chassis_no"],
-            limit_page_length=1,
-        )
-        if found:
-            vehicle = found[0]
-            vehicle["vehicle_no"] = vehicle_no_clean
-            vehicle["chasis_no"] = vehicle.get("chassis_no")
+    for dt in doctype_candidates:
+        try:
+            found = frappe.get_all(
+                dt,
+                filters={"vehicle_no": vehicle_no_clean},
+                fields=["name", "customer", "model", "chasis_no", "vehicle_no"],
+                limit_page_length=1,
+            )
+            if found:
+                vehicle = found[0]
+                frappe.logger().info(f"Found vehicle in {dt}: {vehicle}")
+                break
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), f"Error querying {dt} for vehicle {vehicle_no_clean}")
+            # continue to next candidate
 
     if not vehicle:
+        # Try loose search (in case of extra spaces/case or vehicle_no stored differently)
+        try:
+            loose = frappe.db.sql(
+                """
+                SELECT name, customer, model, chasis_no, vehicle_no
+                FROM `tabVehicle Master`
+                WHERE REPLACE(UPPER(vehicle_no), ' ', '') = %s
+                LIMIT 1
+                """,
+                (vehicle_no_clean.replace(" ", ""),),
+                as_dict=1,
+            )
+            if loose:
+                vehicle = loose[0]
+                frappe.logger().info(f"Found vehicle via loose match in Vehicle Master: {vehicle}")
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Loose match attempt failed")
+
+    if not vehicle:
+        frappe.logger().info(f"No vehicle found for '{vehicle_no_clean}'")
+        # return empty object (consistent with your current behavior), but log
         return {}
 
     cust_name = vehicle.get("customer")
-    if not cust_name or not frappe.db.exists("Customer", cust_name):
+    if not cust_name:
+        frappe.logger().info(f"Vehicle {vehicle.get('name')} has no customer linked")
         return {"vehicle": vehicle, "customer": {}}
 
-    cust = frappe.get_doc("Customer", cust_name)
+    try:
+        cust_doc = frappe.get_doc("Customer", cust_name)
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"Failed to fetch Customer {cust_name} linked to vehicle {vehicle.get('name')}",
+        )
+        return {"vehicle": vehicle, "customer": {}}
 
-    return {
+    resp = {
         "vehicle": {
             "name": vehicle.get("name"),
             "vehicle_no": vehicle.get("vehicle_no"),
@@ -308,16 +394,21 @@ def get_customer_by_vehicle(vehicle_no):
             "chasis_no": vehicle.get("chasis_no"),
         },
         "customer": {
-            "name": cust.name,
-            "customer_name": cust.customer_name,
-            "email_id": cust.email_id,
-            "mobile_no": cust.mobile_no,
-            "tax_id": cust.tax_id,
-            "customer_group": cust.customer_group,
-            "territory": cust.territory,
-            "posa_discount": getattr(cust, "posa_discount", 0),
+            "name": cust_doc.name,
+            "customer_name": getattr(cust_doc, "customer_name", ""),
+            "email_id": getattr(cust_doc, "email_id", ""),
+            "mobile_no": getattr(cust_doc, "mobile_no", ""),
+            "tax_id": getattr(cust_doc, "tax_id", ""),
+            "customer_group": getattr(cust_doc, "customer_group", ""),
+            "territory": getattr(cust_doc, "territory", ""),
+            "posa_discount": getattr(cust_doc, "posa_discount", 0),
         },
     }
+
+    frappe.logger().info(
+        f"get_customer_by_vehicle returning for {vehicle_no_clean}: customer {cust_doc.name}"
+    )
+    return resp
 
 @frappe.whitelist()
 def get_vehicles_by_search(search_term="", limit=1):
@@ -376,7 +467,7 @@ def get_vehicle_makes(search_term=""):
         conditions = "WHERE make LIKE %s"
         values.append(f"%{search_term}%")
 
-    rows = frappe.db.sql(
+    makes = frappe.db.sql(
         f"""
         SELECT DISTINCT make
         FROM `tabVehicle`
@@ -388,4 +479,4 @@ def get_vehicle_makes(search_term=""):
         as_dict=True,
     )
 
-    return [r.make for r in rows if r.make]
+    return [d["make"] for d in makes if d.get("make")]
