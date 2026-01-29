@@ -328,7 +328,6 @@ export default {
 		}
 
 		this.invoice_doc = data;
-		this.loaded_draft_name = data.name || null;
 		this.items = data.items || [];
 		this.packed_items = data.packed_items || [];
 		console.log("Items set:", this.items.length, "items");
@@ -397,40 +396,10 @@ export default {
 		}
 
 
-		const resolvedContactMobile = String(
-			data.contact_mobile || data.mobile_no || data.customer_mobile || "",
-		).trim();
-		let resolvedVehicleNo = String(
-			data.custom_vehicle_no ||
-				data.vehicle_no ||
-				data.vehicle_number ||
-				data.custom_vehicle_number ||
-				"",
-		).trim();
-		if (!resolvedVehicleNo && Array.isArray(data.items)) {
-			const itemWithVehicle = data.items.find(
-				(it) =>
-					it &&
-					(it.custom_vehicle_no ||
-						it.vehicle_no ||
-						it.vehicle_number ||
-						it.custom_vehicle_number),
-			);
-			if (itemWithVehicle) {
-				resolvedVehicleNo = String(
-					itemWithVehicle.custom_vehicle_no ||
-						itemWithVehicle.vehicle_no ||
-						itemWithVehicle.vehicle_number ||
-						itemWithVehicle.custom_vehicle_number ||
-						"",
-				).trim();
-			}
-		}
-
 		this.custom_has_oil_item = !!data.custom_has_oil_item;
 		this.custom_odometer_reading = data.custom_odometer_reading || null;
-		this.contact_mobile = resolvedContactMobile;
-		this.custom_vehicle_no = resolvedVehicleNo;
+		this.contact_mobile = data.contact_mobile || "";
+		this.custom_vehicle_no = data.custom_vehicle_no || "";
 
 		console.log("Odometer/vehicle data loaded:", {
 			custom_has_oil_item: this.custom_has_oil_item,
@@ -444,8 +413,8 @@ export default {
 			this.eventBus.emit("load_odometer_data", {
 				custom_has_oil_item: data.custom_has_oil_item,
 				custom_odometer_reading: data.custom_odometer_reading,
-				contact_mobile: this.contact_mobile,
-				custom_vehicle_no: this.custom_vehicle_no,
+				contact_mobile: data.contact_mobile,
+				custom_vehicle_no: data.custom_vehicle_no,
 			});
 		}
 		console.log("load_invoice completed, invoice state:", {
@@ -460,8 +429,8 @@ export default {
 			// Emit event to Customer component to update customer and vehicle without overwriting invoice data
 			this.eventBus.emit("load_invoice_customer", {
 				customer: customerToLoad,
-				contact_mobile: this.contact_mobile,
-				custom_vehicle_no: this.custom_vehicle_no,
+				contact_mobile: data.contact_mobile || "",
+				custom_vehicle_no: data.custom_vehicle_no || "",
 			});
 		}
 
@@ -534,11 +503,6 @@ export default {
 			this.additional_discount_percentage = 0;
 			this.invoiceType = "Invoice";
 			this.invoiceTypes = ["Invoice", "Order"];
-			// Clear contact/vehicle when starting a fresh order
-			this.contact_mobile = "";
-			this.custom_vehicle_no = "";
-			this.custom_odometer_reading = null;
-			this.custom_has_oil_item = false;
 		} else {
 			if (data.is_return) {
 				// For return without invoice case, check if there's a return_against
@@ -580,50 +544,6 @@ export default {
 					item.serial_no_selected_count = item.serial_no_selected.length;
 				}
 			});
-
-			// Resolve contact/vehicle for job orders to avoid stale values
-			const resolvedContactMobile = String(
-				data.contact_mobile || data.mobile_no || data.customer_mobile || "",
-			).trim();
-			let resolvedVehicleNo = String(
-				data.custom_vehicle_no ||
-					data.vehicle_no ||
-					data.vehicle_number ||
-					data.custom_vehicle_number ||
-					"",
-			).trim();
-			if (!resolvedVehicleNo && Array.isArray(data.items)) {
-				const itemWithVehicle = data.items.find(
-					(it) =>
-						it &&
-						(it.custom_vehicle_no ||
-							it.vehicle_no ||
-							it.vehicle_number ||
-							it.custom_vehicle_number),
-				);
-				if (itemWithVehicle) {
-					resolvedVehicleNo = String(
-						itemWithVehicle.custom_vehicle_no ||
-							itemWithVehicle.vehicle_no ||
-							itemWithVehicle.vehicle_number ||
-							itemWithVehicle.custom_vehicle_number ||
-							"",
-					).trim();
-				}
-			}
-
-			this.contact_mobile = resolvedContactMobile;
-			this.custom_vehicle_no = resolvedVehicleNo;
-			this.custom_odometer_reading = data.custom_odometer_reading || null;
-			this.custom_has_oil_item = !!data.custom_has_oil_item;
-
-			if (this.customer) {
-				this.eventBus.emit("load_invoice_customer", {
-					customer: this.customer,
-					contact_mobile: this.contact_mobile,
-					custom_vehicle_no: this.custom_vehicle_no,
-				});
-			}
 		}
 		return old_invoice;
 	},
@@ -1337,6 +1257,12 @@ export default {
 				items_count: this.items.length,
 				customer: this.customer,
 			});
+
+			// Defensive: sync customer from loaded invoice doc if needed
+			if (!this.customer) {
+				this.customer =
+					(this.invoice_doc && (this.invoice_doc.customer || this.invoice_doc.customer_name)) || "";
+			}
 
 			if (!this.customer) {
 				console.log("Customer validation failed");
