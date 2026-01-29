@@ -280,6 +280,13 @@ export default {
 		vehiclePage: 0,
 		vehicleSearchResults: [],
 		vehicleHasMore: false,
+		vehicleFetchInFlight: false,
+		lastVehicleFetchKey: "",
+		lastVehicleFetchAt: 0,
+		jobOrderVehicleNo: null,
+		jobOrderCustomer: null,
+		jobOrderLoading: false,
+		jobOrderLockUntil: 0,
 
 		// invoice doc placeholder used in some methods (should be provided by parent normally)
 		invoice_doc: {},
@@ -459,6 +466,23 @@ export default {
 		},
 
 		onCustomerChange(val) {
+			// When loading from a draft, internalCustomer is set programmatically
+			// which may trigger this. Skip to avoid showing false "already selected" error.
+			if (this._skipNextCustomerSearch) {
+				return;
+			}
+			if (val && this.jobOrderCustomer && val !== this.jobOrderCustomer) {
+				this.jobOrderCustomer = null;
+				this.jobOrderVehicleNo = null;
+				this.jobOrderLoading = false;
+				this.jobOrderLockUntil = 0;
+			}
+			if (this.jobOrderLoading && val && val === this.jobOrderCustomer) {
+				this.customer = val;
+				this.internalCustomer = val;
+				this.eventBus.emit("update_customer", val);
+				return;
+			}
 			if (val && val === this.customer) {
 				this.internalCustomer = this.customer;
 				this.eventBus.emit("show_message", {
@@ -474,7 +498,9 @@ export default {
 				this.customer = val;
 				this.eventBus.emit("update_customer", val);
 				this.fetchAndEmitCustomerDetails(val);
-				this.fetchVehiclesForCustomer(val); 
+				if (!(this.jobOrderCustomer && this.jobOrderVehicleNo)) {
+					this.fetchVehiclesForCustomer(val);
+				}
 				this.selectedVehicle = null;
 			}
 
@@ -484,6 +510,10 @@ export default {
 				this.vehicles = [];
 				this.selectedVehicle = null;
 				this.vehicle_no = "";
+				this.jobOrderCustomer = null;
+				this.jobOrderVehicleNo = null;
+				this.jobOrderLoading = false;
+				this.jobOrderLockUntil = 0;
 				this.eventBus.emit("update_customer", null);
 				this.eventBus.emit("vehicle_selected", null);
 				this.selected_customer_is_corporate = false;
@@ -500,6 +530,11 @@ export default {
 		},
 
 		onCustomerSearch(val) {
+			// Skip search when loading from a draft to prevent the debounced
+			// search from clearing this.customers[] and blanking the autocomplete
+			if (this._skipNextCustomerSearch) {
+				return;
+			}
 			if (this.isCustomerBackgroundLoading) {
 				this.pendingCustomerSearch = val;
 				return;
@@ -1233,25 +1268,73 @@ export default {
 		},
 
 		// --- Vehicle Methods ---
-		async fetchVehiclesForCustomer(customerName) {
+		async fetchVehiclesForCustomer(customerName, vehicleNo = null) {
 			if (!customerName) {
 				this.vehicles = [];
 				this.selectedVehicle = null;
 				this.vehicle_no = "";
+				this.jobOrderVehicleNo = null;
+				this.jobOrderCustomer = null;
+				this.jobOrderLoading = false;
+				this.jobOrderLockUntil = 0;
 				this.eventBus.emit("vehicle_selected", null);
 				return;
 			}
 
+			const now = Date.now();
+			if (
+				this.jobOrderCustomer === customerName &&
+				this.jobOrderLockUntil &&
+				now < this.jobOrderLockUntil
+			) {
+				if (!vehicleNo) {
+					return;
+				}
+				if (this.jobOrderVehicleNo && vehicleNo !== this.jobOrderVehicleNo) {
+					return;
+				}
+			}
+			if (this.jobOrderVehicleNo && this.jobOrderCustomer === customerName && !vehicleNo) {
+				// Only allow job-order vehicle fetch when a job order is active.
+				return;
+			}
+			if (
+				this.jobOrderVehicleNo &&
+				this.jobOrderCustomer === customerName &&
+				vehicleNo &&
+				vehicleNo !== this.jobOrderVehicleNo
+			) {
+				return;
+			}
+
+			const fetchKey = `${customerName}::${vehicleNo || ""}`;
+			if (this.vehicleFetchInFlight && fetchKey === this.lastVehicleFetchKey) {
+				return;
+			}
+			if (fetchKey === this.lastVehicleFetchKey && now - this.lastVehicleFetchAt < 500) {
+				return;
+			}
+
+			this.vehicleFetchInFlight = true;
+			this.lastVehicleFetchKey = fetchKey;
+			this.lastVehicleFetchAt = now;
+
 			this.loadingVehicles = true;
 			try {
 				let fetchedVehicles = [];
-				this.vehicle_no = "";
+				if (!vehicleNo) {
+					this.vehicle_no = "";
+				}
 
 				// 1. Offline lookup
 				try {
 					await checkDbHealth();
 					if (!db.isOpen()) await db.open();
-					const local = await db.table("vehicles").where("customer").equals(customerName).toArray();
+					let localQuery = db.table("vehicles").where("customer").equals(customerName);
+					if (vehicleNo) {
+						localQuery = localQuery.and((v) => v.vehicle_no === vehicleNo);
+					}
+					const local = await localQuery.toArray();
 					if (local && local.length) {
 						fetchedVehicles = local.map((r) => ({
 							name: r.name || r.id,
@@ -1271,7 +1354,7 @@ export default {
 				if (!fetchedVehicles.length || navigator.onLine) {
 					const res = await frappe.call({
 						method: "posawesome.posawesome.api.vehicles.get_vehicles_by_customer",
-						args: { customer_name: customerName },
+						args: { customer_name: customerName, vehicle_no: vehicleNo },
 					});
 					const serverVehicles = res?.message || [];
 
@@ -1292,8 +1375,10 @@ export default {
 				}
 
 				this.vehicles = fetchedVehicles;
-				this.selectedVehicle = null;
-				this.vehicle_no = "";
+				if (!vehicleNo) {
+					this.selectedVehicle = null;
+					this.vehicle_no = "";
+				}
 
 				if (this.vehicles.length === 1) {
 					this.selectedVehicle = this.vehicles[0].name;
@@ -1317,6 +1402,7 @@ export default {
 				this.vehicles = [];
 			} finally {
 				this.loadingVehicles = false;
+				this.vehicleFetchInFlight = false;
 			}
 		},
 
@@ -1382,13 +1468,27 @@ export default {
 			}
 
 			const customerName = payload.customer;
+			const jobVehicleNo = payload.custom_vehicle_no || null;
+			this.jobOrderCustomer = customerName;
+			this.jobOrderVehicleNo = jobVehicleNo;
+			this.jobOrderLoading = true;
+			this.jobOrderLockUntil = Date.now() + 5000;
+
+			// Prevent the debounced search from firing after we set internalCustomer.
+			// When internalCustomer changes, Vuetify's v-autocomplete fires @update:search
+			// which triggers searchDebounce. After 500ms, the debounce clears this.customers = []
+			// which causes the autocomplete to lose the customer display.
+			// Cancel any pending debounce and set a flag to skip the next search trigger.
+			if (this.searchDebounce && this.searchDebounce.cancel) {
+				this.searchDebounce.cancel();
+			}
+			this._skipNextCustomerSearch = true;
 
 			// Set customer state
 			this.customer = customerName;
 			this.internalCustomer = customerName;
 
 			// Emit update_customer so Invoice.vue stays in sync
-			// (clear_invoice may have reset it via onCustomerChange(null) side-effect)
 			this.eventBus.emit("update_customer", customerName);
 
 			// Ensure the customer exists in the autocomplete items list
@@ -1410,7 +1510,8 @@ export default {
 			await this.fetchAndEmitCustomerDetails(customerName);
 
 			// Load vehicles
-			await this.fetchVehiclesForCustomer(customerName);
+			await this.fetchVehiclesForCustomer(customerName, jobVehicleNo);
+			this.jobOrderLoading = false;
 
 			// Auto-select vehicle if present in draft
 			if (payload.custom_vehicle_no && this.vehicles.length) {
@@ -1427,6 +1528,10 @@ export default {
 			// Force Vue to re-render the autocomplete with the loaded customer
 			this.$nextTick(() => {
 				this.internalCustomer = customerName;
+				// Clear the skip flag after the autocomplete has settled
+				setTimeout(() => {
+					this._skipNextCustomerSearch = false;
+				}, 600);
 			});
 		});
 
@@ -1454,7 +1559,9 @@ export default {
 					this.internalCustomer = matched.name;
 					this.eventBus.emit("update_customer", matched.name);
 					await this.fetchAndEmitCustomerDetails(matched.name);
-					await this.fetchVehiclesForCustomer(matched.name);
+					if (!(this.jobOrderCustomer && this.jobOrderVehicleNo)) {
+						await this.fetchVehiclesForCustomer(matched.name);
+					}
 					this.selectedVehicle = null;
 				}
 			}
@@ -1466,6 +1573,10 @@ export default {
 			this.customer = "";
 			this.internalCustomer = null;
 			this.tempSelectedCustomer = null;
+			this.jobOrderCustomer = null;
+			this.jobOrderVehicleNo = null;
+			this.jobOrderLoading = false;
+			this.jobOrderLockUntil = 0;
 		});
 
 		this.eventBus.on("clear_vehicle_number", () => {
@@ -1481,6 +1592,10 @@ export default {
 			this.selectedVehicle = null;
 			this.vehicle_no = "";
 			this.vehicles = [];
+			this.jobOrderCustomer = null;
+			this.jobOrderVehicleNo = null;
+			this.jobOrderLoading = false;
+			this.jobOrderLockUntil = 0;
 		});
 
 		this.effectiveReadonly = this.readonly && navigator.onLine;
@@ -1492,7 +1607,9 @@ export default {
 					this.pos_profile = pos_profile;
 					await this.get_customer_names();
 					if (this.customer) {
-						this.fetchVehiclesForCustomer(this.customer);
+						const jobVehicleNo =
+							this.jobOrderCustomer === this.customer ? this.jobOrderVehicleNo : null;
+						this.fetchVehiclesForCustomer(this.customer, jobVehicleNo);
 					}
 				});
 
@@ -1501,13 +1618,24 @@ export default {
 					this.pos_profile = pos_profile;
 					await this.get_customer_names();
 					if (this.customer) {
-						this.fetchVehiclesForCustomer(this.customer);
+						const jobVehicleNo =
+							this.jobOrderCustomer === this.customer ? this.jobOrderVehicleNo : null;
+						this.fetchVehiclesForCustomer(this.customer, jobVehicleNo);
 					}
 				});
 
 				this.eventBus.on("set_customer", (customer) => {
 					this.customer = customer;
 					this.internalCustomer = customer;
+					if (this.jobOrderCustomer && customer !== this.jobOrderCustomer) {
+						this.jobOrderCustomer = null;
+						this.jobOrderVehicleNo = null;
+						this.jobOrderLoading = false;
+						this.jobOrderLockUntil = 0;
+					}
+					if (this.jobOrderCustomer === customer && this.jobOrderVehicleNo) {
+						return;
+					}
 					this.fetchVehiclesForCustomer(customer);
 				});
 
@@ -1551,7 +1679,9 @@ export default {
 						this.selectedVehicle = vehicle.name;
 						this.eventBus.emit("vehicle_selected", vehicle.name);
 					} else {
-						this.fetchVehiclesForCustomer(customer.name);
+						const jobVehicleNo =
+							this.jobOrderCustomer === customer.name ? this.jobOrderVehicleNo : null;
+						this.fetchVehiclesForCustomer(customer.name, jobVehicleNo);
 					}
 				});
 
@@ -1570,7 +1700,9 @@ export default {
 				this.eventBus.on("add_vehicle_to_list", async (vehicle) => {
 					if (!this.customer) return;
 
-					await this.fetchVehiclesForCustomer(this.customer);
+					const jobVehicleNo =
+						this.jobOrderCustomer === this.customer ? this.jobOrderVehicleNo : null;
+					await this.fetchVehiclesForCustomer(this.customer, jobVehicleNo);
 
 					if (vehicle.customer === this.customer) {
 						this.vehicles = this.vehicles.filter(v => v.name !== vehicle.name);
@@ -1602,7 +1734,9 @@ export default {
 						this.customer = customer.name;
 						this.internalCustomer = customer.name;
 						this.eventBus.emit("update_customer", customer.name);
-						this.fetchVehiclesForCustomer(customer.name);
+						if (!(this.jobOrderCustomer && this.jobOrderVehicleNo)) {
+							this.fetchVehiclesForCustomer(customer.name);
+						}
 					}
 				});
 				window._customerListenersRegistered = true;
