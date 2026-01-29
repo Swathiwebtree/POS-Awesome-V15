@@ -2353,7 +2353,7 @@ export default {
 				return null;
 			}
 
-			if (!hasOnlyServiceItems) {
+			/*if (!hasOnlyServiceItems) {
 				// Validate stock for non-service items
 				const insufficientStockItems = this.items.filter(item => {
 					// Only check stock for non-carwash items
@@ -2368,7 +2368,7 @@ export default {
 					});
 					return null;
 				}
-			}
+			}*/
 
 			// Ensure invoice_doc exists
 			if (!this.invoice_doc) {
@@ -2770,14 +2770,12 @@ export default {
 			});
 		},
 
-		clear_invoice({ skipCustomerClear = false } = {}) {
+		clear_invoice() {
 
 			// Reset all data
 			this.invoice_doc = null;
-			if (!skipCustomerClear) {
-				this.customer = "";
-				this.customer_name = "";
-			}
+			this.customer = "";
+			this.customer_name = "";
 			this.vehicle_number = "";
 			this.items = [];
 			this.additional_discount = 0;
@@ -2799,17 +2797,9 @@ export default {
 			// Emit events to clear UI components
 			this.eventBus.emit("invoice_cleared");
 			this.eventBus.emit("clear_employee_selection");
-
-			// When called from load_invoice(), skip clearing customer/vehicle
-			// because load_invoice will re-populate them via load_invoice_customer event.
-			// This prevents a race condition where clear events wipe the Customer.vue
-			// state right before it gets re-set, causing the autocomplete to lose
-			// the customer display (especially for non-car-wash items).
-			if (!skipCustomerClear) {
-				this.eventBus.emit("clear_customer");
-				this.eventBus.emit("clear_vehicle_number");
-				this.eventBus.emit("clear_all_fields");
-			}
+			this.eventBus.emit("clear_customer");
+			this.eventBus.emit("clear_vehicle_number");
+			this.eventBus.emit("clear_all_fields");
 
 		},
 		// Handle item reordering from drag and drop

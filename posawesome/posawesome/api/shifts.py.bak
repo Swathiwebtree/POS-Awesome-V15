@@ -154,40 +154,24 @@ def create_opening_voucher(pos_profile, company, balance_details):
 
 @frappe.whitelist()
 def check_opening_shift(user):
-
-        # Resolve user's default company (if set) to scope open shift lookup
-
-    user_company = get_user_company(user)
-    filters = {'pos_closing_shift': ['in', ['', None]], 'docstatus': 1,
-               'status': 'Open'}
-    if user_company:
-
-                # If company is known, filter by company only (user may differ)
-
-        filters['company'] = user_company
-    else:
-        filters['user'] = user
-
-    open_vouchers = frappe.db.get_all('POS Opening Shift',
-            filters=filters, fields=['name', 'pos_profile'],
-            order_by='period_start_date desc')
-    data = ''
+    open_vouchers = frappe.db.get_all(
+        "POS Opening Shift",
+        filters={
+            "user": user,
+            "pos_closing_shift": ["in", ["", None]],
+            "docstatus": 1,
+            "status": "Open",
+        },
+        fields=["name", "pos_profile"],
+        order_by="period_start_date desc",
+    )
+    data = ""
     if len(open_vouchers) > 0:
         data = {}
-        data['pos_opening_shift'] = frappe.get_doc('POS Opening Shift',
-                open_vouchers[0]['name'])
-        update_opening_shift_data(data, open_vouchers[0]['pos_profile'])
+        data["pos_opening_shift"] = frappe.get_doc("POS Opening Shift", open_vouchers[0]["name"])
+        update_opening_shift_data(data, open_vouchers[0]["pos_profile"])
     return data
 
-def get_user_company(user):
-    company = frappe.db.get_value('User Permission', {'user': user,
-                                  'allow': 'Company'}, 'for_value')
-
-    if company:
-        return company
-
-    return frappe.defaults.get_user_default('Company', user=user) \
-        or frappe.defaults.get_user_default('company', user=user)
 
 def update_opening_shift_data(data, pos_profile):
     data["pos_profile"] = frappe.get_doc("POS Profile", pos_profile)
@@ -513,3 +497,4 @@ def close_shift_with_reconciliation(balance_details=None):
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "posawesome.close_shift_with_reconciliation")
         return {"success": False, "message": _("Failed to close shift: {0}").format(str(e))}
+

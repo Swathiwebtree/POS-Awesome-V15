@@ -1,0 +1,70 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-01-28 12:23:14.623728",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "total_cash",
+  "open_work_orders",
+  "closing_time"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "total_cash",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Total Cash",
+   "reqd": 1
+  },
+  {
+   "fieldname": "open_work_orders",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Open Work Orders",
+   "reqd": 1
+  },
+  {
+   "fieldname": "closing_time",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Closing Time",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-01-28 18:13:31.817248",
+ "modified_by": "Administrator",
+ "module": "POSAwesome",
+ "name": "Day End Closing_2",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Administrator",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
