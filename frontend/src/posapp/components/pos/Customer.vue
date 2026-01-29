@@ -290,6 +290,10 @@ export default {
 
                 // invoice doc placeholder used in some methods (should be provided by parent normally)
                 invoice_doc: {},
+
+                // Guard to prevent duplicate load_invoice_customer event processing
+                _lastLoadInvoiceCustomerPayload: null,
+                _loadInvoiceCustomerInProgress: false,
         }),
 
         components: {
@@ -1495,96 +1499,124 @@ export default {
                         this.effectiveReadonly = this.readonly && navigator.onLine;
                 });
 
-                this.eventBus.on("load_invoice_customer", async (payload) => {
-                        console.log("[Customer] load_invoice_customer", payload);
-                        if (!payload || !payload.customer) {
-                                this.customer = null;
-                                this.internalCustomer = null;
-                                this.selectedVehicle = null;
+                // Create a debounced handler to prevent duplicate processing of the same load_invoice_customer event
+                const debouncedLoadInvoiceCustomer = _.debounce(async (payload) => {
+                        // Guard: If already processing a request, skip duplicate
+                        if (this._loadInvoiceCustomerInProgress) {
+                                console.log("[Customer] load_invoice_customer skipped: already in progress");
                                 return;
                         }
 
-                        const customerName = payload.customer;
-                        const jobVehicleNo = payload.custom_vehicle_no || null;
-
-                        if (jobVehicleNo) {
-                                this.jobOrderCustomer = customerName;
-                                this.jobOrderVehicleNo = jobVehicleNo;
-                                this.jobOrderLoading = true;
-                                this.jobOrderLockUntil = Date.now() + 5000;
-                        } else {
-                                this.jobOrderCustomer = null;
-                                this.jobOrderVehicleNo = null;
-                                this.jobOrderLoading = false;
-                                this.jobOrderLockUntil = 0;
-                        }
-
-                        // Prevent the debounced search from firing after we set internalCustomer.
-                        // When internalCustomer changes, Vuetify's v-autocomplete fires @update:search
-                        // which triggers searchDebounce. After 500ms, the debounce clears this.customers = []
-                        // which causes the autocomplete to lose the customer display.
-                        // Cancel any pending debounce and set a flag to skip the next search trigger.
-                        if (this.searchDebounce && this.searchDebounce.cancel) {
-                                this.searchDebounce.cancel();
-                        }
-                        this._skipNextCustomerSearch = true;
-
-                        // Set customer state
-                        this.customer = customerName;
-                        this.internalCustomer = customerName;
-
-                        // Emit update_customer so Invoice.vue stays in sync
-                        this.eventBus.emit("update_customer", customerName);
-
-                        // Ensure the customer exists in the autocomplete items list
-                        // so Vuetify can display it. If not present, inject a temporary entry.
-                        const existsInList = this.customers.some((c) => c.name === customerName);
-                        if (!existsInList) {
-                                this.customers.unshift({
-                                        name: customerName,
-                                        customer_name: customerName,
-                                        mobile_no: "",
-                                        email_id: "",
-                                        vehicle_no: "",
-                                        tax_id: "",
-                                        is_corporate: false,
-                                });
-                        }
-
-                        // Load customer details (mobile, corporate flag, etc.)
-                        await this.fetchAndEmitCustomerDetails(customerName, {
-                                preferVehicleNo: jobVehicleNo || "",
-                                allowVehicleFallback: !jobVehicleNo,
+                        // Guard: Check if this is the same payload as the last one processed
+                        const payloadKey = JSON.stringify({ 
+                                customer: payload?.customer, 
+                                custom_vehicle_no: payload?.custom_vehicle_no 
                         });
+                        if (this._lastLoadInvoiceCustomerPayload === payloadKey) {
+                                console.log("[Customer] load_invoice_customer skipped: duplicate payload", payload);
+                                return;
+                        }
 
-                        // Load vehicles
-                        console.log("[Customer] load_invoice_customer vehicles", {
-                                customerName,
-                                jobVehicleNo,
-                        });
-                        await this.fetchVehiclesForCustomer(customerName, jobVehicleNo);
-                        this.jobOrderLoading = false;
+                        this._lastLoadInvoiceCustomerPayload = payloadKey;
+                        this._loadInvoiceCustomerInProgress = true;
 
-                        // Auto-select vehicle if present in draft
-                        if (payload.custom_vehicle_no && this.vehicles.length) {
-                                const matchedVehicle = this.vehicles.find(
-                                        (v) => v.vehicle_no === payload.custom_vehicle_no
-                                );
-
-                                if (matchedVehicle) {
-                                        this.selectedVehicle = matchedVehicle.name;
-                                        this.eventBus.emit("vehicle_selected", matchedVehicle.name);
+                        try {
+                                console.log("[Customer] load_invoice_customer", payload);
+                                if (!payload || !payload.customer) {
+                                        this.customer = null;
+                                        this.internalCustomer = null;
+                                        this.selectedVehicle = null;
+                                        return;
                                 }
-                        }
 
-                        // Force Vue to re-render the autocomplete with the loaded customer
-                        this.$nextTick(() => {
+                                const customerName = payload.customer;
+                                const jobVehicleNo = payload.custom_vehicle_no || null;
+
+                                if (jobVehicleNo) {
+                                        this.jobOrderCustomer = customerName;
+                                        this.jobOrderVehicleNo = jobVehicleNo;
+                                        this.jobOrderLoading = true;
+                                        this.jobOrderLockUntil = Date.now() + 5000;
+                                } else {
+                                        this.jobOrderCustomer = null;
+                                        this.jobOrderVehicleNo = null;
+                                        this.jobOrderLoading = false;
+                                        this.jobOrderLockUntil = 0;
+                                }
+
+                                // Prevent the debounced search from firing after we set internalCustomer.
+                                // When internalCustomer changes, Vuetify's v-autocomplete fires @update:search
+                                // which triggers searchDebounce. After 500ms, the debounce clears this.customers = []
+                                // which causes the autocomplete to lose the customer display.
+                                // Cancel any pending debounce and set a flag to skip the next search trigger.
+                                if (this.searchDebounce && this.searchDebounce.cancel) {
+                                        this.searchDebounce.cancel();
+                                }
+                                this._skipNextCustomerSearch = true;
+
+                                // Set customer state
+                                this.customer = customerName;
                                 this.internalCustomer = customerName;
-                                // Clear the skip flag after the autocomplete has settled
-                                setTimeout(() => {
-                                        this._skipNextCustomerSearch = false;
-                                }, 600);
-                        });
+
+                                // Emit update_customer so Invoice.vue stays in sync
+                                this.eventBus.emit("update_customer", customerName);
+
+                                // Ensure the customer exists in the autocomplete items list
+                                // so Vuetify can display it. If not present, inject a temporary entry.
+                                const existsInList = this.customers.some((c) => c.name === customerName);
+                                if (!existsInList) {
+                                        this.customers.unshift({
+                                                name: customerName,
+                                                customer_name: customerName,
+                                                mobile_no: "",
+                                                email_id: "",
+                                                vehicle_no: "",
+                                                tax_id: "",
+                                                is_corporate: false,
+                                        });
+                                }
+
+                                // Load customer details (mobile, corporate flag, etc.)
+                                await this.fetchAndEmitCustomerDetails(customerName, {
+                                        preferVehicleNo: jobVehicleNo || "",
+                                        allowVehicleFallback: !jobVehicleNo,
+                                });
+
+                                // Load vehicles
+                                console.log("[Customer] load_invoice_customer vehicles", {
+                                        customerName,
+                                        jobVehicleNo,
+                                });
+                                await this.fetchVehiclesForCustomer(customerName, jobVehicleNo);
+                                this.jobOrderLoading = false;
+
+                                // Auto-select vehicle if present in draft
+                                if (payload.custom_vehicle_no && this.vehicles.length) {
+                                        const matchedVehicle = this.vehicles.find(
+                                                (v) => v.vehicle_no === payload.custom_vehicle_no
+                                        );
+
+                                        if (matchedVehicle) {
+                                                this.selectedVehicle = matchedVehicle.name;
+                                                this.eventBus.emit("vehicle_selected", matchedVehicle.name);
+                                        }
+                                }
+
+                                // Force Vue to re-render the autocomplete with the loaded customer
+                                this.$nextTick(() => {
+                                        this.internalCustomer = customerName;
+                                        // Clear the skip flag after the autocomplete has settled
+                                        setTimeout(() => {
+                                                this._skipNextCustomerSearch = false;
+                                        }, 600);
+                                });
+                        } finally {
+                                this._loadInvoiceCustomerInProgress = false;
+                        }
+                }, 300);
+
+                this.eventBus.on("load_invoice_customer", (payload) => {
+                        debouncedLoadInvoiceCustomer(payload);
                 });
 
 
