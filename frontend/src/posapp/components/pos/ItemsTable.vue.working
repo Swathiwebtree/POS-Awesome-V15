@@ -399,7 +399,9 @@
 				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" hide-details
 					class="discount-input" :model-value="Math.round((item.raw || item).discount_percentage || 0)"
 					:disabled="isDiscountDisabled(item)" @input="
-						handleDiscountInput(item.raw || item, $event)
+						$parent?.maxDiscountInfo?.item_level_caps?.[(item.raw || item).item_code]
+							? handleDiscountInput(item.raw || item, $event)
+							: applyItemDiscount(item.raw || item, $event.target.value)
 						" @click.stop @focus.stop prepend-inner-icon="mdi-percent" />
 			</template>
 
@@ -575,7 +577,7 @@ export default {
 			const value = event.target.value;
 
 			// Emit to parent for validation
-			this.$parent?.eventBus?.emit('validate_item_discount', {
+			this.eventBus.emit('validate_item_discount', {
 				item: item,
 				discount: value
 			});

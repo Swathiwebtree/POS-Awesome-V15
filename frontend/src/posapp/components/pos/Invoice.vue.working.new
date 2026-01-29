@@ -637,11 +637,8 @@ export default {
 		},
 
 		async validateAndApplyManualDiscount(item, discountPercentage) {
-			if (!item || !item.item_code) {
-				return false;
-			}
-			if (!this.customer) {
-				// No customer context, allow discount
+			if (!this.custom_vehicle_no || !item.item_code) {
+				// No vehicle context, allow discount
 				item.discount_percentage = Number(discountPercentage || 0);
 				this.recalculateItemPrice(item);
 				return true;

@@ -1295,8 +1295,8 @@ export default {
 					return;
 				}
 			}
-			// Validate paid_change (skip for credit sales)
-			if (!this.is_credit_sale && this.paid_change > -this.diff_payment) {
+			// Validate paid_change
+			if (this.paid_change > -this.diff_payment) {
 				this.eventBus.emit("show_message", {
 					title: `Paid change cannot be greater than total change!`,
 					color: "error",
@@ -1306,7 +1306,7 @@ export default {
 			}
 			// Validate cashback
 			let total_change = this.flt(this.flt(this.paid_change) + this.flt(-this.credit_change));
-			if (this.is_cashback && !this.is_credit_sale && total_change !== -this.diff_payment) {
+			if (this.is_cashback && total_change !== -this.diff_payment) {
 				this.eventBus.emit("show_message", {
 					title: `Error in change calculations!`,
 					color: "error",
