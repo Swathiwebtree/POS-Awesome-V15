@@ -308,6 +308,41 @@ export default {
 			items_count: data.items ? data.items.length : 0,
 		});
 
+		const resolvedContactMobile = String(
+			data.contact_mobile || data.mobile_no || data.customer_mobile || "",
+		).trim();
+		let resolvedVehicleNo = String(
+			data.custom_vehicle_no ||
+				data.vehicle_no ||
+				data.vehicle_number ||
+				data.custom_vehicle_number ||
+				"",
+		).trim();
+		if (!resolvedVehicleNo && Array.isArray(data.items)) {
+			const itemWithVehicle = data.items.find(
+				(it) =>
+					it &&
+					(it.custom_vehicle_no ||
+						it.vehicle_no ||
+						it.vehicle_number ||
+						it.custom_vehicle_number),
+			);
+			if (itemWithVehicle) {
+				resolvedVehicleNo = String(
+					itemWithVehicle.custom_vehicle_no ||
+						itemWithVehicle.vehicle_no ||
+						itemWithVehicle.vehicle_number ||
+						itemWithVehicle.custom_vehicle_number ||
+						"",
+				).trim();
+			}
+		}
+
+		console.log("resolved vehicle & number ",{
+			resolvedContactMobile,
+			resolvedVehicleNo
+		});
+
 		// Skip clearing customer/vehicle in Customer.vue because load_invoice
 		// will re-populate them via load_invoice_customer event immediately after.
 		this.clear_invoice({ skipCustomerClear: true });
@@ -397,40 +432,31 @@ export default {
 		}
 
 
-		const resolvedContactMobile = String(
-			data.contact_mobile || data.mobile_no || data.customer_mobile || "",
-		).trim();
-		let resolvedVehicleNo = String(
-			data.custom_vehicle_no ||
-				data.vehicle_no ||
-				data.vehicle_number ||
-				data.custom_vehicle_number ||
-				"",
-		).trim();
-		if (!resolvedVehicleNo && Array.isArray(data.items)) {
-			const itemWithVehicle = data.items.find(
-				(it) =>
-					it &&
-					(it.custom_vehicle_no ||
-						it.vehicle_no ||
-						it.vehicle_number ||
-						it.custom_vehicle_number),
-			);
-			if (itemWithVehicle) {
-				resolvedVehicleNo = String(
-					itemWithVehicle.custom_vehicle_no ||
-						itemWithVehicle.vehicle_no ||
-						itemWithVehicle.vehicle_number ||
-						itemWithVehicle.custom_vehicle_number ||
-						"",
-				).trim();
-			}
-		}
+		const hasContactField =
+			Object.prototype.hasOwnProperty.call(data, "contact_mobile") ||
+			Object.prototype.hasOwnProperty.call(data, "mobile_no") ||
+			Object.prototype.hasOwnProperty.call(data, "customer_mobile");
+		const hasVehicleField =
+			Object.prototype.hasOwnProperty.call(data, "custom_vehicle_no") ||
+			Object.prototype.hasOwnProperty.call(data, "vehicle_no") ||
+			Object.prototype.hasOwnProperty.call(data, "vehicle_number") ||
+			Object.prototype.hasOwnProperty.call(data, "custom_vehicle_number");
+
+		
+
+		const finalContactMobile =
+			resolvedContactMobile || (!hasContactField ? this.contact_mobile || "" : "");
+		const finalVehicleNo =
+			resolvedVehicleNo || (!hasVehicleField ? this.custom_vehicle_no || "" : "");
 
 		this.custom_has_oil_item = !!data.custom_has_oil_item;
 		this.custom_odometer_reading = data.custom_odometer_reading || null;
-		this.contact_mobile = resolvedContactMobile;
-		this.custom_vehicle_no = resolvedVehicleNo;
+		if (resolvedContactMobile || hasContactField) {
+			this.contact_mobile = finalContactMobile;
+		}
+		if (resolvedVehicleNo || hasVehicleField) {
+			this.custom_vehicle_no = finalVehicleNo;
+		}
 
 		console.log("Odometer/vehicle data loaded:", {
 			custom_has_oil_item: this.custom_has_oil_item,
@@ -458,10 +484,50 @@ export default {
 			const customerToLoad = data.customer || data.customer_name;
 			console.log("[Invoice] Emitting load_invoice_customer event:", customerToLoad);
 			// Emit event to Customer component to update customer and vehicle without overwriting invoice data
+			console.log("[Invoice] Emitting load_invoice_customer from second location");
+			console.log("[Invoice] Context:", {
+				caller: new Error().stack.split('\n')[2], // Get caller info
+				has_customer: !!this.customer,
+				has_employee: !!this.custom_service_employee
+			});
+
+			console.log("[Invoice] Component state at emission time:", {
+				this_customer: this.customer,
+				this_contact_mobile: this.contact_mobile,
+				this_custom_vehicle_no: this.custom_vehicle_no,
+				this_custom_odometer_reading: this.custom_odometer_reading,
+				this_custom_service_employee: this.custom_service_employee,
+				this_custom_has_oil_item: this.custom_has_oil_item
+			});
+
+			// Check if values are coming from invoice_doc or elsewhere
+			console.log("[Invoice] Data source check:", {
+				invoice_doc_exists: !!this.invoice_doc,
+				invoice_doc_custom_vehicle_no: this.invoice_doc?.custom_vehicle_no,
+				invoice_doc_contact_mobile: this.invoice_doc?.contact_mobile,
+				invoice_doc_customer: this.invoice_doc?.customer
+			});
+
+			// Use the resolved values from the invoice payload (locals) so
+			// we don't accidentally emit values that were already modified
+			// by other event handlers (e.g. Customer -> update_customer_details).
+			const emitContactMobile = typeof resolvedContactMobile !== 'undefined' ? resolvedContactMobile : this.contact_mobile;
+			const emitVehicleNo = resolvedVehicleNo || this.custom_vehicle_no || "";
+
+			console.log("[Invoice] 🚀 EMITTING with values:", {
+				customer: this.customer,
+				contact_mobile: emitContactMobile,
+				custom_vehicle_no: emitVehicleNo,
+				has_vehicle: !!emitVehicleNo,
+				has_mobile: !!emitContactMobile,
+				vehicle_source: emitVehicleNo ? (emitVehicleNo === this.invoice_doc?.custom_vehicle_no ? 'invoice_doc' : 'component_state') : 'none',
+				mobile_source: emitContactMobile ? (emitContactMobile === this.invoice_doc?.contact_mobile ? 'invoice_doc' : 'component_state') : 'none'
+			});
+
 			this.eventBus.emit("load_invoice_customer", {
 				customer: customerToLoad,
-				contact_mobile: this.contact_mobile,
-				custom_vehicle_no: this.custom_vehicle_no,
+				contact_mobile: emitContactMobile,
+				custom_vehicle_no: emitVehicleNo,
 			});
 		}
 
@@ -519,6 +585,21 @@ export default {
 
 	// Start a new order (or return order) with provided data
 	async new_order(data = {}) {
+		console.log("[new_order] 🚨 DEBUG START =======================================");
+		console.log("[new_order] Input data:", {
+			name: data.name,
+			is_return: data.is_return,
+			customer: data.customer,
+			custom_service_employee: data.custom_service_employee,
+			custom_vehicle_no: data.custom_vehicle_no,
+			contact_mobile: data.contact_mobile,
+			custom_odometer_reading: data.custom_odometer_reading,
+			custom_has_oil_item: data.custom_has_oil_item,
+			return_against: data.return_against,
+			has_items: data.items?.length || 0,
+			keys: Object.keys(data)
+		});
+		
 		let old_invoice = null;
 		this.eventBus.emit("set_customer_readonly", false);
 		this.expanded = [];
@@ -526,7 +607,9 @@ export default {
 		this.eventBus.emit("set_pos_coupons", []);
 		this.posa_coupons = [];
 		this.return_doc = "";
+		
 		if (!data.name && !data.is_return) {
+			console.log("[new_order] CASE 1: Fresh order (no name, not return)");
 			this.items = [];
 			this.customer = this.pos_profile.customer;
 			this.invoice_doc = "";
@@ -534,28 +617,51 @@ export default {
 			this.additional_discount_percentage = 0;
 			this.invoiceType = "Invoice";
 			this.invoiceTypes = ["Invoice", "Order"];
+			
 			// Clear contact/vehicle when starting a fresh order
+			console.log("[new_order] Clearing contact/vehicle for fresh order");
 			this.contact_mobile = "";
 			this.custom_vehicle_no = "";
 			this.custom_odometer_reading = null;
 			this.custom_has_oil_item = false;
+			
+			console.log("[new_order] Fresh order state:", {
+				customer: this.customer,
+				contact_mobile: this.contact_mobile,
+				custom_vehicle_no: this.custom_vehicle_no
+			});
+			
 		} else {
+			console.log(`[new_order] CASE 2: Loading existing ${data.is_return ? 'RETURN' : 'ORDER/INVOICE'}`);
+			console.log("[new_order] Document details:", {
+				name: data.name,
+				customer: data.customer,
+				type: data.is_return ? 'Return' : 'Invoice/Order'
+			});
+			
 			if (data.is_return) {
+				console.log("[new_order] Processing RETURN");
 				// For return without invoice case, check if there's a return_against
 				// Only set customer readonly if this is a return with reference to an invoice
 				if (data.return_against) {
+					console.log("[new_order] Return with reference to invoice:", data.return_against);
 					this.eventBus.emit("set_customer_readonly", true);
 				} else {
+					console.log("[new_order] Return WITHOUT invoice reference - customer can be selected");
 					// Allow customer selection for returns without invoice
 					this.eventBus.emit("set_customer_readonly", false);
 				}
 				this.invoiceType = "Return";
 				this.invoiceTypes = ["Return"];
 			}
+			
 			this.invoice_doc = data;
 			this.items = data.items;
+			console.log("[new_order] Setting items:", this.items?.length || 0);
+			
 			this.update_items_details(this.items);
 			this.posa_offers = data.posa_offers || [];
+			
 			this.items.forEach((item) => {
 				if (!item.posa_row_id) {
 					item.posa_row_id = this.makeid(20);
@@ -564,10 +670,12 @@ export default {
 					this.set_batch_qty(item, item.batch_no);
 				}
 			});
+			
 			this.customer = data.customer;
 			this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
 			this.discount_amount = data.discount_amount;
 			this.additional_discount_percentage = data.additional_discount_percentage;
+			
 			this.items.forEach((item) => {
 				if (item.serial_no) {
 					item.serial_no_selected = [];
@@ -582,49 +690,121 @@ export default {
 			});
 
 			// Resolve contact/vehicle for job orders to avoid stale values
-			const resolvedContactMobile = String(
-				data.contact_mobile || data.mobile_no || data.customer_mobile || "",
-			).trim();
-			let resolvedVehicleNo = String(
-				data.custom_vehicle_no ||
-					data.vehicle_no ||
-					data.vehicle_number ||
-					data.custom_vehicle_number ||
-					"",
-			).trim();
-			if (!resolvedVehicleNo && Array.isArray(data.items)) {
-				const itemWithVehicle = data.items.find(
+			console.log("[new_order] 🔍 ANALYZING VEHICLE/MOBILE DATA:");
+			
+			const hasEmployeeData = Boolean(
+				data.custom_service_employee ||
+				data.service_employee ||
+				data.employee_data ||
+				data.custom_service_employee_name,
+			);
+			
+			console.log("[new_order] Employee data check:", {
+				custom_service_employee: data.custom_service_employee,
+				service_employee: data.service_employee,
+				employee_data: data.employee_data,
+				custom_service_employee_name: data.custom_service_employee_name,
+				hasEmployeeData: hasEmployeeData
+			});
+
+			const itemWithVehicle =
+				Array.isArray(data.items) &&
+				data.items.find(
 					(it) =>
 						it &&
 						(it.custom_vehicle_no ||
-							it.vehicle_no ||
-							it.vehicle_number ||
-							it.custom_vehicle_number),
+						it.vehicle_no ||
+						it.vehicle_number ||
+						it.custom_vehicle_number ||
+						it.contact_mobile ||
+						it.mobile_no ||
+						it.customer_mobile),
 				);
-				if (itemWithVehicle) {
-					resolvedVehicleNo = String(
-						itemWithVehicle.custom_vehicle_no ||
-							itemWithVehicle.vehicle_no ||
-							itemWithVehicle.vehicle_number ||
-							itemWithVehicle.custom_vehicle_number ||
-							"",
-					).trim();
-				}
-			}
+			
+			console.log("[new_order] Item with vehicle check:", {
+				has_items: Array.isArray(data.items),
+				item_with_vehicle_found: !!itemWithVehicle,
+				item_with_vehicle: itemWithVehicle ? {
+					item_code: itemWithVehicle.item_code,
+					custom_vehicle_no: itemWithVehicle.custom_vehicle_no,
+					vehicle_no: itemWithVehicle.vehicle_no,
+					vehicle_number: itemWithVehicle.vehicle_number,
+					custom_vehicle_number: itemWithVehicle.custom_vehicle_number,
+					contact_mobile: itemWithVehicle.contact_mobile,
+					mobile_no: itemWithVehicle.mobile_no,
+					customer_mobile: itemWithVehicle.customer_mobile
+				} : null
+			});
+
+			const resolvedContactMobile = String(
+				(itemWithVehicle &&
+					(itemWithVehicle.contact_mobile ||
+					itemWithVehicle.mobile_no ||
+					itemWithVehicle.customer_mobile)) ||
+				(hasEmployeeData &&
+					(data.contact_mobile || data.mobile_no || data.customer_mobile)) ||
+				"",
+			).trim();
+
+			const resolvedVehicleNo = String(
+				(itemWithVehicle &&
+					(itemWithVehicle.custom_vehicle_no ||
+					itemWithVehicle.vehicle_no ||
+					itemWithVehicle.vehicle_number ||
+					itemWithVehicle.custom_vehicle_number)) ||
+				(hasEmployeeData &&
+					(data.custom_vehicle_no ||
+					data.vehicle_no ||
+					data.vehicle_number ||
+					data.custom_vehicle_number)) ||
+				"",
+			).trim();
+			
+			console.log("[new_order] 🔍 VEHICLE/MOBILE RESOLUTION:");
+			console.log("  Data source vehicle:", {
+				data_custom_vehicle_no: data.custom_vehicle_no,
+				data_vehicle_no: data.vehicle_no,
+				data_vehicle_number: data.vehicle_number,
+				data_custom_vehicle_number: data.custom_vehicle_number
+			});
+			console.log("  Data source contact:", {
+				data_contact_mobile: data.contact_mobile,
+				data_mobile_no: data.mobile_no,
+				data_customer_mobile: data.customer_mobile
+			});
+			console.log("  Resolved values:", {
+				resolvedVehicleNo: resolvedVehicleNo,
+				resolvedContactMobile: resolvedContactMobile,
+				hasEmployeeData: hasEmployeeData,
+				usedItemData: !!itemWithVehicle
+			});
 
 			this.contact_mobile = resolvedContactMobile;
 			this.custom_vehicle_no = resolvedVehicleNo;
 			this.custom_odometer_reading = data.custom_odometer_reading || null;
 			this.custom_has_oil_item = !!data.custom_has_oil_item;
+			
+			console.log("[new_order] 🎯 FINAL STATE SET:");
+			console.log("  this.custom_vehicle_no:", this.custom_vehicle_no);
+			console.log("  this.contact_mobile:", this.contact_mobile);
+			console.log("  this.custom_odometer_reading:", this.custom_odometer_reading);
+			console.log("  this.custom_has_oil_item:", this.custom_has_oil_item);
+			console.log("  this.customer:", this.customer);
 
 			if (this.customer) {
-				this.eventBus.emit("load_invoice_customer", {
+				console.log("[new_order] Prepared customer/vehicle data (will not emit load_invoice_customer here):", {
 					customer: this.customer,
 					contact_mobile: this.contact_mobile,
-					custom_vehicle_no: this.custom_vehicle_no,
+					custom_vehicle_no: this.custom_vehicle_no
 				});
+			} else {
+				console.log("[new_order] No customer, skipping load_invoice_customer");
 			}
 		}
+		
+		console.log("[new_order] ✅ DEBUG END =========================================");
+		console.log("[new_order] Return value (old_invoice):", old_invoice);
+		
 		return old_invoice;
 	},
 

@@ -2435,19 +2435,14 @@ export default {
 			}
 
 			// Mobile number
-			if (this.contact_mobile) {
-				this.invoice_doc.contact_mobile = this.contact_mobile;
-			}
+			this.invoice_doc.contact_mobile = this.contact_mobile || "";
 
 			// Vehicle number
-			if (this.custom_vehicle_no) {
-				this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no;
-			}
+			this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no || "";
 
 			// Odometer reading and oil item flag
-			if (this.custom_odometer_reading) {
-				this.invoice_doc.custom_odometer_reading = this.custom_odometer_reading;
-			}
+			this.invoice_doc.custom_odometer_reading =
+				this.custom_odometer_reading || null;
 
 			// Set oil item flag based on items
 			const hasOilItem = this.items.some(item => this.isEngineOil(item));

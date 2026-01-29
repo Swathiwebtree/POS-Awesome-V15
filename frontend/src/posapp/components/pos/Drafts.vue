@@ -491,9 +491,104 @@ export default {
 
 	created() {
 
-		// NOTE: draft_selected is handled by Pos.vue → load_selected_draft().
-		// Drafts.vue only emits the event; it should NOT also listen for it.
+		this.eventBus.on("draft_selected", async (draftName) => {
+        console.log("[Invoice] Draft selected event received:", draftName);
+        
+        if (!draftName) {
+            console.error("[Invoice] No draft name provided");
+            return;
+        }
+        
+        try {
+            // Load the draft invoice
+            const response = await frappe.call({
+                method: "frappe.client.get",
+                args: {
+                    doctype: "Sales Invoice",
+                    name: draftName,
+                },
+            });
+            
+            if (response && response.message) {
+                const invoice = response.message;
+                
+                console.log("[Invoice] Draft loaded:", invoice);
+                
+                // ✅ SET THE INVOICE DOC
+                this.invoice_doc = invoice;
+                this.loaded_draft_name = draftName;
+                
+                // ✅ EMIT TO LOAD CUSTOMER & VEHICLE
+				console.log("[Invoice] 🔍 DEBUG EMISSION POINT 1 ==============================");
+				console.log("[Invoice] Emitting load_invoice_customer from first location");
+				console.log("[Invoice] Invoice data being used:", {
+					name: invoice.name,
+					customer: invoice.customer,
+					customer_name: invoice.customer_name,
+					contact_mobile: invoice.contact_mobile,
+					custom_vehicle_no: invoice.custom_vehicle_no,
+					custom_service_employee: invoice.custom_service_employee,
+					// Check all possible vehicle fields
+					vehicle_no: invoice.vehicle_no,
+					vehicle_number: invoice.vehicle_number,
+					custom_vehicle_number: invoice.custom_vehicle_number,
+					// Check if invoice has invoice_doc
+					has_invoice_doc: !!invoice.invoice_doc,
+					invoice_doc_custom_vehicle_no: invoice.invoice_doc?.custom_vehicle_no,
+					invoice_doc_contact_mobile: invoice.invoice_doc?.contact_mobile
+				});
 
+				console.log("[Invoice] Component state at emission time:", {
+					this_customer: this.customer,
+					this_contact_mobile: this.contact_mobile,
+					this_custom_vehicle_no: this.custom_vehicle_no,
+					this_custom_service_employee: this.custom_service_employee
+				});
+
+				console.log("[Invoice] 🚀 EMITTING with values:", {
+					customer: invoice.customer,
+					customer_name: invoice.customer_name || invoice.customer,
+					invoice_name: invoice.name || "",
+					contact_mobile: invoice.contact_mobile || "",
+					custom_vehicle_no: invoice.custom_vehicle_no || "",
+					has_vehicle: !!(invoice.custom_vehicle_no || invoice.vehicle_no || invoice.vehicle_number || invoice.custom_vehicle_number),
+					has_mobile: !!invoice.contact_mobile
+				});
+
+                this.eventBus.emit("load_invoice_customer", {
+                    customer: invoice.customer,
+                    customer_name: invoice.customer_name || invoice.customer,
+                    invoice_name: invoice.name || "",
+                    contact_mobile: invoice.contact_mobile || "",
+                    custom_vehicle_no: invoice.custom_vehicle_no || "",
+                });
+                
+                // ✅ EMIT TO LOAD ITEMS
+                if (invoice.items && invoice.items.length > 0) {
+                    this.eventBus.emit("load_invoice_items", invoice.items);
+                }
+                
+                // Show success message
+                frappe.show_alert({
+                    message: `Draft invoice ${draftName} loaded successfully`,
+                    indicator: "green",
+                });
+                
+                console.log("[Invoice] Draft loading completed");
+            } else {
+                frappe.show_alert({
+                    message: "Failed to load draft invoice",
+                    indicator: "red",
+                });
+            }
+        } catch (err) {
+            console.error("[Invoice] Error loading draft:", err);
+            frappe.show_alert({
+                message: "Error loading draft invoice",
+                indicator: "red",
+            });
+        }
+    });
 		this.eventBus.on("open_drafts", async (data) => {
 			if (Array.isArray(data) && data.length) {
 				const normalized = this._normalizeAndSort(data);
@@ -595,6 +690,7 @@ export default {
 		this.eventBus.off("draft_saved");
 		this.eventBus.off("draft_deleted"); // ✅ Clean up draft deletion listener
 		this.eventBus.off("invoice_saved_successfully");
+		this.eventBus.off("draft_selected");
 	},
 };
 </script>

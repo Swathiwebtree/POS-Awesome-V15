@@ -1517,20 +1517,17 @@ export default {
                                 return;
                         }
 
-                                // Guard: Check if this is the same payload as the last one processed
-                                const payloadKey = JSON.stringify({ 
-                                        customer: payload?.customer, 
-                                        custom_vehicle_no: payload?.custom_vehicle_no 
-                                });
-                                if (
-                                        this._lastLoadInvoiceCustomerPayload === payloadKey &&
-                                        (this.customer === payload?.customer || this.internalCustomer === payload?.customer)
-                                ) {
-                                        console.log("[Customer] load_invoice_customer skipped: duplicate payload", payload);
-                                        return;
-                                }
+                        // Guard: Check if this is the same payload as the last one processed
+                        const payloadKey = JSON.stringify({ 
+                                customer: payload?.customer, 
+                                custom_vehicle_no: payload?.custom_vehicle_no 
+                        });
+                        if (this._lastLoadInvoiceCustomerPayload === payloadKey) {
+                                console.log("[Customer] load_invoice_customer skipped: duplicate payload", payload);
+                                return;
+                        }
 
-                                this._lastLoadInvoiceCustomerPayload = payloadKey;
+                        this._lastLoadInvoiceCustomerPayload = payloadKey;
                         this._loadInvoiceCustomerInProgress = true;
 
                         try {
