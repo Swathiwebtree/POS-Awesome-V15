@@ -328,6 +328,7 @@ export default {
 		}
 
 		this.invoice_doc = data;
+		this.loaded_draft_name = data.name || null;
 		this.items = data.items || [];
 		this.packed_items = data.packed_items || [];
 		console.log("Items set:", this.items.length, "items");
@@ -368,7 +369,7 @@ export default {
 			});
 		}
 
-		this.customer = data.customer || data.customer_name || "";
+		this.customer = data.customer;
 		this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
 		this.discount_amount = data.discount_amount;
 		this.additional_discount_percentage = data.additional_discount_percentage;
@@ -423,19 +424,18 @@ export default {
 			items: this.items.length,
 			customer: this.customer,
 		});
-		if (data.customer || data.customer_name) {
-			const customerToLoad = data.customer || data.customer_name;
-			console.log("[Invoice] Emitting load_invoice_customer event:", customerToLoad);
+		if (data.customer) {
+			console.log("[Invoice] Emitting load_invoice_customer event:", data.customer);
 			// Emit event to Customer component to update customer and vehicle without overwriting invoice data
 			this.eventBus.emit("load_invoice_customer", {
-				customer: customerToLoad,
+				customer: data.customer,
 				contact_mobile: data.contact_mobile || "",
 				custom_vehicle_no: data.custom_vehicle_no || "",
 			});
 		}
 
 		// Also ensure customer is synced to local state:
-		this.customer = data.customer || data.customer_name || "";
+		this.customer = data.customer || "";
 
 		console.log("[Invoice] load_invoice completed with customer:", data.customer);
 
@@ -1257,12 +1257,6 @@ export default {
 				items_count: this.items.length,
 				customer: this.customer,
 			});
-
-			// Defensive: sync customer from loaded invoice doc if needed
-			if (!this.customer) {
-				this.customer =
-					(this.invoice_doc && (this.invoice_doc.customer || this.invoice_doc.customer_name)) || "";
-			}
 
 			if (!this.customer) {
 				console.log("Customer validation failed");
