@@ -432,6 +432,15 @@ export default {
 		this.contact_mobile = resolvedContactMobile;
 		this.custom_vehicle_no = resolvedVehicleNo;
 
+		// Guard against async event handlers overwriting draft values with empty
+		// values during the loading window (e.g., a second update_customer_details
+		// emission without preferVehicleNo can clear vehicle/mobile).
+		this._draftLoadingGuard = true;
+		clearTimeout(this._draftLoadingGuardTimer);
+		this._draftLoadingGuardTimer = setTimeout(() => {
+			this._draftLoadingGuard = false;
+		}, 3000);
+
 		console.log("Odometer/vehicle data loaded:", {
 			custom_has_oil_item: this.custom_has_oil_item,
 			custom_odometer_reading: this.custom_odometer_reading,

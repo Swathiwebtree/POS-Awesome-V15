@@ -2772,6 +2772,10 @@ export default {
 
 		clear_invoice({ skipCustomerClear = false } = {}) {
 
+			// Clear draft loading guard so manual clears work immediately
+			this._draftLoadingGuard = false;
+			clearTimeout(this._draftLoadingGuardTimer);
+
 			// Reset all data
 			this.invoice_doc = null;
 			this.customer = "";
@@ -3016,15 +3020,22 @@ export default {
 		this.eventBus.on("update_odometer_data", (data) => {
 
 			this.custom_odometer_reading = data.custom_odometer_reading;
-			this.contact_mobile = data.contact_mobile || "";
-			this.custom_vehicle_no = data.custom_vehicle_no || "";
+
+			// During draft loading, don't overwrite non-empty draft values with empty
+			if (this._draftLoadingGuard) {
+				this.contact_mobile = data.contact_mobile || this.contact_mobile || "";
+				this.custom_vehicle_no = data.custom_vehicle_no || this.custom_vehicle_no || "";
+			} else {
+				this.contact_mobile = data.contact_mobile || "";
+				this.custom_vehicle_no = data.custom_vehicle_no || "";
+			}
 
 			// Update invoice_doc immediately
 			if (this.invoice_doc) {
 				this.invoice_doc.custom_has_oil_item = data.custom_has_oil_item || 0;
 				this.invoice_doc.custom_odometer_reading = data.custom_odometer_reading;
-				this.invoice_doc.contact_mobile = data.contact_mobile || "";
-				this.invoice_doc.custom_vehicle_no = data.custom_vehicle_no || "";
+				this.invoice_doc.contact_mobile = this.contact_mobile;
+				this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no;
 
 			}
 
@@ -3035,14 +3046,22 @@ export default {
 		// Listen for customer details from Customer component
 		this.eventBus.on("update_customer_details", (data) => {
 
-			// Store customer mobile and vehicle
-			this.contact_mobile = data.contact_mobile || "";
-			this.custom_vehicle_no = data.custom_vehicle_no || "";
+			// During draft loading, don't overwrite non-empty draft values with empty.
+			// This prevents a secondary update_customer_details emission (e.g., from
+			// a fetchAndEmitCustomerDetails call without preferVehicleNo) from clearing
+			// the vehicle/mobile values that were set correctly from the draft.
+			if (this._draftLoadingGuard) {
+				this.contact_mobile = data.contact_mobile || this.contact_mobile || "";
+				this.custom_vehicle_no = data.custom_vehicle_no || this.custom_vehicle_no || "";
+			} else {
+				this.contact_mobile = data.contact_mobile || "";
+				this.custom_vehicle_no = data.custom_vehicle_no || "";
+			}
 
 			// Update invoice_doc
 			if (this.invoice_doc) {
-				this.invoice_doc.contact_mobile = data.contact_mobile || "";
-				this.invoice_doc.custom_vehicle_no = data.custom_vehicle_no || "";
+				this.invoice_doc.contact_mobile = this.contact_mobile;
+				this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no;
 			}
 		});
 
