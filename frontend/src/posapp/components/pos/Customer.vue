@@ -419,12 +419,13 @@ export default {
                         }
                 },
 
-                async fetchAndEmitCustomerDetails(customerName) {
+                async fetchAndEmitCustomerDetails(customerName, opts = {}) {
                         if (!customerName) {
                                 return;
                         }
 
                         try {
+                                const { preferVehicleNo = null, allowVehicleFallback = true } = opts;
                                 let customerNameString = customerName;
 
                                 if (typeof customerName === 'object' && customerName !== null) {
@@ -446,10 +447,17 @@ export default {
                                         const customerData = response.message;
 
                                         const mobile = customerData.mobile_no || "";
-                                        const vehicleNo = customerData.vehicle_no ||
-                                                (customerData.vehicles && customerData.vehicles.length > 0
-                                                        ? customerData.vehicles[0].vehicle_no
-                                                        : "");
+                                        let vehicleNo = "";
+                                        if (allowVehicleFallback) {
+                                                if (customerData.vehicle_no) {
+                                                        vehicleNo = customerData.vehicle_no;
+                                                } else if (customerData.vehicles && customerData.vehicles.length > 0) {
+                                                        vehicleNo = customerData.vehicles[0].vehicle_no;
+                                                }
+                                        }
+                                        if (preferVehicleNo) {
+                                                vehicleNo = preferVehicleNo;
+                                        }
 
                                         const isCorporate = !!(customerData.is_corporate || customerData.is_company);
                                         this.selected_customer_is_corporate = isCorporate;
@@ -1498,10 +1506,18 @@ export default {
 
                         const customerName = payload.customer;
                         const jobVehicleNo = payload.custom_vehicle_no || null;
-                        this.jobOrderCustomer = customerName;
-                        this.jobOrderVehicleNo = jobVehicleNo;
-                        this.jobOrderLoading = true;
-                        this.jobOrderLockUntil = Date.now() + 5000;
+
+                        if (jobVehicleNo) {
+                                this.jobOrderCustomer = customerName;
+                                this.jobOrderVehicleNo = jobVehicleNo;
+                                this.jobOrderLoading = true;
+                                this.jobOrderLockUntil = Date.now() + 5000;
+                        } else {
+                                this.jobOrderCustomer = null;
+                                this.jobOrderVehicleNo = null;
+                                this.jobOrderLoading = false;
+                                this.jobOrderLockUntil = 0;
+                        }
 
                         // Prevent the debounced search from firing after we set internalCustomer.
                         // When internalCustomer changes, Vuetify's v-autocomplete fires @update:search
@@ -1536,7 +1552,10 @@ export default {
                         }
 
                         // Load customer details (mobile, corporate flag, etc.)
-                        await this.fetchAndEmitCustomerDetails(customerName);
+                        await this.fetchAndEmitCustomerDetails(customerName, {
+                                preferVehicleNo: jobVehicleNo || "",
+                                allowVehicleFallback: !jobVehicleNo,
+                        });
 
                         // Load vehicles
                         console.log("[Customer] load_invoice_customer vehicles", {
