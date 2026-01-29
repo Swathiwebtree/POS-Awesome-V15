@@ -425,7 +425,7 @@ export default {
                         }
 
                         try {
-                                const { preferVehicleNo = null, allowVehicleFallback = true } = opts;
+                                const { preferVehicleNo = null, preferContactMobile = null, allowVehicleFallback = true } = opts;
                                 let customerNameString = customerName;
 
                                 if (typeof customerName === 'object' && customerName !== null) {
@@ -446,7 +446,7 @@ export default {
                                 if (response && response.message) {
                                         const customerData = response.message;
 
-                                        const mobile = customerData.mobile_no || "";
+                                        const mobile = preferContactMobile || customerData.mobile_no || "";
                                         let vehicleNo = "";
                                         if (allowVehicleFallback) {
                                                 if (customerData.vehicle_no) {
@@ -1552,8 +1552,10 @@ export default {
                         }
 
                         // Load customer details (mobile, corporate flag, etc.)
+                        // Pass draft's contact_mobile so it takes precedence over the customer record
                         await this.fetchAndEmitCustomerDetails(customerName, {
                                 preferVehicleNo: jobVehicleNo || "",
+                                preferContactMobile: payload.contact_mobile || "",
                                 allowVehicleFallback: !jobVehicleNo,
                         });
 
