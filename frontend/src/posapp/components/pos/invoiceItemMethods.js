@@ -328,6 +328,7 @@ export default {
 		}
 
 		this.invoice_doc = data;
+		this.loaded_draft_name = data.name || null;
 		this.items = data.items || [];
 		this.packed_items = data.packed_items || [];
 		console.log("Items set:", this.items.length, "items");

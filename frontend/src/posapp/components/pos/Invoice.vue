@@ -3009,39 +3009,8 @@ export default {
 		if (!this.invoice_instance_id) {
 			this.invoice_instance_id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 		}
-		this.eventBus.on("draft_selected", async (draftName) => {
-
-			try {
-				// Fetch the full draft invoice document
-				const response = await frappe.call({
-					method: "frappe.client.get",
-					args: {
-						doctype: "Sales Invoice",
-						name: draftName,
-					},
-				});
-
-				if (response.message) {
-
-					// IMPORTANT: Store the draft name before loading
-					this.loaded_draft_name = draftName;
-
-					// Load the complete draft invoice
-					this.load_invoice(response.message);
-
-					frappe.show_alert({
-						message: this.__("Draft invoice {0} loaded successfully", [draftName]),
-						indicator: "green",
-					});
-				}
-			} catch (error) {
-				console.error("[Invoice] Error loading draft:", error);
-				frappe.show_alert({
-					message: this.__("Error loading draft invoice: ") + (error.message || error),
-					indicator: "red",
-				});
-			}
-		});
+		// NOTE: draft_selected is handled by Pos.vue → load_selected_draft() which
+		// emits "load_invoice" → handled below. Do NOT add a duplicate handler here.
 
 		// Listen for odometer data updates from InvoiceSummary
 		this.eventBus.on("update_odometer_data", (data) => {
@@ -3342,7 +3311,6 @@ export default {
 
 	// Cleanup event listeners before component is destroyed
 	beforeUnmount() {
-		this.eventBus.off("draft_selected");
 		this.eventBus.off("update_offers_counters");
 		this.eventBus.off("update_coupons_counters");
 		this.eventBus.off("register_item_groups");
