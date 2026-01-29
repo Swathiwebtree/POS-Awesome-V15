@@ -1702,42 +1702,68 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
             order_by="modified desc",
         )
 
-    # SAFE like pattern
-    like_pattern = f"%{search_term}%"
+    # SAFE like pattern (prefix-only for faster index usage)
+    like_pattern = f"{search_term}%"
 
-    where_clause = "1=1"
     params = {
         "like": like_pattern,
         "limit": limit,
     }
-
+    customer_clause = ""
     if customer:
-        where_clause += " AND vm.customer = %(customer)s"
+        customer_clause = " AND vm.customer = %(customer)s"
         params["customer"] = customer
 
     try:
+        # Fast path: exact match by vehicle_no (uses index if present)
+        exact_params = {
+            "vehicle_no": search_term,
+            "limit": limit,
+        }
+        exact_customer_clause = ""
+        if customer:
+            exact_customer_clause = " AND vm.customer = %(customer)s"
+            exact_params["customer"] = customer
+
         vehicles = frappe.db.sql(
             f"""
-            SELECT 
+            SELECT
                 vm.name,
                 vm.vehicle_no,
                 vm.model,
-                v.make,
                 vm.customer,
                 vm.odometer,
                 vm.chasis_no
             FROM `tabVehicle Master` vm
-            LEFT JOIN `tabVehicle` v ON v.name = vm.name
-            WHERE {where_clause}
-            AND (
-                vm.vehicle_no LIKE %(like)s
-                OR vm.model LIKE %(like)s
-                OR v.make LIKE %(like)s
-            )
+            WHERE vm.vehicle_no = %(vehicle_no)s
+            {exact_customer_clause}
             ORDER BY vm.modified DESC
             LIMIT %(limit)s
             """,
-            params,  
+            exact_params,
+            as_dict=True,
+        )
+
+        if vehicles:
+            return vehicles
+
+        # Fallback: vehicle_no partial match only
+        vehicles = frappe.db.sql(
+            f"""
+            SELECT
+                vm.name,
+                vm.vehicle_no,
+                vm.model,
+                vm.customer,
+                vm.odometer,
+                vm.chasis_no
+            FROM `tabVehicle Master` vm
+            WHERE vm.vehicle_no LIKE %(like)s
+            {customer_clause}
+            ORDER BY vm.modified DESC
+            LIMIT %(limit)s
+            """,
+            params,
             as_dict=True,
         )
 
@@ -1746,3 +1772,4 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Vehicle Search Error")
         return []
+
