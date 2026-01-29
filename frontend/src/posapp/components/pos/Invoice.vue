@@ -976,9 +976,58 @@ export default {
 			return true;
 		},
 
+		async validateItemDiscountCap(item, discountPercentage) {
+			if (!item || !item.item_code) {
+				return true;
+			}
+
+			const discount = Number(discountPercentage || 0);
+			if (discount <= 0) {
+				return true;
+			}
+
+			if (!this.customer) {
+				return true;
+			}
+
+			try {
+				const res = await frappe.call({
+					method: "posawesome.posawesome.api.discounts.validate_discount",
+					args: {
+						customer: this.customer,
+						item_code: item.item_code,
+						discount_percentage: discount,
+					},
+				});
+
+				const validation = res.message || {};
+
+				if (!validation.is_valid) {
+					frappe.show_alert({
+						message: validation.message || __("Discount exceeds maximum allowed"),
+						indicator: "red",
+					});
+					return false;
+				}
+
+				if (validation.max_allowed !== undefined) {
+					item._max_discount_allowed = validation.max_allowed;
+				}
+
+				return true;
+			} catch (e) {
+				console.error("[Discount] Validation error:", e);
+				frappe.show_alert({
+					message: __("Error validating discount"),
+					indicator: "red",
+				});
+				return false;
+			}
+		},
 
 
-		applyItemGroupDiscount({ group, percentage }) {
+
+		async applyItemGroupDiscount({ group, percentage }) {
 
 			//  ENGINE OIL BLOCK
 			if (group && group.toLowerCase().includes('engine oil')) {
@@ -989,20 +1038,25 @@ export default {
 				return;
 			}
 
-			// Store group discount (UI chips)
-			if (percentage > 0) {
-				this.itemGroupDiscounts[group] = percentage;
-			} else {
-				delete this.itemGroupDiscounts[group];
-			}
+			let itemsUpdated = 0;
+			let itemsRejected = 0;
 
-			this.items.forEach(item => {
+			for (const item of this.items) {
 
-				if ((item.item_group || "").trim() !== group) return;
+				if ((item.item_group || "").trim() !== group) {
+					continue;
+				}
 
 				// VALIDATION (IMPORTANT)
 				if (!this.validateDiscount(item, percentage)) {
-					return;
+					itemsRejected++;
+					continue;
+				}
+
+				const canApply = await this.validateItemDiscountCap(item, percentage);
+				if (!canApply) {
+					itemsRejected++;
+					continue;
 				}
 
 				const gross = item.price_list_rate * item.qty;
@@ -1020,13 +1074,23 @@ export default {
 				);
 
 				item.amount = this.flt(item.qty * item.rate, this.currency_precision);
-			});
+				itemsUpdated++;
+			}
+
+			// Store group discount only if something was applied
+			if (itemsUpdated > 0 && percentage > 0) {
+				this.itemGroupDiscounts[group] = percentage;
+			} else {
+				delete this.itemGroupDiscounts[group];
+			}
 
 			this.$nextTick(() => {
 				this.update_totals();
 				this.apply_additional_discount();
 				this.$forceUpdate();
 			});
+
+			return { applied: itemsUpdated, rejected: itemsRejected };
 		},
 
 
@@ -2358,18 +2422,29 @@ export default {
 
 			if (!hasOnlyServiceItems) {
 				// Validate stock for non-service items
+				const blockSale =
+					!this.stock_settings.allow_negative_stock ||
+					this.pos_profile.posa_block_sale_beyond_available_qty;
 				const insufficientStockItems = this.items.filter(item => {
 					// Only check stock for non-carwash items
 					return !this.isCarWashItem(item) && (item.actual_qty < item.qty);
 				});
 
-				if (insufficientStockItems.length > 0) {
+				if (insufficientStockItems.length > 0 && blockSale) {
 					const itemNames = insufficientStockItems.map(i => i.item_name).join(', ');
 					frappe.show_alert({
 						message: this.__("Insufficient stock for: {0}", [itemNames]),
 						indicator: "error",
 					});
 					return null;
+				}
+
+				if (insufficientStockItems.length > 0 && !blockSale) {
+					const itemNames = insufficientStockItems.map(i => i.item_name).join(', ');
+					frappe.show_alert({
+						message: this.__("Insufficient stock for: {0}. Proceeding may create negative stock.", [itemNames]),
+						indicator: "warning",
+					});
 				}
 			}
 
@@ -2914,7 +2989,7 @@ export default {
 		});
 
 		// Apply group discount to all items in that group
-		this.eventBus.on('apply_group_discount', (data) => {
+		this.eventBus.on('apply_group_discount', async (data) => {
 			const { group } = data;
 			const rawDiscount =
 				typeof data.discountPercentage === "number"
@@ -2925,9 +3000,23 @@ export default {
 			console.log('[GroupDiscount] Applying to group:', group, 'discount:', discountPercentage);
 
 			let itemsUpdated = 0;
+			let itemsRejected = 0;
+			const attempted = [];
 
-			this.items.forEach(item => {
+			for (const item of this.items) {
 				if ((item.item_group || '').trim() === group && !this.isEngineOil(item)) {
+					attempted.push(item);
+					if (!this.validateDiscount(item, discountPercentage)) {
+						itemsRejected++;
+						continue;
+					}
+
+					const canApply = await this.validateItemDiscountCap(item, discountPercentage);
+					if (!canApply) {
+						itemsRejected++;
+						continue;
+					}
+
 					// Store original values if not stored
 					if (!item.original_rate) {
 						item.original_rate = item.rate;
@@ -2953,9 +3042,17 @@ export default {
 
 					itemsUpdated++;
 				}
-			});
+			}
 
 			console.log('[GroupDiscount] Updated', itemsUpdated, 'items');
+
+			if (typeof data.callback === "function") {
+				data.callback({
+					applied: itemsUpdated,
+					rejected: itemsRejected,
+					attempted: attempted.length,
+				});
+			}
 
 			this.$nextTick(() => {
 				this.apply_additional_discount();

@@ -21,16 +21,6 @@
 							<v-icon left color="primary">mdi-file-document</v-icon>
 							<span>{{ __("Job orders") }}</span>
 							<v-spacer></v-spacer>
-							<v-btn
-								icon
-								size="small"
-								:color="autoRefreshDrafts ? 'primary' : 'grey'"
-								:aria-label="autoRefreshDrafts ? __('Auto Refresh On') : __('Auto Refresh Off')"
-								:title="autoRefreshDrafts ? __('Auto Refresh On') : __('Auto Refresh Off')"
-								@click="toggleDraftsAutoRefresh"
-							>
-								<v-icon>{{ autoRefreshDrafts ? "mdi-refresh-auto" : "mdi-refresh-off" }}</v-icon>
-							</v-btn>
 							<v-btn icon size="small" @click="refreshDrafts" :loading="loadDraftsLoading"
 								:aria-label="__('Refresh Drafts')">
 								<v-icon>mdi-refresh</v-icon>
@@ -245,9 +235,6 @@ export default {
 			items_group: ["ALL"],
 			dialog: false,
 			loadDraftsLoading: false,
-			autoRefreshDrafts: true,
-			draftsRefreshIntervalId: null,
-			draftsRefreshIntervalMs: 60000,
 			pos_profile: null,
 			pos_opening_shift: null,
 			payment: false,
@@ -534,37 +521,6 @@ export default {
 				this.loadDraftsLoading = false;
 			}
 		},
-		shouldAutoRefreshDrafts() {
-			if (typeof document !== "undefined" && document.hidden) return false;
-			if (!this.autoRefreshDrafts) return false;
-			if (this.showOffers || this.showCoupons) return false;
-			if (this.loadDraftsLoading) return false;
-			return true;
-		},
-		startDraftsAutoRefresh() {
-			if (this.draftsRefreshIntervalId) return;
-			this.draftsRefreshIntervalId = setInterval(() => {
-				if (this.shouldAutoRefreshDrafts()) {
-					this.refreshDrafts();
-				}
-			}, this.draftsRefreshIntervalMs);
-		},
-		stopDraftsAutoRefresh() {
-			if (!this.draftsRefreshIntervalId) return;
-			clearInterval(this.draftsRefreshIntervalId);
-			this.draftsRefreshIntervalId = null;
-		},
-		toggleDraftsAutoRefresh() {
-			this.autoRefreshDrafts = !this.autoRefreshDrafts;
-			if (this.autoRefreshDrafts) {
-				this.startDraftsAutoRefresh();
-				if (this.shouldAutoRefreshDrafts()) {
-					this.refreshDrafts();
-				}
-			} else {
-				this.stopDraftsAutoRefresh();
-			}
-		},
 
 		get_items_groups() {
 			if (!this.pos_profile) {
@@ -668,7 +624,6 @@ export default {
 				this.get_offers(this.pos_profile.name, this.pos_profile);
 				this.get_items_groups();
 				this.refreshDrafts();
-				this.startDraftsAutoRefresh();
 				await this.initializeItems();
 				this.items_view = this.pos_profile.posa_default_card_view ? "card" : "list";
 				this.active_price_list = this.pos_profile.selling_price_list;
@@ -716,20 +671,9 @@ export default {
 				this.onBarcodeScanned(code);
 			});
 		});
-
-		this._handleDraftsVisibility = () => {
-			if (!document.hidden && this.shouldAutoRefreshDrafts()) {
-				this.refreshDrafts();
-			}
-		};
-		document.addEventListener("visibilitychange", this._handleDraftsVisibility);
 	},
 
 	beforeUnmount() {
-		this.stopDraftsAutoRefresh();
-		if (this._handleDraftsVisibility) {
-			document.removeEventListener("visibilitychange", this._handleDraftsVisibility);
-		}
 		this.eventBus.off("close_opening_dialog");
 		this.eventBus.off("register_pos_data");
 		this.eventBus.off("register_pos_profile");

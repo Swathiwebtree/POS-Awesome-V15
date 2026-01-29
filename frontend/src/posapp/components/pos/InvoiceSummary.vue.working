@@ -195,9 +195,9 @@
 										</div>
 
 										<!-- Active Discounts List -->
-										<div v-if="Object.keys(displayItemGroupDiscounts).length > 0"
+										<div v-if="Object.keys(itemGroupDiscounts).length > 0"
 											class="discounts-list mb-3">
-											<v-chip v-for="(discount, group) in displayItemGroupDiscounts" :key="group"
+											<v-chip v-for="(discount, group) in itemGroupDiscounts" :key="group"
 												closable color="info" variant="tonal" class="discount-chip mr-2 mb-2"
 												@click:close="removeItemGroupDiscount(group)">
 												<v-icon size="small" left>mdi-folder-multiple</v-icon>
@@ -726,10 +726,12 @@ export default {
 		itemGroupsList() {
 			const parentItems = this.$parent?.items || [];
 
+			const blockedGroups = ["Engine Oil"];
+
 			const uniqueGroups = [...new Set(
 				parentItems
 					.map(item => (item.item_group || '').trim())
-					.filter(group => group && !group.toLowerCase().includes("engine oil"))
+					.filter(group => group && !blockedGroups.includes(group))
 			)];
 
 			return uniqueGroups.sort();
@@ -746,14 +748,6 @@ export default {
 				};
 			});
 			return summary;
-		},
-		displayItemGroupDiscounts() {
-			return Object.fromEntries(
-				Object.entries(this.itemGroupDiscounts || {}).filter(([group]) => {
-					const name = (group || "").toString().trim();
-					return name.length > 0 && name.toLowerCase() !== "null";
-				}),
-			);
 		},
 
 		maxInvoiceDiscount() {
@@ -931,14 +925,6 @@ export default {
 				return;
 			}
 
-			const groupName = (this.selectedItemGroupForDiscount || "").toString().trim();
-			if (!groupName || groupName.toLowerCase() === "null") {
-				frappe.show_alert({
-					message: this.__("Please select a valid item group"),
-					indicator: "warning",
-				});
-				return;
-			}
 			const discountPct = Number(this.discountPercentageByGroup || 0);
 
 			if (discountPct < 0 || discountPct > 100) {
@@ -949,44 +935,24 @@ export default {
 				return;
 			}
 
-			// Emit event to parent to apply discount to items (callback handles success/failure)
+			// Store the discount
+			this.itemGroupDiscounts[this.selectedItemGroupForDiscount] = discountPct;
+
+			// Emit event to parent to apply discount to items
 			this.eventBus.emit('apply_group_discount', {
-				group: groupName,
+				group: this.selectedItemGroupForDiscount,
 				percentage: discountPct,
-				callback: (result = {}) => {
-					const applied = Number(result.applied || 0);
-					const rejected = Number(result.rejected || 0);
-
-					if (applied <= 0) {
-						frappe.show_alert({
-							message: this.__("Discount was not applied (validation failed)"),
-							indicator: "red",
-						});
-						return;
-					}
-
-					this.itemGroupDiscounts[groupName] = discountPct;
-
-					if (rejected > 0) {
-						frappe.show_alert({
-							message: this.__(
-								`Discount applied to ${applied} items. ${rejected} items rejected due to limits.`
-							),
-							indicator: "orange",
-						});
-					} else {
-						frappe.show_alert({
-							message: this.__(
-								`${discountPct}% discount applied to ${groupName} items`
-							),
-							indicator: "green",
-						});
-					}
-				},
 			});
 
 			// Recalculate totals
 			this.$emit('update_discount_umount');
+
+			frappe.show_alert({
+				message: this.__(
+					`${discountPct}% discount applied to ${this.selectedItemGroupForDiscount} items`
+				),
+				indicator: "green"
+			});
 
 			// Reset and close
 			this.discountPercentageByGroup = 0;
@@ -1116,7 +1082,7 @@ export default {
 			}
 			// 2. MANDATORY ODOMETER VALIDATION
 			if (this.showOdometerField) {
-				if (!this.odometerReading || isNaN(this.odometerReading) || Number(this.odometerReading) <= 0) {
+				if (!this.odometerValue || isNaN(this.odometerValue) || Number(this.odometerValue) <= 0) {
 					frappe.show_alert({
 						message: this.__("Please enter a valid odometer reading before saving."),
 						indicator: "red",
