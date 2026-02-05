@@ -1,16 +1,14 @@
 <template>
-	<div>
-		<v-card
-			:class="['selection mx-auto mt-3', isDarkTheme ? '' : 'bg-grey-lighten-5']"
+	<div class="offer-container">
+		<v-card class="offer-main-card"
+			:class="['selection', isDarkTheme ? '' : 'bg-grey-lighten-5']"
 			:style="isDarkTheme ? 'background-color:#1E1E1E' : ''"
-			style="max-height: 80vh; height: 80vh"
 		>
 			<v-card-title>
 				<span class="text-h6 text-primary">{{ __("Offers") }}</span>
 			</v-card-title>
 			<div
 				class="my-0 py-0 overflow-y-auto"
-				style="max-height: 75vh"
 				@mouseover="style = 'cursor: pointer'"
 			>
 				<v-data-table
@@ -74,7 +72,7 @@
 			</div>
 		</v-card>
 
-		<v-card flat class="offer-footer-card mb-0 mt-3">
+        <v-card flat class="offer-footer-card">
 			<v-row align="center" no-gutters>
 				<v-col cols="12">
 					<v-btn
@@ -91,7 +89,7 @@
 				</v-col>
 			</v-row>
 		</v-card>
-	</div>
+  </div>
 </template>
 
 <script>
@@ -346,6 +344,22 @@ export default {
 };
 </script>
 <style scoped>
+/* ===== FIX BOTTOM GAP ===== */
+.offer-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.offer-main-card {
+  flex: 1;
+  overflow: hidden;
+}
+
+.offer-footer-card {
+  margin-top: auto;
+}
+
 /* Footer Card */
 .offer-footer-card {
 	background: white;
@@ -385,4 +399,47 @@ export default {
 		font-size: 1rem !important;
 	}
 }
+/* ===== FINAL OFFERS LAYOUT FIX ===== */
+
+.offer-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* main card fills space */
+.offer-main-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* table scrolls */
+.offer-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+/* footer sticks to bottom */
+.offer-footer-card {
+  flex-shrink: 0;
+  background: white;
+  border-top: 2px solid #e0e0e0;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  padding: 12px;
+  height: 80px;
+}
+
+/* FIX bottom white gap in Offers */
+.selection {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.selection > .overflow-y-auto {
+  flex: 1;
+}
+
 </style>

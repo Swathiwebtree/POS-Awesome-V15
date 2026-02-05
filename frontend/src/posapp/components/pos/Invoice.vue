@@ -3673,9 +3673,8 @@ export default {
 }
 
 .modern-items {
-	border-radius: 14px;
-	background: #ffffff;
-	padding: 6px;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 /* table row spacing */
@@ -3827,9 +3826,77 @@ export default {
 
 
 .items-table-wrapper {
-	position: relative;
-	margin-top: 15px;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
+
+.items-table-wrapper :deep(.v-table) {
+  font-size: 13px;
+}
+/* DESKTOP (1920px+) */
+@media (min-width: 1920px) {
+  .items-table-wrapper :deep(.v-table__wrapper) {
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+
+  .items-table-wrapper :deep(th) {
+    padding: 12px 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .items-table-wrapper :deep(td) {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+}
+
+/* LAPTOP (1280px - 1919px) */
+@media (min-width: 1280px) and (max-width: 1919px) {
+  .items-table-wrapper :deep(.v-table__wrapper) {
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+
+  .items-table-wrapper :deep(th) {
+    padding: 10px 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .items-table-wrapper :deep(td) {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+
+  /* Reduce column widths on laptop */
+  .items-table-wrapper :deep(.v-col-md-1) {
+    flex: 0 0 calc(8.33% - 4px);
+  }
+  
+  .items-table-wrapper :deep(.v-col-md-2) {
+    flex: 0 0 calc(16.66% - 4px);
+  }
+}
+
+/* Hide less important columns on laptop */
+@media (max-width: 1400px) {
+  .items-table-wrapper :deep(.col-hide-laptop) {
+    display: none;
+  }
+}
+/* Responsive input fields */
+.items-table-wrapper :deep(.v-text-field) {
+  margin: 0;
+}
+
+.items-table-wrapper :deep(.v-text-field__loader) {
+  display: none;
+}
+
 
 /* New styles for improved column switches */
 :deep(.column-switch) {
@@ -3850,18 +3917,25 @@ export default {
 	font-size: 0.95rem;
 }
 
-/* Fixed Controls Footer */
+/* Fixed Controls Footer — COMPACT */
 .invoice-controls {
-	flex-shrink: 0;
-	background: white;
-	border-top: 1px dashed #e5e7eb;
-	padding-top: 8px;
-	padding: 12px;
-	z-index: 100;
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
+  position: sticky;
+  bottom: 0;
+  flex-shrink: 0;
+  background: white;
+  border-top: 1px dashed #e5e7eb;
+  margin-top: 4px !important;
+  padding: 2px 4px 4px !important;
+  gap: 2px !important;
+  align-items: stretch;
+  line-height: 1 !important;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: clamp(260px, 36vh, 320px);
 }
+
 
 .cards {
 	border-radius: 16px;
@@ -3972,6 +4046,15 @@ export default {
 .qty-btn .v-icon {
 	font-size: 18px !important;
 }
+.invoice-wrapper {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.invoice-content {
+  overflow-y: auto;
+  padding-bottom: 8px !important;
+}
 
 /* On small screens, increase touch target slightly */
 @media (max-width: 600px) {
@@ -3987,5 +4070,8 @@ export default {
 		min-width: 64px;
 		font-size: 1rem;
 	}
+}
+.items-table-wrapper {
+  margin-top: 12px;
 }
 </style>

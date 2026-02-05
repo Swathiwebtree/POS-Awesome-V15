@@ -1,5 +1,5 @@
 <template>
-	<v-dialog v-model="showDialog" max-width="1400px" width="90vw" height="90vh" persistent scrollable="false" transition="dialog-bottom-transition " overlay-opacity="0.5">
+	<v-dialog v-model="showDialog" max-width="900px" width="900px" persistent scrollable="false" transition="dialog-bottom-transition" overlay-opacity="0.5">
 		<div class="payment-modal-container">
 			<div class="payment-content">
 				<div class="payment-card-wrapper">
@@ -38,10 +38,10 @@
 							</div>
 						</div>
 						<!-- Scrollable content -->
-						<div ref="paymentContainer" lass="pa-2 payment-content-container">
+						<div ref="paymentContainer" class="pa-2 payment-content-container">
 							<v-row dense >
 
-								<v-col cols="6">
+								<v-col cols="6" class="payment-left-column">
 									<!-- PAID / CREDIT CHANGE -->
 									<v-row v-if="invoice_doc" dense>
 										<v-col cols="7" v-if="credit_change > 0 && !invoice_doc.is_return">
@@ -97,8 +97,8 @@
 										</div>
 
 										<v-divider class="my-2" />
-
-										<div v-for="payment in invoice_doc.payments" :key="payment.name" class="mb-2">
+                                       <div class="payment-methods-grid">
+										 <div v-for="payment in invoice_doc.payments" :key="payment.name" class="mb-1">
 
 											<div v-if="!is_mpesa_c2b_payment(payment)" class="payment-method-card"
 												:class="{ active: payment.amount > 0, disabled: invoice_doc.is_return }"
@@ -147,6 +147,7 @@
 
 										</div>
 									</div>
+								</div>
 
 								</v-col>
 
@@ -2718,6 +2719,142 @@ export default {
 
 <style scoped>
 
+.payments-panel {
+  width: 100%;
+}
+
+/* DESKTOP (1920px+) */
+@media (min-width: 1920px) {
+  .payments-panel :deep(.payment-method-btn) {
+    padding: 12px 16px;
+    font-size: 13px;
+    min-height: 44px;
+  }
+
+  .payments-panel :deep(.payment-amount-field) {
+    font-size: 13px;
+  }
+
+  .payments-panel :deep(.payment-input) {
+    padding: 10px 12px;
+  }
+
+  .payments-panel :deep(.payment-summary) {
+    padding: 12px;
+    font-size: 13px;
+  }
+}
+
+/* LAPTOP (1280px - 1919px) */
+@media (min-width: 1280px) and (max-width: 1919px) {
+  .payments-panel :deep(.payment-method-btn) {
+    padding: 10px 12px;
+    font-size: 12px;
+    min-height: 40px;
+  }
+
+  .payments-panel :deep(.payment-amount-field) {
+    font-size: 12px;
+  }
+
+  .payments-panel :deep(.payment-input) {
+    padding: 8px 10px;
+  }
+
+  .payments-panel :deep(.payment-summary) {
+    padding: 10px;
+    font-size: 12px;
+  }
+
+  /* Reduce button grid columns */
+  .payments-panel :deep(.payment-methods) {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}
+
+/* Payment method chips */
+.payments-panel :deep(.payment-chip) {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+@media (max-width: 1400px) {
+  .payments-panel :deep(.payment-chip) {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+}
+
+/* Payment text inputs */
+.payments-panel :deep(.v-text-field) {
+  margin: 8px 0;
+}
+
+.payments-panel :deep(.v-field) {
+  border-radius: 6px;
+}
+
+/* Payment total section */
+.payments-panel :deep(.payment-total) {
+  padding: 12px;
+  background-color: #f5f5f5;
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+.payments-panel :deep(.payment-total-label) {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.payments-panel :deep(.payment-total-amount) {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1976d2;
+}
+
+@media (max-width: 1400px) {
+  .payments-panel :deep(.payment-total) {
+    padding: 10px;
+    margin-top: 10px;
+  }
+
+  .payments-panel :deep(.payment-total-amount) {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 1400px) {
+  .payments-panel :deep(.v-text-field) {
+    margin: 6px 0;
+  }
+}
+/* Further compact at 1350px */
+@media (max-width: 1400px) {
+  .payments-panel :deep(.payment-method-btn) {
+    padding: 8px 10px;
+    font-size: 11px;
+    min-height: 36px;
+  }
+
+  .payments-panel :deep(.payment-input) {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .payments-panel :deep(.payment-summary) {
+    padding: 8px;
+    font-size: 11px;
+  }
+
+  .payments-panel :deep(.payment-methods) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+}
+
 /* Remove readonly styling */
 .v-text-field--readonly {
 	cursor: text;
@@ -2736,9 +2873,9 @@ export default {
 	position: relative;
 	overflow: hidden;
 	font-weight: 700 !important;
-	font-size: 1.2rem !important;
+	font-size: 1rem !important;
 	letter-spacing: 1px !important;
-	height: 64px !important;
+	height: 44px !important;
 	background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%) !important;
 	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
@@ -2850,8 +2987,8 @@ export default {
 /* Cancel Button */
 .cancel-btn {
 	font-weight: 600 !important;
-	font-size: 1rem !important;
-	height: 52px !important;
+	font-size: 0.95rem !important;
+	height: 40px !important;
 	background: linear-gradient(135deg, #d32f2f 0%, #c62828 100%) !important;
 	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
@@ -2909,8 +3046,8 @@ export default {
 /* Responsive Design */
 @media (max-width: 600px) {
 	.submit-btn-main {
-		height: 56px !important;
-		font-size: 1.1rem !important;
+		height: 50px !important;
+		font-size: 1rem !important;
 	}
 
 	.submit-text {
@@ -2918,14 +3055,42 @@ export default {
 	}
 
 	.cancel-btn {
-		height: 48px !important;
-		font-size: 0.95rem !important;
+		height: 44px !important;
+		font-size: 0.9rem !important;
 	}
 
 	.menu-item {
 		min-height: 56px !important;
 		padding: 10px 14px !important;
 	}
+}
+
+/* ================= PAYMENT GRID ================= */
+
+/* Stack payment methods one below another */
+.payment-methods-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+
+
+
+/* Tighten cards */
+.payment-method-card {
+  width: 100%;
+  padding: 6px 8px;
+  min-height: 36px;
+}
+
+.method-title {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.method-input {
+  max-width: 70px;
 }
 
 /* Icon Animations */
@@ -3019,8 +3184,8 @@ export default {
 .payment-card-wrapper .v-card.selection {
   display: flex !important;
   flex-direction: column !important;
-  height: 75vh !important;        
-  max-height: 75vh !important;
+  height: 90vh !important;        
+  max-height: 90vh !important;
   overflow: hidden !important;   
   border-radius: 8px !important;
   margin: 0 !important;          
@@ -3102,7 +3267,7 @@ export default {
   padding: 12px !important;
   max-height: none !important;
   box-sizing: border-box;
-  padding-bottom: 140px; 
+  padding-bottom: 120px; 
 }
 
 .payment-card-wrapper .overflow-y-auto .pa-1 {
@@ -3115,7 +3280,7 @@ export default {
   left: 0;
   right: 0;
   background: inherit;
-  padding: 12px 16px;
+  padding: 6px 10px;
   box-shadow: 0 -6px 14px rgba(0,0,0,0.06);
   z-index: 25;
 }
@@ -3143,13 +3308,13 @@ export default {
 
 .submit-btn-main {
   font-weight: 700 !important;
-  font-size: 1.2rem !important;
-  height: 64px !important;
+  font-size: 1rem !important;
+  height: 44px !important;
 }
 .cancel-btn {
   font-weight: 600 !important;
-  font-size: 1rem !important;
-  height: 52px !important;
+  font-size: 0.95rem !important;
+  height: 40px !important;
 }
 
 @media (max-width: 760px) {
@@ -3365,21 +3530,21 @@ div.v-card.selection {
 .payment-summary-hero {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
-	gap: 10px;
-	margin-bottom: 12px;
+	gap: 8px;
+	margin-bottom: 8px;
 	padding-left: 12px;
 	padding-right: 12px;
 }
 
 /* Main box */
 .summary-box {
-	padding: 10px 14px;    /* ⬅ reduced height */
+	padding: 4px 8px;    /* ⬅ reduced height */
 	border-radius: 12px;   /* slightly tighter */
 	color: #fff;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	min-height: 64px;      /* ⬅ controlled compact height */
+	min-height: 42px;      /* ⬅ controlled compact height */
 }
 
 /* Paid (green) */
@@ -3394,7 +3559,7 @@ div.v-card.selection {
 
 /* Label */
 .summary-box .label {
-	font-size: 13px;
+	font-size: 11px;
 	font-weight: 700;      /* ⬅ bold label */
 	line-height: 1.1;
 	opacity: 0.95;
@@ -3402,7 +3567,7 @@ div.v-card.selection {
 
 /* Value */
 .summary-box .value {
-	font-size: 20px;       /* slightly smaller */
+	font-size: 15px;       /* slightly smaller */
 	font-weight: 800;      /* ⬅ strong bold for amount */
 	line-height: 1.2;
 	margin-top: 2px;
@@ -3438,16 +3603,14 @@ div.v-card.selection {
 }
 
 .payment-method-card {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 10px 14px;
-	border-radius: 12px;
-	border: 1px solid #e5e7eb;
-	background: #ffffff;
-	cursor: pointer;
-	transition: all 0.2s ease;
+  min-height: 36px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+
 
 .payment-method-card:hover {
 	background: #f0f7ff;
@@ -3467,22 +3630,42 @@ div.v-card.selection {
 .method-left {
 	display: flex;
 	align-items: center;
-	gap: 12px;
+	gap: 8px;
+	flex: 1;
 }
 
 .method-title {
-	font-size: 15px;
+	font-size: 11px;
 	font-weight: 600;
 }
 
+.payment-method-card .v-icon {
+  font-size: 16px !important;
+}
+
 .method-amount {
-	font-size: 13px;
+	font-size: 11px;
 	color: #6b7280;
 	display: none;
 }
 
 .method-input {
-	max-width: 110px;
+	max-width: 70px;
+}
+.method-input :deep(.v-field) {
+  min-height: 28px !important;
+}
+.method-input :deep(input) {
+  font-size: 11px;
+  padding: 2px 6px;
+}
+.payment-summary-row {
+  margin-bottom: 8px;
+}
+
+.payment-summary-card {
+  padding: 8px 10px;
+  font-size: 0.9rem;
 }
 
 .credit-sale-banner {
@@ -3539,9 +3722,15 @@ div.v-card.selection {
 
 
 .payment-content-container {
-	max-height: none;
-	overflow: visible;
+  flex: 1;
+  overflow: hidden; /* parent should NOT scroll */
 }
+@media (min-width: 1400px) {
+  .payment-left-column {
+    max-height: calc(90vh - 130px);
+  }
+}
+
 
 .payment-modal-container {
 	height: 90vh;
@@ -3554,5 +3743,38 @@ div.v-card.selection {
 .v-card {
 	height: 100%;
 }
+
+.payment-card-wrapper {
+  width: 80%;
+  max-width: 100%;
+}
+.payment-card-wrapper {
+  font-size: clamp(12px, 0.9vw, 14px);
+}
+.summary-box .value {
+  font-size: clamp(14px, 1.6vw, 18px);
+}
+.summary-box .label,
+.sleek-field .v-field-label {
+  font-size: clamp(10px, 0.8vw, 12px);
+}
+.sleek-field input {
+  font-size: clamp(12px, 0.9vw, 13px);
+}
+.payment-left-column {
+  max-height: calc(90vh - 130px); /* header + summary + footer */
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+/* smooth scrollbar */
+.payment-left-column::-webkit-scrollbar {
+  width: 6px;
+}
+.payment-left-column::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
 
 </style>

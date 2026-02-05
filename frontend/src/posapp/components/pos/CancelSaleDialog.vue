@@ -1,7 +1,9 @@
 <template>
 	<v-dialog
 		:model-value="modelValue"
-		max-width="330"
+		max-width="420"
+		width="92vw"
+		class="cancel-sale-dialog"
 		@update:model-value="$emit('update:modelValue', $event)"
 	>
 		<v-card>
@@ -41,3 +43,24 @@ export default {
 	},
 };
 </script>
+
+<style scoped>
+.cancel-sale-dialog :deep(.v-card) {
+	width: 100%;
+}
+
+.cancel-sale-dialog :deep(.v-card-title) {
+	padding-bottom: 6px;
+}
+
+.cancel-sale-dialog :deep(.v-card-actions) {
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+@media (max-width: 600px) {
+	.cancel-sale-dialog :deep(.v-card-actions .v-btn) {
+		width: 100%;
+	}
+}
+</style>

@@ -400,7 +400,7 @@
 					class="discount-input" :model-value="Math.round((item.raw || item).discount_percentage || 0)"
 					:disabled="isDiscountDisabled(item)" @input="
 						handleDiscountInput(item.raw || item, $event)
-						" @click.stop @focus.stop prepend-inner-icon="mdi-percent" />
+						" @click.stop @focus.stop />
 			</template>
 
 
@@ -985,6 +985,138 @@ export default {
 </script>
 
 <style scoped>
+
+.items-table {
+  font-size: 13px;
+}
+/* DESKTOP (1920px+) */
+@media (min-width: 1920px) {
+  .items-table :deep(th) {
+    padding: 14px 10px;
+    font-size: 13px;
+    font-weight: 700;
+    background-color: #f5f5f5;
+  }
+
+  .items-table :deep(td) {
+    padding: 12px 10px;
+    font-size: 12px;
+  }
+
+  .items-table :deep(.v-table__wrapper) {
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+}
+
+/* LAPTOP (1280px - 1919px) */
+@media (min-width: 1280px) and (max-width: 1919px) {
+  .items-table :deep(th) {
+    padding: 10px 6px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .items-table :deep(td) {
+    padding: 8px 6px;
+    font-size: 10px;
+  }
+
+  .items-table :deep(.v-table__wrapper) {
+    overflow-x: auto;
+    overflow-y: auto;
+  }
+
+  /* Column width reduction */
+  .items-table :deep(.col-item-code) {
+    min-width: 80px;
+  }
+
+  .items-table :deep(.col-item-name) {
+    min-width: 150px;
+  }
+
+  .items-table :deep(.col-qty) {
+    min-width: 60px;
+  }
+
+  .items-table :deep(.col-price) {
+    min-width: 80px;
+  }
+
+  .items-table :deep(.col-amount) {
+    min-width: 80px;
+  }
+
+  .items-table :deep(.col-discount) {
+    min-width: 70px;
+  }
+}
+
+/* Reduce column width further at 1350px */
+@media (max-width: 1400px) {
+  .items-table :deep(th) {
+    font-size: 10px;
+  }
+
+  .items-table :deep(td) {
+    font-size: 9px;
+    padding: 6px 4px;
+  }
+
+  .items-table :deep(.col-item-code) {
+    min-width: 70px;
+  }
+
+  .items-table :deep(.col-item-name) {
+    min-width: 120px;
+  }
+
+  .items-table :deep(.col-qty) {
+    min-width: 50px;
+  }
+
+  .items-table :deep(.col-price) {
+    min-width: 70px;
+  }
+
+  .items-table :deep(.col-amount) {
+    min-width: 70px;
+  }
+
+  .items-table :deep(.col-discount) {
+    min-width: 60px;
+  }
+}
+
+/* Input field sizing */
+.items-table :deep(.v-text-field) {
+  margin: 0;
+}
+.items-table :deep(.v-text-field--density-compact) {
+  padding: 0;
+}
+
+.items-table :deep(.v-input__control) {
+  padding: 0;
+}
+
+/* Hover effects */
+.items-table :deep(.v-table__tr:hover) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Scrollbar */
+.items-table :deep(.v-table__wrapper::-webkit-scrollbar) {
+  width: 6px;
+  height: 6px;
+}
+
+.items-table :deep(.v-table__wrapper::-webkit-scrollbar-thumb) {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
 /* Modern table styling with enhanced visual hierarchy */
 .modern-items-table {
 	border-radius: var(--border-radius-lg);
@@ -1749,6 +1881,40 @@ export default {
     white-space: nowrap;
     overflow: hidden;
     max-width: 100px;
+}
+/* === Make Discount % field small and stable === */
+.discount-input {
+  width: 75px !important;
+  min-width: 75px !important;
+  max-width: 75px !important;
+}
+
+/* Center inside table cell */
+.modern-items-table :deep(td) .discount-input {
+  margin: 0 auto !important;
+}
+
+/* Reduce height */
+.discount-input :deep(.v-field) {
+  display: flex;
+  align-items: center; /* ← this is the key */
+}
+.discount-input :deep(.v-field__field) {
+  display: flex;
+  align-items: center;
+}
+/* Reduce inner padding & center number */
+.discount-input :deep(input) {
+  padding: 4px 6px !important;
+  text-align: center !important;
+  font-size: 13px !important;
+  font-weight: 600;
+  line-height: 1 !important;
+}
+
+/* Keep % icon compact */
+.discount-input :deep(.v-field__prepend-inner) {
+  margin-inline-end: 4px;
 }
 
 </style>

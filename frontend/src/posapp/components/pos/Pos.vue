@@ -1,5 +1,7 @@
 <template>
-	<div class="pos-app-container">
+	<div class="pos-app-container" :class="{ 'fullscreen-mode': isFullscreen }">
+		<div class="pos-scale-wrapper" :class="{ 'fullscreen-mode': isFullscreen }">
+
 		<!-- Main POS Container -->
 		<div class="pos-main-container" :class="[rtlClasses, { 'fullscreen-mode': isFullscreen }]"
 			:style="[responsiveStyles, rtlStyles]">
@@ -197,6 +199,7 @@
 
 		<Payments></Payments>
 		<!-- dialogs omitted -->
+		 </div>
 	</div>
 </template>
 
@@ -396,9 +399,11 @@ export default {
 			if (this.isFullscreen) {
 				document.body.style.overflow = "hidden";
 				document.body.style.paddingTop = "0";
+				document.documentElement.style.overflow = "hidden";
 			} else {
 				document.body.style.overflow = "";
 				document.body.style.paddingTop = "";
+				document.documentElement.style.overflow = "";
 			}
 		},
 
@@ -746,6 +751,7 @@ export default {
 		if (this.isFullscreen) {
 			document.body.style.overflow = "";
 			document.body.style.paddingTop = "";
+			document.documentElement.style.overflow = "";
 		}
 	},
 
@@ -761,12 +767,64 @@ export default {
 	display: flex;
 	flex-direction: column;
 	width: 100%;
-	height: 100vh;
+	height: 100%;
+	flex: 1 1 auto;
+	min-height: 0;
 	overflow: hidden;
 	background: #fff;
 	padding: 0;
 	margin: 0;
 }
+
+.pos-app-container.fullscreen-mode {
+	position: fixed !important;
+	top: 0 !important;
+	left: 0 !important;
+	right: 0 !important;
+	bottom: 0 !important;
+	width: 100% !important;
+	height: 100% !important;
+	z-index: 1100 !important;
+	overflow: hidden !important;
+}
+
+@media (min-width: 1280px) {
+  .pos-scale-wrapper {
+    --pos-scale: 0.85;
+
+    position: fixed;
+    top: 60px;
+    left: 0;
+
+    transform: scale(var(--pos-scale));
+    transform-origin: top left;
+
+    width: calc(100% / var(--pos-scale));
+    height: calc((100vh - 60px) / var(--pos-scale));
+
+    overflow: hidden;
+    z-index: 1;
+  }
+
+  /* ===== FULLSCREEN: SAME SCALE, REMOVE NAVBAR OFFSET ===== */
+  .pos-scale-wrapper.fullscreen-mode {
+    --pos-scale: 0.85;
+
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+
+    transform: scale(var(--pos-scale)) !important;
+    transform-origin: top left !important;
+
+    width: calc(100% / var(--pos-scale)) !important;
+    height: calc(100vh / var(--pos-scale)) !important;
+
+    overflow: hidden !important;
+    z-index: 1100 !important;
+  }
+}
+
 
 /* Main POS Container */
 .pos-main-container {
@@ -774,6 +832,7 @@ export default {
 	flex: 1;
 	width: 100%;
 	height: 100%;
+	min-height: 0;
 	overflow: hidden;
 	padding: 0 !important;
 	margin: 0 !important;
@@ -788,9 +847,11 @@ export default {
 	right: 0;
 	bottom: 0;
 	z-index: 1100;
-	/* Lower z-index - below dialogs but above normal content */
 	background: white;
 	overflow: auto;
+	transform: none !important;
+	width: 100%;
+	height: 100%;
 }
 
 /* Ensure all interactive elements work in fullscreen */
@@ -836,15 +897,98 @@ export default {
 	z-index: 10 !important;
 }
 
-/* Flexbox layout */
 .pos-layout {
-	display: flex;
-	width: 100%;
-	height: 100%;
-	gap: 0;
-	padding: 0;
-	margin: 0;
-	overflow: hidden;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  gap: 6px;                    /* Consistent gap */
+  padding: 6px;                /* Consistent padding */
+  margin: 0;
+  overflow: hidden;
+  flex-wrap: nowrap;           /* CRITICAL: No wrapping! */
+}
+
+/* BASE COLUMN STYLES */
+.pos-column {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  min-width: 0;                /* CRITICAL: Allows flex shrinking */
+  pointer-events: auto;
+  position: relative;
+}
+
+@media (min-width: 1920px) {
+  .pos-column {
+    padding: 8px 6px;
+  }
+
+  .drafts-column {
+    flex: 0 0 20%;
+    min-width: 250px;           
+  }
+
+  .invoice-column {
+    flex: 0 0 55%;
+    min-width: 500px;           
+  }
+
+  .items-column {
+    flex: 0 0 25%;
+    min-width: 300px;          
+  }
+}
+
+/* ============================================
+   LAPTOP (1400px - 1919px) - Flex scaling
+   ============================================ */
+@media (min-width: 1400px) and (max-width: 1919px) {
+  .pos-column {
+    padding: 6px 4px;           /* Reduce padding */
+  }
+
+  .drafts-column {
+    flex: 0 0 20%;              /* Keep percentage for scaling */
+    min-width: 180px;           /* Lower minimum */
+  }
+
+  .invoice-column {
+    flex: 0 0 55%;              /* Scales with screen */
+    min-width: 350px;           /* Lower minimum */
+  }
+
+  .items-column {
+    flex: 0 0 25%;              /* Scales with screen */
+    min-width: 150px;           /* Lower minimum */
+  }
+}
+
+/* ============================================
+   TIGHT LAPTOP (1280px - 1399px) - Compact
+   ============================================ */
+@media (min-width: 1280px) and (max-width: 1399px) {
+  .pos-column {
+    padding: 4px 2px;           /* Minimal padding */
+  }
+
+  .drafts-column {
+    flex: 0 0 auto;
+    width: 22%;                 /* Fixed percentage */
+    min-width: 140px;           /* Very low minimum */
+  }
+
+  .invoice-column {
+    flex: 1 1 auto;             /* Take remaining space */
+    min-width: 300px;           /* Can go lower */
+  }
+
+  .items-column {
+    flex: 0 0 auto;
+    width: 22%;                 /* Fixed percentage */
+    min-width: 120px;           /* Very low minimum */
+  }
 }
 
 /* Columns */
@@ -868,50 +1012,67 @@ export default {
 	/* Allow dropdowns to overflow */
 }
 
-.drafts-column {
+/* ============================================
+   DESKTOP & LAPTOP MAIN LAYOUT (1280px+)
+   ============================================ */
+
+@media (min-width: 1280px) {
+  .drafts-column,
+  .items-column {
+    flex: 0 0 22%;
+    min-width: 220px;
+    max-width: 26%;
+  }
+
+  .invoice-column {
+    flex: 1 1 auto;      /* take remaining space */
+    min-width: 420px;
+  }
+}
+
+/* .drafts-column {
 	flex: 0 0 20%;
 	padding-left: 1px;
 	padding-right: 2px;
 	flex-shrink: 0;
 	pointer-events: auto;
 	min-width: 260px;
-}
+} */
 
-.invoice-column {
-	flex: 0 0 60%;
+/* .invoice-column {
+	flex: 2 1 520px;
 	padding-left: 3px;
 	padding-right: 3px;
-	flex-shrink: 0;
 	pointer-events: auto;
 	z-index: 2;
-	min-width: 520px;
-}
+	min-width: 320px;
+} */
 
 .invoice-column .column-card {
 	border-radius: 14px;
 }
 
 
-.items-column {
-	flex: 0 0 20%;
+/* .items-column {
+	flex: 1 1 300px;
 	padding-left: 2px;
 	padding-right: 1px;
-	flex-shrink: 0;
 	pointer-events: auto;
-	min-width: 300px;
-}
+	min-width: 240px;
+} */
 
 /* Column Card */
 .column-card {
-	display: flex;
-	flex-direction: column;
-	height: 100%;
-	border: 1px solid #ececec;
-	border-radius: 12px;
-	overflow: hidden;
-	background: #ffffff;
-	transition: border-color 0.2s ease;
-	position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+  transition: border-color 0.2s ease;
+  position: relative;
+  flex: 1 1 auto;  
 }
 
 /* Drafts Card */
@@ -923,14 +1084,13 @@ export default {
 
 /* Drafts Wrapper Container */
 .drafts-wrapper-container {
-	flex: 1;
-	overflow: hidden;
-	display: flex;
-	flex-direction: column;
-	width: 100%;
-	min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
 }
-
 .drafts-wrapper-container :deep(.drafts-wrapper) {
 	display: flex;
 	flex-direction: column;
@@ -939,176 +1099,116 @@ export default {
 }
 
 .drafts-wrapper-container :deep(.drafts-content) {
-	flex: 1;
-	overflow-y: auto;
-	overflow-x: hidden;
-	padding: 10px;
-	background-color: white;
-	min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;                
+  background-color: white;
+  min-height: 0;
 }
 
 .drafts-wrapper-container :deep(.drafts-footer) {
-	flex-shrink: 0;
+	position: relative;
+	bottom: 0;
 	padding: 12px;
 	background: white;
 	border-top: 2px solid #e0e0e0;
-	z-index: 100;
 }
 
-/* ===== Offers & Coupons - balanced / centered styles ===== */
 
+/* === BUTTON STYLING  */
+
+/* BUTTONS - Responsive sizing */
 .offer-style-btn,
 .coupon-style-btn {
-	display: inline-flex !important;
-	align-items: center !important;
-	justify-content: center !important;
-	gap: 12px;
-	box-sizing: border-box;
-
-	/* fixed/consistent sizing */
-	min-width: 0;
-	max-width: 100%;
-	height: 48px !important;
-	padding: 8px 14px !important;
-
-	border-radius: 10px !important;
-	text-transform: none !important;
-	font-weight: 800 !important;
-	color: #fff !important;
-	transition:
-		transform 0.12s ease;
-	overflow: visible !important;
+  width: 100% !important;
+  height: 40px !important;         /* Reduce from 44px */
+  padding: 0 10px !important;      /* Reduce from 12px */
+  margin: 0 !important;
+  border-radius: 6px !important;   /* Reduce from 8px */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;             /* Reduce from 8px */
+  font-weight: 600 !important;
+  font-size: 12px !important;      /* Reduce from 13px */
+  color: white !important;
+  transition: all 0.2s ease !important;
 }
 
-/* Hover / active micro-interaction */
+@media (min-width: 1920px) {
+  .offer-style-btn,
+  .coupon-style-btn {
+    height: 44px !important;
+    font-size: 13px !important;
+  }
+}
+
+.offer-style-btn {
+  background: linear-gradient(90deg, #ff9800, #f57c00) !important;
+}
+
+.coupon-style-btn {
+  background: linear-gradient(90deg, #2196f3, #1976d2) !important;
+}
+
 .offer-style-btn:hover,
 .coupon-style-btn:hover {
 	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }
 
-/* icon alignment (left) */
-.offer-icon,
-.coupon-icon {
-	flex: 0 0 auto;
-	margin-right: 6px;
-	margin-left: 0;
+.offer-style-btn:active,
+.coupon-style-btn:active {
+	transform: translateY(0);
 }
 
-/* text container: center-aligned, allow short wrap */
+/* Button text styling */
 .btn-text {
 	display: flex;
 	flex-direction: column;
-	align-items: flex-start;
-	/* left align next to icon */
+	align-items: center;
 	justify-content: center;
 	line-height: 1;
 }
 
-/* Title: number + word */
 .btn-title {
-	font-size: 15px;
-	font-weight: 900;
-	line-height: 1;
-	display: inline-block;
+	font-size: 13px;
+	font-weight: 600;
 	white-space: nowrap;
-	/* keep number + word on same line if space; otherwise truncate gracefully */
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
-/* make the descriptive word slightly lighter */
-.btn-word {
-	font-weight: 700;
-	margin-left: 6px;
+/* Reset Vuetify Grid */
+.items-footer-filters :deep(.v-col) {
+  padding: 3px !important;         /* Reduce from 4px */
 }
 
-/* Add clean spacing between Offers and Coupons buttons */
-.offer-btn-wrapper,
-.coupon-btn-wrapper {
-	display: flex;
-	justify-content: center;
+.items-footer-filters :deep(.v-row) {
+  margin: 0 !important;
 }
-
-.offer-style-btn,
-.coupon-style-btn {
-	margin-right: 12px;
-	/* spacing */
-}
-
-.coupon-style-btn {
-	margin-left: 12px;
-	/* spacing */
-}
-
-/* optional subtitle (if used) */
-.btn-sub {
-	font-size: 11px;
-	opacity: 0.9;
-	margin-top: 2px;
-}
-
-/* gradients */
-.offer-style-btn {
-	background: linear-gradient(90deg, #ff9a1c 0%, #ff7a00 60%, #ff6f00 100%) !important;
-}
-
-.coupon-style-btn {
-	background: linear-gradient(90deg, #43b6ff 0%, #2196f3 60%, #1976d2 100%) !important;
-}
-
-/* Responsive: stack & full width on small screens */
-@media (max-width: 600px) {
-
-	.offer-style-btn,
-	.coupon-style-btn {
-		min-width: 100% !important;
-		max-width: 100% !important;
-		justify-content: flex-start !important;
-		padding-left: 16px !important;
-		height: 52px !important;
-	}
-
-	.btn-text {
-		align-items: flex-start;
-	}
-
-	.btn-title {
-		white-space: nowrap;
-		font-size: 15px;
-	}
-}
-
-/* Offers = Orange gradient */
-.offer-style-btn {
-	background: linear-gradient(90deg, #ff9800, #ff6f00) !important;
-}
-
-/* Coupons = Blue gradient */
-.coupon-style-btn {
-	background: linear-gradient(90deg, #2196f3, #1976d2) !important;
-}
-
-/* text block */
-.btn-text {
-	display: flex;
-	flex-direction: column;
-	line-height: 1.1;
-	margin-left: 8px;
-}
-
-.btn-title {
-	font-size: 15px;
-	font-weight: 700;
-}
-
-.btn-sub {
-	font-size: 12px;
-	opacity: 0.9;
-}
-
 /* Invoice Card */
 .invoice-card {
 	overflow: hidden;
+}
+
+/* SCROLLBARS */
+.column-scroll-content::-webkit-scrollbar,
+.drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar),
+.invoice-wrapper :deep(.invoice-content::-webkit-scrollbar) {
+  width: 6px;
+}
+
+.column-scroll-content::-webkit-scrollbar-thumb,
+.drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar-thumb),
+.invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb) {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 3px;
+}
+
+.column-scroll-content::-webkit-scrollbar-thumb:hover,
+.drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar-thumb:hover),
+.invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb:hover) {
+  background: rgba(0, 0, 0, 0.4);
 }
 
 /* Items Card with Footer */
@@ -1118,32 +1218,38 @@ export default {
 
 /* Column Header */
 .column-header {
-	background: white;
-	padding: 10px 14px;
-	font-weight: 600;
-	font-size: 23px;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-height: 50px;
-	flex-shrink: 0;
-	color: #333;
-	border-bottom: 1px solid #e5e7eb;
-
+  background: white;
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 18px;               
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  flex-shrink: 0;
+  color: #333;
+  border-bottom: 1px solid #e5e7eb;
+  flex-wrap: wrap;
 }
-
+@media (max-width: 1400px) {
+  .column-header {
+    font-size: 16px;
+    padding: 8px 10px;
+    min-height: 44px;
+  }
+}
 .column-header .v-icon {
 	font-size: 20px;
 }
 
 /* Scrollable Content */
 .column-scroll-content {
-	flex: 1;
-	overflow-y: hidden;
-	overflow-x: hidden;
-	padding: 10px;
-	background-color: white;
-	min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;                  
+  background-color: white;
+  min-height: 0;
 }
 
 .pos-main-container>.v-row:nth-child(1),
@@ -1160,16 +1266,13 @@ export default {
 }
 /* Invoice Wrapper */
 .invoice-wrapper {
-	flex: 1;
-	overflow: hidden;
-	display: flex;
-	flex-direction: column;
-	width: 100%;
-	min-height: 0;
-	position: relative;
-	/* Add this */
-	z-index: 1;
-	/* Add this */
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  position: relative;
 }
 
 /* Ensure invoice content is scrollable and interactive in fullscreen */
@@ -1189,16 +1292,13 @@ export default {
 }
 
 .invoice-wrapper :deep(.invoice-content) {
-	flex: 1;
-	overflow-y: auto;
-	overflow-x: hidden;
-	padding: 14px 16px;
-	background-color: #ffffff;
-	min-height: 0;
-	pointer-events: auto;
-	/* Add this */
-	position: relative;
-	/* Add this */
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 12px;
+  background-color: #ffffff;
+  min-height: 0;
+  pointer-events: auto;
 }
 
 .items-card {
@@ -1212,13 +1312,22 @@ export default {
   overflow-y: auto;
 }
 
-/* Footer should be sticky */
 .items-footer-filters {
   position: sticky;
   bottom: 0;
   background: #fff;
   z-index: 10;
   flex-shrink: 0;
+  padding: 8px;
+  border-top: 1px solid #e0e0e0;
+  overflow: visible;   /* key */
+  max-height: none;    /* key */
+}
+
+@media (max-width: 1400px) {
+  .items-footer-filters {
+    padding: 6px;
+  }
 }
 
 
@@ -1270,7 +1379,7 @@ export default {
 /* Responsive - Tablet */
 @media (max-width: 1024px) {
 	.pos-layout {
-		flex-direction: column;
+		flex-wrap: wrap;
 	}
 
 	.pos-column {
@@ -1285,6 +1394,23 @@ export default {
 
 	.items-scroll {
 		margin-bottom: 130px;
+	}
+}
+
+@media (max-width: 1200px) {
+	.invoice-column {
+		order: 1;
+		flex: 1 1 100%;
+	}
+
+	.drafts-column {
+		order: 2;
+		flex: 1 1 50%;
+	}
+
+	.items-column {
+		order: 3;
+		flex: 1 1 50%;
 	}
 }
 
@@ -1331,7 +1457,6 @@ export default {
 	}
 }
 
-/* New Customer / New Vehicle dialogs not visible in fullscreen */
 
 /* FIX: Add New Customer / Add New Vehicle buttons not clickable in fullscreen */
 .fullscreen-mode .invoice-wrapper :deep(.v-input__append),
@@ -1375,6 +1500,21 @@ export default {
 .offer-style-btn,
 .coupon-style-btn {
   width: 100% !important;
+}
+
+.drafts-column {
+  overflow: hidden;  
+}
+
+@media (min-width: 1280px) {
+  .drafts-footer {
+    position: relative;   
+  }
+}
+/* Compact Invoice Footer Area */
+.cards {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
 }
 
 </style>

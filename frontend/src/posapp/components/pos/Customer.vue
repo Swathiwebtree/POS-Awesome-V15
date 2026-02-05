@@ -6,7 +6,7 @@
                         <v-autocomplete ref="vehicleDropdown" class="vehicle-autocomplete sleek-field" density="compact"
                                 variant="solo" clearable :loading="loadingVehicles" :items="vehicleItems" item-title="vehicle_no"
                                 item-value="name" :label="__('Vehicle No')" v-model="selectedVehicle" hide-details
-                                @update:search="onVehicleSearch" @update:modelValue="onVehicleSelect">
+                                @update:search="onVehicleSearch" @update:modelValue="onVehicleSelect",:menu-props="{maxWidth: '80vw'}">
                                 <template #prepend-inner>
                                         <v-icon class="icon-button" @click.stop="edit_vehicle">
                                                 mdi-car-edit
@@ -46,7 +46,7 @@
                                 hide-details
                                 :customFilter="() => true"
                                 :disabled="effectiveReadonly || loadingCustomers"
-                                :menu-props="{ closeOnContentClick: false }"
+                                :menu-props="{ closeOnContentClick: false ,maxWidth: '80vw'}"
                                 @update:menu="onCustomerMenuToggle"
                                 @update:modelValue="onCustomerChange"
                                 @update:search="onCustomerSearch"
@@ -120,9 +120,9 @@
 .customer-autocomplete,
 .vehicle-autocomplete,
 .v-text-field {
-        height: 58px;
+        height: 48px;
         box-sizing: border-box;
-        border-radius: 12px;
+        border-radius: 10px;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
         transition: box-shadow 0.3s ease;
         background-color: #fff;
@@ -155,7 +155,7 @@
 
 .icon-button {
         cursor: pointer;
-        font-size: 20px;
+        font-size: 18px;
         opacity: 0.7;
         transition: all 0.2s ease;
 }
@@ -175,12 +175,26 @@
 .v-field__input input {
         color: #1f2937 !important; /* dark gray */
         font-weight: 500;
+        font-size: 13px;
 }
 
 /* Placeholder */
 .v-field__input input::placeholder {
         color: #6b7280; /* medium gray */
         opacity: 1;
+        font-size: 12px;
+}
+
+:deep(.vehicle-autocomplete .v-field__input),
+:deep(.customer-autocomplete .v-field__input),
+:deep(.vehicle-autocomplete .v-field__input input),
+:deep(.customer-autocomplete .v-field__input input) {
+        min-height: 32px;
+}
+
+:deep(.vehicle-autocomplete .v-label),
+:deep(.customer-autocomplete .v-label) {
+        font-size: 12px;
 }
 .v-card,
 .job-orders,
@@ -206,7 +220,7 @@ header .v-icon {
         border-color: #2563eb !important;
         box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
-/* 🔒 Fix disabled autocomplete background + opacity */
+/*  Fix disabled autocomplete background + opacity */
 :deep(.v-input--disabled) {
   opacity: 1 !important; /* remove faded look */
 }
@@ -219,6 +233,14 @@ header .v-icon {
 :deep(.v-input--disabled input),
 :deep(.v-input--disabled .v-label) {
   color: #1f2937 !important;
+}
+
+/*height for vehicle & customer fields */
+:deep(.vehicle-autocomplete .v-field),
+:deep(.customer-autocomplete .v-field) {
+  min-height: 50px !important;
+  height: 50px !important;
+  align-items: center;
 }
 
 

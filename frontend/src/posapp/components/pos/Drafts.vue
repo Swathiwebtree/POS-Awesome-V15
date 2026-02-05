@@ -714,6 +714,7 @@ export default {
 	border-radius: 8px;
 }
 .customer-name {
+	font-size: 0.9rem;
 	font-weight: 600;
 	color: #222;
 }
@@ -726,18 +727,82 @@ export default {
 	font-size: 0.8rem;
 }
 
-:deep(.v-data-table-row td),
+/* :deep(.v-data-table-row td),
 :deep(.v-data-table-row th) {
 	padding: 12px 12px !important;
-}
-:deep(.v-data-table__tr) {
+} */
+/* :deep(.v-data-table__tr) {
 	border-radius: 8px;
 	transition: background-color 0.15s ease;
 }
 
 :deep(.v-data-table__tr) {
 	border-bottom: 8px solid transparent;
+} */
+
+:deep(.v-data-table__tr) {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  margin-bottom: 6px;          
+  transition: background-color 0.15s ease;
 }
+
+
+.drafts-table {
+  font-size: 15px;
+}
+
+/* DESKTOP (1920px+) */
+@media (min-width: 1920px) {
+  .drafts-table :deep(th) {
+    padding: 14px 8px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .drafts-table :deep(td) {
+    padding: 12px 8px;
+    font-size: 11px;
+  }
+}
+
+/* LAPTOP (1280px - 1919px) */
+@media (min-width: 1280px) and (max-width: 1919px) {
+  .drafts-table :deep(th) {
+    padding: 10px 6px;
+    font-size: 11px;
+  }
+
+  .drafts-table :deep(td) {
+    padding: 8px 6px;
+    font-size: 10px;
+  }
+}
+
+/* Keep headers compact */
+.drafts-table :deep(th) {
+  line-height: 1.2;
+}
+
+/* 1350px and below */
+@media (max-width: 1400px) {
+  .drafts-table :deep(th) {
+    padding: 8px 4px;
+    font-size: 10px;
+  }
+
+  .drafts-table :deep(td) {
+    padding: 6px 4px;
+    font-size: 9px;
+  }
+}
+@media (max-width: 1400px) {
+  :deep(.v-data-table__tr) {
+    margin-bottom: 4px;
+  }
+}
+
 
 :deep(.v-data-table__tr) {
 	background: #ffffff;
@@ -803,4 +868,9 @@ export default {
 		padding: 8px;
 	}
 }
+
+.drafts-wrapper {
+  transform: translateZ(0);
+}
+
 </style>

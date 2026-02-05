@@ -1,10 +1,8 @@
 <template>
-	<v-card :class="['cards mb-0 mt-3 py-2 px-3 rounded-lg resizable', isDarkTheme ? '' : 'bg-grey-lighten-4']"
-		:style="(isDarkTheme ? 'background-color:#1E1E1E;' : '') + 'resize: vertical; overflow: auto;'">
+	<v-card :class="['cards mb-0 mt-1 py-0 px-1 rounded-lg compact-summary', isDarkTheme ? '' : 'bg-grey-lighten-4']"
+		:style="(isDarkTheme ? 'background-color:#1E1E1E;' : '')">
 		<v-row dense class="w-100">
-			<v-col cols="12" class="my-2">
-				<v-divider />
-			</v-col>
+			<!-- divider removed to save height -->
 
 			<!-- Totals and Actions Section -->
 			<v-col cols="12">
@@ -13,14 +11,14 @@
 					<v-col cols="12" md="7">
 						<v-row dense>
 							<!-- Odometer Reading Field (Only shown when Engine Oil item is present) -->
-							<v-col cols="6" v-if="showOdometerField">
+							<v-col :cols="showEmployeeSelection ? 6 : 12" v-if="showOdometerField">
 								<v-text-field v-model="odometerReading" :label="__('Odometer Reading (km)')"
 									prepend-inner-icon="mdi-speedometer" variant="solo" density="compact"
 									color="primary" type="number" class="summary-field" :rules="[isNumber]"
 									@update:model-value="emitOdometerData" />
 							</v-col>
 							<!-- Service Employee Selection (for car wash services) -->
-							<v-col cols="12" v-if="showEmployeeSelection">
+							<v-col :cols="showOdometerField ? 6 : 12" v-if="showEmployeeSelection">
 								<v-autocomplete v-model="selectedEmployee" :items="employees"
 									:loading="loadingEmployees" :label="__('Select Service Employee')"
 									item-title="employee_name" item-value="name"
@@ -101,15 +99,14 @@
 								prepend-inner-icon="mdi-cash" variant="solo" density="compact" color="success"
 								class="summary-field" readonly :prefix="currencySymbol(displayCurrency)" />
 
-							<!-- Manual Round Off -->
-							<v-text-field v-model.number="manual_round_off" :label="__('Manual Round Off')"
-								prepend-inner-icon="mdi-plus-minus" variant="solo" density="compact" color="info"
-								class="summary-field" type="number" :prefix="currencySymbol(displayCurrency)"
-								@change="onManualRoundOffChange" />
-
-
-							<!-- Frequent Cards Button (LEFT SIDE) -->
-							<v-col cols="12">
+							<!-- Manual Round Off + Frequent Cards (side by side) -->
+							<v-col cols="6">
+								<v-text-field v-model.number="manual_round_off" :label="__('Manual Round Off')"
+									prepend-inner-icon="mdi-plus-minus" variant="solo" density="compact" color="info"
+									class="summary-field" type="number" :prefix="currencySymbol(displayCurrency)"
+									@change="onManualRoundOffChange" />
+							</v-col>
+							<v-col cols="6">
 								<v-btn block color="orange" theme="dark" prepend-icon="mdi-cards"
 									@click="handleFrequentCards" class="summary-btn" :loading="frequentCardsLoading">
 									<span class="flex-grow-1">{{ __("FREQUENT CARDS") }}</span>
@@ -126,7 +123,7 @@
 					<v-col cols="12" md="5">
 						<v-row dense>
 							<!-- Save Button -->
-							<v-col cols="12">
+							<v-col cols="6">
 								<v-btn block color="info" prepend-icon="mdi-content-save" @click="handleSaveAndClear"
 									class="summary-btn" :loading="saveLoading">
 									{{ __("SAVE & CLEAR") }}
@@ -134,7 +131,7 @@
 							</v-col>
 
 							<!-- Loyalty Points Button -->
-							<v-col cols="12">
+							<v-col cols="6">
 								<v-btn block color="purple" theme="dark" prepend-icon="mdi-star"
 									@click="handleLoyaltyPoints" class="summary-btn" :loading="loyaltyLoading">
 									{{ __("LOYALTY POINTS") }}
@@ -235,7 +232,7 @@
 							</v-col>
 
 							<!-- Item Group Discount Dialog -->
-							<v-dialog v-model="showItemGroupDiscountDialog" max-width="450px" persistent>
+							<v-dialog v-model="showItemGroupDiscountDialog" max-width="480px" width="480px" persistent>
 								<v-card :style="isDarkTheme ? 'background-color:#1E1E1E;' : ''">
 									<v-card-title class="text-h6 pb-2 pt-4 px-6">
 										<v-row align="center" no-gutters>
@@ -364,39 +361,36 @@
 									{{ __("PRINT DRAFT") }}
 								</v-btn>
 							</v-col>
+
+							<!-- Cancel + Pay (Right Side, Highlighted) -->
+							<v-col cols="12">
+								<v-row dense class="summary-actions">
+									<v-col cols="6">
+										<v-btn block color="error" theme="dark" @click="handleCancelSale"
+											class="summary-btn primary-action" :loading="cancelLoading"
+											style="display: flex; align-items: center; justify-content: center">
+											<v-icon left size="18">mdi-close-circle</v-icon>
+											{{ __("CANCEL SALE") }}
+										</v-btn>
+									</v-col>
+									<v-col cols="6">
+										<v-btn block color="green darken-2" theme="dark" @click="handleShowPayment"
+											class="summary-btn pay-btn primary-action" :loading="paymentLoading"
+											style="display: flex; align-items: center; justify-content: center">
+											<v-icon left size="18">mdi-credit-card</v-icon>
+											{{ __("PAY") }}
+										</v-btn>
+									</v-col>
+								</v-row>
+							</v-col>
 						</v-row>
-					</v-col>
-				</v-row>
-			</v-col>
-
-			<!-- Bottom Action Buttons -->
-			<v-col cols="12">
-				<v-row dense class="mt-4">
-					<!-- Cancel Sale Button -->
-					<v-col cols="6">
-						<v-btn block color="error" theme="dark" @click="handleCancelSale" class="summary-btn"
-							:loading="cancelLoading"
-							style="display: flex; align-items: center; justify-content: center">
-							<v-icon left size="18">mdi-close-circle</v-icon>
-							{{ __("CANCEL SALE") }}
-						</v-btn>
-					</v-col>
-
-					<!-- Pay Button -->
-					<v-col cols="6">
-						<v-btn block color="green darken-2" theme="dark" @click="handleShowPayment"
-							class="summary-btn pay-btn" :loading="paymentLoading"
-							style="display: flex; align-items: center; justify-content: center">
-							<v-icon left size="18">mdi-credit-card</v-icon>
-							{{ __("PAY") }}
-						</v-btn>
 					</v-col>
 				</v-row>
 			</v-col>
 		</v-row>
 
 		<!-- Loyalty Points Dialog (Redeem Only) -->
-		<v-dialog v-model="showLoyaltyDialog" max-width="500px" persistent>
+		<v-dialog v-model="showLoyaltyDialog" max-width="520px" width="520px" persistent>
 			<v-card :style="isDarkTheme ? 'background-color:#1E1E1E;' : ''">
 				<v-card-title class="text-h6 pb-2 pt-4 px-6">
 					<v-row align="center" no-gutters>
@@ -486,7 +480,7 @@
 		</v-dialog>
 
 		<!-- Frequent Cards Dialog (SEPARATE) -->
-		<v-dialog v-model="showFrequentCardsDialog" max-width="700px" persistent scrollable>
+		<v-dialog v-model="showFrequentCardsDialog" max-width="720px" width="720px" persistent scrollable>
 			<v-card :style="isDarkTheme ? 'background-color:#1E1E1E;' : ''" class="dialog-card">
 				<v-card-title class="text-h6 pb-2 pt-4 px-6 sticky-header">
 					<v-row align="center" no-gutters>
@@ -1772,6 +1766,8 @@ export default {
 .cards {
 	background-color: #f5f5f5 !important;
 	transition: all 0.3s ease;
+	display: flex;
+    flex-direction: column;
 }
 
 :deep([data-theme="dark"]) .cards,
@@ -1852,10 +1848,27 @@ export default {
 	transition: all 0.2s ease !important;
 	position: relative;
 	overflow: hidden;
-	height: 44px !important;
+	height: 22px !important;
+    font-size: 0.66rem !important;
 	text-transform: none !important;
 	font-weight: 600 !important;
+	padding: 0 6px !important;
+
 }
+
+.primary-action {
+	height: 26px !important;
+	font-size: 0.72rem !important;
+	font-weight: 700 !important;
+}
+
+.compact-summary {
+	height: 100%;
+	overflow: hidden;
+	margin-top: 12px !important;
+}
+
+
 
 .summary-btn:hover:not(:disabled) {
 	transform: translateY(-1px);
@@ -1881,10 +1894,24 @@ export default {
 
 .pay-btn {
 	font-weight: 700 !important;
-	font-size: 1.1rem !important;
+	font-size: 0.68rem !important;
 	background: linear-gradient(135deg, #4caf50, #45a049) !important;
-	height: 48px !important;
+	height: 22px !important;
 }
+
+.loyalty-points-display-card .v-card-text {
+  padding: 4px !important;
+}
+
+.loyalty-points-display-card p {
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+.loyalty-points-display-card .text-h6 {
+  font-size: 0.8rem !important;
+}
+
 
 .pay-btn:hover {
 	background: linear-gradient(135deg, #45a049, #3d8b40) !important;
@@ -1893,16 +1920,66 @@ export default {
 
 .summary-field {
 	transition: all 0.2s ease;
+	margin-bottom: 1px !important;
 }
 
 .summary-field:hover {
 	transform: translateY(-1px);
 }
 
+.v-row.dense {
+  row-gap: 1px !important;
+}
 
+/* FIX: Prevent label/value overlap */
 .summary-field :deep(.v-field-label) {
 	font-weight: 600;   
-	font-size: 0.95rem;   
+	font-size: 0.74rem;   
+}
+
+.summary-actions {
+	margin-top: 20px !important;
+}
+
+@media (max-width: 1366px) {
+	.summary-actions {
+		margin-top: 17px !important;
+	}
+}
+
+:deep(.compact-summary .v-col) {
+	padding-top: 0 !important;
+	padding-bottom: 0 !important;
+}
+
+:deep(.compact-summary .v-field) {
+	min-height: 28px !important;
+	height: 28px !important;
+}
+
+:deep(.compact-summary .v-field__input) {
+	min-height: 24px !important;
+	height: 24px !important;
+	padding-top: 0 !important;
+	padding-bottom: 0 !important;
+	font-size: 0.7rem !important;
+}
+
+:deep(.compact-summary .v-field__append-inner),
+:deep(.compact-summary .v-field__prepend-inner) {
+	min-height: 24px !important;
+	height: 24px !important;
+}
+
+:deep(.compact-summary .v-input__details) {
+	min-height: 0 !important;
+	padding-top: 0 !important;
+	margin-top: 0 !important;
+}
+
+:deep(.compact-summary .v-field__prepend-inner .v-icon),
+:deep(.compact-summary .v-field__append-inner .v-icon) {
+	font-size: 16px !important;
 }
 
 
@@ -1987,6 +2064,7 @@ export default {
 
 /* Item Group Discount Card  */
 .item-group-discount-card {
+  margin-top: 10px !important;
   background: linear-gradient(
     135deg,
     rgba(33, 150, 243, 0.08),
@@ -1994,8 +2072,8 @@ export default {
   );
   border: 2px solid rgba(33, 150, 243, 0.25);
   border-radius: 12px !important;
-  min-height: 96px;
-  max-height: 96px;
+  min-height: 44px;
+  max-height: 44px;
 
   padding: 0 !important;
 
@@ -2007,10 +2085,19 @@ export default {
   align-items: center !important;
   justify-content: center !important;
 
-  width: 40px !important;
-  height: 40px !important;
-  min-width: 40px !important;
-  min-height: 40px !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+}
+
+.item-group-discount-card :deep(.v-avatar) {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.item-group-discount-card :deep(.v-icon) {
+  font-size: 16px !important;
 }
 
 :deep(.item-group-discount-card .item-group-avatar) {
@@ -2023,7 +2110,7 @@ export default {
   visibility: visible !important;
 
   color: #ffffff !important;
-  font-size: 24px !important;
+  font-size: 20px !important;
   line-height: 1 !important;
 }
 
@@ -2040,17 +2127,19 @@ export default {
 
 /* Reduce internal padding to match loyalty card */
 .item-group-discount-card .v-card-text {
-  padding: 12px !important;
+  padding: 2px 4px !important;
 }
 /* Hide empty state (keeps card compact) */
 .item-group-discount-card .text-center {
+  display: none !important;
+}
+.item-group-discount-card .text-caption {
   display: none !important;
 }
 
 
 .item-group-discount-card:hover {
   border-color: rgba(33, 150, 243, 0.45);
-  box-shadow: 0 8px 24px rgba(33, 150, 243, 0.15);
   transform: translateY(-2px);
 }
 
@@ -2061,7 +2150,6 @@ export default {
 
 :deep(.v-theme--dark) .item-group-discount-card:hover {
   border-color: rgba(33, 150, 243, 0.55);
-  box-shadow: 0 8px 24px rgba(33, 150, 243, 0.25);
 }
 
 /* Discount Chips */
@@ -2074,14 +2162,13 @@ export default {
 
 .discount-chip:hover {
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
 }
 
 .discounts-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  min-height: 40px;
+  min-height: 24px;
   align-content: flex-start;
 }
 
@@ -2116,12 +2203,142 @@ export default {
 
 .add-discount-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
 }
 
 /* Dialog Styling */
 .item-group-discount-card ~ .v-dialog__content {
   backdrop-filter: blur(4px);
 }
+.card-container {
+	display: flex !important;
+	flex-direction: column !important;
+	height: 100% !important;
+	overflow: hidden !important;
+	position: relative !important;
+}
 
+.card-content-wrapper {
+	display: flex !important;
+	flex-direction: column !important;
+	height: 100% !important;
+	overflow: hidden !important;
+}
+
+.card-content-area {
+	flex: 1 1 auto !important;
+	overflow-y: auto !important;
+	overflow-x: hidden !important;
+	padding: 8px !important;
+	min-height: 0 !important;
+}
+
+/* Custom scrollbar for content area */
+.card-content-area::-webkit-scrollbar {
+	width: 6px;
+}
+
+.card-content-area::-webkit-scrollbar-track {
+	background: rgba(0, 0, 0, 0.05);
+	border-radius: 3px;
+}
+
+.card-content-area::-webkit-scrollbar-thumb {
+	background: rgba(0, 0, 0, 0.2);
+	border-radius: 3px;
+}
+
+.card-content-area::-webkit-scrollbar-thumb:hover {
+	background: rgba(0, 0, 0, 0.3);
+}
+
+:deep(.v-theme--dark) .card-content-area::-webkit-scrollbar-track {
+	background: rgba(255, 255, 255, 0.05);
+}
+
+:deep(.v-theme--dark) .card-content-area::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.2);
+}
+
+:deep(.v-theme--dark) .card-content-area::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+/* FOOTER BUTTONS - FIXED AT BOTTOM */
+.card-footer-actions {
+	flex: 0 0 auto !important;
+	padding: 12px 8px 8px 8px !important;
+	border-top: 1px solid rgba(0, 0, 0, 0.12) !important;
+	background: inherit !important;
+	z-index: 20 !important;
+	margin: 0 !important;
+	position: relative !important;
+}
+
+:deep(.v-theme--dark) .card-footer-actions {
+	border-top-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.card-footer-actions .v-row {
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+.card-footer-actions .v-col {
+	padding: 4px !important;
+}
+
+.card-footer-actions .summary-actions {
+	margin: 0 !important;
+}
+
+/* Button sizing in footer */
+.card-footer-actions .summary-btn {
+	height: 36px !important;
+	font-size: 0.75rem !important;
+	min-height: 36px !important;
+	transition: all 0.2s ease !important;
+}
+
+.card-footer-actions .primary-action {
+	height: 36px !important;
+	font-size: 0.75rem !important;
+	font-weight: 700 !important;
+}
+
+.card-footer-actions .pay-btn {
+	background: linear-gradient(135deg, #4caf50, #45a049) !important;
+}
+
+.card-footer-actions .pay-btn:hover {
+	background: linear-gradient(135deg, #45a049, #3d8b40) !important;
+	transform: translateY(-1px);
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+	.card-footer-actions {
+		padding: 8px 4px 4px 4px !important;
+	}
+
+	.card-footer-actions .summary-btn {
+		height: 32px !important;
+		font-size: 0.7rem !important;
+	}
+
+	.card-footer-actions .primary-action {
+		height: 32px !important;
+	}
+}
+
+@media (max-width: 600px) {
+	.card-footer-actions .summary-btn {
+		height: 40px !important;
+		font-size: 0.875rem !important;
+	}
+
+	.card-footer-actions .primary-action {
+		height: 40px !important;
+		font-size: 1rem !important;
+	}
+}
 </style>
