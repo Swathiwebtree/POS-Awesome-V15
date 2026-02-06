@@ -1885,23 +1885,19 @@ export default {
 		// defensive: accept null/undefined
 		if (!item) return false;
 
-		// prefer explicit flags
-		if (item.is_service_item === 1 || item.service_item === 1) return true;
-
 		// normalized checks on group, code, name
 		const group = (item.item_group || "").toString().toLowerCase();
 		const name = (item.item_name || "").toString().toLowerCase();
 		const code = (item.item_code || item.code || "").toString().toLowerCase();
 
-		// keywords commonly used for car/bike washes or generic service items
-		const keywords = ["carwash", "car wash", "bikewash", "bike wash", "wash", "service"];
+		// keywords commonly used for car/bike washes
+		const keywords = ["carwash", "car wash", "bikewash", "bike wash"];
 
-		for (let k of keywords) {
-			if (group.includes(k) || name.includes(k) || code.includes(k)) return true;
-		}
+		const washMatch = keywords.some((k) => group.includes(k) || name.includes(k) || code.includes(k));
 
-		// fallback: if item explicitly marked as non-stock and no stock fields, treat as service
-		if (item.is_stock_item === 0 || item.update_stock === 0) return true;
+		// prefer explicit flags but only for wash-related items
+		const serviceFlag = item.is_service_item === 1 || item.service_item === 1;
+		if (washMatch || (serviceFlag && washMatch)) return true;
 
 		return false;
 	},

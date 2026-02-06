@@ -1116,26 +1116,25 @@ export default {
 
 			// Check if any item is a car wash service
 			const hasCarWashService = this.items.some((item) => {
-				// Check item group
-				const itemGroupMatch =
-					item.item_group &&
-					(item.item_group.toLowerCase().includes("car wash") ||
-						item.item_group.toLowerCase().includes("Carwash") ||
-						item.item_group.toLowerCase().includes("wash"));
+				const group = (item.item_group || "").toLowerCase();
+				const code = (item.item_code || "").toLowerCase();
+				const name = (item.item_name || "").toLowerCase();
 
-				// Check item code
-				const itemCodeMatch =
-					item.item_code &&
-					(item.item_code.toLowerCase().includes("wash") ||
-						item.item_code.toLowerCase().includes("service"));
+				const washMatch =
+					group.includes("car wash") ||
+					group.includes("carwash") ||
+					group.includes("bike wash") ||
+					group.includes("bikewash") ||
+					code.includes("carwash") ||
+					code.includes("car wash") ||
+					code.includes("bikewash") ||
+					code.includes("bike wash") ||
+					name.includes("carwash") ||
+					name.includes("car wash") ||
+					name.includes("bikewash") ||
+					name.includes("bike wash");
 
-				// Check if item has service_item flag
-				const serviceItemFlag = item.service_item === 1 || item.is_service_item === 1;
-
-				// Check item name
-				const itemNameMatch = item.item_name && item.item_name.toLowerCase().includes("wash");
-
-				return itemGroupMatch || itemCodeMatch || serviceItemFlag || itemNameMatch;
+				return washMatch;
 			});
 
 			return hasCarWashService;

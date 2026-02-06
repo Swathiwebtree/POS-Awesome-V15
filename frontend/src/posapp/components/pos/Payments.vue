@@ -117,9 +117,9 @@
 												</div>
 
 												<v-text-field density="compact" variant="solo" hide-details
-													class="method-input" :model-value="payment.amount ? formatCurrency(payment.amount) : ''"
-													@change="setFormatedCurrency(payment, 'amount', null, false, $event)"
-													@focus="is_user_editing_paid_change = true" :rules="[
+													class="method-input" v-model="payment.amount"
+													@blur="handlePaymentAmountBlur(payment, $event)"
+													@focus="handlePaymentAmountFocus(payment)" :rules="[
 														isNumber,
 														(v) =>
 															!payment.mode_of_payment.toLowerCase().includes('cash') ||
@@ -561,6 +561,8 @@ export default {
 			is_user_editing_paid_change: false, // User interaction flag
 			highlightSubmit: false, // Highlight state for submit button
 			_active_invoice_instance_id: null,
+			items_signature: "",
+			pending_show_payment: false,
 		};
 	},
 	computed: {
@@ -800,8 +802,9 @@ export default {
 			handler(newItems, oldItems) {
 				console.log('[Payment] invoice_doc.items changed, clearing old payment amounts');
 
-				// Only reset if items array length changed or items were modified
-				if (!oldItems || oldItems.length !== newItems?.length) {
+				const newSignature = this.computeItemsSignature(newItems);
+				if (newSignature !== this.items_signature) {
+					this.items_signature = newSignature;
 					this.resetPaymentAmounts();
 				}
 			},
@@ -875,6 +878,126 @@ export default {
 		},
 	},
 	methods: {
+		isCarWashServiceItem(item) {
+			if (!item) {
+				return false;
+			}
+
+			const group = (item.item_group || "").toLowerCase();
+			const code = (item.item_code || "").toLowerCase();
+			const name = (item.item_name || "").toLowerCase();
+
+			const washMatch =
+				group.includes("car wash") ||
+				group.includes("carwash") ||
+				group.includes("bike wash") ||
+				group.includes("bikewash") ||
+				code.includes("carwash") ||
+				code.includes("car wash") ||
+				code.includes("bikewash") ||
+				code.includes("bike wash") ||
+				name.includes("carwash") ||
+				name.includes("car wash") ||
+				name.includes("bikewash") ||
+				name.includes("bike wash");
+
+			return washMatch;
+		},
+
+		hasCarWashServiceForItems(items) {
+			if (!Array.isArray(items) || items.length === 0) {
+				return false;
+			}
+			return items.some((item) => this.isCarWashServiceItem(item));
+		},
+
+		hasCarWashService() {
+			if (this.invoice_doc?.custom_has_carwash_service !== undefined) {
+				return !!this.invoice_doc.custom_has_carwash_service;
+			}
+			return this.hasCarWashServiceForItems(this.invoice_doc?.items || []);
+		},
+
+		computeItemsSignature(items) {
+			if (!Array.isArray(items) || items.length === 0) {
+				return "";
+			}
+			return items
+				.map((item) => [
+					item.item_code || "",
+					item.item_group || "",
+					item.item_name || "",
+					this.flt(item.qty || 0),
+					this.flt(item.rate || 0),
+					this.flt(item.amount || 0),
+				].join("|"))
+				.sort()
+				.join("::");
+		},
+
+		handlePaymentAmountFocus(payment) {
+			this.is_user_editing_paid_change = true;
+			if (!payment) return;
+			if (payment.amount === 0) {
+				payment.amount = null;
+			}
+		},
+
+		handlePaymentAmountBlur(payment, $event) {
+			if (!payment) return;
+			const raw = $event && $event.target ? $event.target.value : $event;
+			if (raw === "" || raw === null || raw === undefined) {
+				payment.amount = null;
+				if (payment.base_amount !== undefined) {
+					payment.base_amount = null;
+				}
+				return;
+			}
+			this.setFormatedCurrency(payment, "amount", null, false, $event);
+		},
+
+		tryOpenPaymentDialog() {
+			if (!this.pending_show_payment) {
+				return;
+			}
+			if (!this.invoice_doc || !Array.isArray(this.invoice_doc.items)) {
+				return;
+			}
+
+			const hasServiceItem = this.hasCarWashServiceForItems(this.invoice_doc.items || []);
+			const hasEmployee = !!this.invoice_doc?.custom_service_employee;
+
+			if (hasServiceItem && !hasEmployee) {
+				frappe.show_alert({
+					message: __("Please select a service employee before proceeding to payment."),
+					indicator: "red",
+				});
+				frappe.utils.play_sound("error");
+				this.showDialog = false;
+				this.loading = false;
+				this.highlightSubmit = false;
+				this.pending_show_payment = false;
+				return;
+			}
+
+			this.showDialog = true;
+			this.loading = false;
+			this.highlightSubmit = false;
+			this.pending_show_payment = false;
+
+			this.$nextTick(() => {
+				setTimeout(() => {
+					const btn = this.$refs.submitButton;
+					const el = btn && btn.$el ? btn.$el : btn;
+					if (el) {
+						el.scrollIntoView({ behavior: "smooth", block: "center" });
+						el.focus();
+						this.highlightSubmit = true;
+					}
+				}, 100);
+			});
+		},
+
 		resetPaymentAmounts() {
 			if (!this.invoice_doc || !this.invoice_doc.payments) {
 				return;
@@ -884,9 +1007,9 @@ export default {
 
 			// Clear all payment amounts
 			this.invoice_doc.payments.forEach((payment) => {
-				payment.amount = 0;
+				payment.amount = null;
 				if (payment.base_amount !== undefined) {
-					payment.base_amount = 0;
+					payment.base_amount = null;
 				}
 			});
 
@@ -1132,7 +1255,7 @@ export default {
 
 			this.invoice_doc.payments.forEach((payment) => {
 				if (payment.mode_of_payment && payment.mode_of_payment.toLowerCase() === "cash") {
-					payment.amount = 0;
+					payment.amount = null;
 				}
 			});
 		},
@@ -1623,7 +1746,7 @@ export default {
 		// Clear all payment amounts
 		clear_all_amounts() {
 			this.invoice_doc.payments.forEach((payment) => {
-				payment.amount = 0;
+				payment.amount = null;
 			});
 		},
 		load_print_page() {
@@ -2241,6 +2364,17 @@ export default {
 		this.eventBus.on("send_invoice_doc_payment", (invoice_doc) => {
 			console.log("[Payment] send_invoice_doc_payment received, initializing...");
 			this.invoice_doc = invoice_doc;
+			this.items_signature = this.computeItemsSignature(this.invoice_doc?.items || []);
+			if (this.invoice_doc) {
+				const hasCarWashService = this.hasCarWashServiceForItems(this.invoice_doc.items || []);
+				this.invoice_doc.custom_has_carwash_service = hasCarWashService ? 1 : 0;
+				if (!hasCarWashService) {
+					this.invoice_doc.custom_service_employee = null;
+					this.invoice_doc.custom_service_employee_name = null;
+					this.invoice_doc.custom_service_employee_designation = null;
+					this.invoice_doc.custom_service_employee_department = null;
+				}
+			}
 			const hasItemTaxRates = this.invoice_doc?.items?.some((item) => item.item_tax_rate);
 			if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0) && hasItemTaxRates) {
 				this.invoice_doc.total_taxes_and_charges = this.calculateItemTax();
@@ -2277,8 +2411,8 @@ export default {
 							name: "",
 							mode_of_payment: payment.mode_of_payment,
 							account: payment.default_account || "",
-							amount: 0,
-							base_amount: 0,
+							amount: null,
+							base_amount: null,
 							type: payment.type || "Cash",
 							idx: index + 1,
 							default: payment.default || 0,
@@ -2292,8 +2426,8 @@ export default {
 							name: "",
 							mode_of_payment: "Cash",
 							account: "",
-							amount: 0,
-							base_amount: 0,
+							amount: null,
+							base_amount: null,
 							type: "Cash",
 							idx: 1,
 							default: 1,
@@ -2303,6 +2437,7 @@ export default {
 			}
 
 			console.log("[Payment] Payments initialized:", this.invoice_doc.payments);
+			this.tryOpenPaymentDialog();
 
 			const default_payment = this.invoice_doc.payments.find((payment) => payment.default === 1);
 			this.is_credit_sale = false;
@@ -2312,21 +2447,10 @@ export default {
 				this.is_return = true;
 				this.is_credit_return = false;
 				invoice_doc.payments.forEach((payment) => {
-					payment.amount = 0;
-					payment.base_amount = 0;
+					payment.amount = null;
+					payment.base_amount = null;
 				});
-				if (default_payment) {
-					const amount = invoice_doc.rounded_total || invoice_doc.grand_total;
-					default_payment.amount = -Math.abs(amount);
-					if (default_payment.base_amount !== undefined) {
-						default_payment.base_amount = -Math.abs(amount);
-					}
-				}
-			} else if (default_payment) {
-				default_payment.amount = this.flt(
-					invoice_doc.rounded_total || invoice_doc.grand_total,
-					this.currency_precision,
-				);
+			} else {
 				this.is_credit_return = false;
 			}
 
@@ -2345,43 +2469,12 @@ export default {
 			console.log("[Payment] show_payment event received with data:", data);
 
 			if (data === "true") {
-
-				const hasServiceItem = this.invoice_doc?.items?.some(
-					item => item.is_service_item === 1 || item.item_group === "Services"
-				);
-
-				const hasEmployee = !!this.invoice_doc?.custom_service_employee;
-
-				if (hasServiceItem && !hasEmployee) {
-					frappe.show_alert({
-						message: __("Please select a service employee before proceeding to payment."),
-						indicator: "red",
-					});
-					frappe.utils.play_sound("error");
-
-					this.showDialog = false;
-					this.loading = false;
-					this.highlightSubmit = false;
-					return;
-				}
-
-				this.showDialog = true;
-				this.loading = false;
-				this.highlightSubmit = false;
-
-				this.$nextTick(() => {
-					setTimeout(() => {
-						const btn = this.$refs.submitButton;
-						const el = btn && btn.$el ? btn.$el : btn;
-						if (el) {
-							el.scrollIntoView({ behavior: "smooth", block: "center" });
-							el.focus();
-							this.highlightSubmit = true;
-						}
-					}, 100);
-				});
+				this.pending_show_payment = true;
+				this.tryOpenPaymentDialog();
 			}
 			else if (data === "false") {
+				this._active_invoice_instance_id = null;
+				this.pending_show_payment = false;
 				return;
 			}
 		});
@@ -2392,13 +2485,15 @@ export default {
 
 			const sourceId = invoiceData && invoiceData._posa_invoice_instance_id;
 			if (sourceId) {
-				if (this._active_invoice_instance_id && this._active_invoice_instance_id !== sourceId) {
+				if (
+					this._active_invoice_instance_id &&
+					this._active_invoice_instance_id !== sourceId &&
+					this.showDialog
+				) {
 					console.log("[Payment] Ignoring invoice data from inactive instance:", sourceId);
 					return;
 				}
-				if (!this._active_invoice_instance_id) {
-					this._active_invoice_instance_id = sourceId;
-				}
+				this._active_invoice_instance_id = sourceId;
 			}
 
 			const shouldOverwriteInvoice = !this.showDialog;
@@ -2437,8 +2532,8 @@ export default {
 							name: "",
 							mode_of_payment: payment.mode_of_payment,
 							account: payment.custom_account || payment.default_account || "",
-							amount: 0,
-							base_amount: 0,
+							amount: null,
+							base_amount: null,
 							type: payment.type || "Cash",
 							idx: index + 1,
 							default: payment.default || 0,
@@ -2470,8 +2565,8 @@ export default {
 								name: "",
 								mode_of_payment: "Credit",
 								account: "",
-								amount: 0,
-								base_amount: 0,
+								amount: null,
+								base_amount: null,
 								type: "Credit",
 								idx: invoiceData.payments.length + 1,
 								default: 0,
@@ -2488,8 +2583,8 @@ export default {
 							name: "",
 							mode_of_payment: "Cash",
 							account: "",
-							amount: 0,
-							base_amount: 0,
+							amount: null,
+							base_amount: null,
 							type: "Cash",
 							idx: 1,
 							default: 1,
@@ -2515,6 +2610,8 @@ export default {
 					this.invoice_doc.total_taxes_and_charges = invoiceData.total_taxes_and_charges;
 				}
 			}
+
+			this.items_signature = this.computeItemsSignature(invoiceData.items || []);
 
 			// Reset payment amounts when invoice items change
 			if (this.invoice_doc && invoiceData.items) {
@@ -2561,8 +2658,8 @@ export default {
 										name: "",
 										mode_of_payment: "Credit",
 										account: "",
-										amount: 0,
-										base_amount: 0,
+										amount: null,
+										base_amount: null,
 										type: "Credit",
 										idx: this.invoice_doc.payments.length + 1,
 										default: 0,
@@ -2601,6 +2698,8 @@ export default {
 			this.$nextTick(() => {
 				this.$forceUpdate();
 			});
+
+			this.tryOpenPaymentDialog();
 		});
 
 		this.eventBus.on("register_pos_profile", (data) => {
@@ -3650,14 +3749,21 @@ div.v-card.selection {
 }
 
 .method-input {
-	max-width: 70px;
+	min-width: 120px;
+	max-width: 140px;
 }
 .method-input :deep(.v-field) {
   min-height: 28px !important;
 }
 .method-input :deep(input) {
   font-size: 11px;
-  padding: 2px 6px;
+  padding: 2px 8px;
+  text-align: left;
+}
+.method-input :deep(.v-field__prefix) {
+  margin-right: 6px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 .payment-summary-row {
   margin-bottom: 8px;
