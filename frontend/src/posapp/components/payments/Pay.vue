@@ -400,7 +400,7 @@ import {
 	getCustomerStorage,
 	getOfflineCustomers,
 } from "../../../offline/index.js";
-import { silentPrint } from "../../plugins/print.js";
+import { silentPrint, jinjaPrint } from "../../plugins/print.js";
 import { useRtl } from "../../composables/useRtl.js";
 
 export default {
@@ -1095,21 +1095,16 @@ export default {
 				return;
 			}
 
-			// Use simplest URL possible to avoid errors
-			const url =
-				frappe.urllib.get_base_url() +
-				"/printview?doctype=Payment%20Entry" +
-				"&name=" +
-				payment_name +
-				"&trigger_print=1";
+			const print_format = this.pos_profile?.print_format_for_online || this.pos_profile?.print_format || "";
+			const letter_head = this.pos_profile?.letter_head || 0;
 
-			console.log("Opening printing URL:", url);
-
-			if (this.pos_profile?.posa_silent_print) {
-				silentPrint(url);
-			} else {
-				window.open(url, "_blank");
-			}
+			jinjaPrint(
+				"Payment Entry",
+				payment_name,
+				print_format,
+				letter_head,
+				this.pos_profile?.posa_silent_print,
+			);
 		},
 
 		async syncPendingPayments() {

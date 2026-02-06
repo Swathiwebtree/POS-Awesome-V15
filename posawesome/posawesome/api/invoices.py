@@ -1350,3 +1350,10 @@ def get_vehicles_by_customer(doctype, txt, searchfield, start, page_len, filters
         results.append([name, label])
 
     return results
+
+
+@frappe.whitelist()
+def get_print_html(doctype, name, print_format=None, no_letterhead=0):
+    """Return rendered Jinja print format HTML for direct printing."""
+    html = frappe.get_print(doctype, name, print_format, no_letterhead=cint(no_letterhead))
+    return html

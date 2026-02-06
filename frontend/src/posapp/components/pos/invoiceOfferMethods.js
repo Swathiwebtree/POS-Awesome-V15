@@ -1,4 +1,4 @@
-import { silentPrint } from "../../plugins/print.js";
+import { silentPrint, jinjaPrint } from "../../plugins/print.js";
 import { formatUtils } from "../../format.js";
 /* global __, frappe, flt */
 
@@ -1026,30 +1026,14 @@ export default {
 		const doctype = this.pos_profile.create_pos_invoice_instead_of_sales_invoice
 			? "POS Invoice"
 			: "Sales Invoice";
-		const url =
-			frappe.urllib.get_base_url() +
-			"/printview?doctype=" +
-			encodeURIComponent(doctype) +
-			"&name=" +
-			invoice_name +
-			"&trigger_print=1" +
-			"&format=" +
-			print_format +
-			"&no_letterhead=" +
-			letter_head;
 
-		if (this.pos_profile.posa_silent_print) {
-			silentPrint(url);
-		} else {
-			const printWindow = window.open(url, "Print");
-			printWindow.addEventListener(
-				"load",
-				function () {
-					printWindow.print();
-				},
-				{ once: true },
-			);
-		}
+		jinjaPrint(
+			doctype,
+			invoice_name,
+			print_format,
+			letter_head,
+			this.pos_profile.posa_silent_print,
+		);
 	},
 
 	formatDateForBackend(date) {

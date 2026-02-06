@@ -69,7 +69,7 @@ import {
 	isOffline,
 	getLastSyncTotals,
 } from "../offline/index.js";
-import { silentPrint } from "./plugins/print.js";
+import { silentPrint, jinjaPrint } from "./plugins/print.js";
 import {
 	setupNetworkListeners,
 	checkNetworkConnectivity,
@@ -393,30 +393,14 @@ export default {
 			const doctype = this.posProfile.create_pos_invoice_instead_of_sales_invoice
 				? "POS Invoice"
 				: "Sales Invoice";
-			const url =
-				frappe.urllib.get_base_url() +
-				"/printview?doctype=" +
-				encodeURIComponent(doctype) +
-				"&name=" +
-				this.lastInvoiceId +
-				"&trigger_print=1" +
-				"&format=" +
-				print_format +
-				"&no_letterhead=" +
-				letter_head;
 
-			if (this.posProfile.posa_silent_print) {
-				silentPrint(url);
-			} else {
-				const printWindow = window.open(url, "Print");
-				printWindow.addEventListener(
-					"load",
-					function () {
-						printWindow.print();
-					},
-					{ once: true },
-				);
-			}
+			jinjaPrint(
+				doctype,
+				this.lastInvoiceId,
+				print_format,
+				letter_head,
+				this.posProfile.posa_silent_print,
+			);
 		},
 
 		async handleSyncInvoices() {

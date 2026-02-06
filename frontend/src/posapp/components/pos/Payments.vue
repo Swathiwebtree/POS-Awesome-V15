@@ -516,7 +516,7 @@ import {
 } from "../../../offline/index.js";
 
 import renderOfflineInvoiceHTML from "../../../offline_print_template";
-import { silentPrint } from "../../plugins/print.js";
+import { silentPrint, jinjaPrint } from "../../plugins/print.js";
 
 export default {
 	// Using format mixin for shared formatting methods
@@ -1641,37 +1641,13 @@ export default {
 				? "POS Invoice"
 				: "Sales Invoice";
 
-			const url =
-				frappe.urllib.get_base_url() +
-				"/printview?doctype=" +
-				encodeURIComponent(doctype) +
-				"&name=" +
-				encodeURIComponent(this.invoice_doc.name) +
-				"&trigger_print=1" +
-				"&format=" +
-				encodeURIComponent(print_format) +
-				"&no_letterhead=" +
-				letter_head;
-
-			if (this.pos_profile.posa_silent_print) {
-				silentPrint(url);
-			} else {
-				const printWindow = window.open(url, "Print");
-				if (printWindow) {
-					printWindow.addEventListener(
-						"load",
-						function () {
-							printWindow.print();
-						},
-						{ once: true },
-					);
-				} else {
-					this.eventBus.emit("show_message", {
-						title: __("Print window blocked. Please allow popups and try again."),
-						color: "warning",
-					});
-				}
-			}
+			jinjaPrint(
+				doctype,
+				this.invoice_doc.name,
+				print_format,
+				letter_head,
+				this.pos_profile.posa_silent_print,
+			);
 		},
 		// Print invoice using a more detailed offline template
 		async print_offline_invoice(invoice) {
