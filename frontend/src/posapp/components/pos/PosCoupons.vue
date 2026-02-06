@@ -1,16 +1,16 @@
 <template>
-	<div>
+	<div class="coupon-container">
 		<v-card
-			:class="['selection mx-auto mt-3', isDarkTheme ? '' : 'bg-grey-lighten-5']"
+			class="coupon-main-card"
+			:class="['selection', isDarkTheme ? '' : 'bg-grey-lighten-5']"
 			:style="isDarkTheme ? 'background-color:#1E1E1E' : ''"
-			style="max-height: 80vh; height: 80vh"
 		>
 			<v-card-title>
 				<span class="text-h6 text-primary">{{ __("Coupons") }}</span>
 			</v-card-title>
 
 			<!-- Input and Button Row - Same Level -->
-			<v-row class="px-4 pb-2" no-gutters>
+			<v-row class="coupon-input-row px-4 pb-2" no-gutters>
 				<v-col cols="8" class="pr-2">
 					<v-text-field
 						density="compact"
@@ -38,18 +38,14 @@
 				</v-col>
 			</v-row>
 
-			<div
-				class="my-0 py-0 overflow-y-auto"
-				style="max-height: 75vh"
-				@mouseover="style = 'cursor: pointer'"
-			>
+			<div class="coupon-scroll my-0 py-0" @mouseover="style = 'cursor: pointer'">
 				<v-data-table
+					class="coupon-table"
 					:headers="items_headers"
 					:items="posa_coupons"
 					:single-expand="singleExpand"
 					v-model:expanded="expanded"
 					item-key="coupon"
-					class="elevation-1"
 					:items-per-page="itemsPerPage"
 					hide-default-footer
 				>
@@ -60,7 +56,7 @@
 			</div>
 		</v-card>
 
-		<v-card flat class="coupon-footer-card mb-0 mt-3">
+		<v-card flat class="coupon-footer-card">
 			<v-row align="center" no-gutters>
 				<v-col cols="12">
 					<v-btn
@@ -252,8 +248,90 @@ export default {
 </script>
 
 <style scoped>
+.coupon-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.coupon-main-card {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.coupon-scroll {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
+	padding-top: 0;
+}
+
+.selection {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.selection > .coupon-scroll {
+	flex: 1;
+}
+
+.coupon-scroll :deep(.v-data-table) {
+	margin-top: 0 !important;
+	flex: 1;
+	min-height: 0;
+}
+
+.coupon-scroll :deep(.v-table__wrapper) {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.coupon-scroll :deep(.v-data-table__empty-wrapper) {
+	margin-top: 0 !important;
+	align-items: flex-start !important;
+	justify-content: flex-start !important;
+	padding-top: 0 !important;
+	height: auto !important;
+	vertical-align: top !important;
+}
+
+.coupon-table {
+	margin-top: 0 !important;
+	margin-bottom: auto !important;
+	align-self: stretch;
+}
+
+.coupon-scroll :deep(.v-data-table),
+.coupon-scroll :deep(.v-table) {
+	margin-top: 0 !important;
+	align-self: flex-start !important;
+}
+
 .coupon-input {
 	height: 40px;
+}
+
+.coupon-input-row {
+	flex: 0 0 auto;
+	height: auto;
+	min-height: 0;
+	align-items: center;
+	margin-bottom: 0;
+}
+
+.coupon-input-row :deep(.v-input) {
+	margin-bottom: 0 !important;
+}
+
+.coupon-input-row :deep(.v-field) {
+	margin-bottom: 0 !important;
 }
 
 .add-coupon-btn {
@@ -274,6 +352,7 @@ export default {
 	box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
 	padding: 12px;
 	height: 80px;
+	flex-shrink: 0;
 }
 
 .back-btn {
