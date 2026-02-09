@@ -495,6 +495,46 @@
 						</v-card>
 					</v-dialog>
 
+					<!-- Raw Printer Mapping Dialog -->
+					<v-dialog v-model="printer_mapping_dialog" max-width="520px">
+						<v-card>
+							<v-card-title class="text-h6">
+								{{ __("Printer Mapping") }}
+							</v-card-title>
+							<v-card-text class="pa-0">
+								<v-container>
+									<!-- <div class="text-body-2 mb-2">
+										{{ __("Print Format") }}: {{ printer_mapping_context.print_format || "-" }}
+									</div>
+									<div class="text-body-2 mb-4">
+										{{ __("Doctype") }}: {{ printer_mapping_context.doctype || "-" }}
+									</div> -->
+									<v-alert v-if="printer_error" type="error" variant="tonal" class="mb-3">
+										{{ printer_error }}
+									</v-alert>
+									<v-select
+										:items="available_printers"
+										v-model="selected_printer"
+										:label="__('Select Printer')"
+										variant="solo"
+										density="compact"
+										:loading="printer_loading"
+										:disabled="printer_loading"
+									/>
+								</v-container>
+							</v-card-text>
+							<v-card-actions>
+								<v-spacer></v-spacer>
+								<v-btn color="error" theme="dark" @click="printer_mapping_dialog = false">
+									{{ __("Close") }}
+								</v-btn>
+								<v-btn color="primary" theme="dark" :disabled="!selected_printer" @click="save_printer_mapping">
+									{{ __("Save Mapping") }}
+								</v-btn>
+							</v-card-actions>
+						</v-card>
+					</v-dialog>
+
 				</div>
 			</div>
 		</div>
@@ -563,6 +603,14 @@ export default {
 			_active_invoice_instance_id: null,
 			items_signature: "",
 			pending_show_payment: false,
+			printer_mapping_dialog: false,
+			printer_mapping_context: { doctype: "", print_format: "" },
+			available_printers: [],
+			selected_printer: "",
+			printer_loading: false,
+			printer_error: "",
+			pending_print_submit: false,
+			pending_print_args: null,
 		};
 	},
 	computed: {
@@ -1291,7 +1339,7 @@ export default {
 				}
 			});
 		},
-		async submit(event, payment_received = false, print = false) {
+		async submit(event, payment_received = false, print = false, skip_raw_precheck = false) {
 
 			// this.invoice_doc.total_taxes_and_charges = this.computedTaxAndCharges;
 
@@ -1301,6 +1349,29 @@ export default {
 
 			console.log("Synced Tax:", this.invoice_doc.total_taxes_and_charges);
 			console.log("Synced Grand Total:", this.invoice_doc.grand_total);
+
+			if (print && !skip_raw_precheck) {
+				const print_format =
+					this.pos_profile.posa_dot_matrix_print_format ||
+					this.pos_profile.print_format_for_online ||
+					this.pos_profile.print_format;
+				const doctype = this.pos_profile.create_pos_invoice_instead_of_sales_invoice
+					? "POS Invoice"
+					: "Sales Invoice";
+				const is_raw_format = await this.is_raw_print_format(print_format);
+				if (is_raw_format) {
+					const ready = await this.prepare_raw_print_before_submit(doctype, print_format);
+					if (!ready) {
+						this.pending_print_submit = true;
+						this.pending_print_args = {
+							event,
+							payment_received,
+							print,
+						};
+						return;
+					}
+				}
+			}
 
 
 			if (!this.verifyInvoiceTotals()) {
@@ -1749,7 +1820,7 @@ export default {
 				payment.amount = null;
 			});
 		},
-		load_print_page() {
+		async load_print_page() {
 			if (!this.invoice_doc || !this.invoice_doc.name || this.invoice_doc.name === 'undefined') {
 				this.eventBus.emit("show_message", {
 					title: __("Cannot print: Invoice not saved properly"),
@@ -1758,11 +1829,22 @@ export default {
 				return;
 			}
 
-			const print_format = this.pos_profile.print_format_for_online || this.pos_profile.print_format;
+			const invoice_doc = JSON.parse(JSON.stringify(this.invoice_doc));
+
+			const print_format =
+				this.pos_profile.posa_dot_matrix_print_format ||
+				this.pos_profile.print_format_for_online ||
+				this.pos_profile.print_format;
 			const letter_head = this.pos_profile.letter_head || 0;
 			const doctype = this.pos_profile.create_pos_invoice_instead_of_sales_invoice
 				? "POS Invoice"
 				: "Sales Invoice";
+
+			const is_raw_format = await this.is_raw_print_format(print_format);
+			if (is_raw_format) {
+				await this.print_raw_commands(invoice_doc, doctype, print_format);
+				return;
+			}
 
 			const url =
 				frappe.urllib.get_base_url() +
@@ -1794,6 +1876,151 @@ export default {
 						color: "warning",
 					});
 				}
+			}
+		},
+		async is_raw_print_format(print_format) {
+			if (!print_format) {
+				return false;
+			}
+			try {
+				const r = await frappe.db.get_value("Print Format", print_format, "raw_printing");
+				return !!(r && r.message && r.message.raw_printing);
+			} catch (err) {
+				console.warn("[Payment] Could not check raw_printing for format:", print_format, err);
+				return false;
+			}
+		},
+		async prepare_raw_print_before_submit(doctype, print_format) {
+			try {
+				await frappe.ui.form.qz_connect();
+			} catch (err) {
+				this.eventBus.emit("show_message", {
+					title: __("QZ Tray connection failed. Please allow and retry."),
+					color: "error",
+				});
+				return false;
+			}
+
+			const mapped = this.get_mapped_printer(doctype, print_format);
+			const preselect = mapped && mapped[0] && mapped[0].printer ? mapped[0].printer : "";
+			this.open_printer_mapping_dialog(doctype, print_format, preselect);
+			return false;
+		},
+		get_print_format_printer_map() {
+			try {
+				return JSON.parse(localStorage.print_format_printer_map);
+			} catch (e) {
+				return {};
+			}
+		},
+		get_mapped_printer(doctype, print_format) {
+			const map = this.get_print_format_printer_map();
+			if (map && map[doctype]) {
+				return map[doctype].filter((row) => row.print_format === print_format);
+			}
+			return [];
+		},
+		open_printer_mapping_dialog(doctype, print_format, preselect_printer = "") {
+			this.printer_mapping_context = { doctype, print_format };
+			this.printer_error = "";
+			this.selected_printer = preselect_printer || "";
+			this.available_printers = [];
+			this.printer_mapping_dialog = true;
+			this.load_qz_printers();
+		},
+		async load_qz_printers() {
+			this.printer_loading = true;
+			this.printer_error = "";
+			try {
+				const printers = await frappe.ui.form.qz_get_printer_list();
+				this.available_printers = Array.isArray(printers) ? printers : [];
+				if (!this.available_printers.length) {
+					this.printer_error = __("No printers found from QZ Tray.");
+				}
+			} catch (err) {
+				this.printer_error = __("Failed to connect to QZ Tray.");
+				console.error("[Payment] Failed to load QZ printers", err);
+			} finally {
+				this.printer_loading = false;
+			}
+		},
+		save_printer_mapping() {
+			const doctype = this.printer_mapping_context.doctype;
+			const print_format = this.printer_mapping_context.print_format;
+			const printer = this.selected_printer;
+
+			if (!doctype || !print_format || !printer) {
+				this.printer_error = __("Please select a printer.");
+				return;
+			}
+
+			const map = this.get_print_format_printer_map();
+			if (!map[doctype]) {
+				map[doctype] = [];
+			}
+
+			map[doctype] = map[doctype].filter((row) => row.print_format !== print_format);
+			map[doctype].push({
+				print_format,
+				printer,
+			});
+
+			localStorage.print_format_printer_map = JSON.stringify(map);
+			this.printer_mapping_dialog = false;
+			this.eventBus.emit("show_message", {
+				title: __("Printer mapping saved."),
+				color: "success",
+			});
+
+			if (this.pending_print_submit && this.pending_print_args) {
+				const { event, payment_received, print } = this.pending_print_args;
+				this.pending_print_submit = false;
+				this.pending_print_args = null;
+				this.$nextTick(() => {
+					this.submit(event, payment_received, print, true);
+				});
+			}
+		},
+		async print_raw_commands(invoice_doc, doctype, print_format) {
+			try {
+				if (!invoice_doc || !invoice_doc.name) {
+					this.eventBus.emit("show_message", {
+						title: __("Cannot print: Invoice not available for raw printing."),
+						color: "error",
+					});
+					return;
+				}
+
+				const mapped = this.get_mapped_printer(doctype, print_format);
+				if (!mapped.length || !mapped[0] || !mapped[0].printer) {
+					this.open_printer_mapping_dialog(doctype, print_format);
+					return;
+				}
+
+				const out = await frappe.call({
+					method: "frappe.www.printview.get_rendered_raw_commands",
+					args: {
+						doc: invoice_doc,
+						print_format: print_format,
+					},
+				});
+
+				const raw_commands = out && out.message && out.message.raw_commands;
+				if (!raw_commands) {
+					this.eventBus.emit("show_message", {
+						title: __("Raw print commands are empty."),
+						color: "error",
+					});
+					return;
+				}
+
+				await frappe.ui.form.qz_connect();
+				const config = qz.configs.create(mapped[0].printer);
+				await qz.print(config, [raw_commands]);
+				frappe.ui.form.qz_success();
+			} catch (err) {
+				console.error("[Payment] Raw printing failed", err);
+				frappe.ui.form.qz_fail(err);
 			}
 		},
 		// Print invoice using a more detailed offline template

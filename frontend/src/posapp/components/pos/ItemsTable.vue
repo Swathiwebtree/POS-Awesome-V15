@@ -13,6 +13,11 @@
 						val.map((v) => (typeof v === 'object' ? v.posa_row_id : v)),
 					)
 			" :search="itemSearch">
+			<!-- Item code column -->
+			<template v-slot:item.item_code="{ item }">
+				<span class="item-code">{{ item.item_code }}</span>
+			</template>
+
 			<!-- Item name column -->
 			<template v-slot:item.item_name="{ item }">
 				<div class="d-flex align-center">
@@ -1535,6 +1540,7 @@ export default {
 .amount-value {
 	font-weight: 500;
 	text-align: left;
+	font-size: 0.95rem;
 	/* Enhanced Arabic number font stack for maximum clarity */
 	font-family:
 		"SF Pro Display", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
@@ -1881,6 +1887,11 @@ export default {
     white-space: nowrap;
     overflow: hidden;
     max-width: 100px;
+	font-size: 0.95rem;
+}
+.item-code {
+	font-size: 0.95rem;
+	font-weight: 600;
 }
 /* === Make Discount % field small and stable === */
 .discount-input {
