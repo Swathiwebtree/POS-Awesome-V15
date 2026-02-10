@@ -3983,7 +3983,7 @@ div.v-card.selection {
   min-height: 28px !important;
 }
 .method-input :deep(input) {
-  font-size: 11px;
+  font-size: 14px;
   padding: 2px 8px;
   text-align: left;
 }
