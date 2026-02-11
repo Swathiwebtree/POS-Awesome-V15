@@ -36,7 +36,7 @@
 				<!-- Main POS Content -->
 				<POS :pos-profile="posProfile" @toggle-fullscreen="handleFullscreenToggle" />
 			</div>
-			<div class="page-content">
+			<div v-if="page !== 'POS'" class="page-content">
 				<component v-bind:is="page" class="mx-4 md-4"></component>
 			</div>
 		</v-main>

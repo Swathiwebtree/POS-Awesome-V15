@@ -1669,8 +1669,6 @@ export default {
 			}
 
 			console.log("Showing payment dialog with currency:", invoice_doc.currency);
-			this.eventBus.emit("show_payment", "true");
-			this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
 		} catch (error) {
 			console.error("Error in show_payment:", error);
 			this.eventBus.emit("show_message", {
