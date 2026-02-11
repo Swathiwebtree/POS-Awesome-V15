@@ -5,7 +5,7 @@
 		@dragenter="onDragEnterFromSelector" @dragleave="onDragLeaveFromSelector">
 		<v-data-table-virtual :headers="headers" :items="items" :theme="$theme.current" :expanded="expanded" show-expand
 			item-value="posa_row_id" class="modern-items-table elevation-2" :items-per-page="itemsPerPage"
-			expand-on-click density="compact" hide-default-footer :single-expand="true" :header-props="headerProps"
+			density="compact" hide-default-footer :single-expand="true" :header-props="headerProps"
 			:no-data-text="__('No items in cart')" @update:expanded="
 				(val) =>
 					$emit(
@@ -400,13 +400,13 @@
 					</div>
 				</td>
 			</template>
-			<template v-slot:item.discount_percentage="{ item }">
-				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" hide-details
-					class="discount-input" :model-value="Math.round((item.raw || item).discount_percentage || 0)"
-					:disabled="isDiscountDisabled(item)" @input="
-						handleDiscountInput(item.raw || item, $event)
-						" @click.stop @focus.stop />
+				<template v-slot:item.discount_percentage="{ item }">
+				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" step="1"
+					hide-details class="discount-input" v-model.number="(item.raw || item).discount_percentage"
+					:disabled="isDiscountDisabled(item)"
+					@update:model-value="handleDiscountInput(item.raw || item, $event)" />
 			</template>
+
 
 
 		</v-data-table-virtual>
@@ -577,7 +577,11 @@ export default {
 		},
 
 		handleDiscountInput(item, event) {
-			const value = event.target.value;
+			const rawValue =
+				typeof event === "string" || typeof event === "number"
+					? event
+					: event?.target?.value;
+			const value = String(rawValue ?? "").replace(/[^\d.\-]/g, "");
 
 			// Emit to parent for validation
 			this.$parent?.eventBus?.emit('validate_item_discount', {
@@ -585,7 +589,6 @@ export default {
 				discount: value
 			});
 		},
-
 		/**
 		 * Check if discount field should be disabled
 		 */
@@ -1914,18 +1917,48 @@ export default {
   display: flex;
   align-items: center;
 }
+
+.discount-input :deep(.v-field) {
+  border-radius: 6px !important;
+}
+
+.discount-input :deep(.v-field) {
+  border-radius: 6px !important;
+  border: 1px solid #000 !important;
+  box-shadow: none !important;
+}
+
+.discount-input :deep(.v-field__outline) {
+  display: none !important;
+}
+
+.discount-input :deep(.v-field__input) {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  caret-color: #000 !important;
+}
+
 /* Reduce inner padding & center number */
 .discount-input :deep(input) {
   padding: 4px 6px !important;
   text-align: center !important;
   font-size: 13px !important;
   font-weight: 600;
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  caret-color: #000 !important;
+  cursor: text !important;
   line-height: 1 !important;
 }
 
 /* Keep % icon compact */
 .discount-input :deep(.v-field__prepend-inner) {
   margin-inline-end: 4px;
+}
+
+.discount-input :deep(.v-field--focused input),
+.discount-input :deep(input:focus) {
+  caret-color: #000 !important;
 }
 
 </style>

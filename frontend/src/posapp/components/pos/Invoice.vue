@@ -582,8 +582,10 @@ export default {
 
 					item._max_discount_allowed = rule.max_discount || 0;
 
-					item.allow_discount = item._max_discount_allowed > 0;
-					item.discount_locked = item.allow_discount ? 0 : 1;
+					// Keep manual discount field editable for non-engine-oil items.
+					// Only engine-oil rows are hard-locked (handled above).
+					item.allow_discount = true;
+					item.discount_locked = 0;
 
 					return;
 				}

@@ -3,12 +3,13 @@
 # For license information, please see license.txt
 
 from __future__ import unicode_literals
+from warnings import filters
 from frappe.utils import now
 from frappe.utils.data import flt
 import json
 import frappe
 from frappe.utils import nowdate
-from frappe import _
+from frappe import _   
 from .utilities import get_version
 
 
@@ -201,44 +202,44 @@ def update_opening_shift_data(data, pos_profile):
 
 @frappe.whitelist()
 def close_shift():
-    """
-    Closes the latest open POS Opening Shift for the current session user.
-    Returns: { success: True/False, message: "..." }
-    """
     try:
         user = frappe.session.user
-        # Find latest open POS Opening Shift for the user
+        user_company = get_user_company(user)
+
+        filters = {
+            "pos_closing_shift": ["in", ["", None]],
+            "docstatus": 1,
+            "status": "Open",
+        }
+
+        if user_company:
+            filters["company"] = user_company
+        else:
+            filters["user"] = user
+
         open_shifts = frappe.get_all(
             "POS Opening Shift",
-            filters={
-                "user": user,
-                "pos_closing_shift": ["in", ["", None]],
-                "docstatus": 1,
-                "status": "Open",
-            },
+            filters=filters,
             fields=["name"],
             limit_page_length=1,
             order_by="period_start_date desc",
         )
 
         if not open_shifts:
-            return {"success": False, "message": _("No open shift found for user.")}
+            return {"success": False, "message": _("No open shift found.")}
 
-        docname = open_shifts[0]["name"]
-        shift = frappe.get_doc("POS Opening Shift", docname)
+        shift = frappe.get_doc("POS Opening Shift", open_shifts[0]["name"])
 
-        # Mark closing timestamp and change status
-        shift.pos_closing_shift = now()  # timestamp; change to nowdate() if you want date-only
-        # if you also have a separate closing doc relationship, adjust accordingly
+        shift.pos_closing_shift = now()
         shift.status = "Closed"
         shift.save(ignore_permissions=True)
 
-        # Optionally you may want to run any closing logic/hooks here
-
         return {"success": True, "message": _("Shift closed successfully")}
+
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "posawesome.close_shift")
         return {"success": False, "message": _("Failed to close shift: {0}").format(str(e))}
+
 
 
 def get_shift_payment_mode_totals(shift_start, pos_profile):
@@ -343,17 +344,26 @@ def get_closing_dialog_data():
     # -------------------------------------------------------
     # 4. Open POS Shift
     # -------------------------------------------------------
+    user = frappe.session.user
+    user_company = get_user_company(user)
+    
+    filters = {
+    "pos_closing_shift": ["in", ["", None]],
+    "docstatus": 1,
+    "status": "Open",
+   }
+    
+    if user_company:
+        filters["company"] = user_company
+    else:
+         filters["user"] = user
+
     open_shift = frappe.get_all(
-        "POS Opening Shift",
-        filters={
-            "user": frappe.session.user,
-            "pos_closing_shift": ["in", ["", None]],
-            "docstatus": 1,
-            "status": "Open",
-        },
-        fields=["name", "period_start_date", "pos_profile"],
-        order_by="period_start_date desc",
-        limit_page_length=1,
+       "POS Opening Shift",
+       filters=filters,
+       fields=["name", "period_start_date", "pos_profile"],
+       order_by="period_start_date desc",
+       limit_page_length=1,
     )
 
     if not open_shift:
@@ -458,58 +468,50 @@ def close_shift_with_reconciliation(balance_details=None):
 
     try:
         user = frappe.session.user
+        user_company = get_user_company(user)
+
         if isinstance(balance_details, str):
             balance_details = json.loads(balance_details)
 
+        filters = {
+            "pos_closing_shift": ["in", ["", None]],
+            "docstatus": 1,
+            "status": "Open",
+        }
+
+        if user_company:
+            filters["company"] = user_company
+        else:
+            filters["user"] = user
+
         open_shifts = frappe.get_all(
             "POS Opening Shift",
-            filters={
-                "user": user,
-                "pos_closing_shift": ["in", ["", None]],
-                "docstatus": 1,
-                "status": "Open",
-            },
+            filters=filters,
             fields=["name"],
             limit_page_length=1,
             order_by="period_start_date desc",
         )
 
         if not open_shifts:
-            return {"success": False, "message": _("No open shift found for user.")}
+            return {"success": False, "message": _("No open shift found.")}
 
-        docname = open_shifts[0]["name"]
-        shift = frappe.get_doc("POS Opening Shift", docname)
+        shift = frappe.get_doc("POS Opening Shift", open_shifts[0]["name"])
 
-        # --- Persist reconciliation on the doc (avoid db_set before save) ---
+        # Save reconciliation
         try:
-            # If the field exists on the doctype, set it on the doc object
-            if "closing_reconciliation" in shift.as_dict():
-                shift.closing_reconciliation = json.dumps(balance_details or [])
-            else:
-                # fallback: add a comment to the document for audit trail
-                shift.add_comment(
-                    "Comment",
-                    _("Closing reconciliation: {0}").format(json.dumps(balance_details or [])),
-                )
+            shift.closing_reconciliation = json.dumps(balance_details or [])
         except Exception:
-            # final fallback: attempt to add a comment and continue
-            try:
-                shift.add_comment(
-                    "Comment",
-                    _("Closing reconciliation (fallback): {0}").format(json.dumps(balance_details or [])),
-                )
-            except Exception:
-                # log but continue to try closing shift
-                frappe.log_error(frappe.get_traceback(), "posawesome.close_shift_recon_save_error")
+            shift.add_comment(
+                "Comment",
+                _("Closing reconciliation: {0}").format(json.dumps(balance_details or [])),
+            )
 
-        # --- Update closing meta and save once (keeps doc timestamps consistent) ---
         shift.pos_closing_shift = now()
         shift.status = "Closed"
-
-        # Save once - ignore permissions if necessary
         shift.save(ignore_permissions=True)
 
         return {"success": True, "message": _("Shift closed successfully")}
+
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "posawesome.close_shift_with_reconciliation")
         return {"success": False, "message": _("Failed to close shift: {0}").format(str(e))}

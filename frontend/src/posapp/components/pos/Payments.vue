@@ -98,7 +98,7 @@
 
 										<v-divider class="my-2" />
                                        <div class="payment-methods-grid">
-										 <div v-for="payment in invoice_doc.payments" :key="payment.name" class="mb-1">
+										 <div v-for="(payment, index) in invoice_doc.payments" :key="payment.name || `${payment.mode_of_payment}-${index}`" class="mb-1">
 
 											<div v-if="!is_mpesa_c2b_payment(payment)" class="payment-method-card"
 												:class="{ active: payment.amount > 0, disabled: invoice_doc.is_return }"
@@ -117,15 +117,13 @@
 												</div>
 
 												<v-text-field density="compact" variant="solo" hide-details
-													class="method-input" v-model="payment.amount"
-													@blur="handlePaymentAmountBlur(payment, $event)"
-													@focus="handlePaymentAmountFocus(payment)" :rules="[
+													class="method-input"
+													:model-value="getPaymentInputDisplayValue(payment, index)"
+													@update:model-value="onPaymentAmountInput(payment, index, $event)"
+													@blur="handlePaymentAmountBlur(payment, index, $event)"
+													@focus="handlePaymentAmountFocus(payment, index)" :rules="[
 														isNumber,
-														(v) =>
-															!payment.mode_of_payment.toLowerCase().includes('cash') ||
-															is_credit_sale ||
-															v >= (invoice_doc.rounded_total || invoice_doc.grand_total) ||
-															'Cash payment cannot be less than invoice total'
+														(v) => validateCashPaymentAmount(v, payment)
 													]" :prefix="currencySymbol(invoice_doc.currency)" :readonly="invoice_doc.is_return" />
 											</div>
 
@@ -611,6 +609,8 @@ export default {
 			printer_error: "",
 			pending_print_submit: false,
 			pending_print_args: null,
+			payment_input_values: {},
+			active_payment_input: null,
 		};
 	},
 	computed: {
@@ -983,25 +983,84 @@ export default {
 				.join("::");
 		},
 
-		handlePaymentAmountFocus(payment) {
-			this.is_user_editing_paid_change = true;
-			if (!payment) return;
-			if (payment.amount === 0) {
-				payment.amount = null;
-			}
+		getPaymentInputKey(payment, index) {
+			return payment?.name || `${payment?.mode_of_payment || "payment"}-${payment?.idx ?? index}`;
 		},
 
-		handlePaymentAmountBlur(payment, $event) {
-			if (!payment) return;
-			const raw = $event && $event.target ? $event.target.value : $event;
-			if (raw === "" || raw === null || raw === undefined) {
+		parsePaymentAmountInput(value) {
+			if (value === null || value === undefined || value === "") {
+				return 0;
+			}
+			const western = formatUtils.fromArabicNumerals(String(value)).replace(/,/g, "");
+			const parsed = parseFloat(western);
+			return Number.isNaN(parsed) ? 0 : parsed;
+		},
+
+		validateCashPaymentAmount(value, payment) {
+			if (!payment?.mode_of_payment?.toLowerCase().includes("cash") || this.is_credit_sale) {
+				return true;
+			}
+			const enteredAmount = this.parsePaymentAmountInput(value);
+			const minimumAmount = this.flt(
+				this.invoice_doc?.rounded_total || this.invoice_doc?.grand_total || 0,
+				this.currency_precision,
+			);
+			return enteredAmount >= minimumAmount || "Cash payment cannot be less than invoice total";
+		},
+
+		getPaymentInputDisplayValue(payment, index) {
+			const key = this.getPaymentInputKey(payment, index);
+			if (this.active_payment_input === key) {
+				return this.payment_input_values[key] ?? "";
+			}
+			if (payment?.amount === null || payment?.amount === undefined) {
+				return "";
+			}
+			return this.formatCurrency(payment.amount);
+		},
+
+		onPaymentAmountInput(payment, index, value) {
+			const key = this.getPaymentInputKey(payment, index);
+			this.payment_input_values[key] = value;
+			this.is_user_editing_paid_change = true;
+			if (value === "" || value === null || value === undefined) {
 				payment.amount = null;
 				if (payment.base_amount !== undefined) {
 					payment.base_amount = null;
 				}
 				return;
 			}
-			this.setFormatedCurrency(payment, "amount", null, false, $event);
+			this.setFormatedCurrency(payment, "amount", this.currency_precision, false, value);
+		},
+
+		handlePaymentAmountFocus(payment, index) {
+			this.is_user_editing_paid_change = true;
+			if (!payment) return;
+			const key = this.getPaymentInputKey(payment, index);
+			this.active_payment_input = key;
+			if (payment.amount === 0) {
+				payment.amount = null;
+			}
+			this.payment_input_values[key] =
+				payment.amount === null || payment.amount === undefined ? "" : String(payment.amount);
+		},
+
+		handlePaymentAmountBlur(payment, index, $event) {
+			if (!payment) return;
+			const key = this.getPaymentInputKey(payment, index);
+			const raw = $event && $event.target ? $event.target.value : this.payment_input_values[key];
+			if (raw === "" || raw === null || raw === undefined) {
+				payment.amount = null;
+				if (payment.base_amount !== undefined) {
+					payment.base_amount = null;
+				}
+				delete this.payment_input_values[key];
+				this.active_payment_input = null;
+				return;
+			}
+			this.setFormatedCurrency(payment, "amount", this.currency_precision, false, raw);
+			delete this.payment_input_values[key];
+			this.active_payment_input = null;
 		},
 
 		tryOpenPaymentDialog() {
@@ -1071,6 +1130,8 @@ export default {
 			this.credit_change = 0;
 			this.customer_credit_dict = [];
 			this.redeem_customer_credit = false;
+			this.payment_input_values = {};
+			this.active_payment_input = null;
 
 			// Force UI update
 			this.$nextTick(() => {
@@ -1117,6 +1178,8 @@ export default {
 
 			// Reset addresses
 			this.addresses = [];
+			this.payment_input_values = {};
+			this.active_payment_input = null;
 
 			// Reset UI states
 			this.loading = false;

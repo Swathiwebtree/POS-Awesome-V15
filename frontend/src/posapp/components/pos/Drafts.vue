@@ -688,7 +688,7 @@ export default {
 		this.eventBus.off("open_drafts");
 		this.eventBus.off("close_drafts");
 		this.eventBus.off("draft_saved");
-		this.eventBus.off("draft_deleted"); // ✅ Clean up draft deletion listener
+		this.eventBus.off("draft_deleted"); 
 		this.eventBus.off("invoice_saved_successfully");
 		this.eventBus.off("draft_selected");
 	},
@@ -720,6 +720,8 @@ export default {
 }
 :deep(.v-data-table td .text-caption) {
 	color: #6b7280;
+	font-size: 0.95rem;
+	font-weight: 400;
 }
 .draft-amount {
 	font-weight: 600;
@@ -757,7 +759,7 @@ export default {
 @media (min-width: 1920px) {
   .drafts-table :deep(th) {
     padding: 14px 8px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
   }
 
@@ -771,7 +773,7 @@ export default {
 @media (min-width: 1280px) and (max-width: 1919px) {
   .drafts-table :deep(th) {
     padding: 10px 6px;
-    font-size: 11px;
+    font-size: 13px;
   }
 
   .drafts-table :deep(td) {
@@ -789,7 +791,7 @@ export default {
 @media (max-width: 1400px) {
   .drafts-table :deep(th) {
     padding: 8px 4px;
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .drafts-table :deep(td) {
@@ -872,5 +874,16 @@ export default {
 .drafts-wrapper {
   transform: translateZ(0);
 }
+/* Bigger selection checkbox */
+:deep(.v-data-table .v-selection-control) {
+  transform: scale(1.25);   /* increase size */
+  transform-origin: left center;
+}
+
+:deep(.v-data-table .v-selection-control__input) {
+  width: 28px;
+  height: 28px;
+}
+
 
 </style>
