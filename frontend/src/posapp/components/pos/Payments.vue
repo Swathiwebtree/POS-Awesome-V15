@@ -1016,7 +1016,7 @@ export default {
 			if (payment?.amount === null || payment?.amount === undefined) {
 				return "";
 			}
-			return this.formatCurrency(payment.amount);
+			return this.flt(payment.amount || 0, this.currency_precision).toFixed(this.currency_precision);
 		},
 
 		onPaymentAmountInput(payment, index, value) {
@@ -1047,18 +1047,23 @@ export default {
 
 		handlePaymentAmountBlur(payment, index, $event) {
 			if (!payment) return;
+
 			const key = this.getPaymentInputKey(payment, index);
-			const raw = $event && $event.target ? $event.target.value : this.payment_input_values[key];
-			if (raw === "" || raw === null || raw === undefined) {
+			const raw = $event?.target?.value ?? this.payment_input_values[key];
+
+			if (!raw) {
 				payment.amount = null;
-				if (payment.base_amount !== undefined) {
-					payment.base_amount = null;
-				}
 				delete this.payment_input_values[key];
 				this.active_payment_input = null;
 				return;
 			}
-			this.setFormatedCurrency(payment, "amount", this.currency_precision, false, raw);
+
+			// Parse number
+			const parsed = this.flt(raw, this.currency_precision);
+
+			// Force precision
+			payment.amount = Number(parsed).toFixed(this.currency_precision);
+
 			delete this.payment_input_values[key];
 			this.active_payment_input = null;
 		},
