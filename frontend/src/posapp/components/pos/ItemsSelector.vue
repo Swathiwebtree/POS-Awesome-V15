@@ -523,6 +523,10 @@ export default {
 
 	watch: {
 		externalSearch(newVal) {
+			if (!newVal && this.first_search) {
+				this.clearSearch();
+				return;
+			}
 			if (newVal && newVal !== this.first_search) {
 				this.first_search = newVal;
 				this.search_onchange(newVal);
@@ -2596,6 +2600,15 @@ export default {
 			return combinations;
 		},
 		async clearSearch() {
+			if (this.search_onchange && this.search_onchange.cancel) {
+				this.search_onchange.cancel();
+			}
+			this.cancelItemDetailsRequest();
+			this.pendingItemSearch = null;
+			this.search_from_scanner = false;
+			// Invalidate any in-flight item fetch response from older searches.
+			this.items_request_token += 1;
+
 			this.search_backup = this.first_search;
 			this.first_search = "";
 			this.search = "";

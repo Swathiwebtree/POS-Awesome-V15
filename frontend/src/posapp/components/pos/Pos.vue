@@ -348,6 +348,8 @@ export default {
 
 			if (this.$refs.itemsSelectorComponent) {
 				await this.$refs.itemsSelectorComponent.clearSearch();
+			} else {
+				this.eventBus.emit("update:item_group", this.item_group || "ALL");
 			}
 		},
 
@@ -365,14 +367,16 @@ export default {
 			this.first_search = (this.first_search || "").trim();
 		},
 
-		clearSearch() {
+		async clearSearch() {
 			this.search_backup = this.first_search;
 			this.first_search = "";
 			this.search = "";
 
 			// Also clear in ItemsSelector
 			if (this.$refs.itemsSelectorComponent) {
-				this.$refs.itemsSelectorComponent.clearSearch();
+				await this.$refs.itemsSelectorComponent.clearSearch();
+			} else {
+				this.eventBus.emit("update:item_group", this.item_group || "ALL");
 			}
 		},
 
