@@ -582,11 +582,14 @@ export default {
 					? event
 					: event?.target?.value;
 			const value = String(rawValue ?? "").replace(/[^\d.\-]/g, "");
+			const parsed = Number(value);
+			const normalized = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+			item.discount_percentage = normalized;
 
 			// Emit to parent for validation
 			this.$parent?.eventBus?.emit('validate_item_discount', {
 				item: item,
-				discount: value
+				discount: normalized
 			});
 		},
 		/**
@@ -1139,7 +1142,7 @@ export default {
 
 /* Ensure items table can scroll when many rows exist */
 .items-table-container {
-	overflow-y: auto;
+	overflow: hidden;
 }
 
 /* Table wrapper styling */
@@ -1147,17 +1150,24 @@ export default {
 .modern-items-table :deep(.v-table__wrapper) {
 	border-radius: var(--border-radius-sm);
 	height: 100%;
+	overflow-x: hidden;
 	overflow-y: auto;
 	scrollbar-width: thin;
+}
+
+/* Force table to fit container width to avoid horizontal scroll */
+.modern-items-table :deep(table) {
+	width: 100%;
+	table-layout: fixed;
 }
 
 /* Table header styling */
 .modern-items-table :deep(th) {
 	font-weight: 600;
-	font-size: 0.9rem;
+	font-size: 0.82rem;
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
-	padding: 12px 16px;
+	padding: 8px 10px;
 	transition: background-color var(--transition-normal);
 	border-bottom: 2px solid var(--table-header-border);
 	background-color: var(--table-header-bg, var(--surface-secondary, #f5f5f5));
@@ -1166,6 +1176,13 @@ export default {
 	top: 0;
 	z-index: 1;
 }
+/* Increase "No items in cart" size (Vuetify 3 Virtual Table) */
+.modern-items-table :deep(.v-data-table-rows-no-data td) {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+}
+
 
 /* Table row styling */
 .modern-items-table :deep(tr) {
@@ -1181,7 +1198,7 @@ export default {
 
 /* Table cell styling */
 .modern-items-table :deep(td) {
-	padding: 12px 16px;
+	padding: 8px 10px;
 	vertical-align: middle;
 }
 
@@ -1567,6 +1584,7 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: center; /* center horizontally */
+	width: 100%;
 	height: 100%;
 	padding: 6px 0;
 }
@@ -1581,9 +1599,9 @@ export default {
 
 /* Unified action button look */
 .action-btn {
-	width: 38px !important; /* square for circular look */
-	height: 38px !important;
-	min-width: 38px !important;
+	width: 32px !important; /* square for circular look */
+	height: 32px !important;
+	min-width: 32px !important;
 	padding: 0 !important;
 	border-radius: 10px !important; /* slightly rounded */
 	display: inline-flex !important;
@@ -1689,10 +1707,11 @@ export default {
 
 /* Qty control: minus - qty - plus (centered) */
 .qty-control {
-	display: inline-flex;
+	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 8px;
+	width: 100%;
+	gap: 4px;
 	padding: 2px 4px;
 	height: 100%;
 	/* ensure it doesn't push layout */
@@ -1701,9 +1720,9 @@ export default {
 
 /* Buttons around qty */
 .qty-btn {
-	width: 34px !important;
-	height: 34px !important;
-	min-width: 34px !important;
+	width: 30px !important;
+	height: 30px !important;
+	min-width: 30px !important;
 	padding: 0 !important;
 	border-radius: 8px !important;
 	display: inline-flex !important;
@@ -1741,10 +1760,10 @@ export default {
 
 /* Qty numeric display */
 .qty-value {
-	min-width: 48px;
+	min-width: 30px;
 	text-align: center;
 	font-weight: 600;
-	padding: 2px 6px;
+	padding: 2px 4px;
 	border-radius: 6px;
 	background: transparent;
 	font-variant-numeric: lining-nums tabular-nums;
@@ -1804,6 +1823,7 @@ export default {
 	justify-content: center;
 	align-items: center;
 	text-align: center;
+	font-size: 0.85rem;
 }
 
 /* Drag and drop styles */
@@ -1889,7 +1909,7 @@ export default {
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;
-    max-width: 100px;
+    max-width: 84px;
 	font-size: 0.95rem;
 }
 .item-code {
@@ -1898,9 +1918,9 @@ export default {
 }
 /* === Make Discount % field small and stable === */
 .discount-input {
-  width: 75px !important;
-  min-width: 75px !important;
-  max-width: 75px !important;
+  width: 64px !important;
+  min-width: 64px !important;
+  max-width: 64px !important;
 }
 
 /* Center inside table cell */

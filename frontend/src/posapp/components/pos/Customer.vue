@@ -240,7 +240,46 @@ header .v-icon {
 :deep(.customer-autocomplete .v-field) {
   min-height: 50px !important;
   height: 50px !important;
-  align-items: center;
+  align-items: stretch !important;
+}
+
+/* Keep label and selected value separated (prevent overlap) */
+:deep(.vehicle-autocomplete .v-field__input),
+:deep(.customer-autocomplete .v-field__input) {
+  min-height: 50px !important;
+  padding-top: 18px !important;
+  padding-bottom: 6px !important;
+}
+
+:deep(.vehicle-autocomplete .v-label.v-field-label),
+:deep(.customer-autocomplete .v-label.v-field-label) {
+  top: 12px !important;
+}
+
+:deep(.vehicle-autocomplete .v-label.v-field-label--floating),
+:deep(.customer-autocomplete .v-label.v-field-label--floating) {
+  transform: translateY(-9px) scale(0.75) !important;
+}
+
+/* Empty state: keep label centered when nothing is selected */
+:deep(.customer-autocomplete .v-field:not(.v-field--dirty):not(.v-field--focused) .v-field__input) {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+:deep(.customer-autocomplete .v-field:not(.v-field--dirty):not(.v-field--focused) .v-label.v-field-label) {
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+:deep(.vehicle-autocomplete .v-field:not(.v-field--dirty):not(.v-field--focused) .v-field__input) {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+:deep(.vehicle-autocomplete .v-field:not(.v-field--dirty):not(.v-field--focused) .v-label.v-field-label) {
+  top: 50% !important;
+  transform: translateY(-50%) !important;
 }
 
 

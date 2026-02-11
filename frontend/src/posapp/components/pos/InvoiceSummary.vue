@@ -1849,7 +1849,7 @@ export default {
 	position: relative;
 	overflow: hidden;
 	height: 22px !important;
-    font-size: 0.66rem !important;
+    font-size: 0.75rem !important;
 	text-transform: none !important;
 	font-weight: 600 !important;
 	padding: 0 6px !important;
@@ -1894,7 +1894,7 @@ export default {
 
 .pay-btn {
 	font-weight: 700 !important;
-	font-size: 0.68rem !important;
+	font-size: 0.75rem !important;
 	background: linear-gradient(135deg, #4caf50, #45a049) !important;
 	height: 22px !important;
 }
@@ -1909,7 +1909,7 @@ export default {
 }
 
 .loyalty-points-display-card .text-h6 {
-  font-size: 0.8rem !important;
+  font-size: 0.9rem !important;
 }
 
 
@@ -2097,7 +2097,7 @@ export default {
 }
 
 .item-group-discount-card :deep(.v-icon) {
-  font-size: 16px !important;
+  font-size: 17px !important;
 }
 
 :deep(.item-group-discount-card .item-group-avatar) {
@@ -2333,7 +2333,7 @@ export default {
 @media (max-width: 600px) {
 	.card-footer-actions .summary-btn {
 		height: 40px !important;
-		font-size: 0.875rem !important;
+		font-size: 0.9rem !important;
 	}
 
 	.card-footer-actions .primary-action {

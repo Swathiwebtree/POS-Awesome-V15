@@ -642,14 +642,16 @@ export default {
 			if (!item || !item.item_code) {
 				return false;
 			}
+			const normalizedDiscount = Math.max(0, Number(discountPercentage || 0));
+
 			if (!this.customer) {
-				// No customer context, allow discount
-				item.discount_percentage = Number(discountPercentage || 0);
+				// No customer context: still enforce non-negative discount
+				item.discount_percentage = normalizedDiscount;
 				this.recalculateItemPrice(item);
 				return true;
 			}
 
-			const discount = Number(discountPercentage || 0);
+			const discount = normalizedDiscount;
 
 			// Zero discount is always valid
 			if (discount <= 0) {
@@ -712,7 +714,8 @@ export default {
 
 		recalculateItemPrice(item) {
 			const gross = Number(item.price_list_rate || 0) * Number(item.qty || 1);
-			const discountPct = Number(item.discount_percentage || 0);
+			const discountPct = Math.max(0, Number(item.discount_percentage || 0));
+			item.discount_percentage = discountPct;
 
 			item.discount_amount = this.flt(
 				(gross * discountPct) / 100,
