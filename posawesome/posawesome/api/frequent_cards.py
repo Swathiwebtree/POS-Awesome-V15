@@ -26,6 +26,7 @@ def get_customer_frequent_cards(customer, company=None):
             "status",
         ],
         order_by="expiry_date desc",
+        ignore_permissions=True,
     )
 
     # Check and update expired cards
@@ -71,7 +72,8 @@ def apply_free_service(card_name, customer, service_item):
         # Mark as redeemed (will be finalized when invoice is submitted)
         card.status = "Redeemed"
         card.redeemed_on = datetime.now()
-        card.save()
+        card.flags.ignore_permissions = True
+        card.save(ignore_permissions=True)
 
         return {
             "status": "success",
@@ -99,6 +101,7 @@ def create_or_update_card(customer, service_item, company=None):
         },
         order_by="creation desc",
         limit=1,
+        ignore_permissions=True,
     )
 
     if existing_cards:
@@ -109,7 +112,8 @@ def create_or_update_card(customer, service_item, company=None):
         if card.visits >= card.required_visits:
             card.status = "Completed"
 
-        card.save()
+        card.flags.ignore_permissions = True
+        card.save(ignore_permissions=True)
         return {"status": "updated", "card": card.as_dict(), "message": _("Visit added to existing card")}
     else:
         # Create new card
@@ -133,7 +137,8 @@ def create_or_update_card(customer, service_item, company=None):
                 "status": "Active",
             }
         )
-        card.insert()
+        card.flags.ignore_permissions = True
+        card.insert(ignore_permissions=True)
 
         return {"status": "created", "card": card.as_dict(), "message": _("New frequent card created")}
 
@@ -153,6 +158,7 @@ def check_auto_apply_card(customer, service_item):
         fields=["name", "visits", "required_visits"],
         order_by="creation asc",
         limit=1,
+        ignore_permissions=True,
     )
 
     if cards and cards[0].visits >= cards[0].required_visits:

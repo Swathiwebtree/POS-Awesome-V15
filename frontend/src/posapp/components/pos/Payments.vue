@@ -42,32 +42,6 @@
 							<v-row dense >
 
 								<v-col cols="6" class="payment-left-column">
-									<!-- PAID / CREDIT CHANGE -->
-									<v-row v-if="invoice_doc" dense>
-										<v-col cols="7" v-if="credit_change > 0 && !invoice_doc.is_return">
-											<v-text-field variant="solo" density="compact" color="primary"
-												:label="frappe._('Paid Change')"
-												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field"
-												:model-value="formatCurrency(paid_change)"
-												:prefix="currencySymbol(invoice_doc.currency)"
-												:rules="paid_change_rules" readonly />
-										</v-col>
-
-										<v-col cols="5" v-if="credit_change > 0 && !invoice_doc.is_return">
-											<v-text-field variant="solo" density="compact" color="primary"
-												:label="frappe._('Credit Change')"
-												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field"
-												:model-value="formatCurrency(credit_change)"
-												:prefix="currencySymbol(invoice_doc.currency)" @change="
-													setFormatedCurrency(this, 'credit_change', null, false, $event);
-												updateCreditChange(this.credit_change);
-												" />
-										</v-col>
-									</v-row>
-
-									<v-divider class="my-2" />
 
 									<!-- PAYMENT METHODS -->
 									<div v-if="is_cashback">
@@ -228,6 +202,30 @@
 									</v-row>
 
 									<v-divider class="my-2" />
+
+									<v-row v-if="invoice_doc" dense>
+										<v-col cols="7" v-if="credit_change > 0 && !invoice_doc.is_return">
+											<v-text-field variant="solo" density="compact" color="primary"
+												:label="frappe._('Paid Change')"
+												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+												class="dark-field sleek-field"
+												:model-value="formatCurrency(paid_change)"
+												:prefix="currencySymbol(invoice_doc.currency)"
+												:rules="paid_change_rules" readonly />
+										</v-col>
+
+										<v-col cols="5" v-if="credit_change > 0 && !invoice_doc.is_return">
+											<v-text-field variant="solo" density="compact" color="primary"
+												:label="frappe._('Credit Change')"
+												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+												class="dark-field sleek-field"
+												:model-value="formatCurrency(credit_change)"
+												:prefix="currencySymbol(invoice_doc.currency)" @change="
+													setFormatedCurrency(this, 'credit_change', null, false, $event);
+												updateCreditChange(this.credit_change);
+												" />
+										</v-col>
+									</v-row>
 
 									<!-- Delivery Date -->
 									<v-row class="pa-1" dense

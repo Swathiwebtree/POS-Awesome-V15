@@ -14,7 +14,7 @@
 							<v-col :cols="showEmployeeSelection ? 6 : 12" v-if="showOdometerField">
 								<v-text-field v-model="odometerReading" :label="__('Odometer Reading (km)')"
 									prepend-inner-icon="mdi-speedometer" variant="solo" density="compact"
-									color="primary" type="number" class="summary-field" :rules="[isNumber]"
+									color="primary" type="text" inputmode="numeric" class="summary-field" :rules="[isNumber]"
 									@update:model-value="emitOdometerData" />
 							</v-col>
 							<!-- Service Employee Selection (for car wash services) -->
@@ -172,7 +172,7 @@
 								<v-card class="item-group-discount-card" elevation="2">
 									<v-card-text class="pa-4">
 										<!-- Header with Icon and Title -->
-										<div class="d-flex align-center justify-space-between mb-4">
+										<div class="d-flex align-center justify-space-between mb-4 item-group-header-row">
 											<div class="d-flex align-center">
 												<v-avatar color="info" size="40" class="mr-3 item-group-avatar">
 													<v-icon color="white" size="24">mdi-folder-multiple</v-icon>
@@ -2191,6 +2191,9 @@ export default {
 /* Reduce internal padding to match loyalty card */
 .item-group-discount-card .v-card-text {
   padding: 2px 4px !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
 }
 /* Hide empty state (keeps card compact) */
 .item-group-discount-card .text-center {
@@ -2262,10 +2265,21 @@ export default {
 /* Add Discount Button */
 .add-discount-btn {
   transition: all 0.2s ease !important;
+  align-self: center !important;
+  margin-top: 3px !important;
+  margin-bottom: 0 !important;
+  min-height: 32px !important;
 }
 
 .add-discount-btn:hover {
   transform: translateY(-2px);
+}
+
+.item-group-header-row {
+  align-items: center !important;
+  margin-bottom: 0 !important;
+  width: 100%;
+  min-height: 32px;
 }
 
 /* Dialog Styling */

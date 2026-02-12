@@ -910,8 +910,15 @@ def submit_invoice(invoice, data):
                         try:
                             item_doc = frappe.get_cached_doc("Item", item.item_code)
 
-                            # Only process service items (non-stock items)
-                            if item_doc.is_stock_item == 0:
+                            # Count visits for explicit service rows from frontend and non-stock service items.
+                            # Skip free/redeemed rows so only paid visits are counted.
+                            is_service_row = (
+                                cint(item.get("is_service_item")) == 1
+                                or cint(item.get("update_stock")) == 0
+                                or cint(item_doc.is_stock_item) == 0
+                            )
+                            is_paid_row = flt(item.get("amount")) > 0 or flt(item.get("rate")) > 0
+                            if is_service_row and is_paid_row:
                                 result = create_or_update_card(
                                     customer=invoice_doc.customer,
                                     service_item=item.item_code,
@@ -1018,8 +1025,15 @@ def submit_in_background_job(kwargs):
                         try:
                             item_doc = frappe.get_cached_doc("Item", item.item_code)
 
-                            # Only process service items (non-stock items)
-                            if item_doc.is_stock_item == 0:
+                            # Count visits for explicit service rows from frontend and non-stock service items.
+                            # Skip free/redeemed rows so only paid visits are counted.
+                            is_service_row = (
+                                cint(item.get("is_service_item")) == 1
+                                or cint(item.get("update_stock")) == 0
+                                or cint(item_doc.is_stock_item) == 0
+                            )
+                            is_paid_row = flt(item.get("amount")) > 0 or flt(item.get("rate")) > 0
+                            if is_service_row and is_paid_row:
                                 result = create_or_update_card(
                                     customer=invoice_doc.customer,
                                     service_item=item.item_code,
