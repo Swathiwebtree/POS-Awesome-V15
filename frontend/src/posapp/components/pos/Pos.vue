@@ -1159,7 +1159,6 @@ export default {
 .offer-style-btn:hover,
 .coupon-style-btn:hover {
 	transform: translateY(-2px);
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }
 
 .offer-style-btn:active,
@@ -1266,7 +1265,7 @@ export default {
 }
 
 .items-scroll {
-	padding: 6px;
+	padding: 0;
 }
 /* Invoice Wrapper */
 .invoice-wrapper {
@@ -1490,6 +1489,18 @@ export default {
 .items-footer-filters .v-text-field:deep(.v-field) {
 	border-radius: 8px;
 	background-color: white;
+	border: 1.5px solid #b8c1cc !important;
+}
+
+.items-footer-filters :deep(.v-select .v-field),
+.items-footer-filters :deep(.items-group-full .v-field) {
+	border-radius: 8px;
+	background-color: white;
+	border: 1.5px solid #b8c1cc !important;
+}
+
+.items-footer-filters :deep(.v-field__overlay) {
+	opacity: 0.02 !important;
 }
 
 .items-footer-filters .v-text-field:deep(input) {
@@ -1519,6 +1530,39 @@ export default {
 .cards {
   padding-top: 8px !important;
   padding-bottom: 8px !important;
+}
+
+/* Final override: always-visible borders for right panel search/item group fields */
+:deep(.items-footer-filters .v-text-field .v-field),
+:deep(.items-footer-filters .v-select .v-field),
+:deep(.items-footer-filters .items-group-full .v-field) {
+	border: 1px solid #0f0f0f !important;
+	background-color: #fff !important;
+}
+
+:deep(.items-footer-filters .v-field__overlay) {
+	opacity: 0 !important;
+}
+
+/* Final desktop/laptop layout override: remove outer and inter-column gaps */
+@media (min-width: 1280px) {
+	.pos-layout {
+		gap: 0 !important;
+		padding: 0 !important;
+	}
+
+	.pos-column {
+		padding: 0 !important;
+	}
+
+	.column-card {
+		margin: 0 !important;
+	}
+
+	.pos-main-container.fullscreen-mode .pos-layout {
+		gap: 0 !important;
+		padding: 0 !important;
+	}
 }
 
 </style>

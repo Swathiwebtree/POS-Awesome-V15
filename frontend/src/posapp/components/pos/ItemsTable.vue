@@ -400,11 +400,24 @@
 					</div>
 				</td>
 			</template>
-				<template v-slot:item.discount_percentage="{ item }">
-				<v-text-field id="discount_percentage" density="compact" variant="outlined" type="number" step="1"
-					hide-details class="discount-input" v-model.number="(item.raw || item).discount_percentage"
+			<template v-slot:item.discount_percentage="{ item }">
+				<v-text-field
+					id="discount_percentage"
+					density="compact"
+					variant="outlined"
+					type="text"
+					inputmode="decimal"
+					suffix="%"
+					placeholder="0"
+					hide-details
+					class="discount-input"
+					v-model="(item.raw || item).discount_percentage"
 					:disabled="isDiscountDisabled(item)"
-					@update:model-value="handleDiscountInput(item.raw || item, $event)" />
+					@click.stop
+					@focus="clearDiscountDefault(item.raw || item)"
+					@blur="handleDiscountInput(item.raw || item, $event)"
+					@keydown.enter.prevent="$event.target.blur()"
+				/>
 			</template>
 
 
@@ -591,6 +604,12 @@ export default {
 				item: item,
 				discount: normalized
 			});
+		},
+		clearDiscountDefault(item) {
+			const current = Number(item.discount_percentage ?? 0);
+			if (current === 0) {
+				item.discount_percentage = "";
+			}
 		},
 		/**
 		 * Check if discount field should be disabled
@@ -1918,9 +1937,9 @@ export default {
 }
 /* === Make Discount % field small and stable === */
 .discount-input {
-  width: 64px !important;
-  min-width: 64px !important;
-  max-width: 64px !important;
+  width: 96px !important;
+  min-width: 96px !important;
+  max-width: 96px !important;
 }
 
 /* Center inside table cell */
@@ -1954,21 +1973,22 @@ export default {
 
 .discount-input :deep(.v-field__input) {
   color: #000 !important;
-  -webkit-text-fill-color: #000 !important;
   caret-color: #000 !important;
+  opacity: 1 !important;
 }
 
-/* Reduce inner padding & center number */
+/* Reduce inner padding and keep text-like editing behavior */
 .discount-input :deep(input) {
   padding: 4px 6px !important;
   text-align: center !important;
-  font-size: 13px !important;
-  font-weight: 600;
+  font-size: 14px !important;
+  font-weight: 500;
   color: #000 !important;
-  -webkit-text-fill-color: #000 !important;
+  -webkit-text-fill-color: currentColor !important;
   caret-color: #000 !important;
   cursor: text !important;
-  line-height: 1 !important;
+  line-height: 1.2 !important;
+  opacity: 1 !important;
 }
 
 /* Keep % icon compact */
@@ -1979,6 +1999,25 @@ export default {
 .discount-input :deep(.v-field--focused input),
 .discount-input :deep(input:focus) {
   caret-color: #000 !important;
+}
+
+.discount-input :deep(.v-field--focused) {
+  border-width: 3px !important;
+  border-color: #2e7d32 !important;
+}
+
+.discount-input :deep(.v-field:focus-within) {
+  border-width: 3px !important;
+  border-color: #2e7d32 !important;
+}
+
+
+.discount-input :deep(.v-text-field__suffix),
+.discount-input :deep(.v-text-field__suffix > span) {
+  font-weight: 700 !important;
+  color: #111827 !important;
+  opacity: 1 !important;
+  font-size: 16px !important;
 }
 
 </style>

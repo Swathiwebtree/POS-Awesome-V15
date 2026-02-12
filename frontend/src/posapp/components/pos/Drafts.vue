@@ -209,8 +209,8 @@ export default {
 		dialog_data: [],
 		refreshing: false,
 		headers: [
-			{ title: __("Mobile"), value: "contact_mobile", align: "start", sortable: false, width: "120px" },
-			{ title: __("Vehicle"), value: "custom_vehicle_no", align: "start", sortable: false, width: "120px" },
+			{ title: __("Mobile"), value: "contact_mobile", align: "start", sortable: false, width: "130px" },
+			{ title: __("Vehicle"), value: "custom_vehicle_no", align: "start", sortable: false, width: "130px" },
 			{ title: __("Customer"), value: "customer", align: "start", sortable: true },
 			{ title: __("Date"), value: "posting_date", align: "start", sortable: true, width: "100px" },
 			{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
@@ -883,6 +883,106 @@ export default {
 :deep(.v-data-table .v-selection-control__input) {
   width: 28px;
   height: 28px;
+}
+
+/* Final readability/accessibility overrides */
+:deep(.drafts-table .v-table__wrapper),
+:deep(.drafts-table .v-data-table__wrapper) {
+	max-height: 100%;
+	overflow-y: auto;
+}
+
+:deep(.drafts-table thead th) {
+	position: static !important;
+	background: #ffffff !important;
+	color: #111827 !important;
+	font-size: 0.95rem !important;
+	font-weight: 700 !important;
+	letter-spacing: 0.01em;
+	padding: 12px 10px !important;
+	border-bottom: 1px solid #d1d5db !important;
+}
+
+:deep(.drafts-table thead th .v-data-table-header__content) {
+	display: flex;
+	align-items: center;
+	white-space: nowrap;
+}
+
+:deep(.drafts-table tbody tr) {
+	background: #ffffff !important;
+	box-shadow: none !important;
+	border-radius: 0 !important;
+	border-bottom: 1px solid #e5e7eb !important;
+}
+
+:deep(.drafts-table tbody td) {
+	padding: 12px 10px !important;
+	font-size: 0.93rem !important;
+	line-height: 1.35 !important;
+	color: #1f2937 !important;
+	vertical-align: middle;
+}
+
+:deep(.drafts-table td .text-caption) {
+	font-size: 0.9rem !important;
+	color: #374151 !important;
+}
+
+.customer-name {
+	font-size: 1rem !important;
+	font-weight: 700 !important;
+	line-height: 1.3;
+	color: #111827 !important;
+}
+
+:deep(.drafts-table .v-chip) {
+	max-width: 100%;
+	font-size: 0.72rem !important;
+	font-weight: 600;
+}
+
+:deep(.drafts-table .v-selection-control) {
+	transform: scale(1.1);
+	transform-origin: center;
+}
+
+:deep(.drafts-table .v-selection-control__input) {
+	width: 24px;
+	height: 24px;
+}
+
+:deep(.drafts-table tbody tr:focus-within) {
+	outline: 2px solid #2563eb;
+	outline-offset: -2px;
+}
+
+.load-draft-btn {
+	min-height: 46px !important;
+	font-size: 0.95rem !important;
+}
+
+@media (max-width: 1400px) {
+	:deep(.drafts-table thead th) {
+		font-size: 0.88rem !important;
+		padding: 10px 8px !important;
+	}
+
+	:deep(.drafts-table tbody td) {
+		font-size: 0.88rem !important;
+		padding: 10px 8px !important;
+	}
+
+	.customer-name {
+		font-size: 0.95rem !important;
+	}
+}
+
+@media (max-width: 768px) {
+	.load-draft-btn {
+		min-height: 42px !important;
+		font-size: 0.9rem !important;
+	}
 }
 
 

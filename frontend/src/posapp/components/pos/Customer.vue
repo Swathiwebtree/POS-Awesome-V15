@@ -128,11 +128,11 @@
         background-color: #fff;
 }
 
-.customer-autocomplete:hover,
+/* .customer-autocomplete:hover,
 .vehicle-autocomplete:hover,
 .v-text-field:hover {
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-}
+} */
 
 /* Dark mode styling for all inputs */
 :deep([data-theme="dark"]) .customer-autocomplete,
@@ -168,7 +168,41 @@
 .vehicle-autocomplete .v-field,
 .customer-autocomplete .v-field {
         background-color: #ffffff !important;
-        border: 1px solid #d0d5dd;
+        border: 1.5px solid #b8c1cc !important;
+}
+
+/* Reduce overlay wash so border stays visible */
+:deep(.vehicle-autocomplete .v-field__overlay),
+:deep(.customer-autocomplete .v-field__overlay) {
+        opacity: 0.02 !important;
+}
+
+/* Stronger border on hover */
+:deep(.vehicle-autocomplete .v-field:hover),
+:deep(.customer-autocomplete .v-field:hover) {
+        border-color: #080808 !important;
+}
+
+/* Clear focused border ring */
+:deep(.vehicle-autocomplete .v-field.v-field--focused),
+:deep(.customer-autocomplete .v-field.v-field--focused) {
+        border-color: #080808 !important;
+}
+
+/* Dark theme border visibility */
+:deep(.v-theme--dark .vehicle-autocomplete .v-field),
+:deep(.v-theme--dark .customer-autocomplete .v-field) {
+        border-color: #080808 !important;
+}
+
+:deep(.v-theme--dark .vehicle-autocomplete .v-field:hover),
+:deep(.v-theme--dark .customer-autocomplete .v-field:hover) {
+        border-color: #080808 !important;
+}
+
+:deep(.v-theme--dark .vehicle-autocomplete .v-field.v-field--focused),
+:deep(.v-theme--dark .customer-autocomplete .v-field.v-field--focused) {
+        border-color: #080808 !important;
 }
 
 /* Input text */
@@ -201,7 +235,6 @@
 .search-items {
         background: #ffffff;
         border: 1px solid #e5e7eb;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
 }
 header,
 .app-header {
@@ -212,13 +245,8 @@ header .v-icon {
         color: #374151;
         opacity: 1;
 }
-.v-field:hover {
-        border-color: #3b82f6;
-}
-
 .v-field--focused {
-        border-color: #2563eb !important;
-        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+        border-color: #080808 !important;
 }
 /*  Fix disabled autocomplete background + opacity */
 :deep(.v-input--disabled) {
@@ -280,6 +308,23 @@ header .v-icon {
 :deep(.vehicle-autocomplete .v-field:not(.v-field--dirty):not(.v-field--focused) .v-label.v-field-label) {
   top: 50% !important;
   transform: translateY(-50%) !important;
+}
+
+/* Final override: keep border clearly visible even before click/focus */
+:deep(.customer-autocomplete .v-field),
+:deep(.vehicle-autocomplete .v-field) {
+  border: 1px solid #121416 !important;
+  background-color: #fff !important;
+}
+
+:deep(.customer-autocomplete .v-field__overlay),
+:deep(.vehicle-autocomplete .v-field__overlay) {
+  opacity: 0 !important;
+}
+
+:deep(.customer-autocomplete .v-field.v-field--focused),
+:deep(.vehicle-autocomplete .v-field.v-field--focused) {
+  border-color: #121416 !important;
 }
 
 

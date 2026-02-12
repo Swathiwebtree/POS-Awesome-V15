@@ -101,9 +101,10 @@
 
 							<!-- Manual Round Off + Frequent Cards (side by side) -->
 							<v-col cols="6">
-								<v-text-field v-model.number="manual_round_off" :label="__('Manual Round Off')"
+								<v-text-field v-model="manual_round_off" :label="__('Manual Round Off')"
 									prepend-inner-icon="mdi-plus-minus" variant="solo" density="compact" color="info"
-									class="summary-field" type="number" :prefix="currencySymbol(displayCurrency)"
+									class="summary-field manual-round-off-field" type="text" inputmode="decimal"
+									:prefix="currencySymbol(displayCurrency)"
 									@change="onManualRoundOffChange" />
 							</v-col>
 							<v-col cols="6">
@@ -1866,6 +1867,7 @@ export default {
 	height: 100%;
 	overflow: hidden;
 	margin-top: 12px !important;
+	padding-top: 6px !important;
 }
 
 
@@ -1921,6 +1923,20 @@ export default {
 .summary-field {
 	transition: all 0.2s ease;
 	margin-bottom: 1px !important;
+}
+
+/* Keep field borders visible in normal state (not only on hover/focus) */
+.summary-field :deep(.v-field) {
+	border: 1.5px solid #b8c1cc !important;
+}
+
+.summary-field :deep(.v-field__overlay) {
+	opacity: 0.02 !important;
+}
+
+:deep(.v-theme--dark) .summary-field :deep(.v-field),
+:deep([data-theme="dark"]) .summary-field :deep(.v-field) {
+	border-color: #4b5563 !important;
 }
 
 .summary-field:hover {
@@ -1980,6 +1996,53 @@ export default {
 :deep(.compact-summary .v-field__prepend-inner .v-icon),
 :deep(.compact-summary .v-field__append-inner .v-icon) {
 	font-size: 16px !important;
+}
+
+/* Keep manual round-off field readable and inside bounds in compact layout */
+:deep(.compact-summary .manual-round-off-field .v-field) {
+	min-height: 34px !important;
+	height: 34px !important;
+	overflow: hidden !important;
+}
+
+:deep(.compact-summary .manual-round-off-field .v-field__input) {
+	min-height: 30px !important;
+	height: 30px !important;
+	padding-top: 2px !important;
+	padding-bottom: 2px !important;
+	line-height: 1.2 !important;
+	display: flex !important;
+	align-items: center !important;
+}
+
+:deep(.compact-summary .manual-round-off-field .v-field__prepend-inner),
+:deep(.compact-summary .manual-round-off-field .v-field__append-inner) {
+	min-height: 30px !important;
+	height: 30px !important;
+	align-items: center !important;
+}
+
+
+:deep(.compact-summary .manual-round-off-field input[type="number"]::-webkit-outer-spin-button),
+:deep(.compact-summary .manual-round-off-field input[type="number"]::-webkit-inner-spin-button) {
+	-webkit-appearance: none !important;
+	margin: 0 !important;
+	display: none !important;
+}
+
+:deep(.compact-summary .manual-round-off-field input[type="number"]) {
+	-moz-appearance: textfield !important;
+	appearance: textfield !important;
+	align-self: center !important;
+	line-height: 1.1 !important;
+	padding-top: 0 !important;
+	padding-bottom: 0 !important;
+}
+
+:deep(.compact-summary .manual-round-off-field .v-text-field__prefix) {
+	align-self: center !important;
+	line-height: 1 !important;
+	margin-top: 0 !important;
 }
 
 
@@ -2340,5 +2403,15 @@ export default {
 		height: 40px !important;
 		font-size: 1rem !important;
 	}
+}
+
+/* Final override: always-visible borders for summary fields */
+:deep(.summary-field .v-field) {
+	border: 1px solid #121416 !important;
+	background-color: #fff !important;
+}
+
+:deep(.summary-field .v-field__overlay) {
+	opacity: 0 !important;
 }
 </style>

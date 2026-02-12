@@ -2,16 +2,18 @@
 	<div :style="responsiveStyles">
 		<v-card
 			:class="[
-				'selection mx-auto my-0 py-0 mt-3 pos-card dynamic-card resizable',
+				'selection my-0 py-0 pos-card dynamic-card resizable',
+				{ 'mx-auto': !hideFilters },
+				{ 'mt-3': !hideFilters },
 				isDarkTheme ? '' : 'bg-grey-lighten-5',
 				rtlClasses,
 			]"
 			:style="{
-				height: responsiveStyles['--container-height'],
-				maxHeight: responsiveStyles['--container-height'],
+				height: hideFilters ? '100%' : responsiveStyles['--container-height'],
+				maxHeight: hideFilters ? '100%' : responsiveStyles['--container-height'],
 				backgroundColor: isDarkTheme ? '#121212' : '',
-				resize: 'vertical',
-				overflow: 'auto',
+				resize: hideFilters ? 'none' : 'vertical',
+				overflow: hideFilters ? 'hidden' : 'auto',
 				position: 'relative',
 			}"
 		>
@@ -23,8 +25,8 @@
 				color="info"
 			></v-progress-linear>
 
-			<div class="dynamic-padding">
-				<div class="sticky-header">
+			<div class="dynamic-padding" :class="{ 'compact-layout': hideFilters }">
+				<div v-if="!hideFilters" class="sticky-header">
 					<v-row class="items">
 						<!-- <v-col class="pb-0">
 							<v-text-field
@@ -213,8 +215,8 @@
 						</v-col>
 					</v-row>
 				</div>
-				<v-row class="items">
-					<v-col cols="12" class="pt-0 mt-0">
+				<v-row class="items items-body" :class="{ 'compact-items-body': hideFilters }">
+					<v-col cols="12" class="pt-0 mt-0 items-body-col" :class="{ 'compact-items-body-col': hideFilters }">
 						<div class="items-content-wrapper">
 						<!--REAL CENTER SPINNER -->
 						<div v-if="loading" class="items-spinner-overlay">
@@ -323,7 +325,7 @@
 								:headers="headers"
 								:items="displayed_items"
 								class="sleek-data-table overflow-y-auto"
-								:style="{ height: 'calc(100% - 80px)' }"
+								:style="{ height: hideFilters ? '100%' : 'calc(100% - 80px)' }"
 								item-key="item_code"
 								fixed-header
 								height="100%"
@@ -517,6 +519,10 @@ export default {
 		externalSearch: {
 			type: String,
 			default: "",
+		},
+		hideFilters: {
+			type: Boolean,
+			default: false,
 		},
 	},
 
@@ -3492,6 +3498,67 @@ export default {
 	padding: var(--dynamic-sm);
 }
 
+.dynamic-padding.compact-layout {
+	padding: 0 !important;
+	height: 100%;
+}
+
+.dynamic-padding.compact-layout .compact-items-body {
+	margin: 0 !important;
+	height: 100%;
+}
+
+.dynamic-padding.compact-layout .compact-items-body-col {
+	padding: 0 !important;
+	height: 100%;
+}
+
+.dynamic-padding.compact-layout .items-content-wrapper {
+	height: 100%;
+}
+
+.items-table-container {
+	width: 100%;
+	height: 100%;
+}
+
+/* Embedded POS list view: remove reserved right gutter near scrollbar */
+.dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-table__wrapper),
+.dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-data-table__wrapper) {
+	padding-right: 0 !important;
+	margin-right: 0 !important;
+	scrollbar-gutter: auto !important;
+	background-color: #fafafa !important;
+}
+
+:deep([data-theme="dark"]) .dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-table__wrapper),
+:deep([data-theme="dark"]) .dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-data-table__wrapper),
+:deep(.v-theme--dark) .dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-table__wrapper),
+:deep(.v-theme--dark) .dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-data-table__wrapper) {
+	background-color: #2d2d2d !important;
+}
+
+.dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(table) {
+	width: 100% !important;
+	margin-right: 0 !important;
+	table-layout: fixed !important;
+	border-collapse: collapse !important;
+	border-spacing: 0 !important;
+	border-radius: 0 !important;
+}
+
+.dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(th:last-child),
+.dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(td:last-child) {
+	padding-right: 8px !important;
+}
+
+.dynamic-padding.compact-layout .items-table-container,
+.dynamic-padding.compact-layout .items-table-container .sleek-data-table,
+.dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-table__wrapper),
+.dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-data-table__wrapper) {
+	border-radius: 0 !important;
+}
+
 .sticky-header {
 	position: sticky;
 	top: 0;
@@ -3500,6 +3567,26 @@ export default {
 	padding: var(--dynamic-sm);
 	margin: 0;
 	border-bottom: 1px solid #e0e0e0;
+}
+
+/* Keep search/filter field borders visible in normal state */
+.sticky-header :deep(.v-text-field .v-field),
+.sticky-header :deep(.v-select .v-field),
+.sticky-header :deep(.v-autocomplete .v-field) {
+	border: 1.5px solid #b8c1cc !important;
+}
+
+.sticky-header :deep(.v-field__overlay) {
+	opacity: 0.02 !important;
+}
+
+:deep(.v-theme--dark) .sticky-header :deep(.v-text-field .v-field),
+:deep(.v-theme--dark) .sticky-header :deep(.v-select .v-field),
+:deep(.v-theme--dark) .sticky-header :deep(.v-autocomplete .v-field),
+:deep([data-theme="dark"]) .sticky-header :deep(.v-text-field .v-field),
+:deep([data-theme="dark"]) .sticky-header :deep(.v-select .v-field),
+:deep([data-theme="dark"]) .sticky-header :deep(.v-autocomplete .v-field) {
+	border-color: #4b5563 !important;
 }
 
 [data-theme="dark"] .sticky-header {
@@ -4028,7 +4115,7 @@ export default {
 /* Table wrapper styling */
 .sleek-data-table :deep(.v-data-table__wrapper),
 .sleek-data-table :deep(.v-table__wrapper) {
-	border-radius: var(--border-radius-sm);
+	border-radius: 0 !important;
 	height: 100%;
 	overflow-y: auto;
 	scrollbar-width: thin;
@@ -4223,6 +4310,18 @@ export default {
   padding: 48px 16px;
   color: #9e9e9e;
   font-size: 0.95rem;
+}
+
+/* Final override: always-visible borders for sticky search/filter fields */
+:deep(.sticky-header .v-text-field .v-field),
+:deep(.sticky-header .v-select .v-field),
+:deep(.sticky-header .v-autocomplete .v-field) {
+	border: 1px solid #070707 !important;
+	background-color: #fff !important;
+}
+
+:deep(.sticky-header .v-field__overlay) {
+	opacity: 0 !important;
 }
 
 
