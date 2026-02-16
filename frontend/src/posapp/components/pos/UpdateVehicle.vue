@@ -195,11 +195,17 @@ export default {
 				});
 
 				if (res?.message) {
-					this.mobile_no =
+					const customerMobile =
 						res.message.mobile_no ||
 						res.message.mobile_number ||
 						res.message.phone ||
 						"";
+
+					// Preserve explicit vehicle mobile in edit mode. Only auto-fill
+					// from customer when mobile is currently empty.
+					if (!this.mobile_no) {
+						this.mobile_no = customerMobile;
+					}
 				}
 			} catch (e) {
 				console.warn("Failed to fetch customer mobile:", e);
