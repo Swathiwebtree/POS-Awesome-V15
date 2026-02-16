@@ -208,7 +208,7 @@ export default {
 		 * - { ...customerObject }  => full customer object (editing). payload should include name and optionally vehicles array
 		 * - { customer: {...}, withVehicle: true } => wrapper shape
 		 */
-		handleOpen(data) {
+		async handleOpen(data) {
 			const wrapper = data && data.customer ? data : null;
 			const payload = wrapper ? wrapper.customer : data || {};
 
@@ -241,13 +241,59 @@ export default {
 				this.loyalty_program = payload.loyalty_program || null;
 				this.gender = payload.gender || "";
 
-				// Prefill vehicle details if provided (take the first vehicle)
+				// Prefill vehicle details using selected vehicle from payload when available.
 				if (payload.vehicles && payload.vehicles.length) {
-					const v = payload.vehicles[0];
+					const preferredVehicleNo =
+						(payload.custom_vehicle_no || payload.vehicle_no || "").toString().trim();
+					let v = payload.vehicles[0];
+					if (preferredVehicleNo) {
+						const matched = payload.vehicles.find(
+							(row) => ((row.vehicle_no || "").toString().trim() === preferredVehicleNo)
+						);
+						if (matched) {
+							v = matched;
+						}
+					}
+
 					this.vehicle_no = v.vehicle_no || "";
 					this.vehicle_make = v.make || "";
 					this.vehicle_model = v.model || "";
 					this.odometer = v.odometer || "";
+					if (!this.mobile_no) {
+						this.mobile_no = v.mobile_no || "";
+					}
+				} else {
+					// Fallback when vehicles array is absent but top-level values exist.
+					this.vehicle_no = payload.custom_vehicle_no || payload.vehicle_no || "";
+					this.vehicle_make = payload.vehicle_make || payload.make || "";
+					this.vehicle_model = payload.vehicle_model || payload.model || "";
+					this.odometer = payload.odometer || "";
+				}
+
+				// Always refresh selected vehicle details from API to avoid stale values
+				// after Update Vehicle save and schema-variant field mappings.
+				const selectedVehicleNo = (this.vehicle_no || "").toString().trim();
+				if (selectedVehicleNo && this.customer_id) {
+					try {
+						const vRes = await frappe.call({
+							method: "posawesome.posawesome.api.vehicles.get_vehicles_by_customer",
+							args: {
+								customer_name: this.customer_id,
+								vehicle_no: selectedVehicleNo,
+								limit: 1,
+							},
+						});
+						const latestVehicle = (vRes?.message || [])[0] || null;
+						if (latestVehicle) {
+							this.vehicle_no = latestVehicle.vehicle_no || this.vehicle_no;
+							this.vehicle_make = latestVehicle.make || this.vehicle_make || "";
+							this.vehicle_model = latestVehicle.model || this.vehicle_model || "";
+							this.odometer = latestVehicle.odometer || this.odometer || "";
+							this.mobile_no = latestVehicle.mobile_no || this.mobile_no || "";
+						}
+					} catch (e) {
+						console.warn("Failed to refresh selected vehicle for Update Customer", e);
+					}
 				}
 			} else {
 				// New customer: if caller asked for withVehicle then require vehicle fields during submit

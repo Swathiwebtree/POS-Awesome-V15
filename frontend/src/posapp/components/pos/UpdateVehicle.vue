@@ -163,6 +163,7 @@ export default {
 		chasis_no: "",
 		color: "",
 		registration_number: "",
+		isPrefilling: false,
 	}),
 
 	computed: {
@@ -176,6 +177,9 @@ export default {
 
 	watch: {
 		async customer(newCustomer) {
+			if (this.isPrefilling) {
+				return;
+			}
 			if (!newCustomer) {
 				this.mobile_no = "";
 				return;
@@ -270,46 +274,75 @@ export default {
 		// single entry point to open and populate the dialog
 		async open_dialog(payload = {}) {
 			this.reset_dialog();
+			this.isPrefilling = true;
+			try {
+				// pre-load lists (no-op if server returns quickly)
+				await Promise.all([this.search_customers(), this.search_makes()]);
 
-			// pre-load lists (no-op if server returns quickly)
-			await Promise.all([this.search_customers(), this.search_makes()]);
-
-			if (payload && payload.name) {
-				// editing an existing vehicle
-				this.vehicle_id = payload.name;
-				this.vehicle_no = payload.vehicle_no || "";
-				this.customer = payload.customer || "";
-				this.make = payload.make || "";
-				this.model = payload.model || "";
-				this.mobile_no = payload.mobile_no || "";
-				this.chasis_no = payload.chasis_no || "";
-				this.color = payload.color || "";
-				this.registration_number = payload.registration_number || "";
-
-				// ensure chosen customer exists in the dropdown list
-				if (this.customer && !this.customer_list.find((c) => c.name === this.customer)) {
+				if (payload && payload.name) {
+					let fullVehicle = null;
 					try {
-						const cust_doc_res = await frappe.call({
-							method: "frappe.client.get",
-							args: { doctype: "Customer", name: this.customer },
-						});
-						if (cust_doc_res && cust_doc_res.message) {
-							this.customer_list.push({
-								name: cust_doc_res.message.name,
-								customer_name: cust_doc_res.message.customer_name,
+						const vehicleNo = (payload.vehicle_no || "").trim();
+						const customerName = payload.customer || this.customer || "";
+						if (vehicleNo && customerName) {
+							const fullRes = await frappe.call({
+								method: "posawesome.posawesome.api.vehicles.get_vehicles_by_customer",
+								args: {
+									customer_name: customerName,
+									vehicle_no: vehicleNo,
+									limit: 1,
+								},
 							});
+							fullVehicle = (fullRes?.message || [])[0] || null;
 						}
 					} catch (e) {
-						// ignore missing customer; still open dialog
-						console.warn("Failed to fetch customer for dialog:", e);
+						console.warn("Failed to fetch full vehicle details for edit dialog:", e);
 					}
-				}
-			} else {
-				// payload may include preselected customer or vehicle_no
-				if (payload && payload.customer) this.customer = payload.customer;
-				if (payload && payload.vehicle_no) this.vehicle_no = payload.vehicle_no;
-			}
 
+					const v = fullVehicle || payload;
+
+					// editing an existing vehicle
+					this.vehicle_id = payload.name;
+					this.vehicle_no = v.vehicle_no || payload.vehicle_no || "";
+					this.customer = v.customer || payload.customer || "";
+					this.make = v.make || payload.make || "";
+					this.model = v.model || payload.model || "";
+					this.mobile_no = v.mobile_no || payload.mobile_no || "";
+					this.chasis_no = v.chasis_no || payload.chasis_no || "";
+					this.color = v.color || payload.color || "";
+					this.registration_number = v.registration_number || payload.registration_number || "";
+
+					// Ensure selected make exists in autocomplete list.
+					if (this.make && !this.make_list.includes(this.make)) {
+						this.make_list.push(this.make);
+					}
+
+					// ensure chosen customer exists in the dropdown list
+					if (this.customer && !this.customer_list.find((c) => c.name === this.customer)) {
+						try {
+							const cust_doc_res = await frappe.call({
+								method: "frappe.client.get",
+								args: { doctype: "Customer", name: this.customer },
+							});
+							if (cust_doc_res && cust_doc_res.message) {
+								this.customer_list.push({
+									name: cust_doc_res.message.name,
+									customer_name: cust_doc_res.message.customer_name,
+								});
+							}
+						} catch (e) {
+							// ignore missing customer; still open dialog
+							console.warn("Failed to fetch customer for dialog:", e);
+						}
+					}
+				} else {
+					// payload may include preselected customer or vehicle_no
+					if (payload && payload.customer) this.customer = payload.customer;
+					if (payload && payload.vehicle_no) this.vehicle_no = payload.vehicle_no;
+				}
+			} finally {
+				this.isPrefilling = false;
+			}
 			this.vehicleDialog = true;
 		},
 

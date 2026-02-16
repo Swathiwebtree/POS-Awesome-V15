@@ -6,19 +6,35 @@
                         <v-autocomplete ref="vehicleDropdown" class="vehicle-autocomplete sleek-field" density="compact"
                                 variant="solo" clearable :loading="loadingVehicles" :items="vehicleItems" item-title="vehicle_no"
                                 item-value="name" :label="__('Vehicle No')" v-model="selectedVehicle" hide-details
-                                @update:search="onVehicleSearch" @update:modelValue="onVehicleSelect",:menu-props="{maxWidth: '80vw'}">
+                                @update:search="onVehicleSearch" @update:modelValue="onVehicleSelect" :menu-props="{maxWidth: '80vw'}">
                                 <template #prepend-inner>
-                                        <v-icon class="icon-button" @click.stop="edit_vehicle">
-                                                mdi-car-edit
-                                        </v-icon>
+                                        <v-tooltip text="Edit vehicle">
+                                                <template #activator="{ props }">
+                                                        <v-icon
+                                                                v-bind="props"
+                                                                class="icon-button"
+                                                                @mousedown.prevent.stop
+                                                                @click.stop="edit_vehicle"
+                                                                >mdi-car-wrench</v-icon
+                                                        >
+                                                </template>
+                                        </v-tooltip>
                                 </template>
 
                                 <template #append-inner>
                                         <v-progress-circular v-if="loadingVehicles" indeterminate size="20" width="2" color="primary" />
 
-                                        <v-icon v-else class="icon-button" @click.stop="new_vehicle">
-                                                mdi-plus
-                                        </v-icon>
+                                        <v-tooltip v-else text="Add new vehicle">
+                                                <template #activator="{ props }">
+                                                        <v-icon
+                                                                v-bind="props"
+                                                                class="icon-button"
+                                                                @mousedown.prevent.stop
+                                                                @click.stop="new_vehicle"
+                                                                >mdi-plus</v-icon
+                                                        >
+                                                </template>
+                                        </v-tooltip>
                                 </template>
                         </v-autocomplete>
 
@@ -155,9 +171,10 @@
 
 .icon-button {
         cursor: pointer;
-        font-size: 18px;
+        font-size: 22px;
         opacity: 0.7;
         transition: all 0.2s ease;
+        color: #000000;
 }
 
 .icon-button:hover {
@@ -415,14 +432,15 @@ export default {
                         return this.isCustomerBackgroundLoading ? [] : this.customers;
                 },
                 vehicleItems() {
-                        // When customer is selected and vehicles are loaded
-                        if (this.customer && this.vehicles.length) {
-                                return this.vehicles;
-                        }
-
-                        // When searching manually
+                        // During active vehicle typing, always show explicit search results.
+                        // This avoids fallback to the full customer list for large vehicle sets.
                         if (this.vehicleSearchTerm && this.vehicleSearchTerm.length >= 2) {
                                 return this.vehicleSearchResults;
+                        }
+
+                        // Default: show customer vehicles list.
+                        if (this.customer && this.vehicles.length) {
+                                return this.vehicles;
                         }
 
                         return [];
@@ -798,7 +816,7 @@ export default {
                                         args: {
                                                 search_term: term,
                                                 customer: this.customer || null,
-                                                limit: 20,
+                                                limit: 50,
                                         },
                                 });
 
@@ -1340,11 +1358,40 @@ export default {
                                                 args: { customer_name: cust_name },
                                         });
                                         vehicles = vResp?.message || [];
+                                        const selectedVehicleRow =
+                                                (this.vehicles || []).find((v) => v.name === this.selectedVehicle) || null;
+                                        const currentVehicleNo = (
+                                                selectedVehicleRow?.vehicle_no ||
+                                                this.vehicle_no ||
+                                                ""
+                                        ).trim();
+                                        if (currentVehicleNo && vehicles.length > 1) {
+                                                const idx = vehicles.findIndex(
+                                                        (v) => (v.vehicle_no || "").trim() === currentVehicleNo
+                                                );
+                                                if (idx > 0) {
+                                                        const selectedVehicle = vehicles.splice(idx, 1)[0];
+                                                        vehicles.unshift(selectedVehicle);
+                                                }
+                                        }
                                 } catch (e) {
                                         console.warn("Failed to fetch vehicles for customer", e);
                                 }
 
                                 payload.vehicles = vehicles;
+                                const selectedVehicleRow =
+                                        (this.vehicles || []).find((v) => v.name === this.selectedVehicle) || null;
+                                const preferredVehicleNo = (
+                                        selectedVehicleRow?.vehicle_no ||
+                                        this.vehicle_no ||
+                                        payload.custom_vehicle_no ||
+                                        payload.vehicle_no ||
+                                        ""
+                                ).trim();
+                                if (preferredVehicleNo) {
+                                        payload.custom_vehicle_no = preferredVehicleNo;
+                                        payload.vehicle_no = preferredVehicleNo;
+                                }
 
                                 this.eventBus.emit("open_update_customer", {
                                         customer: payload,
@@ -1524,6 +1571,8 @@ export default {
                                 if (!vehicleNo) {
                                         this.selectedVehicle = null;
                                         this.vehicle_no = "";
+                                        this.vehicleSearchTerm = "";
+                                        this.vehicleSearchResults = [];
                                 }
 
                                 if (this.vehicles.length === 1) {
@@ -1556,6 +1605,8 @@ export default {
                         if (!val) {
                                 this.selectedVehicle = null;
                                 this.vehicle_no = "";
+                                this.vehicleSearchTerm = "";
+                                this.vehicleSearchResults = [];
 
                                 this.eventBus.emit("vehicle_selected", null);
                                 this.eventBus.emit("clear_vehicle_discounts");
@@ -1567,6 +1618,8 @@ export default {
 
                         this.selectedVehicle = val;
                         this.vehicle_no = vehicle.vehicle_no || "";
+                        this.vehicleSearchTerm = "";
+                        this.vehicleSearchResults = [];
 
                         this.eventBus.emit("vehicle_selected", vehicle.name);
 
@@ -1889,13 +1942,24 @@ export default {
                                         });
 
                                         if (vehicle && vehicle.vehicle_no) {
-                                                this.eventBus.emit("add_vehicle_to_list", vehicle);
-                                                this.selectedVehicle = vehicle.name;
-                                                this.eventBus.emit("vehicle_selected", vehicle.name);
+                                                // Always refresh from source of truth after customer update so
+                                                // Update Vehicle dialog gets latest mobile/make/model values.
+                                                const jobVehicleNo =
+                                                        this.jobOrderCustomer === customer.name ? this.jobOrderVehicleNo : null;
+                                                await this.fetchVehiclesForCustomer(customer.name, jobVehicleNo);
+
+                                                const refreshed = (this.vehicles || []).find(
+                                                        (v) => (v.vehicle_no || "").trim() === (vehicle.vehicle_no || "").trim()
+                                                );
+                                                if (refreshed) {
+                                                        this.selectedVehicle = refreshed.name;
+                                                        this.vehicle_no = refreshed.vehicle_no;
+                                                        this.eventBus.emit("vehicle_selected", refreshed.name);
+                                                }
                                         } else {
                                                 const jobVehicleNo =
                                                         this.jobOrderCustomer === customer.name ? this.jobOrderVehicleNo : null;
-                                                this.fetchVehiclesForCustomer(customer.name, jobVehicleNo);
+                                                await this.fetchVehiclesForCustomer(customer.name, jobVehicleNo);
                                         }
                                 });
 
@@ -1919,21 +1983,20 @@ export default {
                                         await this.fetchVehiclesForCustomer(this.customer, jobVehicleNo);
 
                                         if (vehicle.customer === this.customer) {
-                                                this.vehicles = this.vehicles.filter(v => v.name !== vehicle.name);
-
-                                                this.vehicles.push({
-                                                        name: vehicle.name,
-                                                        vehicle_no: vehicle.vehicle_no,
-                                                        model: vehicle.model || "",
-                                                        make: vehicle.make || "",
-                                                        mobile_no: vehicle.mobile_no || "",
-                                                        customer_name: vehicle.customer_name,
-                                                        customer: vehicle.customer,
-                                                });
-
-                                                this.selectedVehicle = vehicle.name;
-                                                this.vehicle_no = vehicle.vehicle_no;
-                                                this.eventBus.emit("vehicle_selected", vehicle.name);
+                                                const refreshed = (this.vehicles || []).find(
+                                                        (v) =>
+                                                                (v.vehicle_no || "").trim() === (vehicle.vehicle_no || "").trim() ||
+                                                                v.name === vehicle.name
+                                                );
+                                                if (refreshed) {
+                                                        this.selectedVehicle = refreshed.name;
+                                                        this.vehicle_no = refreshed.vehicle_no;
+                                                        this.eventBus.emit("vehicle_selected", refreshed.name);
+                                                } else {
+                                                        this.selectedVehicle = vehicle.name;
+                                                        this.vehicle_no = vehicle.vehicle_no;
+                                                        this.eventBus.emit("vehicle_selected", vehicle.name);
+                                                }
                                         }
                                 });
 

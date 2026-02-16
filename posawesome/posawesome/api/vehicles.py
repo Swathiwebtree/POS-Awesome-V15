@@ -10,6 +10,110 @@ from frappe.exceptions import ValidationError, DoesNotExistError, NameError
 VEHICLE_DOCTYPE = "Vehicle Master"
 CUSTOMER_DOCTYPE = "Customer"
 
+
+def _has_column(table, column):
+    # Use direct schema lookup only. frappe.db.has_column can be true from DocField
+    # even when DB column is missing (customizations out of sync).
+    try:
+        table_name = table if str(table).startswith("tab") else f"tab{table}"
+        rows = frappe.db.sql(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = %s
+              AND column_name = %s
+            LIMIT 1
+            """,
+            (table_name, column),
+            as_dict=True,
+        )
+        return bool(rows)
+    except Exception:
+        return False
+
+
+def _set_if_exists(doc, field, value):
+    if value is None:
+        return
+    if hasattr(doc, "meta") and doc.meta and doc.meta.has_field(field):
+        setattr(doc, field, value)
+
+
+def _first_field_value(doc_or_dict, fields):
+    if not doc_or_dict:
+        return None
+    for f in fields:
+        v = None
+        if isinstance(doc_or_dict, dict):
+            v = doc_or_dict.get(f)
+        else:
+            v = getattr(doc_or_dict, f, None)
+        if v not in (None, ""):
+            return v
+    return None
+
+
+def _sync_vehicle_doctype(vehicle_name, vehicle_no, customer, model, make, chasis_no, color, registration_number, mobile_no):
+    """
+    Best-effort sync into ERPNext Vehicle doctype.
+    This keeps data available even when Vehicle Master schema differs across sites.
+    """
+    try:
+        vdoc = None
+        if vehicle_name and frappe.db.exists("Vehicle", vehicle_name):
+            vdoc = frappe.get_doc("Vehicle", vehicle_name)
+        elif vehicle_no:
+            # Vehicle table in this site may use license_plate instead of vehicle_no.
+            found = []
+            if _has_column("Vehicle", "vehicle_no"):
+                found = frappe.get_all(
+                    "Vehicle",
+                    filters={"vehicle_no": vehicle_no},
+                    fields=["name"],
+                    limit_page_length=1,
+                )
+            if not found and _has_column("Vehicle", "license_plate"):
+                found = frappe.get_all(
+                    "Vehicle",
+                    filters={"license_plate": vehicle_no},
+                    fields=["name"],
+                    limit_page_length=1,
+                )
+            if found:
+                vdoc = frappe.get_doc("Vehicle", found[0].name)
+
+        if not vdoc:
+            # Create a new Vehicle record if missing, so fields like make are persisted.
+            vdoc = frappe.new_doc("Vehicle")
+            _set_if_exists(vdoc, "license_plate", vehicle_no)
+            _set_if_exists(vdoc, "vehicle_no", vehicle_no)
+
+        _set_if_exists(vdoc, "customer", customer)
+        _set_if_exists(vdoc, "vehicle_no", vehicle_no)
+        _set_if_exists(vdoc, "license_plate", vehicle_no)
+        _set_if_exists(vdoc, "plate_no", vehicle_no)
+        _set_if_exists(vdoc, "model", model)
+        _set_if_exists(vdoc, "vehicle_model", model)
+        _set_if_exists(vdoc, "model_no", model)
+        _set_if_exists(vdoc, "make", make)
+        _set_if_exists(vdoc, "vehicle_make", make)
+        _set_if_exists(vdoc, "brand", make)
+        _set_if_exists(vdoc, "manufacturer", make)
+        _set_if_exists(vdoc, "chasis_no", chasis_no)
+        _set_if_exists(vdoc, "chassis_no", chasis_no)
+        _set_if_exists(vdoc, "color", color)
+        _set_if_exists(vdoc, "registration_number", registration_number)
+        _set_if_exists(vdoc, "mobile_no", mobile_no)
+        _set_if_exists(vdoc, "tel_mobile", mobile_no)
+        if vdoc.is_new():
+            vdoc.insert(ignore_permissions=True, ignore_mandatory=True)
+        else:
+            vdoc.save(ignore_permissions=True)
+        frappe.db.commit()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Vehicle sync warning")
+
 # ============ POS Vehicle APIs ============
 
 
@@ -55,6 +159,23 @@ def create_vehicle(
 
     # We use a try block specifically around document operations
     try:
+        vm_meta = frappe.get_meta(VEHICLE_DOCTYPE)
+
+        def _vm_set(target_doc, field, value):
+            if value is None:
+                return
+            if vm_meta.has_field(field):
+                setattr(target_doc, field, value)
+
+        def _vm_doc_data(base):
+            doc = {"doctype": VEHICLE_DOCTYPE}
+            for k, v in base.items():
+                if k in ("doctype",):
+                    continue
+                if vm_meta.has_field(k):
+                    doc[k] = v
+            return doc
+
         if method == "create":
             # Check for existing vehicle using vehicle_no as the unique key
             if frappe.db.exists(VEHICLE_DOCTYPE, vehicle_no):
@@ -64,18 +185,27 @@ def create_vehicle(
                 )
 
             # Create a new document dictionary
-            doc_data = {
-                "doctype": VEHICLE_DOCTYPE,
+            base_doc_data = {
                 # Setting 'name' is crucial if the DocType is configured for AutoName: field:vehicle_no
                 "customer": customer,
                 "vehicle_no": vehicle_no,
+                "license_plate": vehicle_no,
+                "plate_no": vehicle_no,
                 "model": model,
+                "vehicle_model": model,
+                "model_no": model,
                 "make": make,
+                "vehicle_make": make,
+                "brand": make,
+                "manufacturer": make,
                 "chasis_no": chasis_no,
+                "chassis_no": chasis_no,
                 "color": color,
                 "registration_number": registration_number,
                 "mobile_no": mobile_no,
+                "tel_mobile": mobile_no,
             }
+            doc_data = _vm_doc_data(base_doc_data)
 
             # Insert the new document (ignore_mandatory=True removed for better validation)
             vehicle = frappe.get_doc(doc_data)
@@ -86,13 +216,23 @@ def create_vehicle(
             vehicle = frappe.get_doc(VEHICLE_DOCTYPE, vehicle_id)
 
             # Update fields based on incoming data
-            vehicle.customer = customer
-            vehicle.model = model
-            vehicle.make = make
-            vehicle.chasis_no = chasis_no
-            vehicle.color = color
-            vehicle.registration_number = registration_number
-            vehicle.mobile_no = mobile_no
+            _vm_set(vehicle, "customer", customer)
+            _vm_set(vehicle, "vehicle_no", vehicle_no)
+            _vm_set(vehicle, "license_plate", vehicle_no)
+            _vm_set(vehicle, "plate_no", vehicle_no)
+            _vm_set(vehicle, "model", model)
+            _vm_set(vehicle, "vehicle_model", model)
+            _vm_set(vehicle, "model_no", model)
+            _vm_set(vehicle, "make", make)
+            _vm_set(vehicle, "vehicle_make", make)
+            _vm_set(vehicle, "brand", make)
+            _vm_set(vehicle, "manufacturer", make)
+            _vm_set(vehicle, "chasis_no", chasis_no)
+            _vm_set(vehicle, "chassis_no", chasis_no)
+            _vm_set(vehicle, "color", color)
+            _vm_set(vehicle, "registration_number", registration_number)
+            _vm_set(vehicle, "mobile_no", mobile_no)
+            _vm_set(vehicle, "tel_mobile", mobile_no)
 
             # Save the document (ignore_mandatory=True removed for better validation)
             vehicle.save(ignore_permissions=True)
@@ -102,6 +242,26 @@ def create_vehicle(
 
         # Commit changes and return the document
         frappe.db.commit()
+        _sync_vehicle_doctype(
+            vehicle_name=getattr(vehicle, "name", None),
+            vehicle_no=vehicle_no,
+            customer=customer,
+            model=model,
+            make=make,
+            chasis_no=chasis_no,
+            color=color,
+            registration_number=registration_number,
+            mobile_no=mobile_no,
+        )
+
+        # Keep linked customer mobile in sync when vehicle mobile is edited.
+        try:
+            if customer and mobile_no and frappe.db.exists("Customer", customer):
+                frappe.db.set_value("Customer", customer, "mobile_no", mobile_no, update_modified=False)
+                frappe.db.commit()
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Customer mobile sync warning")
+
         return vehicle.as_dict()
 
     # CRITICAL FIX: Explicitly catch Frappe-specific exceptions and re-raise them.
@@ -254,17 +414,38 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None, vehicle
         # Get customer details first (for mobile_no and customer_name)
         cust_doc = frappe.get_doc(CUSTOMER_DOCTYPE, customer_name)
 
+        # Build field list defensively because Vehicle Master schemas differ by site.
+        table_name = VEHICLE_DOCTYPE
+        requested_optional_fields = [
+            "model",
+            "vehicle_model",
+            "model_no",
+            "make",
+            "vehicle_make",
+            "brand",
+            "manufacturer",
+            "chasis_no",
+            "color",
+            "registration_number",
+            "reg_no",
+            "mobile_no",
+            "tel_mobile",
+            "odometer",
+        ]
+
+        fields = ["name", "customer", "vehicle_no"]
+        for col in requested_optional_fields:
+            try:
+                if frappe.db.has_column(table_name, col):
+                    fields.append(col)
+            except Exception:
+                # If metadata check fails, skip optional column and continue.
+                pass
+
         vehicles = frappe.get_all(
             VEHICLE_DOCTYPE,
             filters=filters,
-            fields=[
-                "name",
-                "customer",
-                "vehicle_no",
-                # "model",
-                # "make",
-                "chasis_no",
-            ],
+            fields=fields,
             order_by="name asc",
             limit_page_length=1 if vehicle_no else limit,
         )
@@ -272,12 +453,100 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None, vehicle
         # Enrich all vehicles with customer details
         for row in vehicles:
             row.setdefault("vehicle_no", row.get("name", ""))
-            # row.setdefault("model", "")
-            # row.setdefault("make", "")
+            row["model"] = _first_field_value(row, ["model", "vehicle_model", "model_no"]) or ""
+            row["make"] = _first_field_value(row, ["make", "vehicle_make", "brand", "manufacturer"]) or ""
             row.setdefault("chasis_no", "")
+            row.setdefault("color", "")
+            row.setdefault("registration_number", "")
+            row.setdefault("mobile_no", "")
+            row.setdefault("odometer", 0)
+
+            # Fallback enrichment from ERPNext Vehicle doctype when Vehicle Master
+            # does not contain all fields in this site schema.
+            try:
+                vehicle_doc = None
+                v_fields = ["name"]
+                table_vehicle = "Vehicle"
+                for f in [
+                    "model",
+                    "vehicle_model",
+                    "make",
+                    "vehicle_make",
+                    "chasis_no",
+                    "chassis_no",
+                    "color",
+                    "registration_number",
+                    "mobile_no",
+                    "tel_mobile",
+                    "odometer",
+                ]:
+                    if _has_column(table_vehicle, f):
+                        v_fields.append(f)
+
+                # Try by Vehicle.name first
+                found = frappe.get_all(
+                    "Vehicle",
+                    filters={"name": row.get("name")},
+                    fields=v_fields,
+                    limit_page_length=1,
+                )
+                if not found and row.get("vehicle_no"):
+                    # Fallback by vehicle_no in case naming differs
+                    if _has_column(table_vehicle, "vehicle_no"):
+                        found = frappe.get_all(
+                            "Vehicle",
+                            filters={"vehicle_no": row.get("vehicle_no")},
+                            fields=v_fields,
+                            limit_page_length=1,
+                        )
+                    elif _has_column(table_vehicle, "license_plate"):
+                        found = frappe.get_all(
+                            "Vehicle",
+                            filters={"license_plate": row.get("vehicle_no")},
+                            fields=v_fields,
+                            limit_page_length=1,
+                        )
+                if found:
+                    vehicle_doc = found[0]
+
+                if vehicle_doc:
+                    row["model"] = (
+                        row.get("model")
+                        or _first_field_value(vehicle_doc, ["model", "vehicle_model", "model_no"])
+                        or ""
+                    )
+                    row["make"] = (
+                        row.get("make")
+                        or _first_field_value(vehicle_doc, ["make", "vehicle_make", "brand"])
+                        or ""
+                    )
+                    row["chasis_no"] = (
+                        row.get("chasis_no")
+                        or _first_field_value(vehicle_doc, ["chasis_no", "chassis_no"])
+                        or ""
+                    )
+                    row["color"] = row.get("color") or vehicle_doc.get("color") or ""
+                    row["registration_number"] = (
+                        row.get("registration_number")
+                        or row.get("reg_no")
+                        or _first_field_value(vehicle_doc, ["registration_number", "registration_no"])
+                        or ""
+                    )
+                    row["mobile_no"] = (
+                        row.get("mobile_no")
+                        or row.get("tel_mobile")
+                        or _first_field_value(vehicle_doc, ["mobile_no", "tel_mobile", "phone", "phone_no"])
+                        or ""
+                    )
+                    row["odometer"] = row.get("odometer") or vehicle_doc.get("odometer") or 0
+            except Exception:
+                # Non-fatal fallback failure; keep available Vehicle Master values.
+                pass
+
             row["customer"] = customer_name
             row["customer_name"] = cust_doc.customer_name
-            row["mobile_no"] = cust_doc.mobile_no or ""
+            if not row.get("mobile_no"):
+                row["mobile_no"] = cust_doc.mobile_no or ""
             row["email_id"] = cust_doc.email_id or ""
             row["tax_id"] = cust_doc.tax_id or ""
 

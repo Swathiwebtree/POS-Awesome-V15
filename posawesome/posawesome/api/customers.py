@@ -1109,6 +1109,99 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         except Exception:
             frappe.log_error(frappe.get_traceback(), "Failed to link VM to Customer")
 
+        # Force-sync linked vehicle data so Customer and Vehicle dialogs reflect each other immediately.
+        try:
+            def _has_col(dt, fieldname):
+                try:
+                    return frappe.db.has_column(dt, fieldname)
+                except Exception:
+                    return False
+
+            if effective_vehicle_no:
+                sync_mobile = (
+                    vehicle_data.get("mobile_no")
+                    if vehicle_data.get("mobile_no") not in (None, "")
+                    else getattr(customer_doc, "mobile_no", None)
+                )
+                sync_model = vehicle_data.get("model")
+                sync_make = vehicle_data.get("make")
+
+                # Sync Vehicle Master by both key patterns used across sites.
+                vm_updates = {}
+                if sync_model not in (None, "") and _has_col(VM_DOCTYPE, "model"):
+                    vm_updates["model"] = sync_model
+                if sync_mobile not in (None, ""):
+                    if _has_col(VM_DOCTYPE, "tel_mobile"):
+                        vm_updates["tel_mobile"] = sync_mobile
+                    elif _has_col(VM_DOCTYPE, "mobile_no"):
+                        vm_updates["mobile_no"] = sync_mobile
+                if vm_updates:
+                    try:
+                        frappe.db.set_value(VM_DOCTYPE, {"name": effective_vehicle_no}, vm_updates, update_modified=False)
+                    except Exception:
+                        pass
+                    try:
+                        if _has_col(VM_DOCTYPE, "vehicle_no"):
+                            frappe.db.set_value(
+                                VM_DOCTYPE,
+                                {"vehicle_no": effective_vehicle_no},
+                                vm_updates,
+                                update_modified=False,
+                            )
+                    except Exception:
+                        pass
+
+                # Sync ERPNext Vehicle doctype as well.
+                veh_updates = {}
+                if sync_model not in (None, ""):
+                    if _has_col("Vehicle", "model"):
+                        veh_updates["model"] = sync_model
+                    if _has_col("Vehicle", "vehicle_model"):
+                        veh_updates["vehicle_model"] = sync_model
+                if sync_make not in (None, ""):
+                    if _has_col("Vehicle", "make"):
+                        veh_updates["make"] = sync_make
+                    if _has_col("Vehicle", "vehicle_make"):
+                        veh_updates["vehicle_make"] = sync_make
+                    if _has_col("Vehicle", "brand"):
+                        veh_updates["brand"] = sync_make
+                    if _has_col("Vehicle", "manufacturer"):
+                        veh_updates["manufacturer"] = sync_make
+                if sync_mobile not in (None, ""):
+                    if _has_col("Vehicle", "mobile_no"):
+                        veh_updates["mobile_no"] = sync_mobile
+                    if _has_col("Vehicle", "tel_mobile"):
+                        veh_updates["tel_mobile"] = sync_mobile
+                if veh_updates:
+                    try:
+                        frappe.db.set_value("Vehicle", {"name": effective_vehicle_no}, veh_updates, update_modified=False)
+                    except Exception:
+                        pass
+                    try:
+                        if _has_col("Vehicle", "vehicle_no"):
+                            frappe.db.set_value(
+                                "Vehicle",
+                                {"vehicle_no": effective_vehicle_no},
+                                veh_updates,
+                                update_modified=False,
+                            )
+                    except Exception:
+                        pass
+                    try:
+                        if _has_col("Vehicle", "license_plate"):
+                            frappe.db.set_value(
+                                "Vehicle",
+                                {"license_plate": effective_vehicle_no},
+                                veh_updates,
+                                update_modified=False,
+                            )
+                    except Exception:
+                        pass
+
+                frappe.db.commit()
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "create_customer_with_vehicle sync warning")
+
         # Build response
         customer_response = {
             "name": customer_doc.name,
@@ -1679,7 +1772,8 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
     Get vehicles filtered by search term and optionally by customer
     """
     search_term = (search_term or "").strip()
-    limit = int(limit or 20)
+    customer = (customer or "").strip() or None
+    limit = min(max(int(limit or 20), 1), 200)
 
     # No search term → simple get_all
     if not search_term:
@@ -1702,11 +1796,13 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
             order_by="modified desc",
         )
 
-    # SAFE like pattern (prefix-only for faster index usage)
+    # Prefix + contains patterns. Prefix is cheaper; contains gives expected UX.
     like_pattern = f"{search_term}%"
+    contains_pattern = f"%{search_term}%"
 
     params = {
         "like": like_pattern,
+        "contains": contains_pattern,
         "limit": limit,
     }
     customer_clause = ""
@@ -1747,7 +1843,7 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
         if vehicles:
             return vehicles
 
-        # Fallback: vehicle_no partial match only
+        # Second pass: prefix match (fast path for typical typing)
         vehicles = frappe.db.sql(
             f"""
             SELECT
@@ -1767,9 +1863,31 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
             as_dict=True,
         )
 
+        if vehicles:
+            return vehicles
+
+        # Final pass: contains match for non-prefix input (e.g., middle characters)
+        vehicles = frappe.db.sql(
+            f"""
+            SELECT
+                vm.name,
+                vm.vehicle_no,
+                vm.model,
+                vm.customer,
+                vm.odometer,
+                vm.chasis_no
+            FROM `tabVehicle Master` vm
+            WHERE vm.vehicle_no LIKE %(contains)s
+            {customer_clause}
+            ORDER BY vm.modified DESC
+            LIMIT %(limit)s
+            """,
+            params,
+            as_dict=True,
+        )
+
         return vehicles
 
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Vehicle Search Error")
         return []
-
