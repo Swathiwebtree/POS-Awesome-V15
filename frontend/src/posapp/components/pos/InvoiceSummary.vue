@@ -169,10 +169,10 @@
 
 							<!-- Item Group Bulk Discount Section -->
 							<v-col cols="12" v-if="itemGroupsList && itemGroupsList.length > 0">
-								<v-card class="item-group-discount-card" elevation="2">
-									<v-card-text class="pa-4">
-										<!-- Header with Icon and Title -->
-										<div class="d-flex align-center justify-space-between mb-4 item-group-header-row">
+									<v-card class="item-group-discount-card" elevation="2">
+										<v-card-text class="pa-4">
+											<!-- Header with Icon and Title -->
+										<div class="d-flex align-center justify-space-between item-group-header-row">
 											<div class="d-flex align-center">
 												<v-avatar color="info" size="40" class="mr-3 item-group-avatar">
 													<v-icon color="white" size="24">mdi-folder-multiple</v-icon>
@@ -181,35 +181,61 @@
 													<p class="text-subtitle-2 font-weight-bold mb-0">
 														{{ __("Item Group Discounts") }}
 													</p>
-													<p class="text-caption text-grey mb-0">
-														{{ __("Apply bulk discounts by category") }}
-													</p>
 												</div>
+											</div>
+
+											<div v-if="itemGroupDiscountEntries.length === 1" class="discounts-list-compact">
+												<v-chip
+													closable
+													size="x-small"
+													color="info"
+													variant="tonal"
+													class="discount-chip-compact"
+													@click:close="removeItemGroupDiscount(itemGroupDiscountEntries[0][0])"
+												>
+													<span class="font-weight-600">
+														{{ itemGroupDiscountEntries[0][0] }}: {{ itemGroupDiscountEntries[0][1] }}%
+													</span>
+												</v-chip>
+											</div>
+
+											<div v-else-if="itemGroupDiscountEntries.length > 1" class="discounts-list-compact">
+												<v-menu location="bottom end" offset="6">
+													<template #activator="{ props }">
+														<v-chip
+															v-bind="props"
+															size="x-small"
+															color="info"
+															variant="tonal"
+															class="discount-chip-compact discount-dropdown-chip"
+														>
+															{{ itemGroupDiscountEntries.length }} {{ __("Discounts") }}
+															<v-icon end size="14">mdi-chevron-down</v-icon>
+														</v-chip>
+													</template>
+													<v-list density="compact" class="discount-dropdown-list">
+														<v-list-item
+															v-for="([group, discount]) in itemGroupDiscountEntries"
+															:key="group"
+															:title="`${group}: ${discount}%`"
+														>
+															<template #append>
+																<v-btn
+																	icon="mdi-close-circle-outline"
+																	size="x-small"
+																	variant="text"
+																	color="error"
+																	@click.stop="removeItemGroupDiscount(group)"
+																/>
+															</template>
+														</v-list-item>
+													</v-list>
+												</v-menu>
 											</div>
 											<v-btn size="small" color="info" variant="flat" prepend-icon="mdi-plus"
 												@click="openItemGroupDiscountDialog" class="add-discount-btn">
 												{{ __("Add") }}
 											</v-btn>
-										</div>
-
-										<!-- Active Discounts List -->
-										<div v-if="Object.keys(displayItemGroupDiscounts).length > 0"
-											class="discounts-list mb-3">
-											<v-chip v-for="(discount, group) in displayItemGroupDiscounts" :key="group"
-												closable color="info" variant="tonal" class="discount-chip mr-2 mb-2"
-												@click:close="removeItemGroupDiscount(group)">
-												<v-icon size="small" left>mdi-folder-multiple</v-icon>
-												<span class="font-weight-600">{{ group }}: {{ discount }}%</span>
-											</v-chip>
-										</div>
-
-										<!-- No Discounts Message -->
-										<div v-else class="text-center py-4">
-											<v-icon size="48" color="grey-lighten-1"
-												class="mb-2">mdi-folder-outline</v-icon>
-											<p class="text-caption text-grey mb-0">
-												{{ __("No group discounts applied yet") }}
-											</p>
 										</div>
 
 										<!-- Total Group Discount Amount -->
@@ -749,6 +775,9 @@ export default {
 					return name.length > 0 && name.toLowerCase() !== "null";
 				}),
 			);
+		},
+		itemGroupDiscountEntries() {
+			return Object.entries(this.displayItemGroupDiscounts);
 		},
 
 		maxInvoiceDiscount() {
@@ -2190,7 +2219,7 @@ export default {
 
 /* Reduce internal padding to match loyalty card */
 .item-group-discount-card .v-card-text {
-  padding: 2px 4px !important;
+  padding: 2px 6px !important;
   height: 100% !important;
   display: flex !important;
   align-items: center !important;
@@ -2280,6 +2309,42 @@ export default {
   margin-bottom: 0 !important;
   width: 100%;
   min-height: 32px;
+  gap: 8px;
+}
+
+.discounts-list-compact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  padding: 0 2px;
+}
+
+.discount-chip-compact {
+  flex-shrink: 0;
+  max-width: 170px;
+  height: 22px !important;
+  font-size: 0.72rem !important;
+  padding: 0 6px !important;
+}
+
+.discount-chip-compact :deep(.v-chip__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.discount-dropdown-chip {
+  cursor: pointer;
+}
+
+.discount-dropdown-list {
+  min-width: 220px;
+  max-width: 280px;
 }
 
 /* Dialog Styling */
