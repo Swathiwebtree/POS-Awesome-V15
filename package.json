@@ -3,7 +3,7 @@
   "version": "15.8.6",
   "scripts": {
     "dev": "cd frontend && yarn dev",
-    "build": "cd frontend && yarn build",
+    "build": "cd frontend && yarn install && yarn build",
     "watch": "cd frontend && vite build --watch",
     "format": "prettier --write \"**/*.{js,vue,css,scss,html}\""
   },
