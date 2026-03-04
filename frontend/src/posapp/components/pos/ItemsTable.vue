@@ -134,7 +134,7 @@
 
 			<!-- Expanded row content using Vuetify's built-in system -->
 			<template v-slot:expanded-row="{ item }">
-				<td :colspan="headers.length" class="ma-0 pa-0">
+				<td :colspan="headers.length + 1" class="expanded-row-cell ma-0 pa-0">
 					<div class="expanded-content">
 						<!-- Enhanced Item Details Form with better organization -->
 						<div class="item-details-form">
@@ -373,7 +373,7 @@
 													<v-list-item-title v-html="item.raw.batch_no"></v-list-item-title>
 													<v-list-item-subtitle v-html="
 															`Available QTY  '${item.raw.batch_qty}' - Expiry Date ${item.raw.expiry_date}`"
-														"></v-list-item-subtitle>
+														></v-list-item-subtitle>
 												</v-list-item>
 											</template>
 										</v-autocomplete>
@@ -1219,6 +1219,10 @@ export default {
 .modern-items-table :deep(td) {
 	padding: 8px 10px;
 	vertical-align: middle;
+}
+
+.modern-items-table :deep(.expanded-row-cell) {
+	padding: 0 !important;
 }
 
 /* Expanded content styling */

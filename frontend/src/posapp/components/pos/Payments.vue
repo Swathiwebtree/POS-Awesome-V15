@@ -204,26 +204,26 @@
 									<v-divider class="my-2" />
 
 									<v-row v-if="invoice_doc" dense>
-										<v-col cols="7" v-if="credit_change > 0 && !invoice_doc.is_return">
+										<v-col cols="6" v-if="credit_change > 0 && !invoice_doc.is_return">
 											<v-text-field variant="solo" density="compact" color="primary"
 												:label="frappe._('Paid Change')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field"
+												class="dark-field sleek-field" hide-details
 												:model-value="formatCurrency(paid_change)"
 												:prefix="currencySymbol(invoice_doc.currency)"
-												:rules="paid_change_rules" readonly />
+												:rules="paid_change_rules" readonly persistent-placeholder />
 										</v-col>
 
-										<v-col cols="5" v-if="credit_change > 0 && !invoice_doc.is_return">
+										<v-col cols="6" v-if="credit_change > 0 && !invoice_doc.is_return">
 											<v-text-field variant="solo" density="compact" color="primary"
 												:label="frappe._('Credit Change')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field"
+												class="dark-field sleek-field" hide-details
 												:model-value="formatCurrency(credit_change)"
 												:prefix="currencySymbol(invoice_doc.currency)" @change="
 													setFormatedCurrency(this, 'credit_change', null, false, $event);
 												updateCreditChange(this.credit_change);
-												" />
+												" persistent-placeholder />
 										</v-col>
 									</v-row>
 

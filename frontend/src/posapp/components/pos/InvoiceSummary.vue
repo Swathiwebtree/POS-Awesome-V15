@@ -19,11 +19,13 @@
 							</v-col>
 							<!-- Service Employee Selection (for car wash services) -->
 							<v-col :cols="showOdometerField ? 6 : 12" v-if="showEmployeeSelection">
-								<v-autocomplete v-model="selectedEmployee" :items="employees"
+								<v-autocomplete :key="employeeFieldKey" ref="serviceEmployeeAutocomplete" v-model="selectedEmployee" v-model:menu="employeeMenu"
+									v-model:search="employeeSearch" :items="employees"
 									:loading="loadingEmployees" :label="__('Select Service Employee')"
 									item-title="employee_name" item-value="name"
 									prepend-inner-icon="mdi-account-hard-hat" variant="solo" density="compact"
-									color="primary" clearable class="summary-field" :custom-filter="employeeFilter"
+									color="primary" clearable class="summary-field employee-summary-field" :custom-filter="employeeFilter"
+									:menu-props="{ maxHeight: 320, closeOnContentClick: true }"
 									@update:model-value="handleEmployeeChange">
 									<template v-slot:item="{ props, item }">
 										<v-list-item v-bind="props" :title="item.raw.employee_name">
@@ -42,14 +44,11 @@
 											</template>
 										</v-list-item>
 									</template>
-									<template v-slot:chip="{ item }">
-										<v-chip size="small" color="primary">
-											<v-avatar left>
-												<v-img v-if="item.raw.image" :src="item.raw.image" />
-												<v-icon v-else>mdi-account</v-icon>
-											</v-avatar>
-											{{ item.raw.employee_name }} ({{ item.raw.name }})
-										</v-chip>
+									<template v-slot:selection="{ item }">
+										<div class="employee-selection">
+											<span class="employee-selection-name">{{ item.raw.employee_name || item.raw.name }}</span>
+											<span class="employee-selection-id">({{ item.raw.name }})</span>
+										</div>
 									</template>
 								</v-autocomplete>
 							</v-col>
@@ -700,6 +699,9 @@ export default {
 
 			employees: [],
 			selectedEmployee: null,
+			employeeMenu: false,
+			employeeSearch: "",
+			employeeFieldKey: 0,
 			loadingEmployees: false,
 			showEmployeeSelection: false,
 
@@ -1469,6 +1471,7 @@ export default {
 			if (!employeeId) {
 				// Employee cleared
 				this.selectedEmployee = null;
+				this.closeEmployeeDropdown();
 				this.eventBus.emit("employee_selected", {
 					employee_id: null,
 					employee_name: null,
@@ -1491,6 +1494,8 @@ export default {
 				designation: employee.designation,
 				department: employee.department,
 			});
+
+			this.closeEmployeeDropdown();
 
 			// Show confirmation message
 			frappe.show_alert({
@@ -1524,6 +1529,7 @@ export default {
 			// payload may be { employee_id, employee_name } or just employee_id (string)
 			if (!payload) {
 				this.selectedEmployee = null;
+				this.closeEmployeeDropdown();
 				this.showEmployeeSelection = false;
 				return;
 			}
@@ -1546,6 +1552,7 @@ export default {
 					});
 				}
 				this.selectedEmployee = empId;
+				this.closeEmployeeDropdown();
 				return;
 			}
 
@@ -1573,6 +1580,7 @@ export default {
 
 			if (found) {
 				this.selectedEmployee = found.name;
+				this.closeEmployeeDropdown();
 				// show toast
 				frappe.show_alert({
 					message: this.__(`Service employee set to: ${found.employee_name || found.name}`),
@@ -1581,7 +1589,28 @@ export default {
 			} else {
 				// fallback: set id anyway so value exists and user can see placeholder
 				this.selectedEmployee = empId;
+				this.closeEmployeeDropdown();
 			}
+		},
+		closeEmployeeDropdown() {
+			this.employeeSearch = "";
+			this.employeeMenu = false;
+			this.$nextTick(() => {
+				const autocomplete = this.$refs.serviceEmployeeAutocomplete;
+				if (autocomplete?.blur) {
+					autocomplete.blur();
+				}
+				const input = autocomplete?.$el?.querySelector("input");
+				if (input) {
+					input.blur();
+				}
+				const active = document.activeElement;
+				if (active && typeof active.blur === "function") {
+					active.blur();
+				}
+				this.employeeMenu = false;
+				this.employeeFieldKey += 1;
+			});
 		},
 
 		async handleCancelSale() {
@@ -1980,6 +2009,60 @@ export default {
 .summary-field :deep(.v-field-label) {
 	font-weight: 600;   
 	font-size: 0.74rem;   
+}
+
+.employee-selection {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	flex-wrap: nowrap;
+	white-space: nowrap;
+}
+
+.employee-selection-name {
+	color: #0f9fb3;
+	font-weight: 600;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.employee-selection-id {
+	color: #48b8c6;
+	font-size: 0.92em;
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+
+:deep(.summary-field .v-field__input) .employee-selection-name,
+:deep(.summary-field .v-field__input) .employee-selection-id {
+	opacity: 1;
+}
+
+:deep(.employee-summary-field .v-field__input) {
+	flex-wrap: nowrap !important;
+	overflow: hidden !important;
+}
+
+:deep(.employee-summary-field .v-autocomplete__selection) {
+	max-width: 100% !important;
+	min-width: 0 !important;
+	overflow: hidden !important;
+}
+
+:deep(.v-theme--dark) .employee-selection-id,
+:deep([data-theme="dark"]) .employee-selection-id {
+	color: #7fd4dd;
+}
+
+:deep(.v-theme--dark) .employee-selection-name,
+:deep([data-theme="dark"]) .employee-selection-name {
+	color: #55d4e0;
 }
 
 .summary-actions {

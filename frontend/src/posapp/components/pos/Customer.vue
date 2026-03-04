@@ -57,7 +57,9 @@
                                 item-value="name"
                                 :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
                                 :no-data-text="
-                                        isCustomerBackgroundLoading ? __('Loading customer data...') : __('Customers not found')
+                                        isCustomerBackgroundLoading && !customers.length
+                                                ? __('Loading customer data...')
+                                                : __('Customers not found')
                                 "
                                 hide-details
                                 :customFilter="() => true"
@@ -181,6 +183,29 @@
         opacity: 1;
         color: var(--v-theme-primary);
 }
+
+:deep(.vehicle-autocomplete .v-field__prepend-inner),
+:deep(.customer-autocomplete .v-field__prepend-inner),
+:deep(.vehicle-autocomplete .v-field__append-inner),
+:deep(.customer-autocomplete .v-field__append-inner) {
+        position: relative;
+        z-index: 30;
+        pointer-events: auto !important;
+}
+
+:deep(.vehicle-autocomplete .v-field__prepend-inner .icon-button),
+:deep(.customer-autocomplete .v-field__prepend-inner .icon-button),
+:deep(.vehicle-autocomplete .v-field__append-inner .icon-button),
+:deep(.customer-autocomplete .v-field__append-inner .icon-button) {
+        pointer-events: auto !important;
+}
+
+:deep(.vehicle-autocomplete .v-field__input),
+:deep(.customer-autocomplete .v-field__input) {
+        position: relative;
+        z-index: 1;
+}
+
 /* Input background */
 .vehicle-autocomplete .v-field,
 .customer-autocomplete .v-field {
@@ -429,7 +454,7 @@ export default {
                 },
 
                 filteredCustomers() {
-                        return this.isCustomerBackgroundLoading ? [] : this.customers;
+                        return this.customers;
                 },
                 vehicleItems() {
                         // During active vehicle typing, always show explicit search results.
@@ -669,10 +694,6 @@ export default {
                         // Skip search when loading from a draft to prevent the debounced
                         // search from clearing this.customers[] and blanking the autocomplete
                         if (this._skipNextCustomerSearch) {
-                                return;
-                        }
-                        if (this.isCustomerBackgroundLoading) {
-                                this.pendingCustomerSearch = val;
                                 return;
                         }
                         this.searchDebounce(val);
@@ -1131,7 +1152,7 @@ export default {
                 },
 
                 async loadMoreCustomers() {
-                        if (this.loadingCustomers) return;
+                        if (this.loadingCustomers || this.isCustomerBackgroundLoading) return;
                         const count = await this.searchCustomers(this.searchTerm, true);
                         if (count === this.pageSize) return;
                         if (this.nextCustomerStart) {

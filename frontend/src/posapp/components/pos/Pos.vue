@@ -1462,6 +1462,9 @@ export default {
 
 
 /* FIX: Add New Customer / Add New Vehicle buttons not clickable in fullscreen */
+.fullscreen-mode .invoice-wrapper :deep(.v-input__prepend),
+.fullscreen-mode .invoice-wrapper :deep(.v-input__prepend-inner),
+.fullscreen-mode .invoice-wrapper :deep(.v-field__prepend-inner),
 .fullscreen-mode .invoice-wrapper :deep(.v-input__append),
 .fullscreen-mode .invoice-wrapper :deep(.v-input__append-inner),
 .fullscreen-mode .invoice-wrapper :deep(.v-field__append-inner) {
