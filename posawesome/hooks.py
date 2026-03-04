@@ -103,7 +103,7 @@ doc_events = {
     "Sales Invoice": {
         "validate": "posawesome.posawesome.api.invoice.validate",
         "before_submit": "posawesome.posawesome.api.invoice.before_submit",
-        "on_submit": "posawesome.posawesome.api.loyalty.on_invoice_submit", 
+        "on_submit": "posawesome.posawesome.api.loyalty.on_invoice_submit",
         "before_cancel": "posawesome.posawesome.api.invoice.before_cancel",
         "on_update": "posawesome.posawesome.api.sales_invoice.set_job_order_number",
     },
@@ -119,9 +119,7 @@ doc_events = {
     "Purchase Receipt": {
         "on_submit": "posawesome.posawesome.api.purchase_receipt.create_stock_entry_from_pr"
     },
-    "Loyalty Point Entry": {
-        "validate": "posawesome.posawesome.api.loyalty.validate_loyalty_redeem"
-    }
+    "Loyalty Point Entry": {"validate": "posawesome.posawesome.api.loyalty.validate_loyalty_redeem"},
 }
 
 # Scheduled Tasks

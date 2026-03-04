@@ -9,8 +9,7 @@ import themePlugin from "./plugins/theme.js";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import Home from "./Home.vue";
-import '@mdi/font/css/materialdesignicons.css'
-
+import "@mdi/font/css/materialdesignicons.css";
 
 // Expose Dexie globally for libraries that expect a global Dexie instance
 if (typeof window !== "undefined" && !window.Dexie) {

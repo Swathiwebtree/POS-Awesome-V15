@@ -6,4 +6,4 @@ from frappe.tests.utils import FrappeTestCase
 
 
 class TestPOSTerminal(FrappeTestCase):
-	pass
+    pass

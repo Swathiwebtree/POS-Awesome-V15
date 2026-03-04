@@ -17,44 +17,107 @@
 						<v-row dense>
 							<!-- VEHICLE COLUMN -->
 							<v-col cols="6" class="pr-4">
-								<v-text-field v-model="vehicle_no"
+								<v-text-field
+									v-model="vehicle_no"
 									:label="__('Vehicle Number') + (isCreateWithVehicle ? ' *' : '')"
-									density="comfortable" color="primary" hide-details="auto"
-									:required="isCreateWithVehicle" class="mb-3" />
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+									:required="isCreateWithVehicle"
+									class="mb-3"
+								/>
 
-								<v-text-field v-model="mobile_no"
-									:label="__('Mobile No') + (isCreateWithVehicle ? ' *' : '')" density="comfortable"
-									color="primary" hide-details="auto" class="mb-3" />
+								<v-text-field
+									v-model="mobile_no"
+									:label="__('Mobile No') + (isCreateWithVehicle ? ' *' : '')"
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+									class="mb-3"
+								/>
 
-								<v-text-field v-model="vehicle_model" :label="__('Model')" density="comfortable"
-									color="primary" hide-details="auto" class="mb-3" />
+								<v-text-field
+									v-model="vehicle_model"
+									:label="__('Model')"
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+									class="mb-3"
+								/>
 
-								<v-text-field v-model="vehicle_make" :label="__('Make')" density="comfortable"
-									color="primary" hide-details="auto" class="mb-3" />
+								<v-text-field
+									v-model="vehicle_make"
+									:label="__('Make')"
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+									class="mb-3"
+								/>
 
-								<v-text-field v-model="odometer" :label="__('Odometer')" density="comfortable"
-									color="primary" hide-details="auto" />
+								<v-text-field
+									v-model="odometer"
+									:label="__('Odometer')"
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+								/>
 							</v-col>
 
 							<!-- CUSTOMER COLUMN -->
 							<v-col cols="6" class="pl-4">
-								<v-text-field v-model="customer_name" :label="__('Customer Name') + ' *'"
-									density="comfortable" color="primary" hide-details="auto" required class="mb-3" />
+								<v-text-field
+									v-model="customer_name"
+									:label="__('Customer Name') + ' *'"
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+									required
+									class="mb-3"
+								/>
 
-								<v-autocomplete v-model="group" :items="groups" :label="__('Customer Group') + ' *'"
-									density="comfortable" hide-details="auto" color="primary" class="mb-3" clearable />
+								<v-autocomplete
+									v-model="group"
+									:items="groups"
+									:label="__('Customer Group') + ' *'"
+									density="comfortable"
+									hide-details="auto"
+									color="primary"
+									class="mb-3"
+									clearable
+								/>
 
-								<v-autocomplete v-model="territory" :items="territorys" :label="__('Territory') + ' *'"
-									density="comfortable" hide-details="auto" color="primary" class="mb-3" clearable />
+								<v-autocomplete
+									v-model="territory"
+									:items="territorys"
+									:label="__('Territory') + ' *'"
+									density="comfortable"
+									hide-details="auto"
+									color="primary"
+									class="mb-3"
+									clearable
+								/>
 								<!-- CUSTOMER TYPE -->
-								<v-autocomplete v-model="customer_type" :items="['Individual', 'Company']"
-									:label="__('Customer Type') + ' *'" density="comfortable" color="primary"
-									hide-details="auto" class="mb-3" />
+								<v-autocomplete
+									v-model="customer_type"
+									:items="['Individual', 'Company']"
+									:label="__('Customer Type') + ' *'"
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+									class="mb-3"
+								/>
 
 								<!-- TAX / VAT FIELD – visible only for corporate -->
-								<v-text-field v-if="isCorporate" v-model="tax_id" :label="__('VAT / TAX Number') + ' *'"
-									density="comfortable" color="primary" hide-details="auto" required class="mb-3" />
-
+								<v-text-field
+									v-if="isCorporate"
+									v-model="tax_id"
+									:label="__('VAT / TAX Number') + ' *'"
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+									required
+									class="mb-3"
+								/>
 							</v-col>
 						</v-row>
 					</v-container>
@@ -130,7 +193,7 @@ export default {
 		loyalty_program: null,
 		hideNonEssential: false,
 
-		// Vehicle fields 
+		// Vehicle fields
 		vehicle_no: "",
 		vehicle_make: "",
 		vehicle_model: "",
@@ -243,12 +306,13 @@ export default {
 
 				// Prefill vehicle details using selected vehicle from payload when available.
 				if (payload.vehicles && payload.vehicles.length) {
-					const preferredVehicleNo =
-						(payload.custom_vehicle_no || payload.vehicle_no || "").toString().trim();
+					const preferredVehicleNo = (payload.custom_vehicle_no || payload.vehicle_no || "")
+						.toString()
+						.trim();
 					let v = payload.vehicles[0];
 					if (preferredVehicleNo) {
 						const matched = payload.vehicles.find(
-							(row) => ((row.vehicle_no || "").toString().trim() === preferredVehicleNo)
+							(row) => (row.vehicle_no || "").toString().trim() === preferredVehicleNo,
 						);
 						if (matched) {
 							v = matched;

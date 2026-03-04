@@ -79,7 +79,6 @@ def _get_available_stock(item):
     return get_stock_availability(item_code, warehouse)
 
 
-
 def _collect_stock_errors(items):
     """Return list of items exceeding available stock.
 
@@ -110,7 +109,6 @@ def _collect_stock_errors(items):
             )
 
     return errors
-
 
 
 # def _merge_duplicate_taxes(invoice_doc):
@@ -150,7 +148,6 @@ def _validate_stock_on_invoice(invoice_doc):
     errors = _collect_stock_errors(items_to_check)
     if errors and _should_block(invoice_doc.pos_profile):
         frappe.throw(frappe.as_json({"errors": errors}), frappe.ValidationError)
-
 
 
 def _auto_set_return_batches(invoice_doc):
@@ -300,25 +297,27 @@ def update_invoice(data):
             invoice_doc.selling_price_list,
             "currency",
         )
-    
+
     # Auto-create customer if doesn't exist
     customer_name = invoice_doc.get("customer")
     if customer_name and not frappe.db.exists("Customer", customer_name):
         try:
-            cust = frappe.get_doc({
-                "doctype": "Customer",
-                "customer_name": customer_name,
-                "customer_group": "All Customer Groups",
-                "territory": "All Territories",
-                "customer_type": "Individual",
-            })
+            cust = frappe.get_doc(
+                {
+                    "doctype": "Customer",
+                    "customer_name": customer_name,
+                    "customer_group": "All Customer Groups",
+                    "territory": "All Territories",
+                    "customer_type": "Individual",
+                }
+            )
             cust.flags.ignore_permissions = True
             cust.insert()
             invoice_doc.customer = cust.name
             invoice_doc.customer_name = cust.customer_name
         except Exception as e:
             frappe.log_error(f"Failed to create customer {customer_name}: {e}")
-    
+
     # Store item name overrides for later application
     overrides = {d.idx: {"item_name": d.item_name} for d in invoice_doc.items}
 
@@ -344,75 +343,77 @@ def update_invoice(data):
 
     # ===== CRITICAL: TAX CALCULATION =====
     pos_profile_name = invoice_doc.get("pos_profile")
-    
+
     # Get existing total tax amount before clearing (for comparison)
     existing_tax = sum(flt(t.tax_amount) for t in invoice_doc.get("taxes", []))
-    
+
     if pos_profile_name:
         tax_template_name = frappe.db.get_value(
             "POS Profile",
             pos_profile_name,
             "taxes_and_charges",
         )
-        
+
         if tax_template_name:
             try:
                 tax_template = frappe.get_doc(
                     "Sales Taxes and Charges Template",
                     tax_template_name,
                 )
-                
+
                 # Get tax inclusive setting
-                inclusive = frappe.get_cached_value(
-                    "POS Profile",
-                    invoice_doc.pos_profile,
-                    "posa_tax_inclusive",
-                ) or 0
-                
+                inclusive = (
+                    frappe.get_cached_value(
+                        "POS Profile",
+                        invoice_doc.pos_profile,
+                        "posa_tax_inclusive",
+                    )
+                    or 0
+                )
+
                 # Clear existing taxes ONLY if we're injecting from template
                 # This prevents losing manually added taxes
                 # Clear only if NO item-level tax templates exist
-                has_item_tax = any(
-                    d.get("item_tax_template") for d in invoice_doc.items
-                )
+                has_item_tax = any(d.get("item_tax_template") for d in invoice_doc.items)
 
                 if not has_item_tax:
                     invoice_doc.set("taxes", [])
-                
+
                 # Inject tax rows from template
                 for tax in tax_template.taxes:
-                    invoice_doc.append("taxes", {
-                        "charge_type": tax.charge_type,
-                        "account_head": tax.account_head,
-                        "description": tax.description,
-                        "rate": tax.rate,
-                        "apply_on": tax.get("apply_on") or "Net Total",
-                        "cost_center": tax.cost_center or invoice_doc.cost_center,
-                        "included_in_print_rate": (
-                            0 if tax.charge_type == "Actual" else int(inclusive)
-                        ),
-                    })
-                
+                    invoice_doc.append(
+                        "taxes",
+                        {
+                            "charge_type": tax.charge_type,
+                            "account_head": tax.account_head,
+                            "description": tax.description,
+                            "rate": tax.rate,
+                            "apply_on": tax.get("apply_on") or "Net Total",
+                            "cost_center": tax.cost_center or invoice_doc.cost_center,
+                            "included_in_print_rate": (0 if tax.charge_type == "Actual" else int(inclusive)),
+                        },
+                    )
+
                 frappe.logger().info(
                     f"[update_invoice] Injected {len(tax_template.taxes)} tax rows for invoice {invoice_doc.name or 'new'}"
                 )
-                
+
             except Exception as e:
                 frappe.log_error(
                     title="Tax Injection Error",
-                    message=f"Failed to inject taxes for invoice {invoice_doc.name or 'new'}: {str(e)}"
+                    message=f"Failed to inject taxes for invoice {invoice_doc.name or 'new'}: {str(e)}",
                 )
-    
+
     # ===== ALWAYS RECALCULATE TOTALS AFTER TAX INJECTION =====
     invoice_doc.calculate_taxes_and_totals()
-    
+
     # Ensure rounded_total is set
     if not invoice_doc.rounded_total:
         invoice_doc.rounded_total = invoice_doc.grand_total
-    
+
     # Ensure base tax total is set
     invoice_doc.base_total_taxes_and_charges = invoice_doc.total_taxes_and_charges
-    
+
     # Log tax calculation for debugging
     new_tax = sum(flt(t.tax_amount) for t in invoice_doc.get("taxes", []))
     frappe.logger().info(
@@ -455,8 +456,9 @@ def update_invoice(data):
 
         if not conversion_rate:
             frappe.throw(
-                _("Unable to find exchange rate for {0} to {1}")
-                .format(invoice_doc.currency, company_currency)
+                _("Unable to find exchange rate for {0} to {1}").format(
+                    invoice_doc.currency, company_currency
+                )
             )
 
         plc_conversion_rate = 1
@@ -508,7 +510,7 @@ def update_invoice(data):
     response["conversion_rate"] = invoice_doc.conversion_rate
     response["plc_conversion_rate"] = invoice_doc.plc_conversion_rate
     response["exchange_rate_date"] = exchange_rate_date
-    
+
     # ===== CRITICAL: ENSURE TAX VALUES IN RESPONSE =====
     response["total_taxes_and_charges"] = flt(invoice_doc.total_taxes_and_charges)
     response["base_total_taxes_and_charges"] = flt(invoice_doc.base_total_taxes_and_charges)
@@ -518,7 +520,7 @@ def update_invoice(data):
     response["net_total"] = flt(invoice_doc.net_total)
     response["base_grand_total"] = flt(invoice_doc.base_grand_total)
     response["base_net_total"] = flt(invoice_doc.base_net_total)
-    
+
     # Include tax breakdown for frontend display
     response["taxes"] = [
         {
@@ -532,13 +534,14 @@ def update_invoice(data):
         }
         for t in invoice_doc.get("taxes", [])
     ]
-    
+
     frappe.logger().info(
         f"[update_invoice] Response prepared with grand_total={response['grand_total']}, "
         f"taxes={response['total_taxes_and_charges']}, net_total={response['net_total']}"
     )
 
     return response
+
 
 def get_current_user_open_shift(user=None):
     user = user or frappe.session.user

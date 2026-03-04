@@ -1,6 +1,11 @@
 <template>
-	<v-card :class="['cards mb-0 mt-1 py-0 px-1 rounded-lg compact-summary', isDarkTheme ? '' : 'bg-grey-lighten-4']"
-		:style="(isDarkTheme ? 'background-color:#1E1E1E;' : '')">
+	<v-card
+		:class="[
+			'cards mb-0 mt-1 py-0 px-1 rounded-lg compact-summary',
+			isDarkTheme ? '' : 'bg-grey-lighten-4',
+		]"
+		:style="isDarkTheme ? 'background-color:#1E1E1E;' : ''"
+	>
 		<v-row dense class="w-100">
 			<!-- divider removed to save height -->
 
@@ -12,21 +17,43 @@
 						<v-row dense>
 							<!-- Odometer Reading Field (Only shown when Engine Oil item is present) -->
 							<v-col :cols="showEmployeeSelection ? 6 : 12" v-if="showOdometerField">
-								<v-text-field v-model="odometerReading" :label="__('Odometer Reading (km)')"
-									prepend-inner-icon="mdi-speedometer" variant="solo" density="compact"
-									color="primary" type="text" inputmode="numeric" class="summary-field" :rules="[isNumber]"
-									@update:model-value="emitOdometerData" />
+								<v-text-field
+									v-model="odometerReading"
+									:label="__('Odometer Reading (km)')"
+									prepend-inner-icon="mdi-speedometer"
+									variant="solo"
+									density="compact"
+									color="primary"
+									type="text"
+									inputmode="numeric"
+									class="summary-field"
+									:rules="[isNumber]"
+									@update:model-value="emitOdometerData"
+								/>
 							</v-col>
 							<!-- Service Employee Selection (for car wash services) -->
 							<v-col :cols="showOdometerField ? 6 : 12" v-if="showEmployeeSelection">
-								<v-autocomplete :key="employeeFieldKey" ref="serviceEmployeeAutocomplete" v-model="selectedEmployee" v-model:menu="employeeMenu"
-									v-model:search="employeeSearch" :items="employees"
-									:loading="loadingEmployees" :label="__('Select Service Employee')"
-									item-title="employee_name" item-value="name"
-									prepend-inner-icon="mdi-account-hard-hat" variant="solo" density="compact"
-									color="primary" clearable class="summary-field employee-summary-field" :custom-filter="employeeFilter"
+								<v-autocomplete
+									:key="employeeFieldKey"
+									ref="serviceEmployeeAutocomplete"
+									v-model="selectedEmployee"
+									v-model:menu="employeeMenu"
+									v-model:search="employeeSearch"
+									:items="employees"
+									:loading="loadingEmployees"
+									:label="__('Select Service Employee')"
+									item-title="employee_name"
+									item-value="name"
+									prepend-inner-icon="mdi-account-hard-hat"
+									variant="solo"
+									density="compact"
+									color="primary"
+									clearable
+									class="summary-field employee-summary-field"
+									:custom-filter="employeeFilter"
 									:menu-props="{ maxHeight: 320, closeOnContentClick: true }"
-									@update:model-value="handleEmployeeChange">
+									@update:model-value="handleEmployeeChange"
+								>
 									<template v-slot:item="{ props, item }">
 										<v-list-item v-bind="props" :title="item.raw.employee_name">
 											<template v-slot:prepend>
@@ -39,14 +66,17 @@
 												<span class="text-caption">
 													{{ item.raw.name }}
 													<span v-if="item.raw.designation">
-														- {{ item.raw.designation }}</span>
+														- {{ item.raw.designation }}</span
+													>
 												</span>
 											</template>
 										</v-list-item>
 									</template>
 									<template v-slot:selection="{ item }">
 										<div class="employee-selection">
-											<span class="employee-selection-name">{{ item.raw.employee_name || item.raw.name }}</span>
+											<span class="employee-selection-name">{{
+												item.raw.employee_name || item.raw.name
+											}}</span>
 											<span class="employee-selection-id">({{ item.raw.name }})</span>
 										</div>
 									</template>
@@ -55,63 +85,122 @@
 
 							<!-- Total Qty -->
 							<v-col cols="6">
-								<v-text-field :model-value="Math.trunc(total_qty)"
-									:label="__('Total Qty')" prepend-inner-icon="mdi-format-list-numbered"
-									variant="solo" density="compact" readonly color="accent" class="summary-field" />
+								<v-text-field
+									:model-value="Math.trunc(total_qty)"
+									:label="__('Total Qty')"
+									prepend-inner-icon="mdi-format-list-numbered"
+									variant="solo"
+									density="compact"
+									readonly
+									color="accent"
+									class="summary-field"
+								/>
 							</v-col>
 
 							<!-- Additional Discount -->
 							<v-col cols="6" v-if="pos_profile && !pos_profile.posa_use_percentage_discount">
-								<v-text-field :model-value="formatByPrecision(additional_discount)"
+								<v-text-field
+									:model-value="formatByPrecision(additional_discount)"
 									@update:model-value="formatByPrecision(handleAdditionalDiscountUpdate)"
-									@change="apply_additional_discount" :label="__('Additional Discount')"
-									prepend-inner-icon="mdi-cash-minus" variant="solo" density="compact" color="warning"
-									:prefix="pos_profile ? currencySymbol(pos_profile.currency) : ''" :disabled="
+									@change="apply_additional_discount"
+									:label="__('Additional Discount')"
+									prepend-inner-icon="mdi-cash-minus"
+									variant="solo"
+									density="compact"
+									color="warning"
+									:prefix="pos_profile ? currencySymbol(pos_profile.currency) : ''"
+									:disabled="
 										!pos_profile ||
 										!pos_profile.posa_allow_user_to_edit_additional_discount ||
 										!!discount_percentage_offer_name
-									" class="summary-field" />
+									"
+									class="summary-field"
+								/>
 							</v-col>
 
 							<!-- Additional Discount Percentage -->
 							<v-col cols="6" v-else-if="pos_profile">
-								<v-text-field :model-value="additional_discount_percentage"
+								<v-text-field
+									:model-value="additional_discount_percentage"
 									@update:model-value="handleAdditionalDiscountPercentageUpdate"
-									@change="apply_additional_discount" :rules="[isNumber]"
-									:label="__('Additional Discount %')" suffix="%" prepend-inner-icon="mdi-percent"
-									variant="solo" density="compact" color="warning" :disabled="
+									@change="apply_additional_discount"
+									:rules="[isNumber]"
+									:label="__('Additional Discount %')"
+									suffix="%"
+									prepend-inner-icon="mdi-percent"
+									variant="solo"
+									density="compact"
+									color="warning"
+									:disabled="
 										!pos_profile.posa_allow_user_to_edit_additional_discount ||
 										!!discount_percentage_offer_name
-									" class="summary-field" />
+									"
+									class="summary-field"
+								/>
 							</v-col>
 
 							<!-- Items Discounts -->
 							<v-col cols="6">
-								<v-text-field :model-value="formatByPrecision(total_items_discount_amount)"
-									:prefix="currencySymbol(displayCurrency)" :label="__('Items Discounts')"
-									prepend-inner-icon="mdi-tag-minus" variant="solo" density="compact" color="warning"
-									readonly class="summary-field" />
+								<v-text-field
+									:model-value="formatByPrecision(total_items_discount_amount)"
+									:prefix="currencySymbol(displayCurrency)"
+									:label="__('Items Discounts')"
+									prepend-inner-icon="mdi-tag-minus"
+									variant="solo"
+									density="compact"
+									color="warning"
+									readonly
+									class="summary-field"
+								/>
 							</v-col>
 
 							<!-- Total -->
-							<v-text-field :model-value="formatByPrecision(finalTotal)" :label="__('Total')"
-								prepend-inner-icon="mdi-cash" variant="solo" density="compact" color="success"
-								class="summary-field" readonly :prefix="currencySymbol(displayCurrency)" />
+							<v-text-field
+								:model-value="formatByPrecision(finalTotal)"
+								:label="__('Total')"
+								prepend-inner-icon="mdi-cash"
+								variant="solo"
+								density="compact"
+								color="success"
+								class="summary-field"
+								readonly
+								:prefix="currencySymbol(displayCurrency)"
+							/>
 
 							<!-- Manual Round Off + Frequent Cards (side by side) -->
 							<v-col cols="6">
-								<v-text-field v-model="manual_round_off" :label="__('Manual Round Off')"
-									prepend-inner-icon="mdi-plus-minus" variant="solo" density="compact" color="info"
-									class="summary-field manual-round-off-field" type="text" inputmode="decimal"
+								<v-text-field
+									v-model="manual_round_off"
+									:label="__('Manual Round Off')"
+									prepend-inner-icon="mdi-plus-minus"
+									variant="solo"
+									density="compact"
+									color="info"
+									class="summary-field manual-round-off-field"
+									type="text"
+									inputmode="decimal"
 									:prefix="currencySymbol(displayCurrency)"
-									@change="onManualRoundOffChange" />
+									@change="onManualRoundOffChange"
+								/>
 							</v-col>
 							<v-col cols="6">
-								<v-btn block color="orange" theme="dark" prepend-icon="mdi-cards"
-									@click="handleFrequentCards" class="summary-btn" :loading="frequentCardsLoading">
+								<v-btn
+									block
+									color="orange"
+									theme="dark"
+									prepend-icon="mdi-cards"
+									@click="handleFrequentCards"
+									class="summary-btn"
+									:loading="frequentCardsLoading"
+								>
 									<span class="flex-grow-1">{{ __("FREQUENT CARDS") }}</span>
-									<v-chip v-if="completedCardsCount > 0" size="small" color="white"
-										text-color="orange" class="ml-2">
+									<v-chip
+										v-if="completedCardsCount > 0"
+										size="small"
+										color="white"
+										text-color="orange"
+										class="ml-2"
+									>
 										{{ completedCardsCount }} {{ __("Free") }}
 									</v-chip>
 								</v-btn>
@@ -124,16 +213,29 @@
 						<v-row dense>
 							<!-- Save Button -->
 							<v-col cols="6">
-								<v-btn block color="info" prepend-icon="mdi-content-save" @click="handleSaveAndClear"
-									class="summary-btn" :loading="saveLoading">
+								<v-btn
+									block
+									color="info"
+									prepend-icon="mdi-content-save"
+									@click="handleSaveAndClear"
+									class="summary-btn"
+									:loading="saveLoading"
+								>
 									{{ __("SAVE & CLEAR") }}
 								</v-btn>
 							</v-col>
 
 							<!-- Loyalty Points Button -->
 							<v-col cols="6">
-								<v-btn block color="purple" theme="dark" prepend-icon="mdi-star"
-									@click="handleLoyaltyPoints" class="summary-btn" :loading="loyaltyLoading">
+								<v-btn
+									block
+									color="purple"
+									theme="dark"
+									prepend-icon="mdi-star"
+									@click="handleLoyaltyPoints"
+									class="summary-btn"
+									:loading="loyaltyLoading"
+								>
 									{{ __("LOYALTY POINTS") }}
 								</v-btn>
 							</v-col>
@@ -168,13 +270,21 @@
 
 							<!-- Item Group Bulk Discount Section -->
 							<v-col cols="12" v-if="itemGroupsList && itemGroupsList.length > 0">
-									<v-card class="item-group-discount-card" elevation="2">
-										<v-card-text class="pa-4">
-											<!-- Header with Icon and Title -->
-										<div class="d-flex align-center justify-space-between item-group-header-row">
+								<v-card class="item-group-discount-card" elevation="2">
+									<v-card-text class="pa-4">
+										<!-- Header with Icon and Title -->
+										<div
+											class="d-flex align-center justify-space-between item-group-header-row"
+										>
 											<div class="d-flex align-center">
-												<v-avatar color="info" size="40" class="mr-3 item-group-avatar">
-													<v-icon color="white" size="24">mdi-folder-multiple</v-icon>
+												<v-avatar
+													color="info"
+													size="40"
+													class="mr-3 item-group-avatar"
+												>
+													<v-icon color="white" size="24"
+														>mdi-folder-multiple</v-icon
+													>
 												</v-avatar>
 												<div>
 													<p class="text-subtitle-2 font-weight-bold mb-0">
@@ -183,22 +293,33 @@
 												</div>
 											</div>
 
-											<div v-if="itemGroupDiscountEntries.length === 1" class="discounts-list-compact">
+											<div
+												v-if="itemGroupDiscountEntries.length === 1"
+												class="discounts-list-compact"
+											>
 												<v-chip
 													closable
 													size="x-small"
 													color="info"
 													variant="tonal"
 													class="discount-chip-compact"
-													@click:close="removeItemGroupDiscount(itemGroupDiscountEntries[0][0])"
+													@click:close="
+														removeItemGroupDiscount(
+															itemGroupDiscountEntries[0][0],
+														)
+													"
 												>
 													<span class="font-weight-600">
-														{{ itemGroupDiscountEntries[0][0] }}: {{ itemGroupDiscountEntries[0][1] }}%
+														{{ itemGroupDiscountEntries[0][0] }}:
+														{{ itemGroupDiscountEntries[0][1] }}%
 													</span>
 												</v-chip>
 											</div>
 
-											<div v-else-if="itemGroupDiscountEntries.length > 1" class="discounts-list-compact">
+											<div
+												v-else-if="itemGroupDiscountEntries.length > 1"
+												class="discounts-list-compact"
+											>
 												<v-menu location="bottom end" offset="6">
 													<template #activator="{ props }">
 														<v-chip
@@ -208,13 +329,17 @@
 															variant="tonal"
 															class="discount-chip-compact discount-dropdown-chip"
 														>
-															{{ itemGroupDiscountEntries.length }} {{ __("Discounts") }}
+															{{ itemGroupDiscountEntries.length }}
+															{{ __("Discounts") }}
 															<v-icon end size="14">mdi-chevron-down</v-icon>
 														</v-chip>
 													</template>
 													<v-list density="compact" class="discount-dropdown-list">
 														<v-list-item
-															v-for="([group, discount]) in itemGroupDiscountEntries"
+															v-for="[
+																group,
+																discount,
+															] in itemGroupDiscountEntries"
 															:key="group"
 															:title="`${group}: ${discount}%`"
 														>
@@ -224,15 +349,23 @@
 																	size="x-small"
 																	variant="text"
 																	color="error"
-																	@click.stop="removeItemGroupDiscount(group)"
+																	@click.stop="
+																		removeItemGroupDiscount(group)
+																	"
 																/>
 															</template>
 														</v-list-item>
 													</v-list>
 												</v-menu>
 											</div>
-											<v-btn size="small" color="info" variant="flat" prepend-icon="mdi-plus"
-												@click="openItemGroupDiscountDialog" class="add-discount-btn">
+											<v-btn
+												size="small"
+												color="info"
+												variant="flat"
+												prepend-icon="mdi-plus"
+												@click="openItemGroupDiscountDialog"
+												class="add-discount-btn"
+											>
 												{{ __("Add") }}
 											</v-btn>
 										</div>
@@ -258,7 +391,12 @@
 							</v-col>
 
 							<!-- Item Group Discount Dialog -->
-							<v-dialog v-model="showItemGroupDiscountDialog" max-width="480px" width="480px" persistent>
+							<v-dialog
+								v-model="showItemGroupDiscountDialog"
+								max-width="480px"
+								width="480px"
+								persistent
+							>
 								<v-card :style="isDarkTheme ? 'background-color:#1E1E1E;' : ''">
 									<v-card-title class="text-h6 pb-2 pt-4 px-6">
 										<v-row align="center" no-gutters>
@@ -267,8 +405,12 @@
 											</v-avatar>
 											<span>{{ __("Apply Group Discount") }}</span>
 											<v-spacer></v-spacer>
-											<v-btn icon size="small" variant="text"
-												@click="showItemGroupDiscountDialog = false">
+											<v-btn
+												icon
+												size="small"
+												variant="text"
+												@click="showItemGroupDiscountDialog = false"
+											>
 												<v-icon>mdi-close</v-icon>
 											</v-btn>
 										</v-row>
@@ -278,36 +420,71 @@
 
 									<v-card-text class="px-6 py-4">
 										<!-- Select Item Group -->
-										<v-select v-model="selectedItemGroupForDiscount" :items="itemGroupsList"
-											:label="__('Select Item Group')" prepend-inner-icon="mdi-folder"
-											variant="outlined" density="comfortable" color="info" class="mb-4"
-											clearable />
+										<v-select
+											v-model="selectedItemGroupForDiscount"
+											:items="itemGroupsList"
+											:label="__('Select Item Group')"
+											prepend-inner-icon="mdi-folder"
+											variant="outlined"
+											density="comfortable"
+											color="info"
+											class="mb-4"
+											clearable
+										/>
 
 										<!-- Discount Percentage Input -->
-										<v-text-field v-model.number="discountPercentageByGroup"
-											:label="__('Discount Percentage')" type="number" min="0" max="100"
-											step="0.5" prepend-inner-icon="mdi-percent" variant="outlined"
-											density="comfortable" color="info" suffix="%" :rules="[
+										<v-text-field
+											v-model.number="discountPercentageByGroup"
+											:label="__('Discount Percentage')"
+											type="number"
+											min="0"
+											max="100"
+											step="0.5"
+											prepend-inner-icon="mdi-percent"
+											variant="outlined"
+											density="comfortable"
+											color="info"
+											suffix="%"
+											:rules="[
 												(v) => v >= 0 || __('Cannot be negative'),
-												(v) => v <= 100 || __('Cannot exceed 100%')
-											]" />
+												(v) => v <= 100 || __('Cannot exceed 100%'),
+											]"
+										/>
 
 										<!-- Preview Alert -->
-										<v-alert v-if="selectedItemGroupForDiscount && discountPercentageByGroup > 0"
-											type="info" variant="tonal" density="compact" icon="mdi-information-outline"
-											class="mt-4 mb-0">
+										<v-alert
+											v-if="
+												selectedItemGroupForDiscount && discountPercentageByGroup > 0
+											"
+											type="info"
+											variant="tonal"
+											density="compact"
+											icon="mdi-information-outline"
+											class="mt-4 mb-0"
+										>
 											<p class="text-caption mb-0">
-												<strong>{{ selectedItemGroupForDiscount }}</strong> {{ __("items will receive a") }}
-												<strong>{{ discountPercentageByGroup }}%</strong> {{ __("discount") }}
+												<strong>{{ selectedItemGroupForDiscount }}</strong>
+												{{ __("items will receive a") }}
+												<strong>{{ discountPercentageByGroup }}%</strong>
+												{{ __("discount") }}
 											</p>
 										</v-alert>
 
 										<!-- No Selection Alert -->
-										<v-alert v-else-if="!selectedItemGroupForDiscount" type="warning"
-											variant="tonal" density="compact" icon="mdi-alert-outline"
-											class="mt-4 mb-0">
+										<v-alert
+											v-else-if="!selectedItemGroupForDiscount"
+											type="warning"
+											variant="tonal"
+											density="compact"
+											icon="mdi-alert-outline"
+											class="mt-4 mb-0"
+										>
 											<p class="text-caption mb-0">
-												{{ __("Please select an item group and enter a discount percentage") }}
+												{{
+													__(
+														"Please select an item group and enter a discount percentage",
+													)
+												}}
 											</p>
 										</v-alert>
 									</v-card-text>
@@ -316,13 +493,22 @@
 
 									<v-card-actions class="px-6 py-4">
 										<v-spacer></v-spacer>
-										<v-btn color="error" variant="text"
-											@click="showItemGroupDiscountDialog = false">
+										<v-btn
+											color="error"
+											variant="text"
+											@click="showItemGroupDiscountDialog = false"
+										>
 											{{ __("Cancel") }}
 										</v-btn>
-										<v-btn color="info" variant="flat"
-											:disabled="!selectedItemGroupForDiscount || discountPercentageByGroup <= 0"
-											@click="applyItemGroupDiscount">
+										<v-btn
+											color="info"
+											variant="flat"
+											:disabled="
+												!selectedItemGroupForDiscount ||
+												discountPercentageByGroup <= 0
+											"
+											@click="applyItemGroupDiscount"
+										>
 											<v-icon left>mdi-check</v-icon>
 											{{ __("Apply Discount") }}
 										</v-btn>
@@ -365,25 +551,52 @@
 							-->
 
 							<!-- Select Sales Order Button (Conditional) -->
-							<v-col cols="12" v-if="pos_profile && pos_profile.custom_allow_select_sales_order == 1">
-								<v-btn block color="info" theme="dark" prepend-icon="mdi-book-search"
-									@click="handleSelectOrder" class="summary-btn" :loading="selectOrderLoading">
+							<v-col
+								cols="12"
+								v-if="pos_profile && pos_profile.custom_allow_select_sales_order == 1"
+							>
+								<v-btn
+									block
+									color="info"
+									theme="dark"
+									prepend-icon="mdi-book-search"
+									@click="handleSelectOrder"
+									class="summary-btn"
+									:loading="selectOrderLoading"
+								>
 									{{ __("SELECT S.O") }}
 								</v-btn>
 							</v-col>
 
 							<!-- Sales Return Button (Conditional) -->
 							<v-col cols="12" v-if="pos_profile && pos_profile.posa_allow_return == 1">
-								<v-btn block color="secondary" theme="dark" prepend-icon="mdi-backup-restore"
-									@click="handleOpenReturns" class="summary-btn" :loading="returnsLoading">
+								<v-btn
+									block
+									color="secondary"
+									theme="dark"
+									prepend-icon="mdi-backup-restore"
+									@click="handleOpenReturns"
+									class="summary-btn"
+									:loading="returnsLoading"
+								>
 									{{ __("SALES RETURN") }}
 								</v-btn>
 							</v-col>
 
 							<!-- Print Draft Button (Conditional) -->
-							<v-col cols="12" v-if="pos_profile && pos_profile.posa_allow_print_draft_invoices">
-								<v-btn block color="primary" theme="dark" prepend-icon="mdi-printer"
-									@click="handlePrintDraft" class="summary-btn" :loading="printLoading">
+							<v-col
+								cols="12"
+								v-if="pos_profile && pos_profile.posa_allow_print_draft_invoices"
+							>
+								<v-btn
+									block
+									color="primary"
+									theme="dark"
+									prepend-icon="mdi-printer"
+									@click="handlePrintDraft"
+									class="summary-btn"
+									:loading="printLoading"
+								>
 									{{ __("PRINT DRAFT") }}
 								</v-btn>
 							</v-col>
@@ -392,17 +605,37 @@
 							<v-col cols="12">
 								<v-row dense class="summary-actions">
 									<v-col cols="6">
-										<v-btn block color="error" theme="dark" @click="handleCancelSale"
-											class="summary-btn primary-action" :loading="cancelLoading"
-											style="display: flex; align-items: center; justify-content: center">
+										<v-btn
+											block
+											color="error"
+											theme="dark"
+											@click="handleCancelSale"
+											class="summary-btn primary-action"
+											:loading="cancelLoading"
+											style="
+												display: flex;
+												align-items: center;
+												justify-content: center;
+											"
+										>
 											<v-icon left size="18">mdi-close-circle</v-icon>
 											{{ __("CANCEL SALE") }}
 										</v-btn>
 									</v-col>
 									<v-col cols="6">
-										<v-btn block color="green darken-2" theme="dark" @click="handleShowPayment"
-											class="summary-btn pay-btn primary-action" :loading="paymentLoading"
-											style="display: flex; align-items: center; justify-content: center">
+										<v-btn
+											block
+											color="green darken-2"
+											theme="dark"
+											@click="handleShowPayment"
+											class="summary-btn pay-btn primary-action"
+											:loading="paymentLoading"
+											style="
+												display: flex;
+												align-items: center;
+												justify-content: center;
+											"
+										>
 											<v-icon left size="18">mdi-credit-card</v-icon>
 											{{ __("PAY") }}
 										</v-btn>
@@ -457,13 +690,22 @@
 						</v-alert>
 
 						<!-- Redeem Points Input -->
-						<v-text-field v-model="pointsToRedeem" :label="__('Points to Redeem')"
-							prepend-inner-icon="mdi-star-minus" variant="outlined" density="comfortable" color="purple"
-							type="number" :rules="[
+						<v-text-field
+							v-model="pointsToRedeem"
+							:label="__('Points to Redeem')"
+							prepend-inner-icon="mdi-star-minus"
+							variant="outlined"
+							density="comfortable"
+							color="purple"
+							type="number"
+							:rules="[
 								isNumber,
 								(v) => v <= loyaltyPoints || __('Cannot redeem more than available points'),
 								(v) => v >= 0 || __('Points must be positive'),
-							]" :hint="__('Enter points to redeem for a discount')" persistent-hint />
+							]"
+							:hint="__('Enter points to redeem for a discount')"
+							persistent-hint
+						/>
 
 						<!-- Redemption Preview -->
 						<div v-if="pointsToRedeem > 0" class="mt-3 pa-3 redemption-preview">
@@ -496,8 +738,13 @@
 					<v-btn color="error" variant="text" @click="showLoyaltyDialog = false">
 						{{ __("Cancel") }}
 					</v-btn>
-					<v-btn color="purple" variant="flat" :disabled="!isValidRedemption || redeemLoading"
-						:loading="redeemLoading" @click="handleRedeemPoints">
+					<v-btn
+						color="purple"
+						variant="flat"
+						:disabled="!isValidRedemption || redeemLoading"
+						:loading="redeemLoading"
+						@click="handleRedeemPoints"
+					>
 						<v-icon left>mdi-check</v-icon>
 						{{ __("Apply Redemption") }}
 					</v-btn>
@@ -529,8 +776,12 @@
 						</p>
 
 						<!-- Loading State -->
-						<v-progress-linear v-if="loadingFrequentCards" indeterminate color="orange"
-							class="mb-3"></v-progress-linear>
+						<v-progress-linear
+							v-if="loadingFrequentCards"
+							indeterminate
+							color="orange"
+							class="mb-3"
+						></v-progress-linear>
 
 						<!-- Empty State -->
 						<div v-else-if="frequentCards.length === 0" class="text-center py-8">
@@ -546,27 +797,34 @@
 						<!-- Cards Grid -->
 						<v-row v-else dense>
 							<v-col v-for="card in frequentCards" :key="card.name" cols="12">
-								<v-card :class="[
+								<v-card
+									:class="[
 										'frequent-card',
 										card.is_expired ? 'expired-card' : '',
 										card.visits >= card.required_visits ? 'completed-card' : '',
-									]" :elevation="card.visits >= card.required_visits ? 4 : 2" @click="handleCardClick(card)"
-									:disabled="card.is_expired || applyingCard">
+									]"
+									:elevation="card.visits >= card.required_visits ? 4 : 2"
+									@click="handleCardClick(card)"
+									:disabled="card.is_expired || applyingCard"
+								>
 									<v-card-text class="pa-4">
 										<v-row align="center" no-gutters>
 											<v-col cols="auto" class="mr-3">
-												<v-avatar :color="
+												<v-avatar
+													:color="
 														card.is_expired
 															? 'grey'
 															: card.visits >= card.required_visits
 																? 'success'
 																: 'orange'
-													" size="56">
+													"
+													size="56"
+												>
 													<v-icon color="white" size="28">
 														{{
-														card.visits >= card.required_visits
-														? "mdi-gift"
-														: "mdi-cards"
+															card.visits >= card.required_visits
+																? "mdi-gift"
+																: "mdi-cards"
 														}}
 													</v-icon>
 												</v-avatar>
@@ -583,40 +841,61 @@
 												<div class="visit-progress mb-2">
 													<v-row dense align="center">
 														<v-col cols="auto">
-															<v-chip size="small" :color="
+															<v-chip
+																size="small"
+																:color="
 																	card.visits >= card.required_visits
 																		? 'success'
 																		: 'orange'
-																">
+																"
+															>
 																{{ card.visits }}/{{ card.required_visits }}
 																visits
 															</v-chip>
 														</v-col>
 														<v-col>
-															<v-progress-linear :model-value="
+															<v-progress-linear
+																:model-value="
 																	(card.visits / card.required_visits) * 100
-																" :color="
+																"
+																:color="
 																	card.visits >= card.required_visits
 																		? 'success'
 																		: 'orange'
-																" height="6" rounded></v-progress-linear>
+																"
+																height="6"
+																rounded
+															></v-progress-linear>
 														</v-col>
 													</v-row>
 												</div>
 
 												<!-- Status & Expiry -->
 												<div>
-													<v-chip v-if="card.is_expired" size="small" color="error"
-														variant="flat">
+													<v-chip
+														v-if="card.is_expired"
+														size="small"
+														color="error"
+														variant="flat"
+													>
 														<v-icon size="small" left>mdi-clock-alert</v-icon>
 														{{ __("Expired") }}
 													</v-chip>
-													<v-chip v-else-if="card.visits >= card.required_visits" size="small"
-														color="success" variant="flat">
+													<v-chip
+														v-else-if="card.visits >= card.required_visits"
+														size="small"
+														color="success"
+														variant="flat"
+													>
 														<v-icon size="small" left>mdi-gift</v-icon>
 														{{ __("Free Service Available!") }}
 													</v-chip>
-													<v-chip v-else size="small" color="grey" variant="outlined">
+													<v-chip
+														v-else
+														size="small"
+														color="grey"
+														variant="outlined"
+													>
 														<v-icon size="small" left>mdi-calendar</v-icon>
 														{{ __("Expires") }}:
 														{{ formatDate(card.expiry_date) }}
@@ -630,12 +909,18 @@
 						</v-row>
 
 						<!-- Auto-apply notification -->
-						<v-alert v-if="hasCompletedCards" type="success" variant="tonal" density="compact" class="mt-4"
-							icon="mdi-information">
+						<v-alert
+							v-if="hasCompletedCards"
+							type="success"
+							variant="tonal"
+							density="compact"
+							class="mt-4"
+							icon="mdi-information"
+						>
 							{{
-							__(
-							"Click on a completed card to add the free service to your invoice automatically",
-							)
+								__(
+									"Click on a completed card to add the free service to your invoice automatically",
+								)
 							}}
 						</v-alert>
 					</div>
@@ -714,12 +999,11 @@ export default {
 			manual_round_off: 0,
 			isResetting: false,
 
-			itemGroupDiscounts: {}, 
-			availableItemGroups: [], 
+			itemGroupDiscounts: {},
+			availableItemGroups: [],
 			selectedItemGroupForDiscount: null,
-			discountPercentageByGroup: 0, 
+			discountPercentageByGroup: 0,
 			showItemGroupDiscountDialog: false,
-
 		};
 	},
 	emits: [
@@ -749,23 +1033,24 @@ export default {
 		itemGroupsList() {
 			const parentItems = this.$parent?.items || [];
 
-			const uniqueGroups = [...new Set(
-				parentItems
-					.map(item => (item.item_group || '').trim())
-					.filter(group => group && !group.toLowerCase().includes("engine oil"))
-			)];
+			const uniqueGroups = [
+				...new Set(
+					parentItems
+						.map((item) => (item.item_group || "").trim())
+						.filter((group) => group && !group.toLowerCase().includes("engine oil")),
+				),
+			];
 
 			return uniqueGroups.sort();
 		},
 
-
 		itemGroupSummary() {
 			// Calculate totals per item group for display
 			const summary = {};
-			this.items_group.forEach(group => {
+			this.items_group.forEach((group) => {
 				summary[group] = {
 					discount: this.itemGroupDiscounts[group] || 0,
-					itemCount: this.countItemsByGroup(group)
+					itemCount: this.countItemsByGroup(group),
 				};
 			});
 			return summary;
@@ -853,12 +1138,8 @@ export default {
 		subtotal() {
 			this.manual_round_off = 0;
 
-			this.eventBus.emit(
-				"update_rounded_total",
-				this.finalTotal
-			);
+			this.eventBus.emit("update_rounded_total", this.finalTotal);
 		},
-
 
 		additional_discount: {
 			immediate: true,
@@ -876,7 +1157,6 @@ export default {
 		},
 	},
 	methods: {
-
 		getAutoRoundedBase() {
 			return this.roundByLastTwoDecimals(this.subtotal || 0);
 		},
@@ -912,7 +1192,7 @@ export default {
 		countItemsByGroup(group) {
 			// Count items in specific group
 			return this.pos_profile && Array.isArray(this.items_group)
-				? this.items_group.filter(g => g === group).length
+				? this.items_group.filter((g) => g === group).length
 				: 0;
 		},
 
@@ -926,8 +1206,8 @@ export default {
 			const parentItems = this.$parent?.items || [];
 
 			const groupTotal = parentItems.reduce((sum, item) => {
-				if ((item.item_group || '').trim() === group) {
-					return sum + (Number(item.qty || 0) * Number(item.rate || 0));
+				if ((item.item_group || "").trim() === group) {
+					return sum + Number(item.qty || 0) * Number(item.rate || 0);
 				}
 				return sum;
 			}, 0);
@@ -940,7 +1220,6 @@ export default {
 		},
 
 		applyItemGroupDiscount() {
-
 			if (this.selectedItemGroupForDiscount === "Engine Oil") {
 				frappe.show_alert({
 					message: this.__("Discounts are not allowed for Engine Oil items"),
@@ -952,7 +1231,7 @@ export default {
 			if (!this.selectedItemGroupForDiscount) {
 				frappe.show_alert({
 					message: this.__("Please select an item group"),
-					indicator: "warning"
+					indicator: "warning",
 				});
 				return;
 			}
@@ -970,13 +1249,13 @@ export default {
 			if (discountPct < 0 || discountPct > 100) {
 				frappe.show_alert({
 					message: this.__("Discount must be between 0-100%"),
-					indicator: "error"
+					indicator: "error",
 				});
 				return;
 			}
 
 			// Emit event to parent to apply discount to items (callback handles success/failure)
-			this.eventBus.emit('apply_group_discount', {
+			this.eventBus.emit("apply_group_discount", {
 				group: groupName,
 				percentage: discountPct,
 				callback: (result = {}) => {
@@ -996,15 +1275,13 @@ export default {
 					if (rejected > 0) {
 						frappe.show_alert({
 							message: this.__(
-								`Discount applied to ${applied} items. ${rejected} items rejected due to limits.`
+								`Discount applied to ${applied} items. ${rejected} items rejected due to limits.`,
 							),
 							indicator: "orange",
 						});
 					} else {
 						frappe.show_alert({
-							message: this.__(
-								`${discountPct}% discount applied to ${groupName} items`
-							),
+							message: this.__(`${discountPct}% discount applied to ${groupName} items`),
 							indicator: "green",
 						});
 					}
@@ -1012,7 +1289,7 @@ export default {
 			});
 
 			// Recalculate totals
-			this.$emit('update_discount_umount');
+			this.$emit("update_discount_umount");
 
 			// Reset and close
 			this.discountPercentageByGroup = 0;
@@ -1025,15 +1302,15 @@ export default {
 			delete this.itemGroupDiscounts[group];
 
 			// Emit event to parent to remove discount
-			this.eventBus.emit('remove_group_discount', {
-				group: group
+			this.eventBus.emit("remove_group_discount", {
+				group: group,
 			});
 
-			this.$emit('update_discount_umount');
+			this.$emit("update_discount_umount");
 
 			frappe.show_alert({
 				message: this.__(`Discount removed from ${group} items`),
-				indicator: "orange"
+				indicator: "orange",
 			});
 		},
 
@@ -1049,7 +1326,6 @@ export default {
 			// Refresh payment UI
 			this.eventBus.emit("force_payment_refresh");
 		},
-
 
 		resetAfterPayment() {
 			// Core sale state
@@ -1142,7 +1418,11 @@ export default {
 			}
 			// 2. MANDATORY ODOMETER VALIDATION
 			if (this.showOdometerField) {
-				if (!this.odometerReading || isNaN(this.odometerReading) || Number(this.odometerReading) <= 0) {
+				if (
+					!this.odometerReading ||
+					isNaN(this.odometerReading) ||
+					Number(this.odometerReading) <= 0
+				) {
 					frappe.show_alert({
 						message: this.__("Please enter a valid odometer reading before saving."),
 						indicator: "red",
@@ -1505,7 +1785,6 @@ export default {
 		},
 
 		checkIfCarWashService() {
-
 			// Emit event to parent to check items
 			this.eventBus.emit("check_items_for_service", {
 				callback: (hasCarWashService) => {
@@ -1718,18 +1997,13 @@ export default {
 		},
 	},
 	mounted() {
-
 		this.eventBus.on("reset_manual_total", () => {
 			this.manual_round_off = 0;
 
-			this.eventBus.emit(
-				"update_rounded_total",
-				this.finalTotal
-			);
+			this.eventBus.emit("update_rounded_total", this.finalTotal);
 
 			this.eventBus.emit("force_payment_refresh");
 		});
-
 
 		if (this.selectedCustomerId) {
 			this.fetchLoyaltyPoints();
@@ -1747,7 +2021,6 @@ export default {
 
 		// Listen for odometer data from parent (when loading draft)
 		this.eventBus.on("load_odometer_data", (data) => {
-
 			if (data) {
 				this.showOdometerField = data.custom_has_oil_item === 1;
 				this.odometerReading = data.custom_odometer_reading || null;
@@ -1758,7 +2031,6 @@ export default {
 
 		// Listen for customer details from Customer component (AUTO-FETCH)
 		this.eventBus.on("update_customer_details", (data) => {
-
 			// Auto-populate mobile and vehicle from customer
 			this.mobileNumber = data.contact_mobile || "";
 			this.vehicleNumber = data.custom_vehicle_no || "";
@@ -1797,7 +2069,7 @@ export default {
 		this.eventBus.on("confirm_cancel_sale", this.handleConfirmedCancelSale);
 
 		// Listen for item groups from parent
-		this.eventBus.on('register_item_groups', (groups) => {
+		this.eventBus.on("register_item_groups", (groups) => {
 			if (Array.isArray(groups)) {
 				this.availableItemGroups = groups;
 			}
@@ -1814,9 +2086,7 @@ export default {
 		this.eventBus.off("payment_completed", this.resetAfterPayment);
 		this.eventBus.off("confirm_cancel_sale", this.handleConfirmedCancelSale);
 		this.eventBus.off("reset_manual_total");
-		this.eventBus.off('register_item_groups');
-
-
+		this.eventBus.off("register_item_groups");
 	},
 };
 </script>
@@ -1826,7 +2096,7 @@ export default {
 	background-color: #f5f5f5 !important;
 	transition: all 0.3s ease;
 	display: flex;
-    flex-direction: column;
+	flex-direction: column;
 }
 
 :deep([data-theme="dark"]) .cards,
@@ -1908,11 +2178,10 @@ export default {
 	position: relative;
 	overflow: hidden;
 	height: 22px !important;
-    font-size: 0.75rem !important;
+	font-size: 0.75rem !important;
 	text-transform: none !important;
 	font-weight: 600 !important;
 	padding: 0 6px !important;
-
 }
 
 .primary-action {
@@ -1927,8 +2196,6 @@ export default {
 	margin-top: 12px !important;
 	padding-top: 6px !important;
 }
-
-
 
 .summary-btn:hover:not(:disabled) {
 	transform: translateY(-1px);
@@ -1960,18 +2227,17 @@ export default {
 }
 
 .loyalty-points-display-card .v-card-text {
-  padding: 4px !important;
+	padding: 4px !important;
 }
 
 .loyalty-points-display-card p {
-  margin: 0 !important;
-  line-height: 1.2 !important;
+	margin: 0 !important;
+	line-height: 1.2 !important;
 }
 
 .loyalty-points-display-card .text-h6 {
-  font-size: 0.9rem !important;
+	font-size: 0.9rem !important;
 }
-
 
 .pay-btn:hover {
 	background: linear-gradient(135deg, #45a049, #3d8b40) !important;
@@ -2002,13 +2268,13 @@ export default {
 }
 
 .v-row.dense {
-  row-gap: 1px !important;
+	row-gap: 1px !important;
 }
 
 /* FIX: Prevent label/value overlap */
 .summary-field :deep(.v-field-label) {
-	font-weight: 600;   
-	font-size: 0.74rem;   
+	font-weight: 600;
+	font-size: 0.74rem;
 }
 
 .employee-selection {
@@ -2134,7 +2400,6 @@ export default {
 	align-items: center !important;
 }
 
-
 :deep(.compact-summary .manual-round-off-field input[type="number"]::-webkit-outer-spin-button),
 :deep(.compact-summary .manual-round-off-field input[type="number"]::-webkit-inner-spin-button) {
 	-webkit-appearance: none !important;
@@ -2156,7 +2421,6 @@ export default {
 	line-height: 1 !important;
 	margin-top: 0 !important;
 }
-
 
 /* Dialog Scrolling */
 .dialog-card {
@@ -2239,200 +2503,194 @@ export default {
 
 /* Item Group Discount Card  */
 .item-group-discount-card {
-  margin-top: 10px !important;
-  background: linear-gradient(
-    135deg,
-    rgba(33, 150, 243, 0.08),
-    rgba(21, 101, 192, 0.06)
-  );
-  border: 2px solid rgba(33, 150, 243, 0.25);
-  border-radius: 12px !important;
-  min-height: 44px;
-  max-height: 44px;
+	margin-top: 10px !important;
+	background: linear-gradient(135deg, rgba(33, 150, 243, 0.08), rgba(21, 101, 192, 0.06));
+	border: 2px solid rgba(33, 150, 243, 0.25);
+	border-radius: 12px !important;
+	min-height: 44px;
+	max-height: 44px;
 
-  padding: 0 !important;
+	padding: 0 !important;
 
-  transition: all 0.3s ease;
+	transition: all 0.3s ease;
 }
 
 :deep(.item-group-discount-card .v-avatar) {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
 
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px !important;
-  min-height: 32px !important;
+	width: 32px !important;
+	height: 32px !important;
+	min-width: 32px !important;
+	min-height: 32px !important;
 }
 
 .item-group-discount-card :deep(.v-avatar) {
-  width: 28px !important;
-  height: 28px !important;
+	width: 28px !important;
+	height: 28px !important;
 }
 
 .item-group-discount-card :deep(.v-icon) {
-  font-size: 17px !important;
+	font-size: 17px !important;
 }
 
 :deep(.item-group-discount-card .item-group-avatar) {
-  background-color: #2196f3 !important;
+	background-color: #2196f3 !important;
 }
 
 :deep(.item-group-discount-card .v-avatar .v-icon) {
-  display: inline-flex !important;
-  opacity: 1 !important;
-  visibility: visible !important;
+	display: inline-flex !important;
+	opacity: 1 !important;
+	visibility: visible !important;
 
-  color: #ffffff !important;
-  font-size: 20px !important;
-  line-height: 1 !important;
+	color: #ffffff !important;
+	font-size: 20px !important;
+	line-height: 1 !important;
 }
 
 /* Kill the underlay globally */
 :deep(.v-avatar__underlay) {
-  display: none !important;
+	display: none !important;
 }
 
 /* Force icon above everything */
 :deep(.v-avatar .v-icon) {
-  position: relative;
-  z-index: 2;
+	position: relative;
+	z-index: 2;
 }
 
 /* Reduce internal padding to match loyalty card */
 .item-group-discount-card .v-card-text {
-  padding: 2px 6px !important;
-  height: 100% !important;
-  display: flex !important;
-  align-items: center !important;
+	padding: 2px 6px !important;
+	height: 100% !important;
+	display: flex !important;
+	align-items: center !important;
 }
 /* Hide empty state (keeps card compact) */
 .item-group-discount-card .text-center {
-  display: none !important;
+	display: none !important;
 }
 .item-group-discount-card .text-caption {
-  display: none !important;
+	display: none !important;
 }
 
-
 .item-group-discount-card:hover {
-  border-color: rgba(33, 150, 243, 0.45);
-  transform: translateY(-2px);
+	border-color: rgba(33, 150, 243, 0.45);
+	transform: translateY(-2px);
 }
 
 :deep(.v-theme--dark) .item-group-discount-card {
-  background: linear-gradient(135deg, rgba(33, 150, 243, 0.15), rgba(21, 101, 192, 0.1));
-  border-color: rgba(33, 150, 243, 0.35);
+	background: linear-gradient(135deg, rgba(33, 150, 243, 0.15), rgba(21, 101, 192, 0.1));
+	border-color: rgba(33, 150, 243, 0.35);
 }
 
 :deep(.v-theme--dark) .item-group-discount-card:hover {
-  border-color: rgba(33, 150, 243, 0.55);
+	border-color: rgba(33, 150, 243, 0.55);
 }
 
 /* Discount Chips */
 .discount-chip {
-  backdrop-filter: blur(10px);
-  transition: all 0.2s ease;
-  padding: 6px 12px !important;
-  font-size: 0.875rem;
+	backdrop-filter: blur(10px);
+	transition: all 0.2s ease;
+	padding: 6px 12px !important;
+	font-size: 0.875rem;
 }
 
 .discount-chip:hover {
-  transform: scale(1.05);
+	transform: scale(1.05);
 }
 
 .discounts-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-height: 24px;
-  align-content: flex-start;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	min-height: 24px;
+	align-content: flex-start;
 }
 
 /* Compact summary like loyalty card */
 .discount-summary {
-  background: transparent;
-  padding: 0;
-  margin: 0;
-  font-size: 0.85rem;
+	background: transparent;
+	padding: 0;
+	margin: 0;
+	font-size: 0.85rem;
 
-  display: flex;
-  align-items: center;
+	display: flex;
+	align-items: center;
 }
 
-
 :deep(.v-theme--dark) .discount-summary {
-  background: rgba(33, 150, 243, 0.1);
+	background: rgba(33, 150, 243, 0.1);
 }
 
 .text-info {
-  color: #1976d2 !important;
+	color: #1976d2 !important;
 }
 
 :deep(.v-theme--dark) .text-info {
-  color: #64b5f6 !important;
+	color: #64b5f6 !important;
 }
 
 /* Add Discount Button */
 .add-discount-btn {
-  transition: all 0.2s ease !important;
-  align-self: center !important;
-  margin-top: 3px !important;
-  margin-bottom: 0 !important;
-  min-height: 32px !important;
+	transition: all 0.2s ease !important;
+	align-self: center !important;
+	margin-top: 3px !important;
+	margin-bottom: 0 !important;
+	min-height: 32px !important;
 }
 
 .add-discount-btn:hover {
-  transform: translateY(-2px);
+	transform: translateY(-2px);
 }
 
 .item-group-header-row {
-  align-items: center !important;
-  margin-bottom: 0 !important;
-  width: 100%;
-  min-height: 32px;
-  gap: 8px;
+	align-items: center !important;
+	margin-bottom: 0 !important;
+	width: 100%;
+	min-height: 32px;
+	gap: 8px;
 }
 
 .discounts-list-compact {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  white-space: nowrap;
-  padding: 0 2px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex: 1;
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	white-space: nowrap;
+	padding: 0 2px;
 }
 
 .discount-chip-compact {
-  flex-shrink: 0;
-  max-width: 170px;
-  height: 22px !important;
-  font-size: 0.72rem !important;
-  padding: 0 6px !important;
+	flex-shrink: 0;
+	max-width: 170px;
+	height: 22px !important;
+	font-size: 0.72rem !important;
+	padding: 0 6px !important;
 }
 
 .discount-chip-compact :deep(.v-chip__content) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .discount-dropdown-chip {
-  cursor: pointer;
+	cursor: pointer;
 }
 
 .discount-dropdown-list {
-  min-width: 220px;
-  max-width: 280px;
+	min-width: 220px;
+	max-width: 280px;
 }
 
 /* Dialog Styling */
 .item-group-discount-card ~ .v-dialog__content {
-  backdrop-filter: blur(4px);
+	backdrop-filter: blur(4px);
 }
 .card-container {
 	display: flex !important;

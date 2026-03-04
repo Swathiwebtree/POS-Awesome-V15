@@ -54,7 +54,9 @@ def _first_field_value(doc_or_dict, fields):
     return None
 
 
-def _sync_vehicle_doctype(vehicle_name, vehicle_no, customer, model, make, chasis_no, color, registration_number, mobile_no):
+def _sync_vehicle_doctype(
+    vehicle_name, vehicle_no, customer, model, make, chasis_no, color, registration_number, mobile_no
+):
     """
     Best-effort sync into ERPNext Vehicle doctype.
     This keeps data available even when Vehicle Master schema differs across sites.
@@ -113,6 +115,7 @@ def _sync_vehicle_doctype(vehicle_name, vehicle_no, customer, model, make, chasi
         frappe.db.commit()
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Vehicle sync warning")
+
 
 # ============ POS Vehicle APIs ============
 
@@ -682,6 +685,7 @@ def get_customer_by_vehicle(vehicle_no):
     )
     return resp
 
+
 @frappe.whitelist()
 def get_vehicles_by_search(search_term="", limit=1):
     """
@@ -692,6 +696,7 @@ def get_vehicles_by_search(search_term="", limit=1):
         return {}
 
     return get_customer_by_vehicle(search_term)
+
 
 @frappe.whitelist()
 def get_all_vehicles(limit=500):
@@ -729,7 +734,8 @@ def get_all_vehicles(limit=500):
         v["mobile_no"] = cust.mobile_no if cust else ""
 
     return vehicles
-    
+
+
 @frappe.whitelist()
 def get_vehicle_makes(search_term=""):
     conditions = ""

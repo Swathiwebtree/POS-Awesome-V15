@@ -1,78 +1,95 @@
 <template>
 	<div class="pos-app-container" :class="{ 'fullscreen-mode': isFullscreen }">
 		<div class="pos-scale-wrapper" :class="{ 'fullscreen-mode': isFullscreen }">
+			<!-- Main POS Container -->
+			<div
+				class="pos-main-container"
+				:class="[rtlClasses, { 'fullscreen-mode': isFullscreen }]"
+				:style="[responsiveStyles, rtlStyles]"
+			>
+				<ClosingDialog></ClosingDialog>
+				<UpdateCustomer />
+				<UpdateVehicle />
+				<SalesOrders></SalesOrders>
+				<Returns></Returns>
+				<NewAddress></NewAddress>
+				<MpesaPayments></MpesaPayments>
+				<Variants></Variants>
+				<OpeningDialog v-if="dialog" :dialog="dialog"></OpeningDialog>
 
-		<!-- Main POS Container -->
-		<div class="pos-main-container" :class="[rtlClasses, { 'fullscreen-mode': isFullscreen }]"
-			:style="[responsiveStyles, rtlStyles]">
-			<ClosingDialog></ClosingDialog>
-			<UpdateCustomer />
-			<UpdateVehicle />
-			<SalesOrders></SalesOrders>
-			<Returns></Returns>
-			<NewAddress></NewAddress>
-			<MpesaPayments></MpesaPayments>
-			<Variants></Variants>
-			<OpeningDialog v-if="dialog" :dialog="dialog"></OpeningDialog>
+				<div v-show="!dialog" class="pos-layout">
+					<!-- Left Column: Drafts (25% width) -->
+					<div class="pos-column drafts-column">
+						<div v-show="!showOffers && !showCoupons" class="column-card drafts-card">
+							<div class="column-header">
+								<v-icon left color="primary">mdi-file-document</v-icon>
+								<span>{{ __("Job orders") }}</span>
+								<v-spacer></v-spacer>
+								<v-btn
+									icon
+									size="small"
+									:color="autoRefreshDrafts ? 'primary' : 'grey'"
+									:aria-label="
+										autoRefreshDrafts ? __('Auto Refresh On') : __('Auto Refresh Off')
+									"
+									:title="
+										autoRefreshDrafts ? __('Auto Refresh On') : __('Auto Refresh Off')
+									"
+									@click="toggleDraftsAutoRefresh"
+								>
+									<v-icon>{{
+										autoRefreshDrafts ? "mdi-refresh-auto" : "mdi-refresh-off"
+									}}</v-icon>
+								</v-btn>
+								<v-btn
+									icon
+									size="small"
+									@click="refreshDrafts"
+									:loading="loadDraftsLoading"
+									:aria-label="__('Refresh Drafts')"
+								>
+									<v-icon>mdi-refresh</v-icon>
+								</v-btn>
+							</div>
+							<v-divider></v-divider>
 
-			<div v-show="!dialog" class="pos-layout">
-				<!-- Left Column: Drafts (25% width) -->
-				<div class="pos-column drafts-column">
-					<div v-show="!showOffers && !showCoupons" class="column-card drafts-card">
-						<div class="column-header">
-							<v-icon left color="primary">mdi-file-document</v-icon>
-							<span>{{ __("Job orders") }}</span>
-							<v-spacer></v-spacer>
-							<v-btn
-								icon
-								size="small"
-								:color="autoRefreshDrafts ? 'primary' : 'grey'"
-								:aria-label="autoRefreshDrafts ? __('Auto Refresh On') : __('Auto Refresh Off')"
-								:title="autoRefreshDrafts ? __('Auto Refresh On') : __('Auto Refresh Off')"
-								@click="toggleDraftsAutoRefresh"
-							>
-								<v-icon>{{ autoRefreshDrafts ? "mdi-refresh-auto" : "mdi-refresh-off" }}</v-icon>
-							</v-btn>
-							<v-btn icon size="small" @click="refreshDrafts" :loading="loadDraftsLoading"
-								:aria-label="__('Refresh Drafts')">
-								<v-icon>mdi-refresh</v-icon>
-							</v-btn>
+							<div class="drafts-wrapper-container">
+								<Drafts :use-as-modal="false" ref="draftsComponent"></Drafts>
+							</div>
 						</div>
-						<v-divider></v-divider>
 
-						<div class="drafts-wrapper-container">
-							<Drafts :use-as-modal="false" ref="draftsComponent"></Drafts>
+						<!-- Additional components with proper card styling -->
+						<div v-show="showOffers" class="column-card offers-coupons-card">
+							<PosOffers></PosOffers>
+						</div>
+						<div v-show="showCoupons" class="column-card offers-coupons-card">
+							<PosCoupons></PosCoupons>
 						</div>
 					</div>
 
-					<!-- Additional components with proper card styling -->
-					<div v-show="showOffers" class="column-card offers-coupons-card">
-						<PosOffers></PosOffers>
-					</div>
-					<div v-show="showCoupons" class="column-card offers-coupons-card">
-						<PosCoupons></PosCoupons>
-					</div>
-				</div>
+					<!-- Middle Column: Invoice (50% width) -->
+					<div class="pos-column invoice-column">
+						<div class="column-card invoice-card">
+							<v-divider></v-divider>
 
-				<!-- Middle Column: Invoice (50% width) -->
-				<div class="pos-column invoice-column">
-					<div class="column-card invoice-card">
-						<v-divider></v-divider>
-
-						<div class="invoice-wrapper">
-							<Invoice ref="invoiceComponent" :items_group="items_group" :item_group="item_group"
-								@update:item_group="handleItemGroupUpdate"></Invoice>
+							<div class="invoice-wrapper">
+								<Invoice
+									ref="invoiceComponent"
+									:items_group="items_group"
+									:item_group="item_group"
+									@update:item_group="handleItemGroupUpdate"
+								></Invoice>
+							</div>
 						</div>
 					</div>
-				</div>
 
-				<!-- Right Column: Items (25% width) -->
-				<div class="pos-column items-column">
-					<div class="column-card items-card">
-						<div class="column-header">
-							<span>{{ __("Search Items") }}</span>
-							<v-spacer></v-spacer>
-							<!-- <v-btn-group density="compact" variant="outlined">
+					<!-- Right Column: Items (25% width) -->
+					<div class="pos-column items-column">
+						<div class="column-card items-card">
+							<div class="column-header">
+								<span>{{ __("Search Items") }}</span>
+								<v-spacer></v-spacer>
+								<!-- <v-btn-group density="compact" variant="outlined">
 								<v-btn
 									size="small"
 									:color="items_view === 'list' ? 'primary' : ''"
@@ -90,59 +107,100 @@
 									<v-icon>mdi-view-grid</v-icon>
 								</v-btn>
 							</v-btn-group> -->
-							<v-btn icon size="small" color="primary" variant="text" @click="toggleFullscreen"
-								:title="isFullscreen ? __('Exit Fullscreen') : __('Fullscreen')" class="ml-2">
-								<v-icon>{{
-									isFullscreen ? "mdi-arrow-collapse" : "mdi-arrow-expand"
-								}}</v-icon>
-							</v-btn>
-						</div>
-						<v-divider></v-divider>
+								<v-btn
+									icon
+									size="small"
+									color="primary"
+									variant="text"
+									@click="toggleFullscreen"
+									:title="isFullscreen ? __('Exit Fullscreen') : __('Fullscreen')"
+									class="ml-2"
+								>
+									<v-icon>{{
+										isFullscreen ? "mdi-arrow-collapse" : "mdi-arrow-expand"
+									}}</v-icon>
+								</v-btn>
+							</div>
+							<v-divider></v-divider>
 
-						<!-- Scrollable Items List -->
-						<div class="column-scroll-content items-scroll">
-							<!-- KEY FIX: make view reactive for ItemsSelector -->
-							<ItemsSelector :initial-view-mode="items_view" :view-mode="items_view"
-								:item_group="item_group" :external-search="first_search"
-								@update-view-mode="handleItemsViewUpdate" :is-modal="false" :hide-filters="true"
-								ref="itemsSelectorComponent" />
-						</div>
+							<!-- Scrollable Items List -->
+							<div class="column-scroll-content items-scroll">
+								<!-- KEY FIX: make view reactive for ItemsSelector -->
+								<ItemsSelector
+									:initial-view-mode="items_view"
+									:view-mode="items_view"
+									:item_group="item_group"
+									:external-search="first_search"
+									@update-view-mode="handleItemsViewUpdate"
+									:is-modal="false"
+									:hide-filters="true"
+									ref="itemsSelectorComponent"
+								/>
+							</div>
 
-						<!-- FOOTER FILTERS IN ITEMS COLUMN -->
-						<div class="items-footer-filters">
-							<!-- Filter and Action Controls -->
-							<v-col cols="12">
-								<v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
-									<!-- SEARCH BAR - ADD THIS FIRST -->
-									<v-col cols="12" class="mb-2">
-										<v-text-field density="compact" clearable autofocus variant="solo"
-											color="#4169E1" placeholder="Search Items"
-											hint="Search by item code, serial number, batch no or barcode" hide-details
-											v-model="debounce_search" @keydown.esc="esc_event"
-											@keydown.enter="search_onchange" @click:clear="handleSearchClear"
-											prepend-inner-icon="mdi-magnify" ref="search_input">
-											<template v-slot:append-inner
-												v-if="pos_profile?.posa_enable_camera_scanning">
-												<v-btn icon="mdi-camera" size="small" color="primary" variant="text"
-													@click="startCameraScanning" :title="__('Scan with Camera')">
-												</v-btn>
-											</template>
-										</v-text-field>
-									</v-col>
-									<!-- Item Group and Price List -->
-									<v-col cols="12" class="mb-2">
-										<v-row dense>
-											<v-col cols="12" class="px-0">
-												<v-select :items="items_group" :label="__('Items Group')"
-													density="compact" variant="solo" hide-details
-													class="items-group-full" :model-value="item_group"
-													@update:model-value="handleItemGroupUpdate" />
-											</v-col>
+							<!-- FOOTER FILTERS IN ITEMS COLUMN -->
+							<div class="items-footer-filters">
+								<!-- Filter and Action Controls -->
+								<v-col cols="12">
+									<v-row
+										no-gutters
+										align="center"
+										justify="center"
+										class="dynamic-spacing-sm"
+									>
+										<!-- SEARCH BAR - ADD THIS FIRST -->
+										<v-col cols="12" class="mb-2">
+											<v-text-field
+												density="compact"
+												clearable
+												autofocus
+												variant="solo"
+												color="#4169E1"
+												placeholder="Search Items"
+												hint="Search by item code, serial number, batch no or barcode"
+												hide-details
+												v-model="debounce_search"
+												@keydown.esc="esc_event"
+												@keydown.enter="search_onchange"
+												@click:clear="handleSearchClear"
+												prepend-inner-icon="mdi-magnify"
+												ref="search_input"
+											>
+												<template
+													v-slot:append-inner
+													v-if="pos_profile?.posa_enable_camera_scanning"
+												>
+													<v-btn
+														icon="mdi-camera"
+														size="small"
+														color="primary"
+														variant="text"
+														@click="startCameraScanning"
+														:title="__('Scan with Camera')"
+													>
+													</v-btn>
+												</template>
+											</v-text-field>
+										</v-col>
+										<!-- Item Group and Price List -->
+										<v-col cols="12" class="mb-2">
+											<v-row dense>
+												<v-col cols="12" class="px-0">
+													<v-select
+														:items="items_group"
+														:label="__('Items Group')"
+														density="compact"
+														variant="solo"
+														hide-details
+														class="items-group-full"
+														:model-value="item_group"
+														@update:model-value="handleItemGroupUpdate"
+													/>
+												</v-col>
+											</v-row>
+										</v-col>
 
-										</v-row>
-									</v-col>
-
-									<!-- <v-col
+										<!-- <v-col
 												cols="12"
 												md="6"
 												class="pl-md-2"
@@ -163,43 +221,46 @@
 										</v-row>
 									</v-col>  -->
 
-									<!-- Offers & Coupons -->
-									<v-col cols="12" class="mt-2 mb-2">
-										<v-row dense align="center">
-											<v-col cols="6" class="py-1">
-												<v-btn class="offer-style-btn" @click="handleShowOffers">
-													<v-icon left size="18">mdi-tag-multiple</v-icon>
-													<div class="btn-text">
-														<div class="btn-title">
-															{{ offersCount }} {{ __("Offers") }}
+										<!-- Offers & Coupons -->
+										<v-col cols="12" class="mt-2 mb-2">
+											<v-row dense align="center">
+												<v-col cols="6" class="py-1">
+													<v-btn class="offer-style-btn" @click="handleShowOffers">
+														<v-icon left size="18">mdi-tag-multiple</v-icon>
+														<div class="btn-text">
+															<div class="btn-title">
+																{{ offersCount }} {{ __("Offers") }}
+															</div>
 														</div>
-													</div>
-												</v-btn>
-											</v-col>
+													</v-btn>
+												</v-col>
 
-											<v-col cols="6" class="py-1">
-												<v-btn class="coupon-style-btn" @click="handleShowCoupons">
-													<v-icon left size="18">mdi-ticket-percent</v-icon>
-													<div class="btn-text">
-														<div class="btn-title">
-															{{ couponsCount }} {{ __("Coupons") }}
+												<v-col cols="6" class="py-1">
+													<v-btn
+														class="coupon-style-btn"
+														@click="handleShowCoupons"
+													>
+														<v-icon left size="18">mdi-ticket-percent</v-icon>
+														<div class="btn-text">
+															<div class="btn-title">
+																{{ couponsCount }} {{ __("Coupons") }}
+															</div>
 														</div>
-													</div>
-												</v-btn>
-											</v-col>
-										</v-row>
-									</v-col>
-								</v-row>
-							</v-col>
+													</v-btn>
+												</v-col>
+											</v-row>
+										</v-col>
+									</v-row>
+								</v-col>
+							</div>
 						</div>
 					</div>
 				</div>
 			</div>
-		</div>
 
-		<Payments></Payments>
-		<!-- dialogs omitted -->
-		 </div>
+			<Payments></Payments>
+			<!-- dialogs omitted -->
+		</div>
 	</div>
 </template>
 
@@ -309,7 +370,6 @@ export default {
 	},
 
 	watch: {
-
 		offers: {
 			deep: true,
 			handler(val) {
@@ -340,7 +400,6 @@ export default {
 	},
 
 	methods: {
-
 		async handleSearchClear() {
 			console.log("[POS] Search clear clicked");
 			this.first_search = "";
@@ -624,7 +683,10 @@ export default {
 					this.eventBus.emit("set_contact_mobile", r.message.contact_mobile || "");
 					this.eventBus.emit("set_custom_vehicle_no", r.message.custom_vehicle_no || "");
 					// keep odometer as string if present
-					this.eventBus.emit("set_custom_odometer_reading", r.message.custom_odometer_reading || "");
+					this.eventBus.emit(
+						"set_custom_odometer_reading",
+						r.message.custom_odometer_reading || "",
+					);
 					// coerce has_oil_item to boolean (1/"1" => true)
 					this.eventBus.emit(
 						"set_custom_has_oil_item",
@@ -634,7 +696,7 @@ export default {
 					// Emit customer type for corporate detection
 					this.eventBus.emit("customer_selected", {
 						customer: r.message.customer,
-						customer_type: r.message.customer_type || "Individual"
+						customer_type: r.message.customer_type || "Individual",
 					});
 
 					this.eventBus.emit("show_message", {
@@ -682,7 +744,6 @@ export default {
 				this.items_view = this.pos_profile.posa_default_card_view ? "card" : "list";
 				this.active_price_list = this.pos_profile.selling_price_list;
 			});
-
 
 			this.eventBus.on("show_offers", (data) => {
 				this.showOffers = data === "true";
@@ -793,42 +854,41 @@ export default {
 }
 
 @media (min-width: 1280px) {
-  .pos-scale-wrapper {
-    --pos-scale: 0.85;
+	.pos-scale-wrapper {
+		--pos-scale: 0.85;
 
-    position: fixed;
-    top: 60px;
-    left: 0;
+		position: fixed;
+		top: 60px;
+		left: 0;
 
-    transform: scale(var(--pos-scale));
-    transform-origin: top left;
+		transform: scale(var(--pos-scale));
+		transform-origin: top left;
 
-    width: calc(100% / var(--pos-scale));
-    height: calc((100vh - 60px) / var(--pos-scale));
+		width: calc(100% / var(--pos-scale));
+		height: calc((100vh - 60px) / var(--pos-scale));
 
-    overflow: hidden;
-    z-index: 1;
-  }
+		overflow: hidden;
+		z-index: 1;
+	}
 
-  /* ===== FULLSCREEN: SAME SCALE, REMOVE NAVBAR OFFSET ===== */
-  .pos-scale-wrapper.fullscreen-mode {
-    --pos-scale: 0.85;
+	/* ===== FULLSCREEN: SAME SCALE, REMOVE NAVBAR OFFSET ===== */
+	.pos-scale-wrapper.fullscreen-mode {
+		--pos-scale: 0.85;
 
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
+		position: fixed !important;
+		top: 0 !important;
+		left: 0 !important;
 
-    transform: scale(var(--pos-scale)) !important;
-    transform-origin: top left !important;
+		transform: scale(var(--pos-scale)) !important;
+		transform-origin: top left !important;
 
-    width: calc(100% / var(--pos-scale)) !important;
-    height: calc(100vh / var(--pos-scale)) !important;
+		width: calc(100% / var(--pos-scale)) !important;
+		height: calc(100vh / var(--pos-scale)) !important;
 
-    overflow: hidden !important;
-    z-index: 1100 !important;
-  }
+		overflow: hidden !important;
+		z-index: 1100 !important;
+	}
 }
-
 
 /* Main POS Container */
 .pos-main-container {
@@ -902,97 +962,97 @@ export default {
 }
 
 .pos-layout {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  gap: 6px;                    /* Consistent gap */
-  padding: 6px;                /* Consistent padding */
-  margin: 0;
-  overflow: hidden;
-  flex-wrap: nowrap;           /* CRITICAL: No wrapping! */
+	display: flex;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+	gap: 6px; /* Consistent gap */
+	padding: 6px; /* Consistent padding */
+	margin: 0;
+	overflow: hidden;
+	flex-wrap: nowrap; /* CRITICAL: No wrapping! */
 }
 
 /* BASE COLUMN STYLES */
 .pos-column {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  min-width: 0;                /* CRITICAL: Allows flex shrinking */
-  pointer-events: auto;
-  position: relative;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+	min-width: 0; /* CRITICAL: Allows flex shrinking */
+	pointer-events: auto;
+	position: relative;
 }
 
 @media (min-width: 1920px) {
-  .pos-column {
-    padding: 8px 6px;
-  }
+	.pos-column {
+		padding: 8px 6px;
+	}
 
-  .drafts-column {
-    flex: 0 0 20%;
-    min-width: 250px;           
-  }
+	.drafts-column {
+		flex: 0 0 20%;
+		min-width: 250px;
+	}
 
-  .invoice-column {
-    flex: 0 0 55%;
-    min-width: 500px;           
-  }
+	.invoice-column {
+		flex: 0 0 55%;
+		min-width: 500px;
+	}
 
-  .items-column {
-    flex: 0 0 25%;
-    min-width: 300px;          
-  }
+	.items-column {
+		flex: 0 0 25%;
+		min-width: 300px;
+	}
 }
 
 /* ============================================
    LAPTOP (1400px - 1919px) - Flex scaling
    ============================================ */
 @media (min-width: 1400px) and (max-width: 1919px) {
-  .pos-column {
-    padding: 6px 4px;           /* Reduce padding */
-  }
+	.pos-column {
+		padding: 6px 4px; /* Reduce padding */
+	}
 
-  .drafts-column {
-    flex: 0 0 20%;              /* Keep percentage for scaling */
-    min-width: 180px;           /* Lower minimum */
-  }
+	.drafts-column {
+		flex: 0 0 20%; /* Keep percentage for scaling */
+		min-width: 180px; /* Lower minimum */
+	}
 
-  .invoice-column {
-    flex: 0 0 55%;              /* Scales with screen */
-    min-width: 350px;           /* Lower minimum */
-  }
+	.invoice-column {
+		flex: 0 0 55%; /* Scales with screen */
+		min-width: 350px; /* Lower minimum */
+	}
 
-  .items-column {
-    flex: 0 0 25%;              /* Scales with screen */
-    min-width: 150px;           /* Lower minimum */
-  }
+	.items-column {
+		flex: 0 0 25%; /* Scales with screen */
+		min-width: 150px; /* Lower minimum */
+	}
 }
 
 /* ============================================
    TIGHT LAPTOP (1280px - 1399px) - Compact
    ============================================ */
 @media (min-width: 1280px) and (max-width: 1399px) {
-  .pos-column {
-    padding: 4px 2px;           /* Minimal padding */
-  }
+	.pos-column {
+		padding: 4px 2px; /* Minimal padding */
+	}
 
-  .drafts-column {
-    flex: 0 0 auto;
-    width: 22%;                 /* Fixed percentage */
-    min-width: 140px;           /* Very low minimum */
-  }
+	.drafts-column {
+		flex: 0 0 auto;
+		width: 22%; /* Fixed percentage */
+		min-width: 140px; /* Very low minimum */
+	}
 
-  .invoice-column {
-    flex: 1 1 auto;             /* Take remaining space */
-    min-width: 300px;           /* Can go lower */
-  }
+	.invoice-column {
+		flex: 1 1 auto; /* Take remaining space */
+		min-width: 300px; /* Can go lower */
+	}
 
-  .items-column {
-    flex: 0 0 auto;
-    width: 22%;                 /* Fixed percentage */
-    min-width: 120px;           /* Very low minimum */
-  }
+	.items-column {
+		flex: 0 0 auto;
+		width: 22%; /* Fixed percentage */
+		min-width: 120px; /* Very low minimum */
+	}
 }
 
 /* Columns */
@@ -1021,17 +1081,17 @@ export default {
    ============================================ */
 
 @media (min-width: 1280px) {
-  .drafts-column,
-  .items-column {
-    flex: 0 0 22%;
-    min-width: 220px;
-    max-width: 26%;
-  }
+	.drafts-column,
+	.items-column {
+		flex: 0 0 22%;
+		min-width: 220px;
+		max-width: 26%;
+	}
 
-  .invoice-column {
-    flex: 1 1 auto;      /* take remaining space */
-    min-width: 420px;
-  }
+	.invoice-column {
+		flex: 1 1 auto; /* take remaining space */
+		min-width: 420px;
+	}
 }
 
 /* .drafts-column {
@@ -1056,7 +1116,6 @@ export default {
 	border-radius: 14px;
 }
 
-
 /* .items-column {
 	flex: 1 1 300px;
 	padding-left: 2px;
@@ -1067,16 +1126,16 @@ export default {
 
 /* Column Card */
 .column-card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  border: 1px solid #ececec;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #ffffff;
-  transition: border-color 0.2s ease;
-  position: relative;
-  flex: 1 1 auto;  
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	border: 1px solid #ececec;
+	border-radius: 12px;
+	overflow: hidden;
+	background: #ffffff;
+	transition: border-color 0.2s ease;
+	position: relative;
+	flex: 1 1 auto;
 }
 
 /* Drafts Card */
@@ -1088,12 +1147,12 @@ export default {
 
 /* Drafts Wrapper Container */
 .drafts-wrapper-container {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-height: 0;
+	flex: 1;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	min-height: 0;
 }
 .drafts-wrapper-container :deep(.drafts-wrapper) {
 	display: flex;
@@ -1103,12 +1162,12 @@ export default {
 }
 
 .drafts-wrapper-container :deep(.drafts-content) {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 8px;                
-  background-color: white;
-  min-height: 0;
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 8px;
+	background-color: white;
+	min-height: 0;
 }
 
 .drafts-wrapper-container :deep(.drafts-footer) {
@@ -1119,41 +1178,40 @@ export default {
 	border-top: 2px solid #e0e0e0;
 }
 
-
 /* === BUTTON STYLING  */
 
 /* BUTTONS - Responsive sizing */
 .offer-style-btn,
 .coupon-style-btn {
-  width: 100% !important;
-  height: 40px !important;         /* Reduce from 44px */
-  padding: 0 10px !important;      /* Reduce from 12px */
-  margin: 0 !important;
-  border-radius: 6px !important;   /* Reduce from 8px */
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 6px !important;             /* Reduce from 8px */
-  font-weight: 600 !important;
-  font-size: 12px !important;      /* Reduce from 13px */
-  color: white !important;
-  transition: all 0.2s ease !important;
+	width: 100% !important;
+	height: 40px !important; /* Reduce from 44px */
+	padding: 0 10px !important; /* Reduce from 12px */
+	margin: 0 !important;
+	border-radius: 6px !important; /* Reduce from 8px */
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	gap: 6px !important; /* Reduce from 8px */
+	font-weight: 600 !important;
+	font-size: 12px !important; /* Reduce from 13px */
+	color: white !important;
+	transition: all 0.2s ease !important;
 }
 
 @media (min-width: 1920px) {
-  .offer-style-btn,
-  .coupon-style-btn {
-    height: 44px !important;
-    font-size: 13px !important;
-  }
+	.offer-style-btn,
+	.coupon-style-btn {
+		height: 44px !important;
+		font-size: 13px !important;
+	}
 }
 
 .offer-style-btn {
-  background: linear-gradient(90deg, #ff9800, #f57c00) !important;
+	background: linear-gradient(90deg, #ff9800, #f57c00) !important;
 }
 
 .coupon-style-btn {
-  background: linear-gradient(90deg, #2196f3, #1976d2) !important;
+	background: linear-gradient(90deg, #2196f3, #1976d2) !important;
 }
 
 .offer-style-btn:hover,
@@ -1183,11 +1241,11 @@ export default {
 
 /* Reset Vuetify Grid */
 .items-footer-filters :deep(.v-col) {
-  padding: 3px !important;         /* Reduce from 4px */
+	padding: 3px !important; /* Reduce from 4px */
 }
 
 .items-footer-filters :deep(.v-row) {
-  margin: 0 !important;
+	margin: 0 !important;
 }
 /* Invoice Card */
 .invoice-card {
@@ -1198,20 +1256,20 @@ export default {
 .column-scroll-content::-webkit-scrollbar,
 .drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar),
 .invoice-wrapper :deep(.invoice-content::-webkit-scrollbar) {
-  width: 6px;
+	width: 6px;
 }
 
 .column-scroll-content::-webkit-scrollbar-thumb,
 .drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar-thumb),
 .invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb) {
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 3px;
+	background: rgba(0, 0, 0, 0.25);
+	border-radius: 3px;
 }
 
 .column-scroll-content::-webkit-scrollbar-thumb:hover,
 .drafts-wrapper-container :deep(.drafts-content::-webkit-scrollbar-thumb:hover),
 .invoice-wrapper :deep(.invoice-content::-webkit-scrollbar-thumb:hover) {
-  background: rgba(0, 0, 0, 0.4);
+	background: rgba(0, 0, 0, 0.4);
 }
 
 /* Items Card with Footer */
@@ -1221,25 +1279,25 @@ export default {
 
 /* Column Header */
 .column-header {
-  background: white;
-  padding: 10px 12px;
-  font-weight: 600;
-  font-size: 18px;               
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 48px;
-  flex-shrink: 0;
-  color: #333;
-  border-bottom: 1px solid #e5e7eb;
-  flex-wrap: wrap;
+	background: white;
+	padding: 10px 12px;
+	font-weight: 600;
+	font-size: 18px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 48px;
+	flex-shrink: 0;
+	color: #333;
+	border-bottom: 1px solid #e5e7eb;
+	flex-wrap: wrap;
 }
 @media (max-width: 1400px) {
-  .column-header {
-    font-size: 16px;
-    padding: 8px 10px;
-    min-height: 44px;
-  }
+	.column-header {
+		font-size: 16px;
+		padding: 8px 10px;
+		min-height: 44px;
+	}
 }
 .column-header .v-icon {
 	font-size: 20px;
@@ -1247,20 +1305,20 @@ export default {
 
 /* Scrollable Content */
 .column-scroll-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 8px;                  
-  background-color: white;
-  min-height: 0;
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 8px;
+	background-color: white;
+	min-height: 0;
 }
 
-.pos-main-container>.v-row:nth-child(1),
-.pos-main-container>.v-row:nth-child(2),
-.pos-main-container>.v-row:nth-child(3),
-.pos-main-container>.v-row:nth-child(4),
-.pos-main-container>.v-row:nth-child(5),
-.pos-main-container>.v-row:nth-child(6) {
+.pos-main-container > .v-row:nth-child(1),
+.pos-main-container > .v-row:nth-child(2),
+.pos-main-container > .v-row:nth-child(3),
+.pos-main-container > .v-row:nth-child(4),
+.pos-main-container > .v-row:nth-child(5),
+.pos-main-container > .v-row:nth-child(6) {
 	display: none !important;
 }
 
@@ -1269,13 +1327,13 @@ export default {
 }
 /* Invoice Wrapper */
 .invoice-wrapper {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-height: 0;
-  position: relative;
+	flex: 1;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	min-height: 0;
+	position: relative;
 }
 
 /* Ensure invoice content is scrollable and interactive in fullscreen */
@@ -1295,44 +1353,43 @@ export default {
 }
 
 .invoice-wrapper :deep(.invoice-content) {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 10px 12px;
-  background-color: #ffffff;
-  min-height: 0;
-  pointer-events: auto;
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 10px 12px;
+	background-color: #ffffff;
+	min-height: 0;
+	pointer-events: auto;
 }
 
 .items-card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
 }
 
 .column-scroll-content {
-  flex: 1;
-  overflow-y: auto;
+	flex: 1;
+	overflow-y: auto;
 }
 
 .items-footer-filters {
-  position: sticky;
-  bottom: 0;
-  background: #fff;
-  z-index: 10;
-  flex-shrink: 0;
-  padding: 8px;
-  border-top: 1px solid #e0e0e0;
-  overflow: visible;   /* key */
-  max-height: none;    /* key */
+	position: sticky;
+	bottom: 0;
+	background: #fff;
+	z-index: 10;
+	flex-shrink: 0;
+	padding: 8px;
+	border-top: 1px solid #e0e0e0;
+	overflow: visible; /* key */
+	max-height: none; /* key */
 }
 
 @media (max-width: 1400px) {
-  .items-footer-filters {
-    padding: 6px;
-  }
+	.items-footer-filters {
+		padding: 6px;
+	}
 }
-
 
 .filter-row {
 	margin-bottom: 0 !important;
@@ -1460,7 +1517,6 @@ export default {
 	}
 }
 
-
 /* FIX: Add New Customer / Add New Vehicle buttons not clickable in fullscreen */
 .fullscreen-mode .invoice-wrapper :deep(.v-input__prepend),
 .fullscreen-mode .invoice-wrapper :deep(.v-input__prepend-inner),
@@ -1483,7 +1539,6 @@ export default {
 .fullscreen-mode :deep(.v-icon) {
 	pointer-events: auto !important;
 }
-
 
 .items-footer-filters .v-text-field {
 	margin-bottom: 12px;
@@ -1517,22 +1572,22 @@ export default {
 
 .offer-style-btn,
 .coupon-style-btn {
-  width: 100% !important;
+	width: 100% !important;
 }
 
 .drafts-column {
-  overflow: hidden;  
+	overflow: hidden;
 }
 
 @media (min-width: 1280px) {
-  .drafts-footer {
-    position: relative;   
-  }
+	.drafts-footer {
+		position: relative;
+	}
 }
 /* Compact Invoice Footer Area */
 .cards {
-  padding-top: 8px !important;
-  padding-bottom: 8px !important;
+	padding-top: 8px !important;
+	padding-bottom: 8px !important;
 }
 
 /* Final override: always-visible borders for right panel search/item group fields */
@@ -1567,5 +1622,4 @@ export default {
 		padding: 0 !important;
 	}
 }
-
 </style>

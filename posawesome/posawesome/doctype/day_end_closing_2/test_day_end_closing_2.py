@@ -6,4 +6,4 @@ from frappe.tests.utils import FrappeTestCase
 
 
 class TestDayEndClosing_2(FrappeTestCase):
-	pass
+    pass

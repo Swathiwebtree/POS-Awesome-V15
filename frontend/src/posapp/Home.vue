@@ -160,19 +160,19 @@ export default {
 	},
 	mounted() {
 		if (!window.appHasLoaded) {
-            window.appHasLoaded = true;
-            this.clearAppCache();
-            
-            // Clear service worker cache
-            if ('caches' in window) {
-                caches.keys().then((names) => {
-                    names.forEach(name => {
-                        caches.delete(name);
-                        console.log(`[POS] Cleared browser cache: ${name}`);
-                    });
-                });
-            }
-        }
+			window.appHasLoaded = true;
+			this.clearAppCache();
+
+			// Clear service worker cache
+			if ("caches" in window) {
+				caches.keys().then((names) => {
+					names.forEach((name) => {
+						caches.delete(name);
+						console.log(`[POS] Cleared browser cache: ${name}`);
+					});
+				});
+			}
+		}
 		this.remove_frappe_nav();
 		// Initialize cache ready state early from stored value
 		this.cacheReady = isCacheReady();
@@ -196,20 +196,20 @@ export default {
 		},
 
 		clearAppCache() {
-			console.log('[POS] Clearing app cache on load');
+			console.log("[POS] Clearing app cache on load");
 
 			// Clear localStorage keys
 			const keysToDelete = [
-				'pos_selected_employee',
-				'posawesome_item_selector_settings',
-				'posawesome_drafts',
-				'posawesome_cart',
-				'posawesome_invoice_data',
-				'posa_recent_items',
-				'posa_recent_customers',
+				"pos_selected_employee",
+				"posawesome_item_selector_settings",
+				"posawesome_drafts",
+				"posawesome_cart",
+				"posawesome_invoice_data",
+				"posa_recent_items",
+				"posa_recent_customers",
 			];
 
-			keysToDelete.forEach(key => {
+			keysToDelete.forEach((key) => {
 				try {
 					localStorage.removeItem(key);
 					console.log(`[POS] Cleared: ${key}`);
@@ -221,13 +221,13 @@ export default {
 			// Clear sessionStorage
 			try {
 				sessionStorage.clear();
-				console.log('[POS] Cleared sessionStorage');
+				console.log("[POS] Cleared sessionStorage");
 			} catch (e) {
-				console.warn('[POS] Could not clear sessionStorage:', e);
+				console.warn("[POS] Could not clear sessionStorage:", e);
 			}
 
 			// Emit event to notify all child components
-			this.eventBus.emit('cache_cleared');
+			this.eventBus.emit("cache_cleared");
 		},
 
 		handleFullscreenToggle(fullscreen) {
@@ -484,10 +484,6 @@ export default {
 				},
 			});
 		},
-
-
-
-
 
 		handleRefreshCacheUsage() {
 			this.cacheUsageLoading = true;

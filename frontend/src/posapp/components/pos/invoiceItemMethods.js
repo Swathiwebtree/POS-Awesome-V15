@@ -23,22 +23,22 @@ const { calcUom, calcStockQty } = useStockUtils();
 
 // --- SERVICE ITEM HELPER ---
 const isServiceItem = (item) => {
-  if (!item) return false;
-  const ig = (item.item_group || "").toString().toLowerCase();
-  const name = (item.item_name || "").toString().toLowerCase();
-  const code = (item.item_code || item.code || "").toString().toLowerCase();
+	if (!item) return false;
+	const ig = (item.item_group || "").toString().toLowerCase();
+	const name = (item.item_name || "").toString().toLowerCase();
+	const code = (item.item_code || item.code || "").toString().toLowerCase();
 
-  // keywords commonly used for car/bike washes or generic service items
-  const keywords = ["Carwash", "car wash", "bikewash", "bike wash", "wash", "service"];
+	// keywords commonly used for car/bike washes or generic service items
+	const keywords = ["Carwash", "car wash", "bikewash", "bike wash", "wash", "service"];
 
-  for (let k of keywords) {
-    if (ig.includes(k) || name.includes(k) || code.includes(k)) return true;
-  }
+	for (let k of keywords) {
+		if (ig.includes(k) || name.includes(k) || code.includes(k)) return true;
+	}
 
-  // fallback: treat explicitly non-stock as service
-  if (item.is_stock_item === 0 || item.update_stock === 0) return true;
+	// fallback: treat explicitly non-stock as service
+	if (item.is_stock_item === 0 || item.update_stock === 0) return true;
 
-  return false;
+	return false;
 };
 
 // Alias so older code that expects the other name still works
@@ -57,7 +57,7 @@ export default {
 		try {
 			const res = await frappe.call({
 				method: "posawesome.posawesome.api.items.get_item_tax_template",
-				args: { item_code }
+				args: { item_code },
 			});
 			return res.message || null;
 		} catch (e) {
@@ -71,27 +71,27 @@ export default {
 
 		try {
 			const response = await frappe.call({
-				method: 'frappe.client.get',
+				method: "frappe.client.get",
 				args: {
-					doctype: 'Item Tax Template',
-					name: tax_template_name
-				}
+					doctype: "Item Tax Template",
+					name: tax_template_name,
+				},
 			});
 
 			if (response?.message?.taxes) {
 				// Build item_tax_rate JSON string
 				const tax_rates = {};
-				response.message.taxes.forEach(tax => {
+				response.message.taxes.forEach((tax) => {
 					tax_rates[tax.tax_type] = tax.tax_rate;
 				});
 
 				item.item_tax_template = tax_template_name;
 				item.item_tax_rate = JSON.stringify(tax_rates);
 
-				console.log('[Invoice] Applied tax template:', tax_template_name, tax_rates);
+				console.log("[Invoice] Applied tax template:", tax_template_name, tax_rates);
 			}
 		} catch (error) {
-			console.error('[Invoice] Error applying tax template:', error);
+			console.error("[Invoice] Error applying tax template:", error);
 		}
 	},
 
@@ -155,7 +155,7 @@ export default {
 				return;
 			}
 			const rate = item.net_rate ?? item.rate ?? 0;
-			const amount = item.net_amount ?? item.amount ?? (rate * item.qty) ?? 0;
+			const amount = item.net_amount ?? item.amount ?? rate * item.qty ?? 0;
 			const taxableAmount = this.flt ? this.flt(amount) : amount;
 			Object.values(taxMap).forEach((taxRate) => {
 				taxTotal += (taxableAmount * taxRate) / 100;
@@ -178,7 +178,7 @@ export default {
 		// ==================================================
 		//  CLEAR CUSTOMER / DISCOUNT STATE (ADD THIS)
 		// ==================================================
-		this.maxDiscountInfo = null;         
+		this.maxDiscountInfo = null;
 		this.customer = null;
 		this.customer_info = null;
 		this.customer_balance = 0;
@@ -203,8 +203,6 @@ export default {
 
 		this.eventBus.emit("reset_manual_total");
 	},
-
-
 
 	// Fetch customer balance from backend or cache
 	async fetch_customer_balance() {
@@ -296,7 +294,6 @@ export default {
 
 		// recalc to sync UI + payment
 		this.recalculateTotals();
-
 	},
 
 	// Load an invoice (or return invoice) from data, set all fields accordingly
@@ -322,10 +319,7 @@ export default {
 			const itemWithVehicle = data.items.find(
 				(it) =>
 					it &&
-					(it.custom_vehicle_no ||
-						it.vehicle_no ||
-						it.vehicle_number ||
-						it.custom_vehicle_number),
+					(it.custom_vehicle_no || it.vehicle_no || it.vehicle_number || it.custom_vehicle_number),
 			);
 			if (itemWithVehicle) {
 				resolvedVehicleNo = String(
@@ -338,9 +332,9 @@ export default {
 			}
 		}
 
-		console.log("resolved vehicle & number ",{
+		console.log("resolved vehicle & number ", {
 			resolvedContactMobile,
-			resolvedVehicleNo
+			resolvedVehicleNo,
 		});
 
 		// Skip clearing customer/vehicle in Customer.vue because load_invoice
@@ -431,7 +425,6 @@ export default {
 			this.eventBus.emit("set_pos_coupons", data.posa_coupons);
 		}
 
-
 		const hasContactField =
 			Object.prototype.hasOwnProperty.call(data, "contact_mobile") ||
 			Object.prototype.hasOwnProperty.call(data, "mobile_no") ||
@@ -442,12 +435,9 @@ export default {
 			Object.prototype.hasOwnProperty.call(data, "vehicle_number") ||
 			Object.prototype.hasOwnProperty.call(data, "custom_vehicle_number");
 
-		
-
 		const finalContactMobile =
 			resolvedContactMobile || (!hasContactField ? this.contact_mobile || "" : "");
-		const finalVehicleNo =
-			resolvedVehicleNo || (!hasVehicleField ? this.custom_vehicle_no || "" : "");
+		const finalVehicleNo = resolvedVehicleNo || (!hasVehicleField ? this.custom_vehicle_no || "" : "");
 
 		this.custom_has_oil_item = !!data.custom_has_oil_item;
 		this.custom_odometer_reading = data.custom_odometer_reading || null;
@@ -486,9 +476,9 @@ export default {
 			// Emit event to Customer component to update customer and vehicle without overwriting invoice data
 			console.log("[Invoice] Emitting load_invoice_customer from second location");
 			console.log("[Invoice] Context:", {
-				caller: new Error().stack.split('\n')[2], // Get caller info
+				caller: new Error().stack.split("\n")[2], // Get caller info
 				has_customer: !!this.customer,
-				has_employee: !!this.custom_service_employee
+				has_employee: !!this.custom_service_employee,
 			});
 
 			console.log("[Invoice] Component state at emission time:", {
@@ -497,7 +487,7 @@ export default {
 				this_custom_vehicle_no: this.custom_vehicle_no,
 				this_custom_odometer_reading: this.custom_odometer_reading,
 				this_custom_service_employee: this.custom_service_employee,
-				this_custom_has_oil_item: this.custom_has_oil_item
+				this_custom_has_oil_item: this.custom_has_oil_item,
 			});
 
 			// Check if values are coming from invoice_doc or elsewhere
@@ -505,13 +495,14 @@ export default {
 				invoice_doc_exists: !!this.invoice_doc,
 				invoice_doc_custom_vehicle_no: this.invoice_doc?.custom_vehicle_no,
 				invoice_doc_contact_mobile: this.invoice_doc?.contact_mobile,
-				invoice_doc_customer: this.invoice_doc?.customer
+				invoice_doc_customer: this.invoice_doc?.customer,
 			});
 
 			// Use the resolved values from the invoice payload (locals) so
 			// we don't accidentally emit values that were already modified
 			// by other event handlers (e.g. Customer -> update_customer_details).
-			const emitContactMobile = typeof resolvedContactMobile !== 'undefined' ? resolvedContactMobile : this.contact_mobile;
+			const emitContactMobile =
+				typeof resolvedContactMobile !== "undefined" ? resolvedContactMobile : this.contact_mobile;
 			const emitVehicleNo = resolvedVehicleNo || this.custom_vehicle_no || "";
 
 			console.log("[Invoice] 🚀 EMITTING with values:", {
@@ -520,8 +511,16 @@ export default {
 				custom_vehicle_no: emitVehicleNo,
 				has_vehicle: !!emitVehicleNo,
 				has_mobile: !!emitContactMobile,
-				vehicle_source: emitVehicleNo ? (emitVehicleNo === this.invoice_doc?.custom_vehicle_no ? 'invoice_doc' : 'component_state') : 'none',
-				mobile_source: emitContactMobile ? (emitContactMobile === this.invoice_doc?.contact_mobile ? 'invoice_doc' : 'component_state') : 'none'
+				vehicle_source: emitVehicleNo
+					? emitVehicleNo === this.invoice_doc?.custom_vehicle_no
+						? "invoice_doc"
+						: "component_state"
+					: "none",
+				mobile_source: emitContactMobile
+					? emitContactMobile === this.invoice_doc?.contact_mobile
+						? "invoice_doc"
+						: "component_state"
+					: "none",
 			});
 
 			this.eventBus.emit("load_invoice_customer", {
@@ -537,9 +536,9 @@ export default {
 		console.log("[Invoice] load_invoice completed with customer:", data.customer);
 
 		if (data.taxes && Array.isArray(data.taxes)) {
-			this.invoice_doc.taxes = data.taxes.map(tax => ({
+			this.invoice_doc.taxes = data.taxes.map((tax) => ({
 				...tax,
-				doctype: "Sales Taxes and Charges"
+				doctype: "Sales Taxes and Charges",
 			}));
 
 			// Calculate total tax amount
@@ -597,9 +596,9 @@ export default {
 			custom_has_oil_item: data.custom_has_oil_item,
 			return_against: data.return_against,
 			has_items: data.items?.length || 0,
-			keys: Object.keys(data)
+			keys: Object.keys(data),
 		});
-		
+
 		let old_invoice = null;
 		this.eventBus.emit("set_customer_readonly", false);
 		this.expanded = [];
@@ -607,7 +606,7 @@ export default {
 		this.eventBus.emit("set_pos_coupons", []);
 		this.posa_coupons = [];
 		this.return_doc = "";
-		
+
 		if (!data.name && !data.is_return) {
 			console.log("[new_order] CASE 1: Fresh order (no name, not return)");
 			this.items = [];
@@ -617,28 +616,29 @@ export default {
 			this.additional_discount_percentage = 0;
 			this.invoiceType = "Invoice";
 			this.invoiceTypes = ["Invoice", "Order"];
-			
+
 			// Clear contact/vehicle when starting a fresh order
 			console.log("[new_order] Clearing contact/vehicle for fresh order");
 			this.contact_mobile = "";
 			this.custom_vehicle_no = "";
 			this.custom_odometer_reading = null;
 			this.custom_has_oil_item = false;
-			
+
 			console.log("[new_order] Fresh order state:", {
 				customer: this.customer,
 				contact_mobile: this.contact_mobile,
-				custom_vehicle_no: this.custom_vehicle_no
+				custom_vehicle_no: this.custom_vehicle_no,
 			});
-			
 		} else {
-			console.log(`[new_order] CASE 2: Loading existing ${data.is_return ? 'RETURN' : 'ORDER/INVOICE'}`);
+			console.log(
+				`[new_order] CASE 2: Loading existing ${data.is_return ? "RETURN" : "ORDER/INVOICE"}`,
+			);
 			console.log("[new_order] Document details:", {
 				name: data.name,
 				customer: data.customer,
-				type: data.is_return ? 'Return' : 'Invoice/Order'
+				type: data.is_return ? "Return" : "Invoice/Order",
 			});
-			
+
 			if (data.is_return) {
 				console.log("[new_order] Processing RETURN");
 				// For return without invoice case, check if there's a return_against
@@ -654,14 +654,14 @@ export default {
 				this.invoiceType = "Return";
 				this.invoiceTypes = ["Return"];
 			}
-			
+
 			this.invoice_doc = data;
 			this.items = data.items;
 			console.log("[new_order] Setting items:", this.items?.length || 0);
-			
+
 			this.update_items_details(this.items);
 			this.posa_offers = data.posa_offers || [];
-			
+
 			this.items.forEach((item) => {
 				if (!item.posa_row_id) {
 					item.posa_row_id = this.makeid(20);
@@ -670,12 +670,12 @@ export default {
 					this.set_batch_qty(item, item.batch_no);
 				}
 			});
-			
+
 			this.customer = data.customer;
 			this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
 			this.discount_amount = data.discount_amount;
 			this.additional_discount_percentage = data.additional_discount_percentage;
-			
+
 			this.items.forEach((item) => {
 				if (item.serial_no) {
 					item.serial_no_selected = [];
@@ -691,20 +691,20 @@ export default {
 
 			// Resolve contact/vehicle for job orders to avoid stale values
 			console.log("[new_order] 🔍 ANALYZING VEHICLE/MOBILE DATA:");
-			
+
 			const hasEmployeeData = Boolean(
 				data.custom_service_employee ||
-				data.service_employee ||
-				data.employee_data ||
-				data.custom_service_employee_name,
+					data.service_employee ||
+					data.employee_data ||
+					data.custom_service_employee_name,
 			);
-			
+
 			console.log("[new_order] Employee data check:", {
 				custom_service_employee: data.custom_service_employee,
 				service_employee: data.service_employee,
 				employee_data: data.employee_data,
 				custom_service_employee_name: data.custom_service_employee_name,
-				hasEmployeeData: hasEmployeeData
+				hasEmployeeData: hasEmployeeData,
 			});
 
 			const itemWithVehicle =
@@ -713,77 +713,78 @@ export default {
 					(it) =>
 						it &&
 						(it.custom_vehicle_no ||
-						it.vehicle_no ||
-						it.vehicle_number ||
-						it.custom_vehicle_number ||
-						it.contact_mobile ||
-						it.mobile_no ||
-						it.customer_mobile),
+							it.vehicle_no ||
+							it.vehicle_number ||
+							it.custom_vehicle_number ||
+							it.contact_mobile ||
+							it.mobile_no ||
+							it.customer_mobile),
 				);
-			
+
 			console.log("[new_order] Item with vehicle check:", {
 				has_items: Array.isArray(data.items),
 				item_with_vehicle_found: !!itemWithVehicle,
-				item_with_vehicle: itemWithVehicle ? {
-					item_code: itemWithVehicle.item_code,
-					custom_vehicle_no: itemWithVehicle.custom_vehicle_no,
-					vehicle_no: itemWithVehicle.vehicle_no,
-					vehicle_number: itemWithVehicle.vehicle_number,
-					custom_vehicle_number: itemWithVehicle.custom_vehicle_number,
-					contact_mobile: itemWithVehicle.contact_mobile,
-					mobile_no: itemWithVehicle.mobile_no,
-					customer_mobile: itemWithVehicle.customer_mobile
-				} : null
+				item_with_vehicle: itemWithVehicle
+					? {
+							item_code: itemWithVehicle.item_code,
+							custom_vehicle_no: itemWithVehicle.custom_vehicle_no,
+							vehicle_no: itemWithVehicle.vehicle_no,
+							vehicle_number: itemWithVehicle.vehicle_number,
+							custom_vehicle_number: itemWithVehicle.custom_vehicle_number,
+							contact_mobile: itemWithVehicle.contact_mobile,
+							mobile_no: itemWithVehicle.mobile_no,
+							customer_mobile: itemWithVehicle.customer_mobile,
+						}
+					: null,
 			});
 
 			const resolvedContactMobile = String(
 				(itemWithVehicle &&
 					(itemWithVehicle.contact_mobile ||
-					itemWithVehicle.mobile_no ||
-					itemWithVehicle.customer_mobile)) ||
-				(hasEmployeeData &&
-					(data.contact_mobile || data.mobile_no || data.customer_mobile)) ||
-				"",
+						itemWithVehicle.mobile_no ||
+						itemWithVehicle.customer_mobile)) ||
+					(hasEmployeeData && (data.contact_mobile || data.mobile_no || data.customer_mobile)) ||
+					"",
 			).trim();
 
 			const resolvedVehicleNo = String(
 				(itemWithVehicle &&
 					(itemWithVehicle.custom_vehicle_no ||
-					itemWithVehicle.vehicle_no ||
-					itemWithVehicle.vehicle_number ||
-					itemWithVehicle.custom_vehicle_number)) ||
-				(hasEmployeeData &&
-					(data.custom_vehicle_no ||
-					data.vehicle_no ||
-					data.vehicle_number ||
-					data.custom_vehicle_number)) ||
-				"",
+						itemWithVehicle.vehicle_no ||
+						itemWithVehicle.vehicle_number ||
+						itemWithVehicle.custom_vehicle_number)) ||
+					(hasEmployeeData &&
+						(data.custom_vehicle_no ||
+							data.vehicle_no ||
+							data.vehicle_number ||
+							data.custom_vehicle_number)) ||
+					"",
 			).trim();
-			
+
 			console.log("[new_order] 🔍 VEHICLE/MOBILE RESOLUTION:");
 			console.log("  Data source vehicle:", {
 				data_custom_vehicle_no: data.custom_vehicle_no,
 				data_vehicle_no: data.vehicle_no,
 				data_vehicle_number: data.vehicle_number,
-				data_custom_vehicle_number: data.custom_vehicle_number
+				data_custom_vehicle_number: data.custom_vehicle_number,
 			});
 			console.log("  Data source contact:", {
 				data_contact_mobile: data.contact_mobile,
 				data_mobile_no: data.mobile_no,
-				data_customer_mobile: data.customer_mobile
+				data_customer_mobile: data.customer_mobile,
 			});
 			console.log("  Resolved values:", {
 				resolvedVehicleNo: resolvedVehicleNo,
 				resolvedContactMobile: resolvedContactMobile,
 				hasEmployeeData: hasEmployeeData,
-				usedItemData: !!itemWithVehicle
+				usedItemData: !!itemWithVehicle,
 			});
 
 			this.contact_mobile = resolvedContactMobile;
 			this.custom_vehicle_no = resolvedVehicleNo;
 			this.custom_odometer_reading = data.custom_odometer_reading || null;
 			this.custom_has_oil_item = !!data.custom_has_oil_item;
-			
+
 			console.log("[new_order] 🎯 FINAL STATE SET:");
 			console.log("  this.custom_vehicle_no:", this.custom_vehicle_no);
 			console.log("  this.contact_mobile:", this.contact_mobile);
@@ -792,19 +793,22 @@ export default {
 			console.log("  this.customer:", this.customer);
 
 			if (this.customer) {
-				console.log("[new_order] Prepared customer/vehicle data (will not emit load_invoice_customer here):", {
-					customer: this.customer,
-					contact_mobile: this.contact_mobile,
-					custom_vehicle_no: this.custom_vehicle_no
-				});
+				console.log(
+					"[new_order] Prepared customer/vehicle data (will not emit load_invoice_customer here):",
+					{
+						customer: this.customer,
+						contact_mobile: this.contact_mobile,
+						custom_vehicle_no: this.custom_vehicle_no,
+					},
+				);
 			} else {
 				console.log("[new_order] No customer, skipping load_invoice_customer");
 			}
 		}
-		
+
 		console.log("[new_order] ✅ DEBUG END =========================================");
 		console.log("[new_order] Return value (old_invoice):", old_invoice);
-		
+
 		return old_invoice;
 	},
 
@@ -1144,7 +1148,8 @@ export default {
 			}
 		});
 		doc.items = newItems;
-		const allServiceFromOrder = (doc.items || []).length > 0 && (doc.items || []).every((i) => isServiceItem(i));
+		const allServiceFromOrder =
+			(doc.items || []).length > 0 && (doc.items || []).every((i) => isServiceItem(i));
 
 		if (allServiceFromOrder) {
 			doc.update_stock = 0;
@@ -1474,12 +1479,15 @@ export default {
 		try {
 			if (!Array.isArray(items)) return;
 			items.forEach((item) => {
-				if (!item.posa_row_id) item.posa_row_id = this.makeid ? this.makeid(20) : Date.now().toString(36);
+				if (!item.posa_row_id)
+					item.posa_row_id = this.makeid ? this.makeid(20) : Date.now().toString(36);
 
 				if (isServiceItem(item)) {
 					item.qty = Number(item.qty || 1);
 					item.rate = Number(item.rate || 0);
-					item.amount = this.flt ? this.flt(item.qty * item.rate, this.currency_precision || 2) : item.qty * item.rate;
+					item.amount = this.flt
+						? this.flt(item.qty * item.rate, this.currency_precision || 2)
+						: item.qty * item.rate;
 					item.update_stock = 0;
 					item.is_stock_item = 0;
 					item.is_service_item = 1;
@@ -1613,14 +1621,17 @@ export default {
 
 			// Always use frontend-calculated totals to ensure item discounts are properly included
 			// This fixes the issue where backend-calculated totals don't include item-level discounts
-			console.log("[show_payment] Current item rates:", this.items.map(i => ({
-				item: i.item_code,
-				qty: i.qty,
-				rate: i.rate,
-				discount_percentage: i.discount_percentage,
-				discount_amount: i.discount_amount,
-				amount: i.qty * i.rate
-			})));
+			console.log(
+				"[show_payment] Current item rates:",
+				this.items.map((i) => ({
+					item: i.item_code,
+					qty: i.qty,
+					rate: i.rate,
+					discount_percentage: i.discount_percentage,
+					discount_amount: i.discount_amount,
+					amount: i.qty * i.rate,
+				})),
+			);
 
 			invoice_doc.total = this.Total;
 			invoice_doc.net_total = this.net_total;
@@ -2180,7 +2191,10 @@ export default {
 									)
 								: 0;
 							if (vm.selected_currency === baseCurrency) {
-								item.base_discount_amount = vm.flt(item.discount_amount, vm.currency_precision);
+								item.base_discount_amount = vm.flt(
+									item.discount_amount,
+									vm.currency_precision,
+								);
 							} else {
 								const ex = vm.exchange_rate || 1;
 								item.base_discount_amount = vm.flt(
@@ -2410,7 +2424,7 @@ export default {
 	calc_item_price(item) {
 		return calcItemPrice(item, this);
 	},
- 
+
 	// Update UOM (unit of measure) for an item and recalculate prices
 	calc_uom(item, value) {
 		return calcUom(item, value, this);

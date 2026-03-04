@@ -6,4 +6,4 @@ from frappe.model.document import Document
 
 
 class CashCounting_2(Document):
-	pass
+    pass

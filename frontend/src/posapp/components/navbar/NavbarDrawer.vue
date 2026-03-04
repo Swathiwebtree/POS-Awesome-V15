@@ -142,7 +142,6 @@ export default {
 			const moduleName = module.name || module.text;
 			this.activeModule = moduleName;
 
-
 			// If module has no submodules or empty submodules array, navigate directly
 			if (!module.submodules || module.submodules.length === 0) {
 				this.navigateToPage(moduleName);

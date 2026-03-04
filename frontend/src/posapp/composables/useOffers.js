@@ -6,7 +6,7 @@ export function useOffers() {
 	const eventBus = proxy?.eventBus;
 
 	const offers = ref([]);
-	const coupons = ref([]); 
+	const coupons = ref([]);
 
 	function get_offers(profileName, posProfile) {
 		// 1️⃣ Load from cache
@@ -22,7 +22,6 @@ export function useOffers() {
 			}
 		}
 
-	
 		return frappe
 			.call("posawesome.posawesome.api.offers.get_offers", {
 				profile: profileName,
@@ -66,7 +65,7 @@ export function useOffers() {
 
 	return {
 		offers,
-		coupons, 
+		coupons,
 		get_offers,
 	};
 }

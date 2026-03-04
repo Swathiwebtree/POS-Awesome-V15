@@ -8,9 +8,7 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 
 	// Ensure frappe.PosApp is available before using it
 	if (!frappe.PosApp || !frappe.PosApp.posapp) {
-		console.error(
-			"frappe.PosApp.posapp is not defined. Check if posawesome.umd.js is loaded properly."
-		);
+		console.error("frappe.PosApp.posapp is not defined. Check if posawesome.umd.js is loaded properly.");
 		return;
 	}
 
@@ -22,18 +20,18 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 
 	// Load CSS dynamically
 	$("head").append(
-		"<link href='/assets/posawesome/node_modules/vuetify/dist/vuetify.min.css' rel='stylesheet'>"
+		"<link href='/assets/posawesome/node_modules/vuetify/dist/vuetify.min.css' rel='stylesheet'>",
 	);
 	$("head").append(
-		"<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css'>"
+		"<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css'>",
 	);
 	$("head").append("<link rel='preconnect' href='https://fonts.googleapis.com'>");
 	$("head").append("<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>");
 	$("head").append(
-		"<link rel='preload' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900' as='style'>"
+		"<link rel='preload' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900' as='style'>",
 	);
 	$("head").append(
-		"<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900'>"
+		"<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900'>",
 	);
 
 	// ---- SAFE HANDLER (no logic changed) ----
@@ -42,10 +40,7 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 
 		//  Wait until Vue sets pos_profile
 		let retries = 0;
-		while (
-			(!page.$PosApp || !page.$PosApp.posProfile) &&
-			retries < 20
-		) {
+		while ((!page.$PosApp || !page.$PosApp.posProfile) && retries < 20) {
 			await new Promise((r) => setTimeout(r, 300));
 			retries++;
 		}
@@ -80,18 +75,14 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 
 		const fetchAndCache = () => {
 			frappe.call({
-				method:
-					"posawesome.posawesome.api.utilities.get_pos_profile_tax_inclusive",
+				method: "posawesome.posawesome.api.utilities.get_pos_profile_tax_inclusive",
 				args: { pos_profile: posProfile },
 				callback: (response) => {
 					if (response?.message !== undefined) {
 						const posa_tax_inclusive = response.message;
 
 						try {
-							localStorage.setItem(
-								cacheKey,
-								JSON.stringify(posa_tax_inclusive)
-							);
+							localStorage.setItem(cacheKey, JSON.stringify(posa_tax_inclusive));
 						} catch (err) {
 							console.warn("Failed to cache tax inclusive setting", err);
 						}
@@ -99,9 +90,7 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 						applySetting(posa_tax_inclusive);
 
 						import("/assets/posawesome/dist/js/offline/index.js")
-							.then((m) =>
-								m?.setTaxInclusiveSetting?.(posa_tax_inclusive)
-							)
+							.then((m) => m?.setTaxInclusiveSetting?.(posa_tax_inclusive))
 							.catch(() => {});
 					}
 				},
@@ -123,8 +112,5 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 	};
 
 	// Listen for realtime profile registration
-	frappe.realtime.on(
-		"pos_profile_registered",
-		update_totals_based_on_tax_inclusive
-	);
+	frappe.realtime.on("pos_profile_registered", update_totals_based_on_tax_inclusive);
 };

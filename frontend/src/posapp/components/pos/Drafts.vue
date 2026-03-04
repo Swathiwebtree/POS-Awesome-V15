@@ -1,10 +1,20 @@
 <template>
 	<div class="drafts-wrapper" v-if="!useAsModal">
 		<div class="drafts-content">
-			<v-data-table :headers="headers" :items="dialog_data" item-value="name" class="elevation-0 drafts-table"
-				:theme="isDarkTheme ? 'dark' : 'light'" show-select v-model="selected" select-strategy="single"
-				return-object density="compact" :items-per-page="100"
-				:item-class="(item) => (isCurrentDraft(item.name) ? 'v-data-table__tr--active' : '')">
+			<v-data-table
+				:headers="headers"
+				:items="dialog_data"
+				item-value="name"
+				class="elevation-0 drafts-table"
+				:theme="isDarkTheme ? 'dark' : 'light'"
+				show-select
+				v-model="selected"
+				select-strategy="single"
+				return-object
+				density="compact"
+				:items-per-page="100"
+				:item-class="(item) => (isCurrentDraft(item.name) ? 'v-data-table__tr--active' : '')"
+			>
 				<template v-slot:column.posting_date="{ column }">
 					<span class="text-caption font-weight-medium">{{ column.title }}</span>
 				</template>
@@ -21,22 +31,31 @@
 					}}</span>
 				</template>
 
-				
 				<!-- Mobile -->
 				<template v-slot:item.contact_mobile="{ item }">
-					<span class="text-caption">{{ item.contact_mobile !== "" ? item.contact_mobile : "—" }}</span>
+					<span class="text-caption">{{
+						item.contact_mobile !== "" ? item.contact_mobile : "—"
+					}}</span>
 				</template>
 
 				<!-- Vehicle -->
 				<template v-slot:item.custom_vehicle_no="{ item }">
-					<span class="text-caption">{{ item.custom_vehicle_no !== "" ? item.custom_vehicle_no : "—" }}</span>
+					<span class="text-caption">{{
+						item.custom_vehicle_no !== "" ? item.custom_vehicle_no : "—"
+					}}</span>
 				</template>
-
 
 				<template v-slot:item.customer="{ item }">
 					<div class="d-flex align-center gap-1">
 						<span class="customer-name">{{ item.customer }}</span>
-						<v-chip v-if="item.is_corporate" color="teal" text="black" size="x-small" variant="tonal" class="ml-1">
+						<v-chip
+							v-if="item.is_corporate"
+							color="teal"
+							text="black"
+							size="x-small"
+							variant="tonal"
+							class="ml-1"
+						>
 							{{ __("Corporate") }}
 						</v-chip>
 					</div>
@@ -44,8 +63,13 @@
 
 				<template v-slot:item.name="{ item }">
 					<div class="d-flex align-center">
-						<v-chip v-if="isCurrentDraft(item.name)" color="success" size="x-small" class="mr-2"
-							prepend-icon="mdi-check-circle">
+						<v-chip
+							v-if="isCurrentDraft(item.name)"
+							color="success"
+							size="x-small"
+							class="mr-2"
+							prepend-icon="mdi-check-circle"
+						>
 							{{ __("Current") }}
 						</v-chip>
 						<span class="text-caption font-weight-medium text-primary">{{ item.name }}</span>
@@ -65,7 +89,7 @@
 				<!-- Odometer -->
 				<template v-slot:item.custom_odometer_reading="{ item }">
 					<span class="text-caption" v-if="item.custom_has_oil_item">
-						{{ item.custom_odometer_reading !== "" ? item.custom_odometer_reading + ' km' : '—' }}
+						{{ item.custom_odometer_reading !== "" ? item.custom_odometer_reading + " km" : "—" }}
 					</span>
 					<span class="text-caption" v-else>—</span>
 				</template>
@@ -78,8 +102,13 @@
 				</template>
 
 				<template v-slot:bottom>
-					<div class="pa-4 text-center text-caption text-medium-emphasis" v-if="dialog_data.length === 0">
-						<v-icon size="48" color="grey-lighten-1"class="mb-2">mdi-file-document-outline</v-icon>
+					<div
+						class="pa-4 text-center text-caption text-medium-emphasis"
+						v-if="dialog_data.length === 0"
+					>
+						<v-icon size="48" color="grey-lighten-1" class="mb-2"
+							>mdi-file-document-outline</v-icon
+						>
 						<div>{{ __("No draft invoices found.") }}</div>
 						<div class="text-caption mt-1">{{ __("Create a new sale to get started") }}</div>
 					</div>
@@ -88,16 +117,28 @@
 		</div>
 
 		<div class="drafts-footer">
-			<v-btn block color="success" size="large" variant="flat" prepend-icon="mdi-file-document-check"
-				@click="submit_selection" :disabled="selected.length === 0" class="load-draft-btn">
+			<v-btn
+				block
+				color="success"
+				size="large"
+				variant="flat"
+				prepend-icon="mdi-file-document-check"
+				@click="submit_selection"
+				:disabled="selected.length === 0"
+				class="load-draft-btn"
+			>
 				{{ __("LOAD JOB ORDERS") }}
 			</v-btn>
 		</div>
 	</div>
 
 	<v-row justify="center" v-else>
-		<v-dialog v-model="draftsDialog" :max-width="isMobileModal ? '100%' : maxWidth" :fullscreen="isMobileModal"
-			:scrollable="true">
+		<v-dialog
+			v-model="draftsDialog"
+			:max-width="isMobileModal ? '100%' : maxWidth"
+			:fullscreen="isMobileModal"
+			:scrollable="true"
+		>
 			<v-card variant="flat" :color="isDarkTheme ? $vuetify.theme.themes.dark.colors.surface : 'white'">
 				<v-card-title class="pb-1 pt-3">
 					<span class="text-h6 text-primary">{{ __("Load Sales Invoice") }}</span>
@@ -109,28 +150,48 @@
 					<v-container fluid class="pa-0">
 						<v-row no-gutters>
 							<v-col cols="12" class="pa-1">
-								<v-data-table :headers="headers" :items="dialog_data" item-value="name"
-									class="elevation-0" :theme="isDarkTheme ? 'dark' : 'light'" show-select
-									v-model="selected" select-strategy="single" return-object density="compact"
-									:items-per-page="10" :item-class="
+								<v-data-table
+									:headers="headers"
+									:items="dialog_data"
+									item-value="name"
+									class="elevation-0"
+									:theme="isDarkTheme ? 'dark' : 'light'"
+									show-select
+									v-model="selected"
+									select-strategy="single"
+									return-object
+									density="compact"
+									:items-per-page="10"
+									:item-class="
 										(item) =>
 											isCurrentDraft(item.name) ? 'v-data-table__tr--active' : ''
-									">
-									<template v-slot:column.posting_date="{ column }"><span class="d-none">{{
-											column.title }}</span></template>
-									<template v-slot:item.posting_date="{ item }"><span class="text-caption">{{
-											item.posting_date }}</span></template>
+									"
+								>
+									<template v-slot:column.posting_date="{ column }"
+										><span class="d-none">{{ column.title }}</span></template
+									>
+									<template v-slot:item.posting_date="{ item }"
+										><span class="text-caption">{{ item.posting_date }}</span></template
+									>
 
-									<template v-slot:column.posting_time="{ column }"><span class="d-none">{{
-											column.title }}</span></template>
-									<template v-slot:item.posting_time="{ item }"><span class="text-caption">{{
+									<template v-slot:column.posting_time="{ column }"
+										><span class="d-none">{{ column.title }}</span></template
+									>
+									<template v-slot:item.posting_time="{ item }"
+										><span class="text-caption">{{
 											item.posting_time ? item.posting_time.split(".")[0] : ""
-									}}</span></template>
+										}}</span></template
+									>
 
 									<template v-slot:item.name="{ item }">
 										<div class="d-flex align-center">
-											<v-chip v-if="isCurrentDraft(item.name)" color="success" size="x-small"
-												class="mr-2" prepend-icon="mdi-check-circle">
+											<v-chip
+												v-if="isCurrentDraft(item.name)"
+												color="success"
+												size="x-small"
+												class="mr-2"
+												prepend-icon="mdi-check-circle"
+											>
 												{{ __("Current") }}
 											</v-chip>
 											<span class="text-caption font-weight-medium text-primary">{{
@@ -142,7 +203,11 @@
 									<!-- Service Employee Column -->
 									<template v-slot:item.custom_service_employee="{ item }">
 										<div v-if="item.custom_service_employee" class="d-flex align-center">
-											<v-chip size="x-small" color="primary" prepend-icon="mdi-account-hard-hat">
+											<v-chip
+												size="x-small"
+												color="primary"
+												prepend-icon="mdi-account-hard-hat"
+											>
 												{{ item.custom_service_employee }}
 											</v-chip>
 										</div>
@@ -151,32 +216,49 @@
 
 									<!-- Mobile -->
 									<template v-slot:item.contact_mobile="{ item }">
-										<span class="text-caption">{{ item.contact_mobile !== "" ? item.contact_mobile : "—" }}</span>
+										<span class="text-caption">{{
+											item.contact_mobile !== "" ? item.contact_mobile : "—"
+										}}</span>
 									</template>
 
 									<!-- Vehicle -->
 									<template v-slot:item.custom_vehicle_no="{ item }">
-										<span class="text-caption">{{ item.custom_vehicle_no !== "" ? item.custom_vehicle_no : "—" }}</span>
+										<span class="text-caption">{{
+											item.custom_vehicle_no !== "" ? item.custom_vehicle_no : "—"
+										}}</span>
 									</template>
 
 									<!-- Odometer -->
 									<template v-slot:item.custom_odometer_reading="{ item }">
 										<span class="text-caption" v-if="item.custom_has_oil_item">
-											{{ item.custom_odometer_reading !== "" ? item.custom_odometer_reading + ' km' : '—' }}
+											{{
+												item.custom_odometer_reading !== ""
+													? item.custom_odometer_reading + " km"
+													: "—"
+											}}
 										</span>
 										<span class="text-caption" v-else>—</span>
 									</template>
 
-									<template v-slot:item.grand_total="{ item }">{{ currencySymbol(item.currency)
-									}}{{ formatCurrency(item.grand_total) }}</template>
+									<template v-slot:item.grand_total="{ item }"
+										>{{ currencySymbol(item.currency)
+										}}{{ formatCurrency(item.grand_total) }}</template
+									>
 
 									<template v-slot:bottom>
-										<div class="pa-2 text-caption text-medium-emphasis"
-											v-if="dialog_data.length === 0">
+										<div
+											class="pa-2 text-caption text-medium-emphasis"
+											v-if="dialog_data.length === 0"
+										>
 											{{ __("No draft invoices found.") }}
 										</div>
-										<v-pagination v-else :length="1" :total-visible="3" size="small"
-											class="mt-2"></v-pagination>
+										<v-pagination
+											v-else
+											:length="1"
+											:total-visible="3"
+											size="small"
+											class="mt-2"
+										></v-pagination>
 									</template>
 								</v-data-table>
 							</v-col>
@@ -186,8 +268,13 @@
 				<v-card-actions class="pt-1">
 					<v-spacer></v-spacer>
 					<v-btn color="error" variant="text" @click="close_dialog">{{ __("Close") }}</v-btn>
-					<v-btn color="success" variant="flat" @click="submit_dialog" :disabled="selected.length === 0">{{
-						__("Load Sale") }}</v-btn>
+					<v-btn
+						color="success"
+						variant="flat"
+						@click="submit_dialog"
+						:disabled="selected.length === 0"
+						>{{ __("Load Sale") }}</v-btn
+					>
 				</v-card-actions>
 			</v-card>
 		</v-dialog>
@@ -210,7 +297,13 @@ export default {
 		refreshing: false,
 		headers: [
 			{ title: __("Mobile"), value: "contact_mobile", align: "start", sortable: false, width: "130px" },
-			{ title: __("Vehicle"), value: "custom_vehicle_no", align: "start", sortable: false, width: "130px" },
+			{
+				title: __("Vehicle"),
+				value: "custom_vehicle_no",
+				align: "start",
+				sortable: false,
+				width: "130px",
+			},
 			{ title: __("Customer"), value: "customer", align: "start", sortable: true },
 			{ title: __("Date"), value: "posting_date", align: "start", sortable: true, width: "100px" },
 			{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
@@ -222,11 +315,17 @@ export default {
 				sortable: true,
 				width: "120px",
 			},
-			{ title: __("Odometer"), value: "custom_odometer_reading", align: "start", sortable: false, width: "100px" },
+			{
+				title: __("Odometer"),
+				value: "custom_odometer_reading",
+				align: "start",
+				sortable: false,
+				width: "100px",
+			},
 			{ title: __("Amount"), value: "grand_total", align: "end", sortable: false, width: "120px" },
 		],
 		_employeeNameCache: {},
-	    _customerTypeCache: {},
+		_customerTypeCache: {},
 	}),
 	computed: {
 		isDarkTheme() {
@@ -324,11 +423,7 @@ export default {
 				}
 				// Resolve customer types (to detect corporate/company customers)
 				const customerIdsToResolve = Array.from(
-					new Set(
-						drafts
-							.map((d) => d.customer)
-							.filter((v) => v && !this._customerTypeCache[v])
-					)
+					new Set(drafts.map((d) => d.customer).filter((v) => v && !this._customerTypeCache[v])),
 				);
 
 				if (customerIdsToResolve.length) {
@@ -338,7 +433,7 @@ export default {
 				// Mark is_corporate on drafts based on resolved customer type
 				drafts = drafts.map((d) => {
 					const custType = this._customerTypeCache[d.customer];
-					d.is_corporate = (custType === "Company");
+					d.is_corporate = custType === "Company";
 					return d;
 				});
 
@@ -432,7 +527,7 @@ export default {
 				await this._resolveCustomerTypes([nd.customer]);
 			}
 			const custType = this._customerTypeCache[nd.customer];
-			nd.is_corporate = (custType === "Company");
+			nd.is_corporate = custType === "Company";
 
 			this.dialog_data = this.dialog_data.filter((d) => d.name !== nd.name);
 			this.dialog_data.unshift(nd);
@@ -456,16 +551,20 @@ export default {
 				custom_service_employee: item.custom_service_employee || null,
 				custom_service_employee_name: item.custom_service_employee_name || null,
 				// Keep empty string instead of null so the template can show it if present
-				contact_mobile: (typeof item.contact_mobile !== "undefined" && item.contact_mobile !== null)
-					? String(item.contact_mobile)
-					: "",
-				custom_vehicle_no: (typeof item.custom_vehicle_no !== "undefined" && item.custom_vehicle_no !== null)
-					? String(item.custom_vehicle_no)
-					: "",
+				contact_mobile:
+					typeof item.contact_mobile !== "undefined" && item.contact_mobile !== null
+						? String(item.contact_mobile)
+						: "",
+				custom_vehicle_no:
+					typeof item.custom_vehicle_no !== "undefined" && item.custom_vehicle_no !== null
+						? String(item.custom_vehicle_no)
+						: "",
 				// Keep odometer as string if present (e.g. "12345"), empty string if not
-				custom_odometer_reading: (typeof item.custom_odometer_reading !== "undefined" && item.custom_odometer_reading !== null)
-					? String(item.custom_odometer_reading)
-					: "",
+				custom_odometer_reading:
+					typeof item.custom_odometer_reading !== "undefined" &&
+					item.custom_odometer_reading !== null
+						? String(item.custom_odometer_reading)
+						: "",
 				// coerce to boolean (1 / "1" -> true ; 0 / "0" / undefined -> false)
 				custom_has_oil_item: Boolean(Number(item.custom_has_oil_item)) || false,
 			};
@@ -490,105 +589,109 @@ export default {
 	},
 
 	created() {
-
 		this.eventBus.on("draft_selected", async (draftName) => {
-        console.log("[Invoice] Draft selected event received:", draftName);
-        
-        if (!draftName) {
-            console.error("[Invoice] No draft name provided");
-            return;
-        }
-        
-        try {
-            // Load the draft invoice
-            const response = await frappe.call({
-                method: "frappe.client.get",
-                args: {
-                    doctype: "Sales Invoice",
-                    name: draftName,
-                },
-            });
-            
-            if (response && response.message) {
-                const invoice = response.message;
-                
-                console.log("[Invoice] Draft loaded:", invoice);
-                
-                // ✅ SET THE INVOICE DOC
-                this.invoice_doc = invoice;
-                this.loaded_draft_name = draftName;
-                
-                // ✅ EMIT TO LOAD CUSTOMER & VEHICLE
-				console.log("[Invoice] 🔍 DEBUG EMISSION POINT 1 ==============================");
-				console.log("[Invoice] Emitting load_invoice_customer from first location");
-				console.log("[Invoice] Invoice data being used:", {
-					name: invoice.name,
-					customer: invoice.customer,
-					customer_name: invoice.customer_name,
-					contact_mobile: invoice.contact_mobile,
-					custom_vehicle_no: invoice.custom_vehicle_no,
-					custom_service_employee: invoice.custom_service_employee,
-					// Check all possible vehicle fields
-					vehicle_no: invoice.vehicle_no,
-					vehicle_number: invoice.vehicle_number,
-					custom_vehicle_number: invoice.custom_vehicle_number,
-					// Check if invoice has invoice_doc
-					has_invoice_doc: !!invoice.invoice_doc,
-					invoice_doc_custom_vehicle_no: invoice.invoice_doc?.custom_vehicle_no,
-					invoice_doc_contact_mobile: invoice.invoice_doc?.contact_mobile
+			console.log("[Invoice] Draft selected event received:", draftName);
+
+			if (!draftName) {
+				console.error("[Invoice] No draft name provided");
+				return;
+			}
+
+			try {
+				// Load the draft invoice
+				const response = await frappe.call({
+					method: "frappe.client.get",
+					args: {
+						doctype: "Sales Invoice",
+						name: draftName,
+					},
 				});
 
-				console.log("[Invoice] Component state at emission time:", {
-					this_customer: this.customer,
-					this_contact_mobile: this.contact_mobile,
-					this_custom_vehicle_no: this.custom_vehicle_no,
-					this_custom_service_employee: this.custom_service_employee
-				});
+				if (response && response.message) {
+					const invoice = response.message;
 
-				console.log("[Invoice] 🚀 EMITTING with values:", {
-					customer: invoice.customer,
-					customer_name: invoice.customer_name || invoice.customer,
-					invoice_name: invoice.name || "",
-					contact_mobile: invoice.contact_mobile || "",
-					custom_vehicle_no: invoice.custom_vehicle_no || "",
-					has_vehicle: !!(invoice.custom_vehicle_no || invoice.vehicle_no || invoice.vehicle_number || invoice.custom_vehicle_number),
-					has_mobile: !!invoice.contact_mobile
-				});
+					console.log("[Invoice] Draft loaded:", invoice);
 
-                this.eventBus.emit("load_invoice_customer", {
-                    customer: invoice.customer,
-                    customer_name: invoice.customer_name || invoice.customer,
-                    invoice_name: invoice.name || "",
-                    contact_mobile: invoice.contact_mobile || "",
-                    custom_vehicle_no: invoice.custom_vehicle_no || "",
-                });
-                
-                // ✅ EMIT TO LOAD ITEMS
-                if (invoice.items && invoice.items.length > 0) {
-                    this.eventBus.emit("load_invoice_items", invoice.items);
-                }
-                
-                // Show success message
-                frappe.show_alert({
-                    message: `Draft invoice ${draftName} loaded successfully`,
-                    indicator: "green",
-                });
-                
-                console.log("[Invoice] Draft loading completed");
-            } else {
-                frappe.show_alert({
-                    message: "Failed to load draft invoice",
-                    indicator: "red",
-                });
-            }
-        } catch (err) {
-            console.error("[Invoice] Error loading draft:", err);
-            frappe.show_alert({
-                message: "Error loading draft invoice",
-                indicator: "red",
-            });
-        }
-    });
+					// ✅ SET THE INVOICE DOC
+					this.invoice_doc = invoice;
+					this.loaded_draft_name = draftName;
+
+					// ✅ EMIT TO LOAD CUSTOMER & VEHICLE
+					console.log("[Invoice] 🔍 DEBUG EMISSION POINT 1 ==============================");
+					console.log("[Invoice] Emitting load_invoice_customer from first location");
+					console.log("[Invoice] Invoice data being used:", {
+						name: invoice.name,
+						customer: invoice.customer,
+						customer_name: invoice.customer_name,
+						contact_mobile: invoice.contact_mobile,
+						custom_vehicle_no: invoice.custom_vehicle_no,
+						custom_service_employee: invoice.custom_service_employee,
+						// Check all possible vehicle fields
+						vehicle_no: invoice.vehicle_no,
+						vehicle_number: invoice.vehicle_number,
+						custom_vehicle_number: invoice.custom_vehicle_number,
+						// Check if invoice has invoice_doc
+						has_invoice_doc: !!invoice.invoice_doc,
+						invoice_doc_custom_vehicle_no: invoice.invoice_doc?.custom_vehicle_no,
+						invoice_doc_contact_mobile: invoice.invoice_doc?.contact_mobile,
+					});
+
+					console.log("[Invoice] Component state at emission time:", {
+						this_customer: this.customer,
+						this_contact_mobile: this.contact_mobile,
+						this_custom_vehicle_no: this.custom_vehicle_no,
+						this_custom_service_employee: this.custom_service_employee,
+					});
+
+					console.log("[Invoice] 🚀 EMITTING with values:", {
+						customer: invoice.customer,
+						customer_name: invoice.customer_name || invoice.customer,
+						invoice_name: invoice.name || "",
+						contact_mobile: invoice.contact_mobile || "",
+						custom_vehicle_no: invoice.custom_vehicle_no || "",
+						has_vehicle: !!(
+							invoice.custom_vehicle_no ||
+							invoice.vehicle_no ||
+							invoice.vehicle_number ||
+							invoice.custom_vehicle_number
+						),
+						has_mobile: !!invoice.contact_mobile,
+					});
+
+					this.eventBus.emit("load_invoice_customer", {
+						customer: invoice.customer,
+						customer_name: invoice.customer_name || invoice.customer,
+						invoice_name: invoice.name || "",
+						contact_mobile: invoice.contact_mobile || "",
+						custom_vehicle_no: invoice.custom_vehicle_no || "",
+					});
+
+					// ✅ EMIT TO LOAD ITEMS
+					if (invoice.items && invoice.items.length > 0) {
+						this.eventBus.emit("load_invoice_items", invoice.items);
+					}
+
+					// Show success message
+					frappe.show_alert({
+						message: `Draft invoice ${draftName} loaded successfully`,
+						indicator: "green",
+					});
+
+					console.log("[Invoice] Draft loading completed");
+				} else {
+					frappe.show_alert({
+						message: "Failed to load draft invoice",
+						indicator: "red",
+					});
+				}
+			} catch (err) {
+				console.error("[Invoice] Error loading draft:", err);
+				frappe.show_alert({
+					message: "Error loading draft invoice",
+					indicator: "red",
+				});
+			}
+		});
 		this.eventBus.on("open_drafts", async (data) => {
 			if (Array.isArray(data) && data.length) {
 				const normalized = this._normalizeAndSort(data);
@@ -609,10 +712,8 @@ export default {
 				// Resolve customer types
 				const customerIdsToResolve = Array.from(
 					new Set(
-						normalized
-							.map((d) => d.customer)
-							.filter((v) => v && !this._customerTypeCache[v])
-					)
+						normalized.map((d) => d.customer).filter((v) => v && !this._customerTypeCache[v]),
+					),
 				);
 
 				if (customerIdsToResolve.length) {
@@ -634,7 +735,7 @@ export default {
 
 					// for is_corporate flag
 					const custType = this._customerTypeCache[d.customer];
-					d.is_corporate = (custType === "Company");
+					d.is_corporate = custType === "Company";
 
 					return d;
 				});
@@ -666,12 +767,12 @@ export default {
 		// ✅ NEW: Listen for draft deletion event
 		this.eventBus.on("draft_deleted", (draftName) => {
 			if (!draftName) return;
-			
+
 			// Remove the deleted draft from the dialog data
 			this.dialog_data = this.dialog_data.filter((d) => d.name !== draftName);
-			
+
 			console.log("[Drafts] Draft removed from list:", draftName);
-			
+
 			// Show message if no more drafts
 			if (this.dialog_data.length === 0) {
 				this.eventBus.emit("show_message", {
@@ -688,7 +789,7 @@ export default {
 		this.eventBus.off("open_drafts");
 		this.eventBus.off("close_drafts");
 		this.eventBus.off("draft_saved");
-		this.eventBus.off("draft_deleted"); 
+		this.eventBus.off("draft_deleted");
 		this.eventBus.off("invoice_saved_successfully");
 		this.eventBus.off("draft_selected");
 	},
@@ -701,7 +802,7 @@ export default {
 	flex-direction: column;
 	height: 100%;
 	width: 100%;
-	background:#ffffff;
+	background: #ffffff;
 }
 .drafts-content {
 	flex: 1;
@@ -710,7 +811,7 @@ export default {
 	background-color: #fafafa;
 }
 .drafts-table {
-	background-color:white;
+	background-color: white;
 	border-radius: 8px;
 }
 .customer-name {
@@ -743,76 +844,73 @@ export default {
 } */
 
 :deep(.v-data-table__tr) {
-  background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-  margin-bottom: 6px;          
-  transition: background-color 0.15s ease;
+	background: #ffffff;
+	border-radius: 8px;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+	margin-bottom: 6px;
+	transition: background-color 0.15s ease;
 }
 
-
 .drafts-table {
-  font-size: 15px;
+	font-size: 15px;
 }
 
 /* DESKTOP (1920px+) */
 @media (min-width: 1920px) {
-  .drafts-table :deep(th) {
-    padding: 14px 8px;
-    font-size: 14px;
-    font-weight: 700;
-  }
+	.drafts-table :deep(th) {
+		padding: 14px 8px;
+		font-size: 14px;
+		font-weight: 700;
+	}
 
-  .drafts-table :deep(td) {
-    padding: 12px 8px;
-    font-size: 11px;
-  }
+	.drafts-table :deep(td) {
+		padding: 12px 8px;
+		font-size: 11px;
+	}
 }
 
 /* LAPTOP (1280px - 1919px) */
 @media (min-width: 1280px) and (max-width: 1919px) {
-  .drafts-table :deep(th) {
-    padding: 10px 6px;
-    font-size: 13px;
-  }
+	.drafts-table :deep(th) {
+		padding: 10px 6px;
+		font-size: 13px;
+	}
 
-  .drafts-table :deep(td) {
-    padding: 8px 6px;
-    font-size: 10px;
-  }
+	.drafts-table :deep(td) {
+		padding: 8px 6px;
+		font-size: 10px;
+	}
 }
 
 /* Keep headers compact */
 .drafts-table :deep(th) {
-  line-height: 1.2;
+	line-height: 1.2;
 }
 
 /* 1350px and below */
 @media (max-width: 1400px) {
-  .drafts-table :deep(th) {
-    padding: 8px 4px;
-    font-size: 11px;
-  }
+	.drafts-table :deep(th) {
+		padding: 8px 4px;
+		font-size: 11px;
+	}
 
-  .drafts-table :deep(td) {
-    padding: 6px 4px;
-    font-size: 9px;
-  }
+	.drafts-table :deep(td) {
+		padding: 6px 4px;
+		font-size: 9px;
+	}
 }
 @media (max-width: 1400px) {
-  :deep(.v-data-table__tr) {
-    margin-bottom: 4px;
-  }
+	:deep(.v-data-table__tr) {
+		margin-bottom: 4px;
+	}
 }
-
 
 :deep(.v-data-table__tr) {
 	background: #ffffff;
 	border-radius: 10px;
-	box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 	border-bottom: 10px solid transparent;
 }
-
 
 :deep(.v-data-table__tr:hover) {
 	background-color: #f1f5ff;
@@ -844,7 +942,7 @@ export default {
 	font-weight: 600;
 	letter-spacing: 0.5px;
 	border-radius: 6px;
-	box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 .drafts-content::-webkit-scrollbar {
 	width: 6px;
@@ -872,17 +970,17 @@ export default {
 }
 
 .drafts-wrapper {
-  transform: translateZ(0);
+	transform: translateZ(0);
 }
 /* Bigger selection checkbox */
 :deep(.v-data-table .v-selection-control) {
-  transform: scale(1.25);   /* increase size */
-  transform-origin: left center;
+	transform: scale(1.25); /* increase size */
+	transform-origin: left center;
 }
 
 :deep(.v-data-table .v-selection-control__input) {
-  width: 28px;
-  height: 28px;
+	width: 28px;
+	height: 28px;
 }
 
 /* Final readability/accessibility overrides */
@@ -984,6 +1082,4 @@ export default {
 		font-size: 0.9rem !important;
 	}
 }
-
-
 </style>

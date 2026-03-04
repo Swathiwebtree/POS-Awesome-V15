@@ -1,11 +1,21 @@
 <template>
-	<v-dialog v-model="showDialog" max-width="900px" width="900px" persistent scrollable="false" transition="dialog-bottom-transition" overlay-opacity="0.5">
+	<v-dialog
+		v-model="showDialog"
+		max-width="900px"
+		width="900px"
+		persistent
+		scrollable="false"
+		transition="dialog-bottom-transition"
+		overlay-opacity="0.5"
+	>
 		<div class="payment-modal-container">
 			<div class="payment-content">
 				<div class="payment-card-wrapper">
 					<!-- MAIN CARD -->
-					<v-card :class="['selection mx-auto pa-0 my-0 mt-0', isDarkTheme ? '' : 'bg-grey-lighten-5']"
-						:style="isDarkTheme ? 'background-color:#1E1E1E' : ''">
+					<v-card
+						:class="['selection mx-auto pa-0 my-0 mt-0', isDarkTheme ? '' : 'bg-grey-lighten-5']"
+						:style="isDarkTheme ? 'background-color:#1E1E1E' : ''"
+					>
 						<!-- Header inside the card -->
 						<div class="payments-header">
 							<div class="payments-header-left">
@@ -17,142 +27,221 @@
 							</div>
 
 							<div class="payments-header-right">
-								<v-btn icon @click="closeDialog" class="white--text" aria-label="Close payments dialog">
+								<v-btn
+									icon
+									@click="closeDialog"
+									class="white--text"
+									aria-label="Close payments dialog"
+								>
 									<v-icon class="white--text">mdi-close</v-icon>
 								</v-btn>
 							</div>
 						</div>
 
-						<v-progress-linear :active="loading" :indeterminate="loading" absolute location="top"
-							color="info"></v-progress-linear>
+						<v-progress-linear
+							:active="loading"
+							:indeterminate="loading"
+							absolute
+							location="top"
+							color="info"
+						></v-progress-linear>
 
 						<div v-if="invoice_doc" class="payment-summary-hero payment-summary-fixed mt-3">
 							<div class="summary-box paid">
-								<div class="label">{{ __('Paid') }}</div>
+								<div class="label">{{ __("Paid") }}</div>
 								<div class="value">{{ total_payments_display }}</div>
 							</div>
 
 							<div class="summary-box due">
-								<div class="label">{{ __('To Be Paid') }}</div>
+								<div class="label">{{ __("To Be Paid") }}</div>
 								<div class="value">{{ diff_payment_display }}</div>
 							</div>
 						</div>
 						<!-- Scrollable content -->
 						<div ref="paymentContainer" class="pa-2 payment-content-container">
-							<v-row dense >
-
+							<v-row dense>
 								<v-col cols="6" class="payment-left-column">
-
 									<!-- PAYMENT METHODS -->
 									<div v-if="is_cashback">
-										
 										<!-- CREDIT SALE -->
-										<div v-if="pos_profile.posa_allow_credit_sale && !invoice_doc.is_return && selected_customer_is_corporate"
+										<div
+											v-if="
+												pos_profile.posa_allow_credit_sale &&
+												!invoice_doc.is_return &&
+												selected_customer_is_corporate
+											"
 											class="payment-method-card credit-sale-card"
-											:class="{ active: is_credit_sale }">
+											:class="{ active: is_credit_sale }"
+										>
 											<div class="method-left">
-												<v-icon size="26" :color="is_credit_sale ? 'success' : 'grey'">
+												<v-icon
+													size="26"
+													:color="is_credit_sale ? 'success' : 'grey'"
+												>
 													mdi-credit-card-clock
 												</v-icon>
 												<div>
 													<div class="method-title">Credit Sale</div>
-													<div class="method-amount">Amount will be added to customer credit
+													<div class="method-amount">
+														Amount will be added to customer credit
 													</div>
 												</div>
 											</div>
 
-											<v-btn size="small" :color="is_credit_sale ? 'success' : 'grey'"
+											<v-btn
+												size="small"
+												:color="is_credit_sale ? 'success' : 'grey'"
 												:variant="is_credit_sale ? 'elevated' : 'outlined'"
-												@click="toggleCreditSale">
+												@click="toggleCreditSale"
+											>
 												<v-icon size="20">
-													{{ is_credit_sale ? 'mdi-check-circle' : 'mdi-close-circle' }}
+													{{
+														is_credit_sale
+															? "mdi-check-circle"
+															: "mdi-close-circle"
+													}}
 												</v-icon>
 											</v-btn>
 										</div>
 
 										<v-divider class="my-2" />
-                                       <div class="payment-methods-grid">
-										 <div v-for="(payment, index) in invoice_doc.payments" :key="payment.name || `${payment.mode_of_payment}-${index}`" class="mb-1">
+										<div class="payment-methods-grid">
+											<div
+												v-for="(payment, index) in invoice_doc.payments"
+												:key="payment.name || `${payment.mode_of_payment}-${index}`"
+												class="mb-1"
+											>
+												<div
+													v-if="!is_mpesa_c2b_payment(payment)"
+													class="payment-method-card"
+													:class="{
+														active: payment.amount > 0,
+														disabled: invoice_doc.is_return,
+													}"
+													@click.stop
+												>
+													<div class="method-left">
+														<v-icon size="26" color="primary">
+															{{
+																payment.mode_of_payment
+																	.toLowerCase()
+																	.includes("cash")
+																	? "mdi-cash"
+																	: "mdi-credit-card"
+															}}
+														</v-icon>
 
-											<div v-if="!is_mpesa_c2b_payment(payment)" class="payment-method-card"
-												:class="{ active: payment.amount > 0, disabled: invoice_doc.is_return }"
-												@click.stop>
-												<div class="method-left">
-													<v-icon size="26" color="primary">
-														{{ payment.mode_of_payment.toLowerCase().includes('cash') ?
-															'mdi-cash' : 'mdi-credit-card' }}
-													</v-icon>
-
-													<div>
-														<div class="method-title">{{ payment.mode_of_payment }}</div>
-														<div class="method-amount">{{ formatCurrency(payment.amount) }}
+														<div>
+															<div class="method-title">
+																{{ payment.mode_of_payment }}
+															</div>
+															<div class="method-amount">
+																{{ formatCurrency(payment.amount) }}
+															</div>
 														</div>
 													</div>
+
+													<v-text-field
+														density="compact"
+														variant="solo"
+														hide-details
+														class="method-input"
+														:model-value="
+															getPaymentInputDisplayValue(payment, index)
+														"
+														@update:model-value="
+															onPaymentAmountInput(payment, index, $event)
+														"
+														@blur="
+															handlePaymentAmountBlur(payment, index, $event)
+														"
+														@focus="handlePaymentAmountFocus(payment, index)"
+														:rules="[
+															isNumber,
+															(v) => validateCashPaymentAmount(v, payment),
+														]"
+														:prefix="currencySymbol(invoice_doc.currency)"
+														:readonly="invoice_doc.is_return"
+													/>
 												</div>
 
-												<v-text-field density="compact" variant="solo" hide-details
-													class="method-input"
-													:model-value="getPaymentInputDisplayValue(payment, index)"
-													@update:model-value="onPaymentAmountInput(payment, index, $event)"
-													@blur="handlePaymentAmountBlur(payment, index, $event)"
-													@focus="handlePaymentAmountFocus(payment, index)" :rules="[
-														isNumber,
-														(v) => validateCashPaymentAmount(v, payment)
-													]" :prefix="currencySymbol(invoice_doc.currency)" :readonly="invoice_doc.is_return" />
+												<!-- M-PESA -->
+												<v-btn
+													v-if="is_mpesa_c2b_payment(payment)"
+													block
+													size="large"
+													color="success"
+													theme="dark"
+													@click="mpesa_c2b_dialog(payment)"
+												>
+													<v-icon left>mdi-cellphone</v-icon>
+													{{ __("Get Payments") }} {{ payment.mode_of_payment }}
+												</v-btn>
+
+												<!-- PHONE REQUEST -->
+												<v-btn
+													v-if="
+														payment.type === 'Phone' &&
+														payment.amount > 0 &&
+														request_payment_field
+													"
+													block
+													color="success"
+													theme="dark"
+													class="mt-1"
+													@click="request_payment(payment)"
+												>
+													<v-icon left>mdi-send</v-icon>
+													{{ __("Request Payment") }}
+												</v-btn>
 											</div>
-
-											<!-- M-PESA -->
-											<v-btn v-if="is_mpesa_c2b_payment(payment)" block size="large"
-												color="success" theme="dark" @click="mpesa_c2b_dialog(payment)">
-												<v-icon left>mdi-cellphone</v-icon>
-												{{ __('Get Payments') }} {{ payment.mode_of_payment }}
-											</v-btn>
-
-											<!-- PHONE REQUEST -->
-											<v-btn
-												v-if="payment.type === 'Phone' && payment.amount > 0 && request_payment_field"
-												block color="success" theme="dark" class="mt-1"
-												@click="request_payment(payment)">
-												<v-icon left>mdi-send</v-icon>
-												{{ __('Request Payment') }}
-											</v-btn>
-
 										</div>
 									</div>
-								</div>
-
 								</v-col>
-
 
 								<!-- ================= RIGHT COLUMN ================= -->
 								<v-col cols="6" class="pl-2 mt-2">
-
-
 									<!-- Invoice Totals -->
 									<v-row class="pa-1" dense>
 										<v-col cols="6" class="mb-3">
-											<v-text-field density="compact" variant="solo" color="primary"
+											<v-text-field
+												density="compact"
+												variant="solo"
+												color="primary"
 												:label="frappe._('Net Total')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field"
-												:model-value="formatCurrency(
-													invoice_doc.rounded_total ?? invoice_doc.grand_total,
-													displayCurrency
-												)
-													"
-												readonly :prefix="currencySymbol()" persistent-placeholder />
+												:model-value="
+													formatCurrency(
+														invoice_doc.rounded_total ?? invoice_doc.grand_total,
+														displayCurrency,
+													)
+												"
+												readonly
+												:prefix="currencySymbol()"
+												persistent-placeholder
+											/>
 										</v-col>
 
 										<v-col cols="6" class="mb-3">
-											<v-text-field density="compact" variant="solo" color="primary"
+											<v-text-field
+												density="compact"
+												variant="solo"
+												color="primary"
 												:label="frappe._('VAT and Charges')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" hide-details
-												:model-value="formatCurrency(computedTaxAndCharges, displayCurrency)"
-												readonly :prefix="currencySymbol()" persistent-placeholder />
+												class="dark-field sleek-field"
+												hide-details
+												:model-value="
+													formatCurrency(computedTaxAndCharges, displayCurrency)
+												"
+												readonly
+												:prefix="currencySymbol()"
+												persistent-placeholder
+											/>
 										</v-col>
 
-											<!-- <v-col cols="6" class="mb-3">
+										<!-- <v-col cols="6" class="mb-3">
 											<v-text-field density="compact" variant="solo" color="primary"
 												:label="frappe._('Discount Amount')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
@@ -162,42 +251,77 @@
 										</v-col> -->
 
 										<v-col cols="6" class="mb-3">
-											<v-text-field density="compact" variant="solo" color="primary"
+											<v-text-field
+												density="compact"
+												variant="solo"
+												color="primary"
 												:label="frappe._('Grand Total')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" hide-details
-												:model-value="formatCurrency(
-													invoice_doc.rounded_total || invoice_doc.grand_total,
-													displayCurrency
-												)"
+												class="dark-field sleek-field"
+												hide-details
+												:model-value="
+													formatCurrency(
+														invoice_doc.rounded_total || invoice_doc.grand_total,
+														displayCurrency,
+													)
+												"
 												readonly
-												:prefix="currencySymbol(invoice_doc.currency)" persistent-placeholder />
+												:prefix="currencySymbol(invoice_doc.currency)"
+												persistent-placeholder
+											/>
 										</v-col>
 
-										<v-col cols="6" class="mb-4"  v-if="invoice_doc.rounded_total">
-											<v-text-field density="compact" variant="solo" color="primary"
+										<v-col cols="6" class="mb-4" v-if="invoice_doc.rounded_total">
+											<v-text-field
+												density="compact"
+												variant="solo"
+												color="primary"
 												:label="frappe._('Rounded Total')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" hide-details
-												:model-value="formatCurrency(invoice_doc.rounded_total)" readonly
-												:prefix="currencySymbol(invoice_doc.currency)" persistent-placeholder />
+												class="dark-field sleek-field"
+												hide-details
+												:model-value="formatCurrency(invoice_doc.rounded_total)"
+												readonly
+												:prefix="currencySymbol(invoice_doc.currency)"
+												persistent-placeholder
+											/>
 										</v-col>
 
 										<v-col cols="6" class="mb-3">
-											<v-text-field density="compact" variant="solo" color="primary"
+											<v-text-field
+												density="compact"
+												variant="solo"
+												color="primary"
 												:label="frappe._('Total Amount')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" hide-details
-												:model-value="formatCurrency(invoice_doc.rounded_total || invoice_doc.grand_total, displayCurrency)"
-												readonly :prefix="currencySymbol()" persistent-placeholder />
+												class="dark-field sleek-field"
+												hide-details
+												:model-value="
+													formatCurrency(
+														invoice_doc.rounded_total || invoice_doc.grand_total,
+														displayCurrency,
+													)
+												"
+												readonly
+												:prefix="currencySymbol()"
+												persistent-placeholder
+											/>
 										</v-col>
 
 										<v-col cols="6" class="mb-3">
-											<v-text-field density="compact" variant="solo" color="primary"
-												:label="diff_label" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" hide-details
-												:model-value="formatCurrency(diff_payment, displayCurrency)" readonly
-												:prefix="currencySymbol()" persistent-placeholder />
+											<v-text-field
+												density="compact"
+												variant="solo"
+												color="primary"
+												:label="diff_label"
+												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+												class="dark-field sleek-field"
+												hide-details
+												:model-value="formatCurrency(diff_payment, displayCurrency)"
+												readonly
+												:prefix="currencySymbol()"
+												persistent-placeholder
+											/>
 										</v-col>
 									</v-row>
 
@@ -205,84 +329,150 @@
 
 									<v-row v-if="invoice_doc" dense>
 										<v-col cols="6" v-if="credit_change > 0 && !invoice_doc.is_return">
-											<v-text-field variant="solo" density="compact" color="primary"
+											<v-text-field
+												variant="solo"
+												density="compact"
+												color="primary"
 												:label="frappe._('Paid Change')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" hide-details
+												class="dark-field sleek-field"
+												hide-details
 												:model-value="formatCurrency(paid_change)"
 												:prefix="currencySymbol(invoice_doc.currency)"
-												:rules="paid_change_rules" readonly persistent-placeholder />
+												:rules="paid_change_rules"
+												readonly
+												persistent-placeholder
+											/>
 										</v-col>
 
 										<v-col cols="6" v-if="credit_change > 0 && !invoice_doc.is_return">
-											<v-text-field variant="solo" density="compact" color="primary"
+											<v-text-field
+												variant="solo"
+												density="compact"
+												color="primary"
 												:label="frappe._('Credit Change')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" hide-details
+												class="dark-field sleek-field"
+												hide-details
 												:model-value="formatCurrency(credit_change)"
-												:prefix="currencySymbol(invoice_doc.currency)" @change="
-													setFormatedCurrency(this, 'credit_change', null, false, $event);
-												updateCreditChange(this.credit_change);
-												" persistent-placeholder />
+												:prefix="currencySymbol(invoice_doc.currency)"
+												@change="
+													setFormatedCurrency(
+														this,
+														'credit_change',
+														null,
+														false,
+														$event,
+													);
+													updateCreditChange(this.credit_change);
+												"
+												persistent-placeholder
+											/>
 										</v-col>
 									</v-row>
 
 									<!-- Delivery Date -->
-									<v-row class="pa-1" dense
-										v-if="pos_profile.posa_allow_sales_order && invoiceType === 'Order'">
+									<v-row
+										class="pa-1"
+										dense
+										v-if="pos_profile.posa_allow_sales_order && invoiceType === 'Order'"
+									>
 										<v-col cols="6">
-											<VueDatePicker v-model="new_delivery_date" model-type="format"
-												format="dd-MM-yyyy" :min-date="new Date()" auto-apply
-												:dark="isDarkTheme" class="dark-field sleek-field"
-												@update:model-value="update_delivery_date()" />
+											<VueDatePicker
+												v-model="new_delivery_date"
+												model-type="format"
+												format="dd-MM-yyyy"
+												:min-date="new Date()"
+												auto-apply
+												:dark="isDarkTheme"
+												class="dark-field sleek-field"
+												@update:model-value="update_delivery_date()"
+											/>
 										</v-col>
 									</v-row>
 
 									<!-- Shipping Address -->
 									<v-row class="pa-1" dense v-if="invoice_doc.posa_delivery_date">
 										<v-col cols="12">
-											<v-autocomplete density="compact" clearable auto-select-first variant="solo"
-												color="primary" :label="frappe._('Address')"
-												v-model="invoice_doc.shipping_address_name" :items="addresses"
-												item-title="address_title" item-value="name"
+											<v-autocomplete
+												density="compact"
+												clearable
+												auto-select-first
+												variant="solo"
+												color="primary"
+												:label="frappe._('Address')"
+												v-model="invoice_doc.shipping_address_name"
+												:items="addresses"
+												item-title="address_title"
+												item-value="name"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" hide-details append-icon="mdi-plus"
-												@click:append="new_address" />
+												class="dark-field sleek-field"
+												hide-details
+												append-icon="mdi-plus"
+												@click:append="new_address"
+											/>
 										</v-col>
 									</v-row>
 
 									<!-- Additional Notes -->
-									<v-row class="pa-1" dense v-if="pos_profile.posa_display_additional_notes">
+									<v-row
+										class="pa-1"
+										dense
+										v-if="pos_profile.posa_display_additional_notes"
+									>
 										<v-col cols="12">
-											<v-textarea variant="solo" density="compact"
+											<v-textarea
+												variant="solo"
+												density="compact"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-												class="dark-field sleek-field" auto-grow rows="2"
+												class="dark-field sleek-field"
+												auto-grow
+												rows="2"
 												:label="frappe._('Additional Notes')"
-												v-model="invoice_doc.posa_notes" />
+												v-model="invoice_doc.posa_notes"
+											/>
 										</v-col>
 									</v-row>
-
 								</v-col>
 							</v-row>
-
 
 							<!-- Customer Purchase Order (if enabled in POS profile) -->
 							<div v-if="pos_profile.posa_allow_customer_purchase_order">
 								<v-divider></v-divider>
 								<v-row class="pa-1" justify="center" align="start">
 									<v-col cols="6">
-										<v-text-field v-model="invoice_doc.po_no" :label="frappe._('Purchase Order')"
-											variant="solo" density="compact"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
-											clearable color="primary" hide-details></v-text-field>
+										<v-text-field
+											v-model="invoice_doc.po_no"
+											:label="frappe._('Purchase Order')"
+											variant="solo"
+											density="compact"
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field sleek-field"
+											clearable
+											color="primary"
+											hide-details
+										></v-text-field>
 									</v-col>
 									<v-col cols="6">
-										<VueDatePicker v-model="new_po_date" model-type="format" format="dd-MM-yyyy"
-											:min-date="new Date()" auto-apply :dark="isDarkTheme"
-											class="dark-field sleek-field" @update:model-value="update_po_date()" />
-										<v-text-field v-model="invoice_doc.po_date"
-											:label="frappe._('Purchase Order Date')" readonly variant="solo"
-											density="compact" hide-details color="primary"></v-text-field>
+										<VueDatePicker
+											v-model="new_po_date"
+											model-type="format"
+											format="dd-MM-yyyy"
+											:min-date="new Date()"
+											auto-apply
+											:dark="isDarkTheme"
+											class="dark-field sleek-field"
+											@update:model-value="update_po_date()"
+										/>
+										<v-text-field
+											v-model="invoice_doc.po_date"
+											:label="frappe._('Purchase Order Date')"
+											readonly
+											variant="solo"
+											density="compact"
+											hide-details
+											color="primary"
+										></v-text-field>
 									</v-col>
 								</v-row>
 							</div>
@@ -291,13 +481,20 @@
 
 							<!-- Switches for Write Off and Credit Sale -->
 							<v-row class="pa-1" align="start" no-gutters>
-								<v-col cols="6" v-if="
-							pos_profile.posa_allow_write_off_change &&
-							credit_change > 0 &&
-							!invoice_doc.is_return
-						">
-									<v-switch v-model="is_write_off_change" flat
-										:label="frappe._('Write Off Difference Amount')" class="my-0 pa-1"></v-switch>
+								<v-col
+									cols="6"
+									v-if="
+										pos_profile.posa_allow_write_off_change &&
+										credit_change > 0 &&
+										!invoice_doc.is_return
+									"
+								>
+									<v-switch
+										v-model="is_write_off_change"
+										flat
+										:label="frappe._('Write Off Difference Amount')"
+										class="my-0 pa-1"
+									></v-switch>
 								</v-col>
 								<!-- <v-col cols="6"
 									v-if="pos_profile.posa_allow_credit_sale && !invoice_doc.is_return && selected_customer_is_corporate">
@@ -306,69 +503,128 @@
 									</v-chip>
 								</v-col> -->
 
-
 								<v-col cols="6" v-if="invoice_doc.is_return && pos_profile.use_cashback">
-									<v-switch v-model="is_cashback" flat :label="frappe._('Cashback?')"
-										class="my-0 pa-1"></v-switch>
+									<v-switch
+										v-model="is_cashback"
+										flat
+										:label="frappe._('Cashback?')"
+										class="my-0 pa-1"
+									></v-switch>
 								</v-col>
 								<v-col cols="6" v-if="invoice_doc.is_return">
-									<v-switch v-model="is_credit_return" flat :label="frappe._('Credit Return?')"
-										class="my-0 pa-1"></v-switch>
+									<v-switch
+										v-model="is_credit_return"
+										flat
+										:label="frappe._('Credit Return?')"
+										class="my-0 pa-1"
+									></v-switch>
 								</v-col>
 								<v-col cols="6" v-if="is_credit_sale && false">
-									<VueDatePicker v-model="new_credit_due_date" model-type="format" format="dd-MM-yyyy"
-										:min-date="new Date()" auto-apply :dark="isDarkTheme"
-										class="dark-field sleek-field" @update:model-value="update_credit_due_date()" />
-									<v-text-field class="mt-2 dark-field sleek-field" density="compact" variant="solo"
-										type="number" min="0" max="365" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-										v-model.number="credit_due_days" :label="frappe._('Days until due')"
-										hide-details @change="applyDuePreset(credit_due_days)"></v-text-field>
+									<VueDatePicker
+										v-model="new_credit_due_date"
+										model-type="format"
+										format="dd-MM-yyyy"
+										:min-date="new Date()"
+										auto-apply
+										:dark="isDarkTheme"
+										class="dark-field sleek-field"
+										@update:model-value="update_credit_due_date()"
+									/>
+									<v-text-field
+										class="mt-2 dark-field sleek-field"
+										density="compact"
+										variant="solo"
+										type="number"
+										min="0"
+										max="365"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+										v-model.number="credit_due_days"
+										:label="frappe._('Days until due')"
+										hide-details
+										@change="applyDuePreset(credit_due_days)"
+									></v-text-field>
 									<div class="mt-1">
-										<v-chip v-for="d in credit_due_presets" :key="d" size="small" class="ma-1"
-											variant="solo" color="primary" @click="applyDuePreset(d)">
+										<v-chip
+											v-for="d in credit_due_presets"
+											:key="d"
+											size="small"
+											class="ma-1"
+											variant="solo"
+											color="primary"
+											@click="applyDuePreset(d)"
+										>
 											{{ d }} {{ frappe._("days") }}
 										</v-chip>
 									</div>
 								</v-col>
-								<v-col cols="6" v-if="!invoice_doc.is_return && pos_profile.use_customer_credit">
-									<v-switch v-model="redeem_customer_credit" flat
-										:label="frappe._('Use Customer Credit')" class="my-0 pa-1"
-										@update:model-value="get_available_credit(redeem_customer_credit)"></v-switch>
+								<v-col
+									cols="6"
+									v-if="!invoice_doc.is_return && pos_profile.use_customer_credit"
+								>
+									<v-switch
+										v-model="redeem_customer_credit"
+										flat
+										:label="frappe._('Use Customer Credit')"
+										class="my-0 pa-1"
+										@update:model-value="get_available_credit(redeem_customer_credit)"
+									></v-switch>
 								</v-col>
 							</v-row>
 
 							<!-- Customer Credit Details -->
-							<div v-if="
-								invoice_doc &&
-								available_customer_credit > 0 &&
-								!invoice_doc.is_return &&
-								redeem_customer_credit
-							">
+							<div
+								v-if="
+									invoice_doc &&
+									available_customer_credit > 0 &&
+									!invoice_doc.is_return &&
+									redeem_customer_credit
+								"
+							>
 								<v-row v-for="(row, idx) in customer_credit_dict" :key="idx">
 									<v-col cols="4">
 										<div class="pa-2 py-3">{{ row.credit_origin }}</div>
 									</v-col>
 									<v-col cols="4">
-										<v-text-field density="compact" variant="solo" color="primary"
+										<v-text-field
+											density="compact"
+											variant="solo"
+											color="primary"
 											:label="frappe._('Available Credit')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
-											hide-details :model-value="formatCurrency(row.total_credit)" readonly
-											:prefix="currencySymbol(invoice_doc.currency)"></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field sleek-field"
+											hide-details
+											:model-value="formatCurrency(row.total_credit)"
+											readonly
+											:prefix="currencySymbol(invoice_doc.currency)"
+										></v-text-field>
 									</v-col>
 									<v-col cols="4">
-										<v-text-field density="compact" variant="solo" color="primary"
+										<v-text-field
+											density="compact"
+											variant="solo"
+											color="primary"
 											:label="frappe._('Redeem Credit')"
-											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" class="dark-field sleek-field"
-											hide-details type="text" :model-value="formatCurrency(row.credit_to_redeem)"
-											@change="setFormatedCurrency(row, 'credit_to_redeem', null, false, $event)"
-											:prefix="currencySymbol(invoice_doc.currency)"></v-text-field>
+											:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+											class="dark-field sleek-field"
+											hide-details
+											type="text"
+											:model-value="formatCurrency(row.credit_to_redeem)"
+											@change="
+												setFormatedCurrency(
+													row,
+													'credit_to_redeem',
+													null,
+													false,
+													$event,
+												)
+											"
+											:prefix="currencySymbol(invoice_doc.currency)"
+										></v-text-field>
 									</v-col>
 								</v-row>
 							</div>
 
 							<v-divider></v-divider>
-
-
 
 							<!-- Sales Person Selection -->
 							<!-- <v-row class="pb-0 mb-2" align="start">
@@ -392,20 +648,40 @@
 							<v-row align="start" no-gutters class="button-row">
 								<!-- Submit Dropdown Button -->
 								<v-col cols="12" class="mb-2">
-									<v-menu :teleport="{ to: 'body' }" offset-y :close-on-content-click="true"
-										location="top" transition="slide-y-reverse-transition">
+									<v-menu
+										:teleport="{ to: 'body' }"
+										offset-y
+										:close-on-content-click="true"
+										location="top"
+										transition="slide-y-reverse-transition"
+									>
 										<template v-slot:activator="{ props }">
-											<v-btn ref="submitButton" block size="x-large" color="primary" theme="dark"
-												v-bind="props" :loading="loading" :disabled="loading || vaildatPayment"
-												:class="['submit-btn-main', { 'submit-highlight': highlightSubmit }]"
-												elevation="4">
+											<v-btn
+												ref="submitButton"
+												block
+												size="x-large"
+												color="primary"
+												theme="dark"
+												v-bind="props"
+												:loading="loading"
+												:disabled="loading || vaildatPayment"
+												:class="[
+													'submit-btn-main',
+													{ 'submit-highlight': highlightSubmit },
+												]"
+												elevation="4"
+											>
 												<v-icon left size="24">mdi-check-circle</v-icon>
 												<span class="submit-text">{{ __("SUBMIT") }}</span>
 												<v-icon right size="20">mdi-chevron-up</v-icon>
 											</v-btn>
 										</template>
 										<v-list class="submit-menu" elevation="8" density="compact">
-											<v-list-item @click="submit" class="menu-item" prepend-icon="mdi-check">
+											<v-list-item
+												@click="submit"
+												class="menu-item"
+												prepend-icon="mdi-check"
+											>
 												<v-list-item-title class="menu-title">
 													{{ __("Submit Only") }}
 												</v-list-item-title>
@@ -414,8 +690,11 @@
 												</v-list-item-subtitle>
 											</v-list-item>
 											<v-divider></v-divider>
-											<v-list-item @click="submit(undefined, false, true)" class="menu-item"
-												prepend-icon="mdi-printer-check">
+											<v-list-item
+												@click="submit(undefined, false, true)"
+												class="menu-item"
+												prepend-icon="mdi-printer-check"
+											>
 												<v-list-item-title class="menu-title">
 													{{ __("Submit & Print") }}
 												</v-list-item-title>
@@ -429,8 +708,15 @@
 
 								<!-- Cancel Payment Button -->
 								<v-col cols="12">
-									<v-btn block size="large" color="error" theme="dark" @click="back_to_invoice"
-										class="cancel-btn" elevation="2">
+									<v-btn
+										block
+										size="large"
+										color="error"
+										theme="dark"
+										@click="back_to_invoice"
+										class="cancel-btn"
+										elevation="2"
+									>
 										<v-icon left size="20">mdi-close-circle</v-icon>
 										{{ __("Close") }}
 									</v-btn>
@@ -447,10 +733,18 @@
 							</v-card-title>
 							<v-card-text class="pa-0">
 								<v-container>
-									<v-text-field density="compact" variant="solo" type="number" min="0" max="365"
-										class="dark-field sleek-field" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-										v-model.number="custom_days_value" :label="frappe._('Days')"
-										hide-details></v-text-field>
+									<v-text-field
+										density="compact"
+										variant="solo"
+										type="number"
+										min="0"
+										max="365"
+										class="dark-field sleek-field"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+										v-model.number="custom_days_value"
+										:label="frappe._('Days')"
+										hide-details
+									></v-text-field>
 								</v-container>
 							</v-card-text>
 							<v-card-actions>
@@ -473,10 +767,17 @@
 							</v-card-title>
 							<v-card-text class="pa-0">
 								<v-container>
-									<v-text-field density="compact" variant="solo" color="primary"
-										:label="frappe._('Mobile Number')" :bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-										class="dark-field sleek-field" hide-details v-model="invoice_doc.contact_mobile"
-										type="number"></v-text-field>
+									<v-text-field
+										density="compact"
+										variant="solo"
+										color="primary"
+										:label="frappe._('Mobile Number')"
+										:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+										class="dark-field sleek-field"
+										hide-details
+										v-model="invoice_doc.contact_mobile"
+										type="number"
+									></v-text-field>
 								</v-container>
 							</v-card-text>
 							<v-card-actions>
@@ -524,13 +825,17 @@
 								<v-btn color="error" theme="dark" @click="printer_mapping_dialog = false">
 									{{ __("Close") }}
 								</v-btn>
-								<v-btn color="primary" theme="dark" :disabled="!selected_printer" @click="save_printer_mapping">
+								<v-btn
+									color="primary"
+									theme="dark"
+									:disabled="!selected_printer"
+									@click="save_printer_mapping"
+								>
 									{{ __("Save Mapping") }}
 								</v-btn>
 							</v-card-actions>
 						</v-card>
 					</v-dialog>
-
 				</div>
 			</div>
 		</div>
@@ -562,7 +867,7 @@ export default {
 			showEmployeeSelection: false,
 			selectedEmployee: null,
 			showDialog: false,
-			selected_customer_is_corporate:false,
+			selected_customer_is_corporate: false,
 			loading: false, // UI loading state
 			pos_profile: "", // POS profile settings
 			pos_settings: "", // POS settings
@@ -612,16 +917,12 @@ export default {
 		};
 	},
 	computed: {
-
 		currency_precision() {
 			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
 		},
 
 		computedTaxAndCharges() {
-			const total = this.flt(
-				this.invoice_doc?.total_taxes_and_charges || 0,
-				this.currency_precision
-			);
+			const total = this.flt(this.invoice_doc?.total_taxes_and_charges || 0, this.currency_precision);
 			if (total === 0 && this.invoice_doc?.items?.some((item) => item.item_tax_rate)) {
 				return this.calculateItemTax();
 			}
@@ -635,7 +936,7 @@ export default {
 			// Use rounded_total if available, otherwise use verified grand total
 			return this.flt(
 				this.invoice_doc.rounded_total || this.verifiedGrandTotal,
-				this.currency_precision
+				this.currency_precision,
 			);
 		},
 
@@ -643,10 +944,10 @@ export default {
 		taxBreakdown() {
 			if (!this.invoice_doc || !this.invoice_doc.taxes) return null;
 
-			return this.invoice_doc.taxes.map(tax => ({
+			return this.invoice_doc.taxes.map((tax) => ({
 				account: tax.account_head,
 				rate: tax.rate,
-				amount: this.flt(tax.tax_amount, this.currency_precision)
+				amount: this.flt(tax.tax_amount, this.currency_precision),
 			}));
 		},
 		currencySymbol() {
@@ -827,10 +1128,7 @@ export default {
 				return;
 			}
 
-			const points = this.flt(
-				value / this.customer_info.conversion_factor,
-				this.currency_precision
-			);
+			const points = this.flt(value / this.customer_info.conversion_factor, this.currency_precision);
 
 			this.invoice_doc.loyalty_amount = this.flt(value, this.currency_precision);
 			this.invoice_doc.redeem_loyalty_points = points;
@@ -844,9 +1142,9 @@ export default {
 				});
 			}
 		},
-		'invoice_doc.items': {
+		"invoice_doc.items": {
 			handler(newItems, oldItems) {
-				console.log('[Payment] invoice_doc.items changed, clearing old payment amounts');
+				console.log("[Payment] invoice_doc.items changed, clearing old payment amounts");
 
 				const newSignature = this.computeItemsSignature(newItems);
 				if (newSignature !== this.items_signature) {
@@ -854,7 +1152,7 @@ export default {
 					this.resetPaymentAmounts();
 				}
 			},
-			deep: true
+			deep: true,
 		},
 		customer_credit_dict: {
 			handler(newVal) {
@@ -969,14 +1267,16 @@ export default {
 				return "";
 			}
 			return items
-				.map((item) => [
-					item.item_code || "",
-					item.item_group || "",
-					item.item_name || "",
-					this.flt(item.qty || 0),
-					this.flt(item.rate || 0),
-					this.flt(item.amount || 0),
-				].join("|"))
+				.map((item) =>
+					[
+						item.item_code || "",
+						item.item_group || "",
+						item.item_name || "",
+						this.flt(item.qty || 0),
+						this.flt(item.rate || 0),
+						this.flt(item.amount || 0),
+					].join("|"),
+				)
 				.sort()
 				.join("::");
 		},
@@ -1113,7 +1413,7 @@ export default {
 				return;
 			}
 
-			console.log('[Payment] Resetting all payment amounts to 0');
+			console.log("[Payment] Resetting all payment amounts to 0");
 
 			// Clear all payment amounts
 			this.invoice_doc.payments.forEach((payment) => {
@@ -1143,7 +1443,7 @@ export default {
 		},
 
 		resetPaymentData() {
-			console.log('[Payment] Resetting all payment data');
+			console.log("[Payment] Resetting all payment data");
 
 			// Reset invoice document
 			this.invoice_doc = null;
@@ -1191,7 +1491,7 @@ export default {
 			this.phone_dialog = false;
 			this.custom_days_dialog = false;
 
-			console.log('[Payment] Payment data reset complete');
+			console.log("[Payment] Payment data reset complete");
 		},
 
 		calculateItemTax() {
@@ -1201,7 +1501,7 @@ export default {
 				return 0;
 			}
 
-			this.invoice_doc.items.forEach(item => {
+			this.invoice_doc.items.forEach((item) => {
 				if (!item.item_tax_rate) return;
 
 				let taxMap = {};
@@ -1213,10 +1513,10 @@ export default {
 
 				//  POS Awesome uses net_amount as taxable value
 				const rate = item.net_rate ?? item.rate ?? 0;
-				const amount = item.net_amount ?? item.amount ?? (rate * item.qty) ?? 0;
+				const amount = item.net_amount ?? item.amount ?? rate * item.qty ?? 0;
 				const taxableAmount = this.flt(amount);
 
-				Object.values(taxMap).forEach(rate => {
+				Object.values(taxMap).forEach((rate) => {
 					taxTotal += (taxableAmount * rate) / 100;
 				});
 			});
@@ -1224,12 +1524,10 @@ export default {
 			return this.flt(taxTotal, this.currency_precision);
 		},
 
-
-
 		// Verify invoice totals before submission
 		verifyInvoiceTotals() {
 			if (!this.invoice_doc) {
-				console.error('[Payment] No invoice document to verify');
+				console.error("[Payment] No invoice document to verify");
 				return false;
 			}
 
@@ -1238,28 +1536,28 @@ export default {
 			const grandTotal = this.flt(this.invoice_doc.grand_total || 0);
 			const expectedGrandTotal = netTotal + taxTotal;
 
-			console.log('[Payment] Invoice Verification:', {
+			console.log("[Payment] Invoice Verification:", {
 				netTotal,
 				taxTotal,
 				grandTotal,
 				expectedGrandTotal,
 				difference: Math.abs(grandTotal - expectedGrandTotal),
-				taxes: this.taxBreakdown
+				taxes: this.taxBreakdown,
 			});
 
 			// Check if grand total is correct
 			if (Math.abs(grandTotal - expectedGrandTotal) > 0.01) {
-				console.error('[Payment] Grand total does not match calculation!');
-				this.eventBus.emit('show_message', {
+				console.error("[Payment] Grand total does not match calculation!");
+				this.eventBus.emit("show_message", {
 					title: `Tax calculation error detected. Please refresh and try again.`,
-					color: 'error'
+					color: "error",
 				});
 				return false;
 			}
 
 			// Check if taxes are present
 			if (taxTotal === 0 && this.invoice_doc.taxes && this.invoice_doc.taxes.length > 0) {
-				console.warn('[Payment] Tax rows exist but total is zero');
+				console.warn("[Payment] Tax rows exist but total is zero");
 			}
 
 			return true;
@@ -1268,12 +1566,10 @@ export default {
 			this.is_credit_sale = !this.is_credit_sale;
 
 			if (this.is_credit_sale) {
-				
 				if (!this.invoice_doc.due_date || this.invoice_doc.due_date < this.invoice_doc.posting_date) {
 					// Set due date automatically (30 days from posting date)
 					this.applyDuePreset(30);
-        }
-
+				}
 
 				// Show confirmation message
 				this.eventBus.emit("show_message", {
@@ -1314,11 +1610,12 @@ export default {
 			}
 		},
 		handleShowPayment(data) {
-
 			if (this.showOdometerField) {
 				if (!this.odometerValue || isNaN(this.odometerValue) || Number(this.odometerValue) <= 0) {
 					frappe.show_alert({
-						message: this.__("Please enter a valid odometer reading before proceeding to payment."),
+						message: this.__(
+							"Please enter a valid odometer reading before proceeding to payment.",
+						),
 						indicator: "red",
 					});
 					frappe.utils.play_sound("error");
@@ -1343,7 +1640,7 @@ export default {
 					console.log("[Payment] Synced invoice before opening", {
 						net: r.message.net_total,
 						tax: r.message.total_taxes_and_charges,
-						grand: r.message.grand_total
+						grand: r.message.grand_total,
 					});
 
 					this.eventBus.emit("show_payment", "true");
@@ -1358,7 +1655,7 @@ export default {
 							this.highlightSubmit = true;
 						}
 					});
-				}
+				},
 			});
 		},
 		reset_cash_payments() {
@@ -1406,7 +1703,6 @@ export default {
 			});
 		},
 		async submit(event, payment_received = false, print = false, skip_raw_precheck = false) {
-
 			// this.invoice_doc.total_taxes_and_charges = this.computedTaxAndCharges;
 
 			// this.invoice_doc.grand_total =
@@ -1439,9 +1735,8 @@ export default {
 				}
 			}
 
-
 			if (!this.verifyInvoiceTotals()) {
-				console.error('[Payment] Invoice total verification failed');
+				console.error("[Payment] Invoice total verification failed");
 				return;
 			}
 			if (this.invoice_doc.is_return) {
@@ -1458,23 +1753,32 @@ export default {
 						const newDueDate = new Date(posting_date);
 						newDueDate.setDate(newDueDate.getDate() + 30);
 						this.invoice_doc.due_date = this.formatDate(newDueDate);
-						console.log('[Payment] Auto-set due_date for credit sale:', this.invoice_doc.due_date);
+						console.log(
+							"[Payment] Auto-set due_date for credit sale:",
+							this.invoice_doc.due_date,
+						);
 					} else if (due_date < posting_date) {
 						// If due_date is before posting_date, adjust it
 						const newDueDate = new Date(posting_date);
 						newDueDate.setDate(newDueDate.getDate() + 30);
 						this.invoice_doc.due_date = this.formatDate(newDueDate);
-						console.log('[Payment] Adjusted due_date (was before posting_date):', this.invoice_doc.due_date);
+						console.log(
+							"[Payment] Adjusted due_date (was before posting_date):",
+							this.invoice_doc.due_date,
+						);
 					}
 				} else {
 					if (!this.invoice_doc.due_date) {
 						const newDueDate = new Date(posting_date);
 						newDueDate.setDate(newDueDate.getDate() + 1);
 						this.invoice_doc.due_date = this.formatDate(newDueDate);
-						console.log('[Payment] Set due_date for regular invoice:', this.invoice_doc.due_date);
+						console.log("[Payment] Set due_date for regular invoice:", this.invoice_doc.due_date);
 					} else if (due_date < posting_date) {
 						this.invoice_doc.due_date = this.formatDate(posting_date);
-						console.log('[Payment] Corrected due_date to match posting_date:', this.invoice_doc.due_date);
+						console.log(
+							"[Payment] Corrected due_date to match posting_date:",
+							this.invoice_doc.due_date,
+						);
 					}
 				}
 			}
@@ -1590,7 +1894,7 @@ export default {
 			if (
 				!this.invoice_doc.is_return &&
 				this.redeemed_customer_credit >
-				(this.invoice_doc.rounded_total || this.invoice_doc.grand_total)
+					(this.invoice_doc.rounded_total || this.invoice_doc.grand_total)
 			) {
 				this.eventBus.emit("show_message", {
 					title: `Cannot redeem customer credit more than invoice total`,
@@ -1665,31 +1969,28 @@ export default {
 					const newDueDate = new Date(posting_date);
 					newDueDate.setDate(newDueDate.getDate() + (this.is_credit_sale ? 30 : 1));
 					this.invoice_doc.due_date = this.formatDate(newDueDate);
-					console.log('[Payment] Auto-set due_date:', this.invoice_doc.due_date);
+					console.log("[Payment] Auto-set due_date:", this.invoice_doc.due_date);
 				}
 				// Ensure due_date is NOT before posting_date
 				else if (due_date < posting_date) {
 					const newDueDate = new Date(posting_date);
 					newDueDate.setDate(newDueDate.getDate() + (this.is_credit_sale ? 30 : 1));
 					this.invoice_doc.due_date = this.formatDate(newDueDate);
-					console.log('[Payment] Corrected due_date:', this.invoice_doc.due_date);
+					console.log("[Payment] Corrected due_date:", this.invoice_doc.due_date);
 				}
 			}
 
-			// FINAL LOYALTY 
+			// FINAL LOYALTY
 			if (this.customer_info?.loyalty_program) {
 				this.invoice_doc.loyalty_program = this.customer_info.loyalty_program;
 			}
 
 			this.invoice_doc.loyalty_amount = this.flt(this.loyalty_amount || 0);
-			this.invoice_doc.redeem_loyalty_points = this.flt(
-				this.invoice_doc.redeem_loyalty_points || 0
-			);
+			this.invoice_doc.redeem_loyalty_points = this.flt(this.invoice_doc.redeem_loyalty_points || 0);
 
 			// Safety
 			if (this.invoice_doc.loyalty_amount < 0) this.invoice_doc.loyalty_amount = 0;
-			if (this.invoice_doc.redeem_loyalty_points < 0)
-				this.invoice_doc.redeem_loyalty_points = 0;
+			if (this.invoice_doc.redeem_loyalty_points < 0) this.invoice_doc.redeem_loyalty_points = 0;
 
 			let data = {
 				total_change: !this.invoice_doc.is_return ? -this.diff_payment : 0,
@@ -1726,7 +2027,7 @@ export default {
 						color: "error",
 					});
 					vm.loading = false;
-					vm.showDialog = false;  
+					vm.showDialog = false;
 					return;
 				}
 			}
@@ -1741,8 +2042,8 @@ export default {
 					invoice: this.invoice_doc,
 					order: this.invoice_doc,
 				},
-				async: true,  
-				timeout: 30000,  
+				async: true,
+				timeout: 30000,
 				callback: function (r) {
 					vm.loading = false;
 
@@ -1765,12 +2066,12 @@ export default {
 							setTimeout(() => {
 								vm.submit_invoice(print);
 							}, 500);
-						}  else {
+						} else {
 							console.log("[Payment] Error occurred - closing modal immediately");
-							vm.showDialog = false;      
-							vm.loading = false; 
-							vm.highlightSubmit = false;        
-							vm.eventBus.emit("show_payment", "false"); 
+							vm.showDialog = false;
+							vm.loading = false;
+							vm.highlightSubmit = false;
+							vm.eventBus.emit("show_payment", "false");
 
 							vm.eventBus.emit("show_message", {
 								title: __("Error submitting invoice: ") + errorMsg,
@@ -1786,7 +2087,7 @@ export default {
 							title: __("Error submitting invoice: No response from server"),
 							color: "error",
 						});
-						vm.showDialog = false;  
+						vm.showDialog = false;
 						frappe.utils.play_sound("error");
 						return;
 					}
@@ -1812,43 +2113,45 @@ export default {
 						color: "success",
 					});
 					frappe.utils.play_sound("submit");
-					
+
 					updateLocalStock(vm.invoice_doc.items || []);
 					vm.eventBus.emit("refresh_drafts");
 					vm.addresses = [];
 					vm.eventBus.emit("clear_invoice");
 					vm.eventBus.emit("reset_posting_date");
-					vm.back_to_invoice(); 
+					vm.back_to_invoice();
 				},
 				fail: function (error) {
 					console.error("Invoice submission failed (network error):", error);
-					
+
 					vm.loading = false;
-					vm.showDialog = false;  
+					vm.showDialog = false;
 					vm.eventBus.emit("show_message", {
-						title: __("Network error while submitting invoice. Please check your connection and try again."),
+						title: __(
+							"Network error while submitting invoice. Please check your connection and try again.",
+						),
 						color: "error",
 					});
 					frappe.utils.play_sound("error");
 				},
 				error: function (error) {
 					console.error("Invoice submission error:", error);
-					
+
 					vm.loading = false;
-					vm.showDialog = false; 
+					vm.showDialog = false;
 					vm.eventBus.emit("show_message", {
 						title: __("An error occurred while submitting the invoice. Please try again."),
 						color: "error",
 					});
 					frappe.utils.play_sound("error");
-				}
+				},
 			});
 		},
 		set_full_amount(idx) {
 			const isReturn = this.invoice_doc.is_return || this.invoiceType === "Return";
 			const totalAmount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
 
-			const payment = this.invoice_doc.payments.find(p => p.idx === idx);
+			const payment = this.invoice_doc.payments.find((p) => p.idx === idx);
 			if (!payment) return;
 
 			// ONLY update clicked payment
@@ -1887,7 +2190,7 @@ export default {
 			});
 		},
 		async load_print_page() {
-			if (!this.invoice_doc || !this.invoice_doc.name || this.invoice_doc.name === 'undefined') {
+			if (!this.invoice_doc || !this.invoice_doc.name || this.invoice_doc.name === "undefined") {
 				this.eventBus.emit("show_message", {
 					title: __("Cannot print: Invoice not saved properly"),
 					color: "error",
@@ -2213,8 +2516,7 @@ export default {
 
 			return msg.values.map((row) => {
 				const name = idx_name >= 0 ? row[idx_name] : row[0];
-				const sales_person_name =
-					(idx_sales_person_name >= 0 && row[idx_sales_person_name]) || name;
+				const sales_person_name = (idx_sales_person_name >= 0 && row[idx_sales_person_name]) || name;
 				const parent = idx_parent_sales_person >= 0 ? row[idx_parent_sales_person] : null;
 				const is_group = idx_is_group >= 0 ? Number(row[idx_is_group]) : 0;
 				const enabled = idx_enabled >= 0 ? Number(row[idx_enabled]) : 1;
@@ -2269,15 +2571,21 @@ export default {
 							items = vm.convertReportRowsToObjects(r.message);
 						} else {
 							try {
-								items = (r.message || []).map((sp) => {
-									if (typeof sp === "string") {
-										return { value: sp, title: sp, name: sp };
-									} else if (sp && sp.name) {
-										return { value: sp.name, title: sp.sales_person_name || sp.name, ...sp };
-									} else {
-										return null;
-									}
-								}).filter(Boolean);
+								items = (r.message || [])
+									.map((sp) => {
+										if (typeof sp === "string") {
+											return { value: sp, title: sp, name: sp };
+										} else if (sp && sp.name) {
+											return {
+												value: sp.name,
+												title: sp.sales_person_name || sp.name,
+												...sp,
+											};
+										} else {
+											return null;
+										}
+									})
+									.filter(Boolean);
 							} catch (e) {
 								items = [];
 							}
@@ -2407,7 +2715,9 @@ export default {
 			// Try to select from POS Profile
 			if (this.pos_profile && this.pos_profile.posa_default_sales_person) {
 				const defaultSP = this.pos_profile.posa_default_sales_person;
-				const exists = this.sales_persons.find(sp => sp.value === defaultSP || sp.name === defaultSP);
+				const exists = this.sales_persons.find(
+					(sp) => sp.value === defaultSP || sp.name === defaultSP,
+				);
 				if (exists) {
 					this.sales_person = exists.value;
 					return;
@@ -2422,10 +2732,8 @@ export default {
 
 			// Try to select current user
 			const currentUser = frappe.session.user;
-			const userSP = this.sales_persons.find(sp =>
-				sp.value === currentUser ||
-				sp.name === currentUser ||
-				sp.title === currentUser
+			const userSP = this.sales_persons.find(
+				(sp) => sp.value === currentUser || sp.name === currentUser || sp.title === currentUser,
 			);
 			if (userSP) {
 				this.sales_person = userSP.value;
@@ -2510,9 +2818,10 @@ export default {
 			const parsed = parseInt(westernDays, 10);
 
 			// Calculate from posting_date instead of today
-			const d = this.invoice_doc && this.invoice_doc.posting_date
-				? new Date(this.invoice_doc.posting_date)
-				: new Date();
+			const d =
+				this.invoice_doc && this.invoice_doc.posting_date
+					? new Date(this.invoice_doc.posting_date)
+					: new Date();
 
 			d.setDate(d.getDate() + parsed);
 			this.new_credit_due_date = this.formatDateDisplay(d);
@@ -2648,10 +2957,7 @@ export default {
 
 		// Listen for explicit customer detail updates
 		this.eventBus.on("update_customer_details", (payload) => {
-			this.selected_customer_is_corporate = !!(
-				payload &&
-				(payload.is_corporate || payload.is_company)
-			);
+			this.selected_customer_is_corporate = !!(payload && (payload.is_corporate || payload.is_company));
 		});
 
 		this.eventBus.on("send_invoice_doc_payment", (invoice_doc) => {
@@ -2681,7 +2987,7 @@ export default {
 					const newDueDate = new Date(posting_date);
 					newDueDate.setDate(newDueDate.getDate() + 30);
 					this.invoice_doc.due_date = this.formatDate(newDueDate);
-					console.log('[Payment] Initialized/Corrected due_date:', this.invoice_doc.due_date);
+					console.log("[Payment] Initialized/Corrected due_date:", this.invoice_doc.due_date);
 				}
 			}
 
@@ -2693,11 +2999,7 @@ export default {
 			if (this.invoice_doc.payments.length === 0) {
 				console.log("[Payment] Payments empty, loading from POS Profile");
 
-				if (
-					this.pos_profile &&
-					this.pos_profile.payments &&
-					this.pos_profile.payments.length > 0
-				) {
+				if (this.pos_profile && this.pos_profile.payments && this.pos_profile.payments.length > 0) {
 					// Loop through all payment methods
 					this.invoice_doc.payments = this.pos_profile.payments.map((payment, index) => {
 						return {
@@ -2764,14 +3066,12 @@ export default {
 			if (data === "true") {
 				this.pending_show_payment = true;
 				this.tryOpenPaymentDialog();
-			}
-			else if (data === "false") {
+			} else if (data === "false") {
 				this._active_invoice_instance_id = null;
 				this.pending_show_payment = false;
 				return;
 			}
 		});
-
 
 		this.eventBus.on("current_invoice_data", (invoiceData) => {
 			console.log("[Payment] current_invoice_data received");
@@ -2802,7 +3102,7 @@ export default {
 						return;
 					}
 					const rate = item.net_rate ?? item.rate ?? 0;
-					const amount = item.net_amount ?? item.amount ?? (rate * item.qty) ?? 0;
+					const amount = item.net_amount ?? item.amount ?? rate * item.qty ?? 0;
 					const taxableAmount = this.flt(amount);
 					Object.values(taxMap).forEach((rate) => {
 						taxTotal += (taxableAmount * rate) / 100;
@@ -2842,17 +3142,22 @@ export default {
 					);
 					const isCorporateFromComponent = !!(
 						this.selected_customer_is_corporate ||
-						(this.customer && (
-							this.customer.is_corporate ||
-							this.customer.is_company ||
-							this.customer.customer_type === "Company" ||
-							this.customer.customer_type === "Corporate" ||
-							this.customer.customer_group === "Comercial"
-						))
+						(this.customer &&
+							(this.customer.is_corporate ||
+								this.customer.is_company ||
+								this.customer.customer_type === "Company" ||
+								this.customer.customer_type === "Corporate" ||
+								this.customer.customer_group === "Comercial"))
 					);
 
 					// Add Credit method if not present and customer is corporate
-					if (!invoiceData.payments.some(p => (p.type || '').toLowerCase() === 'credit' || (p.mode_of_payment || '').toLowerCase() === 'credit')) {
+					if (
+						!invoiceData.payments.some(
+							(p) =>
+								(p.type || "").toLowerCase() === "credit" ||
+								(p.mode_of_payment || "").toLowerCase() === "credit",
+						)
+					) {
 						if (isCorporateFromInvoice || isCorporateFromComponent) {
 							invoiceData.payments.push({
 								name: "",
@@ -2912,7 +3217,7 @@ export default {
 				const newItemCount = invoiceData.items?.length || 0;
 
 				if (oldItemCount !== newItemCount) {
-					console.log('[Payment] Item count changed, resetting payments');
+					console.log("[Payment] Item count changed, resetting payments");
 					this.resetPaymentAmounts();
 				}
 			}
@@ -2945,8 +3250,17 @@ export default {
 								msg.customer_group === "Comercial"
 							);
 
-							if (this.selected_customer_is_corporate && Array.isArray(this.invoice_doc.payments)) {
-								if (!this.invoice_doc.payments.some(p => (p.type || '').toLowerCase() === 'credit' || (p.mode_of_payment || '').toLowerCase() === 'credit')) {
+							if (
+								this.selected_customer_is_corporate &&
+								Array.isArray(this.invoice_doc.payments)
+							) {
+								if (
+									!this.invoice_doc.payments.some(
+										(p) =>
+											(p.type || "").toLowerCase() === "credit" ||
+											(p.mode_of_payment || "").toLowerCase() === "credit",
+									)
+								) {
 									this.invoice_doc.payments.push({
 										name: "",
 										mode_of_payment: "Credit",
@@ -2958,7 +3272,9 @@ export default {
 										default: 0,
 									});
 									this.$forceUpdate && this.$forceUpdate();
-									console.log("[Payment] Added Credit payment after fetching customer info");
+									console.log(
+										"[Payment] Added Credit payment after fetching customer info",
+									);
 								}
 							}
 						}
@@ -2981,10 +3297,7 @@ export default {
 			});
 
 			// Set payment amount
-			this.payment_amount =
-				invoiceData.rounded_total ||
-				invoiceData.grand_total ||
-				0;
+			this.payment_amount = invoiceData.rounded_total || invoiceData.grand_total || 0;
 			console.log("[Payment] Payment amount set to:", this.payment_amount);
 
 			// Force UI update
@@ -3057,7 +3370,10 @@ export default {
 				this.selected_customer_is_corporate = false;
 			}
 
-			console.log("[Payment] update_customer set selected_customer_is_corporate:", this.selected_customer_is_corporate);
+			console.log(
+				"[Payment] update_customer set selected_customer_is_corporate:",
+				this.selected_customer_is_corporate,
+			);
 		});
 
 		this.eventBus.on("set_pos_settings", (data) => {
@@ -3110,141 +3426,140 @@ export default {
 </script>
 
 <style scoped>
-
 .payments-panel {
-  width: 100%;
+	width: 100%;
 }
 
 /* DESKTOP (1920px+) */
 @media (min-width: 1920px) {
-  .payments-panel :deep(.payment-method-btn) {
-    padding: 12px 16px;
-    font-size: 13px;
-    min-height: 44px;
-  }
+	.payments-panel :deep(.payment-method-btn) {
+		padding: 12px 16px;
+		font-size: 13px;
+		min-height: 44px;
+	}
 
-  .payments-panel :deep(.payment-amount-field) {
-    font-size: 13px;
-  }
+	.payments-panel :deep(.payment-amount-field) {
+		font-size: 13px;
+	}
 
-  .payments-panel :deep(.payment-input) {
-    padding: 10px 12px;
-  }
+	.payments-panel :deep(.payment-input) {
+		padding: 10px 12px;
+	}
 
-  .payments-panel :deep(.payment-summary) {
-    padding: 12px;
-    font-size: 13px;
-  }
+	.payments-panel :deep(.payment-summary) {
+		padding: 12px;
+		font-size: 13px;
+	}
 }
 
 /* LAPTOP (1280px - 1919px) */
 @media (min-width: 1280px) and (max-width: 1919px) {
-  .payments-panel :deep(.payment-method-btn) {
-    padding: 10px 12px;
-    font-size: 12px;
-    min-height: 40px;
-  }
+	.payments-panel :deep(.payment-method-btn) {
+		padding: 10px 12px;
+		font-size: 12px;
+		min-height: 40px;
+	}
 
-  .payments-panel :deep(.payment-amount-field) {
-    font-size: 12px;
-  }
+	.payments-panel :deep(.payment-amount-field) {
+		font-size: 12px;
+	}
 
-  .payments-panel :deep(.payment-input) {
-    padding: 8px 10px;
-  }
+	.payments-panel :deep(.payment-input) {
+		padding: 8px 10px;
+	}
 
-  .payments-panel :deep(.payment-summary) {
-    padding: 10px;
-    font-size: 12px;
-  }
+	.payments-panel :deep(.payment-summary) {
+		padding: 10px;
+		font-size: 12px;
+	}
 
-  /* Reduce button grid columns */
-  .payments-panel :deep(.payment-methods) {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
+	/* Reduce button grid columns */
+	.payments-panel :deep(.payment-methods) {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 8px;
+	}
 }
 
 /* Payment method chips */
 .payments-panel :deep(.payment-chip) {
-  padding: 6px 12px;
-  font-size: 12px;
+	padding: 6px 12px;
+	font-size: 12px;
 }
 
 @media (max-width: 1400px) {
-  .payments-panel :deep(.payment-chip) {
-    padding: 4px 10px;
-    font-size: 11px;
-  }
+	.payments-panel :deep(.payment-chip) {
+		padding: 4px 10px;
+		font-size: 11px;
+	}
 }
 
 /* Payment text inputs */
 .payments-panel :deep(.v-text-field) {
-  margin: 8px 0;
+	margin: 8px 0;
 }
 
 .payments-panel :deep(.v-field) {
-  border-radius: 6px;
+	border-radius: 6px;
 }
 
 /* Payment total section */
 .payments-panel :deep(.payment-total) {
-  padding: 12px;
-  background-color: #f5f5f5;
-  border-radius: 6px;
-  margin-top: 12px;
+	padding: 12px;
+	background-color: #f5f5f5;
+	border-radius: 6px;
+	margin-top: 12px;
 }
 
 .payments-panel :deep(.payment-total-label) {
-  font-size: 12px;
-  font-weight: 600;
+	font-size: 12px;
+	font-weight: 600;
 }
 
 .payments-panel :deep(.payment-total-amount) {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1976d2;
+	font-size: 18px;
+	font-weight: 700;
+	color: #1976d2;
 }
 
 @media (max-width: 1400px) {
-  .payments-panel :deep(.payment-total) {
-    padding: 10px;
-    margin-top: 10px;
-  }
+	.payments-panel :deep(.payment-total) {
+		padding: 10px;
+		margin-top: 10px;
+	}
 
-  .payments-panel :deep(.payment-total-amount) {
-    font-size: 16px;
-  }
+	.payments-panel :deep(.payment-total-amount) {
+		font-size: 16px;
+	}
 }
 
 @media (max-width: 1400px) {
-  .payments-panel :deep(.v-text-field) {
-    margin: 6px 0;
-  }
+	.payments-panel :deep(.v-text-field) {
+		margin: 6px 0;
+	}
 }
 /* Further compact at 1350px */
 @media (max-width: 1400px) {
-  .payments-panel :deep(.payment-method-btn) {
-    padding: 8px 10px;
-    font-size: 11px;
-    min-height: 36px;
-  }
+	.payments-panel :deep(.payment-method-btn) {
+		padding: 8px 10px;
+		font-size: 11px;
+		min-height: 36px;
+	}
 
-  .payments-panel :deep(.payment-input) {
-    padding: 6px 8px;
-    font-size: 11px;
-  }
+	.payments-panel :deep(.payment-input) {
+		padding: 6px 8px;
+		font-size: 11px;
+	}
 
-  .payments-panel :deep(.payment-summary) {
-    padding: 8px;
-    font-size: 11px;
-  }
+	.payments-panel :deep(.payment-summary) {
+		padding: 8px;
+		font-size: 11px;
+	}
 
-  .payments-panel :deep(.payment-methods) {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-  }
+	.payments-panel :deep(.payment-methods) {
+		grid-template-columns: repeat(2, 1fr);
+		gap: 6px;
+	}
 }
 
 /* Remove readonly styling */
@@ -3461,28 +3776,25 @@ export default {
 
 /* Stack payment methods one below another */
 .payment-methods-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 4px;
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 4px;
 }
-
-
-
 
 /* Tighten cards */
 .payment-method-card {
-  width: 100%;
-  padding: 6px 8px;
-  min-height: 36px;
+	width: 100%;
+	padding: 6px 8px;
+	min-height: 36px;
 }
 
 .method-title {
-  font-size: 11px;
-  font-weight: 600;
+	font-size: 11px;
+	font-weight: 600;
 }
 
 .method-input {
-  max-width: 70px;
+	max-width: 70px;
 }
 
 /* Icon Animations */
@@ -3533,298 +3845,310 @@ export default {
 	background-color: #1e1e1e !important;
 }
 
-
 :deep(.v-overlay__content),
 .v-overlay__content,
 .v-dialog__content,
 .v-dialog__content > .v-overlay__content {
-  padding: 0 !important;
-  margin: 0 !important;
-  display: flex;
-  align-items: flex-start; 
-  box-sizing: border-box;
+	padding: 0 !important;
+	margin: 0 !important;
+	display: flex;
+	align-items: flex-start;
+	box-sizing: border-box;
 }
 
 .payment-modal-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  width: 100%;
-  padding: 8px 8px 12px; 
-  box-sizing: border-box;
-  background: transparent !important;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-start;
+	width: 100%;
+	padding: 8px 8px 12px;
+	box-sizing: border-box;
+	background: transparent !important;
 }
 
 .payment-content {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  box-sizing: border-box;
+	width: 100%;
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+	box-sizing: border-box;
 }
 
 .payment-card-wrapper {
-  width: 100%;
-  max-width: 1000px !important; 
-  box-sizing: border-box;
-  margin: 0 auto;
+	width: 100%;
+	max-width: 1000px !important;
+	box-sizing: border-box;
+	margin: 0 auto;
 }
 
 .payment-card-wrapper .v-card,
 .payment-card-wrapper > .v-card,
 .payment-card-wrapper .v-card.selection {
-  display: flex !important;
-  flex-direction: column !important;
-  height: 90vh !important;        
-  max-height: 90vh !important;
-  overflow: hidden !important;   
-  border-radius: 8px !important;
-  margin: 0 !important;          
-  padding: 0 !important;         
-  box-shadow: 0 6px 18px rgba(0,0,0,0.08) !important;
-  box-sizing: border-box;
+	display: flex !important;
+	flex-direction: column !important;
+	height: 90vh !important;
+	max-height: 90vh !important;
+	overflow: hidden !important;
+	border-radius: 8px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08) !important;
+	box-sizing: border-box;
 }
 
 .payments-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px; 
-  background: linear-gradient(90deg,#00897b,#00796b) !important; 
-  color: #fff;
-  min-height: 52px;
-  box-sizing: border-box;
-  border-top-left-radius: 0px;
-  border-top-right-radius: 0px;
-  width: 100%;
-  z-index: 50;
-  position: relative;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	background: linear-gradient(90deg, #00897b, #00796b) !important;
+	color: #fff;
+	min-height: 52px;
+	box-sizing: border-box;
+	border-top-left-radius: 0px;
+	border-top-right-radius: 0px;
+	width: 100%;
+	z-index: 50;
+	position: relative;
 }
 
 .payments-header-left {
-  width: 44px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding: 0;
-  margin: 0;
+	width: 44px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	margin: 0;
 }
 .payments-header-title {
-  flex: 1;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding: 0;
-  margin: 0;
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	margin: 0;
 }
 .payments-header-right {
-  width: 48px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding-right: 6px;
-  margin: 0;
+	width: 48px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding-right: 6px;
+	margin: 0;
 }
 
 .payments-header .text-h6 {
-  margin: 0;
-  font-weight: 700;
-  line-height: 1;
+	margin: 0;
+	font-weight: 700;
+	line-height: 1;
 }
 
 .payments-header-right .v-btn,
 .payments-header-right v-btn {
-  margin: 0 !important;
-  padding: 6px !important;
-  min-width: 36px !important;
-  background: transparent !important;
+	margin: 0 !important;
+	padding: 6px !important;
+	min-width: 36px !important;
+	background: transparent !important;
 }
 .payments-header-right .v-icon {
-  color: #fff !important;
+	color: #fff !important;
 }
 
 .v-progress-linear[location="top"] {
-  top: 0 !important;
-  left: 0;
-  right: 0;
-  position: absolute !important;
-  z-index: 60;
+	top: 0 !important;
+	left: 0;
+	right: 0;
+	position: absolute !important;
+	z-index: 60;
 }
 
 .payment-card-wrapper .overflow-y-auto,
 .payment-card-wrapper .v-card .overflow-y-auto {
-  flex: 1 1 auto;
-  overflow-y: auto !important;
-  padding: 12px !important;
-  max-height: none !important;
-  box-sizing: border-box;
-  padding-bottom: 120px; 
+	flex: 1 1 auto;
+	overflow-y: auto !important;
+	padding: 12px !important;
+	max-height: none !important;
+	box-sizing: border-box;
+	padding-bottom: 120px;
 }
 
 .payment-card-wrapper .overflow-y-auto .pa-1 {
-  margin-bottom: 6px;
+	margin-bottom: 6px;
 }
 
 .card-footer {
-  position: sticky;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: inherit;
-  padding: 6px 10px;
-  box-shadow: 0 -6px 14px rgba(0,0,0,0.06);
-  z-index: 25;
+	position: sticky;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	background: inherit;
+	padding: 6px 10px;
+	box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.06);
+	z-index: 25;
 }
 
 .footer-actions,
 .v-card.footer-actions,
 .v-card.footer-actions .button-row {
-  max-width: 1000px;
-  width: calc(100% - 24px);
-  margin: 10px auto 0 !important;
-  box-sizing: border-box;
-  position: relative;
-  z-index: 55;
+	max-width: 1000px;
+	width: calc(100% - 24px);
+	margin: 10px auto 0 !important;
+	box-sizing: border-box;
+	position: relative;
+	z-index: 55;
 }
 
 .submit-menu {
-  border-radius: 8px !important;
-  z-index: 1100 !important;
+	border-radius: 8px !important;
+	z-index: 1100 !important;
 }
 
 ::deep .submit-menu,
 :root .submit-menu {
-  position: absolute !important;
+	position: absolute !important;
 }
 
 .submit-btn-main {
-  font-weight: 700 !important;
-  font-size: 1rem !important;
-  height: 44px !important;
+	font-weight: 700 !important;
+	font-size: 1rem !important;
+	height: 44px !important;
 }
 .cancel-btn {
-  font-weight: 600 !important;
-  font-size: 0.95rem !important;
-  height: 40px !important;
+	font-weight: 600 !important;
+	font-size: 0.95rem !important;
+	height: 40px !important;
 }
 
 @media (max-width: 760px) {
-  .payment-card-wrapper .v-card { height: 78vh !important; max-height: 78vh !important; }
-  .payment-card-wrapper .overflow-y-auto { padding-bottom: 180px !important; }
-  .payments-header { padding: 6px 10px !important; min-height: 48px; }
-  .payment-modal-container { padding: 6px; }
-  .footer-actions { width: calc(100% - 12px); max-width: 720px; }
+	.payment-card-wrapper .v-card {
+		height: 78vh !important;
+		max-height: 78vh !important;
+	}
+	.payment-card-wrapper .overflow-y-auto {
+		padding-bottom: 180px !important;
+	}
+	.payments-header {
+		padding: 6px 10px !important;
+		min-height: 48px;
+	}
+	.payment-modal-container {
+		padding: 6px;
+	}
+	.footer-actions {
+		width: calc(100% - 12px);
+		max-width: 720px;
+	}
 }
 
 .v-dialog__content,
 .v-overlay__content,
 .v-dialog__content > .v-overlay__content,
 .v-overlay__content > .v-dialog__content {
-  padding: 0 !important;
-  margin: 0 !important;
-  display: flex !important;
-  align-items: flex-start !important;   
-  justify-content: center !important;
-  box-sizing: border-box !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	display: flex !important;
+	align-items: flex-start !important;
+	justify-content: center !important;
+	box-sizing: border-box !important;
 }
 
-.v-dialog__content > * ,
+.v-dialog__content > *,
 .v-overlay__content > * {
-  margin: 0 !important;
-  padding: 0 !important;
-  box-sizing: border-box !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	box-sizing: border-box !important;
 }
 
 .payment-modal-container,
 .payment-content,
 .payment-card-wrapper {
-  margin: 0 !important;
-  padding: 0 !important;
-  box-sizing: border-box !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	box-sizing: border-box !important;
 }
 
 .payment-card-wrapper .v-card,
 .payment-card-wrapper > .v-card,
 .payment-card-wrapper .v-card.selection,
 div.v-card.selection {
-  margin: 0 !important;             
-  margin-top: 0 !important;
-  padding: 0 !important;
-  padding-top: 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
+	margin: 0 !important;
+	margin-top: 0 !important;
+	padding: 0 !important;
+	padding-top: 0 !important;
+	display: flex !important;
+	flex-direction: column !important;
+	overflow: hidden !important;
+	box-sizing: border-box !important;
 }
 
 .payment-card-wrapper .v-card::before,
 .payment-card-wrapper .v-card::after,
 .v-card.selection::before,
 .v-card.selection::after {
-  display: none !important;
-  content: none !important;
+	display: none !important;
+	content: none !important;
 }
 
 .payments-header {
-  margin: 0 !important;
-  padding-top: 8px !important;   
-  padding-bottom: 8px !important;
-  box-sizing: border-box !important;
-  position: relative !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  border-top-left-radius: 8px !important;
-  border-top-right-radius: 8px !important;
+	margin: 0 !important;
+	padding-top: 8px !important;
+	padding-bottom: 8px !important;
+	box-sizing: border-box !important;
+	position: relative !important;
+	top: 0 !important;
+	left: 0 !important;
+	right: 0 !important;
+	border-top-left-radius: 8px !important;
+	border-top-right-radius: 8px !important;
 }
 
 .v-progress-linear[location="top"],
 .v-progress-linear[location="top"][absolute] {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  margin: 0 !important;
-  z-index: 999 !important;
+	position: absolute !important;
+	top: 0 !important;
+	left: 0 !important;
+	right: 0 !important;
+	margin: 0 !important;
+	z-index: 999 !important;
 }
 
 .v-overlay__content > .payment-modal-container,
 .v-overlay__content > .payment-content,
 .v-overlay__content > .payment-card-wrapper,
 .v-overlay__content > .v-card {
-  align-self: flex-start !important;
+	align-self: flex-start !important;
 }
 
 .v-dialog__content,
 .v-overlay__content {
-  transform: none !important;
+	transform: none !important;
 }
 
 .payment-card-wrapper > .v-card,
 .payment-card-wrapper .v-card.selection {
-  overflow: visible !important;
+	overflow: visible !important;
 }
 
 .submit-menu,
 :deep .submit-menu,
 :root .submit-menu {
-  position: absolute !important;
-  z-index: 9000 !important;
+	position: absolute !important;
+	z-index: 9000 !important;
 }
 
 .v-overlay__content {
-  overflow: visible !important;
+	overflow: visible !important;
 }
 
 .v-menu > .v-overlay__content > .v-card,
 .v-menu > .v-overlay__content > .v-list,
 .v-menu > .v-overlay__content > .v-sheet {
-  height: auto !important;       
-  max-height: none !important;
-  overflow: visible !important;   
-  background: #ffffff !important;
-  box-shadow: none !important;
+	height: auto !important;
+	max-height: none !important;
+	overflow: visible !important;
+	background: #ffffff !important;
+	box-shadow: none !important;
 }
 
 .v-menu__content,
@@ -3833,67 +4157,66 @@ div.v-card.selection {
 .submit-menu,
 .v-overlay__content .v-list,
 .v-overlay__panel .v-list {
-  position: fixed !important;    
-  left: 50% !important;
-  transform: translateX(-50%) !important; 
-  z-index: 14000 !important;      
-  width: min(920px, 92%) !important; 
-  min-width: 360px !important;
-  max-width: 920px !important;
-  background: transparent !important;
-  overflow: visible !important;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.16) !important;
-  border-radius: 10px !important;
+	position: fixed !important;
+	left: 50% !important;
+	transform: translateX(-50%) !important;
+	z-index: 14000 !important;
+	width: min(920px, 92%) !important;
+	min-width: 360px !important;
+	max-width: 920px !important;
+	background: transparent !important;
+	overflow: visible !important;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16) !important;
+	border-radius: 10px !important;
 }
-
 
 .v-menu__content .v-list,
 .submit-menu .v-list,
 .v-overlay__panel .v-list {
-  background: #fff !important;
-  border-radius: 10px !important;
-  padding: 8px !important;
-  margin: 0 !important;
-  max-height: 420px !important;   
-  overflow-y: auto !important;    
-  overflow-x: hidden !important;
+	background: #fff !important;
+	border-radius: 10px !important;
+	padding: 8px !important;
+	margin: 0 !important;
+	max-height: 420px !important;
+	overflow-y: auto !important;
+	overflow-x: hidden !important;
 }
 
 .v-menu__content .v-list-item,
 .submit-menu .v-list-item {
-  min-height: 64px !important;
-  padding: 12px 18px !important;
+	min-height: 64px !important;
+	padding: 12px 18px !important;
 }
 
 .v-overlay__content,
 .v-overlay__panel,
 .v-dialog__content {
-  overflow: visible !important;
+	overflow: visible !important;
 }
 
 @media (max-width: 760px) {
-  .v-menu__content,
-  .submit-menu {
-    left: 8px !important;
-    right: 8px !important;
-    transform: none !important;
-    width: calc(100% - 16px) !important;
-  }
-  .v-menu__content .v-list,
-  .submit-menu .v-list {
-    max-height: 70vh !important;
-  }
+	.v-menu__content,
+	.submit-menu {
+		left: 8px !important;
+		right: 8px !important;
+		transform: none !important;
+		width: calc(100% - 16px) !important;
+	}
+	.v-menu__content .v-list,
+	.submit-menu .v-list {
+		max-height: 70vh !important;
+	}
 }
 
 .v-menu__content {
-  background: #ffffff !important;
+	background: #ffffff !important;
 }
 
 .v-menu__content > .v-overlay__content,
 .v-menu__content .v-sheet,
 .v-menu__content .v-card,
 .v-menu__content .v-list {
-  background: #ffffff !important;
+	background: #ffffff !important;
 }
 
 /* Credit Sale Button - Compact Style */
@@ -3930,13 +4253,13 @@ div.v-card.selection {
 
 /* Main box */
 .summary-box {
-	padding: 4px 8px;    /* ⬅ reduced height */
-	border-radius: 12px;   /* slightly tighter */
+	padding: 4px 8px; /* ⬅ reduced height */
+	border-radius: 12px; /* slightly tighter */
 	color: #fff;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	min-height: 42px;      /* ⬅ controlled compact height */
+	min-height: 42px; /* ⬅ controlled compact height */
 }
 
 /* Paid (green) */
@@ -3952,19 +4275,18 @@ div.v-card.selection {
 /* Label */
 .summary-box .label {
 	font-size: 11px;
-	font-weight: 700;      /* ⬅ bold label */
+	font-weight: 700; /* ⬅ bold label */
 	line-height: 1.1;
 	opacity: 0.95;
 }
 
 /* Value */
 .summary-box .value {
-	font-size: 15px;       /* slightly smaller */
-	font-weight: 800;      /* ⬅ strong bold for amount */
+	font-size: 15px; /* slightly smaller */
+	font-weight: 800; /* ⬅ strong bold for amount */
 	line-height: 1.2;
 	margin-top: 2px;
 }
-
 
 .payment-summary-card {
 	background: #000 !important;
@@ -3995,14 +4317,13 @@ div.v-card.selection {
 }
 
 .payment-method-card {
-  min-height: 36px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+	min-height: 36px;
+	padding: 6px 8px;
+	border-radius: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 }
-
 
 .payment-method-card:hover {
 	background: #f0f7ff;
@@ -4032,7 +4353,7 @@ div.v-card.selection {
 }
 
 .payment-method-card .v-icon {
-  font-size: 16px !important;
+	font-size: 16px !important;
 }
 
 .method-amount {
@@ -4046,25 +4367,25 @@ div.v-card.selection {
 	max-width: 140px;
 }
 .method-input :deep(.v-field) {
-  min-height: 28px !important;
+	min-height: 28px !important;
 }
 .method-input :deep(input) {
-  font-size: 14px;
-  padding: 2px 8px;
-  text-align: left;
+	font-size: 14px;
+	padding: 2px 8px;
+	text-align: left;
 }
 .method-input :deep(.v-field__prefix) {
-  margin-right: 6px;
-  font-size: 11px;
-  white-space: nowrap;
+	margin-right: 6px;
+	font-size: 11px;
+	white-space: nowrap;
 }
 .payment-summary-row {
-  margin-bottom: 8px;
+	margin-bottom: 8px;
 }
 
 .payment-summary-card {
-  padding: 8px 10px;
-  font-size: 0.9rem;
+	padding: 8px 10px;
+	font-size: 0.9rem;
 }
 
 .credit-sale-banner {
@@ -4103,7 +4424,6 @@ div.v-card.selection {
 	opacity: 1;
 }
 
-
 .sleek-field input {
 	font-size: 14px;
 	font-weight: 700;
@@ -4119,17 +4439,15 @@ div.v-card.selection {
 	letter-spacing: 0.3px;
 }
 
-
 .payment-content-container {
-  flex: 1;
-  overflow: hidden; /* parent should NOT scroll */
+	flex: 1;
+	overflow: hidden; /* parent should NOT scroll */
 }
 @media (min-width: 1400px) {
-  .payment-left-column {
-    max-height: calc(90vh - 130px);
-  }
+	.payment-left-column {
+		max-height: calc(90vh - 130px);
+	}
 }
-
 
 .payment-modal-container {
 	height: 90vh;
@@ -4144,36 +4462,34 @@ div.v-card.selection {
 }
 
 .payment-card-wrapper {
-  width: 80%;
-  max-width: 100%;
+	width: 80%;
+	max-width: 100%;
 }
 .payment-card-wrapper {
-  font-size: clamp(12px, 0.9vw, 14px);
+	font-size: clamp(12px, 0.9vw, 14px);
 }
 .summary-box .value {
-  font-size: clamp(14px, 1.6vw, 18px);
+	font-size: clamp(14px, 1.6vw, 18px);
 }
 .summary-box .label,
 .sleek-field .v-field-label {
-  font-size: clamp(10px, 0.8vw, 12px);
+	font-size: clamp(10px, 0.8vw, 12px);
 }
 .sleek-field input {
-  font-size: clamp(12px, 0.9vw, 13px);
+	font-size: clamp(12px, 0.9vw, 13px);
 }
 .payment-left-column {
-  max-height: calc(90vh - 130px); /* header + summary + footer */
-  overflow-y: auto;
-  padding-right: 6px;
+	max-height: calc(90vh - 130px); /* header + summary + footer */
+	overflow-y: auto;
+	padding-right: 6px;
 }
 
 /* smooth scrollbar */
 .payment-left-column::-webkit-scrollbar {
-  width: 6px;
+	width: 6px;
 }
 .payment-left-column::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+	background: #cbd5e1;
+	border-radius: 4px;
 }
-
-
 </style>

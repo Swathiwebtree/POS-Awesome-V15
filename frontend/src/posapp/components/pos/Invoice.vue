@@ -304,8 +304,8 @@
 		<!-- Fixed Footer Controls -->
 		<div class="invoice-controls">
 			<InvoiceSummary
-			    @apply-group-discount="applyItemGroupDiscount"
-			    :maxDiscountInfo="maxDiscountInfo"
+				@apply-group-discount="applyItemGroupDiscount"
+				:maxDiscountInfo="maxDiscountInfo"
 				:pos_profile="pos_profile"
 				:total_qty="total_qty"
 				:additional_discount="additional_discount"
@@ -473,15 +473,11 @@ export default {
 
 		isEngineOil(item) {
 			const row = item?.raw || item;
-			const ig = (row?.item_group || '').toLowerCase();
-			const name = (row?.item_name || '').toLowerCase();
-			const code = (row?.item_code || '').toLowerCase();
+			const ig = (row?.item_group || "").toLowerCase();
+			const name = (row?.item_name || "").toLowerCase();
+			const code = (row?.item_code || "").toLowerCase();
 
-			return (
-				ig.includes('engine oil') ||
-				name.includes('engine oil') ||
-				code.includes('engine oil')
-			);
+			return ig.includes("engine oil") || name.includes("engine oil") || code.includes("engine oil");
 		},
 
 		handleItemGroupUpdate(newGroup) {
@@ -490,24 +486,24 @@ export default {
 
 		async applyVehicleDiscountsToAllItems() {
 			if (!this.custom_vehicle_no || !this.items || this.items.length === 0) {
-				console.log('[Discount] No vehicle or no items to apply discount');
+				console.log("[Discount] No vehicle or no items to apply discount");
 				return;
 			}
 
 			if (this._discount_loading) {
-				console.log('[Discount] Already loading discounts, skipping');
+				console.log("[Discount] Already loading discounts, skipping");
 				return;
 			}
 
 			this._discount_loading = true;
 
-			console.log('[Discount] Applying discounts to', this.items.length, 'items');
+			console.log("[Discount] Applying discounts to", this.items.length, "items");
 
 			try {
 				for (const item of this.items) {
 					// Skip if user has manually set discount
 					if (item._manual_discount_set) {
-						console.log('[Discount] Skipping', item.item_code, '- manual discount set');
+						console.log("[Discount] Skipping", item.item_code, "- manual discount set");
 						continue;
 					}
 
@@ -521,9 +517,8 @@ export default {
 					this.apply_additional_discount();
 					this.$forceUpdate();
 				});
-
 			} catch (e) {
-				console.error('[Discount] Error applying discounts:', e);
+				console.error("[Discount] Error applying discounts:", e);
 			} finally {
 				this._discount_loading = false;
 			}
@@ -542,7 +537,7 @@ export default {
 			item._discount_processing = true;
 
 			try {
-				console.log('[Discount] Processing item:', item.item_code);
+				console.log("[Discount] Processing item:", item.item_code);
 
 				const res = await frappe.call({
 					method: "posawesome.posawesome.api.discounts.get_customer_item_discount",
@@ -555,16 +550,16 @@ export default {
 				const rule = res.message;
 
 				if (!rule) {
-					console.log('[Discount] No rule for item:', item.item_code);
+					console.log("[Discount] No rule for item:", item.item_code);
 					return;
 				}
 
-				console.log('[Discount] Rule for', item.item_code, ':', rule);
+				console.log("[Discount] Rule for", item.item_code, ":", rule);
 
 				// Store rule for validation
 				item._vehicle_discount_rule = rule;
 
-				// ENGINE OIL 
+				// ENGINE OIL
 				if (this.isEngineOil(item)) {
 					item.discount_percentage = 0;
 					item.discount_amount = 0;
@@ -572,13 +567,12 @@ export default {
 					item.allow_discount = false;
 					item.discount_locked = 1;
 
-					console.log('[Discount] Engine Oil item — discount disabled');
+					console.log("[Discount] Engine Oil item — discount disabled");
 					return;
 				}
 
-
 				if (!rule.auto_apply) {
-					console.log('[Discount] Auto-apply disabled, max allowed:', rule.max_discount);
+					console.log("[Discount] Auto-apply disabled, max allowed:", rule.max_discount);
 
 					item._max_discount_allowed = rule.max_discount || 0;
 
@@ -590,36 +584,29 @@ export default {
 					return;
 				}
 
-
 				// AUTO-APPLY the default max discount
 				const discountToApply = Number(rule.auto_apply_value || 0);
 
 				if (discountToApply <= 0) {
-					console.log('[Discount] No discount value to apply');
+					console.log("[Discount] No discount value to apply");
 					return;
 				}
 
-				console.log('[Discount] Auto-applying', discountToApply, '% to', item.item_code);
+				console.log("[Discount] Auto-applying", discountToApply, "% to", item.item_code);
 
 				// Calculate discount
 				const gross = Number(item.price_list_rate || 0) * Number(item.qty || 1);
 
 				item.discount_percentage = discountToApply;
-				item.discount_amount = this.flt(
-					(gross * discountToApply) / 100,
-					this.currency_precision
-				);
+				item.discount_amount = this.flt((gross * discountToApply) / 100, this.currency_precision);
 
 				// Update rate and amount
 				item.rate = this.flt(
 					(gross - item.discount_amount) / (item.qty || 1),
-					this.currency_precision
+					this.currency_precision,
 				);
 
-				item.amount = this.flt(
-					item.qty * item.rate,
-					this.currency_precision
-				);
+				item.amount = this.flt(item.qty * item.rate, this.currency_precision);
 
 				// Mark as auto-applied
 				item._auto_discount_applied = true;
@@ -628,11 +615,9 @@ export default {
 				item.allow_discount = true;
 				item.discount_locked = 0;
 
-
-				console.log('[Discount] Applied', discountToApply, '% to', item.item_code);
-
+				console.log("[Discount] Applied", discountToApply, "% to", item.item_code);
 			} catch (e) {
-				console.error('[Discount] Error applying discount to item:', e);
+				console.error("[Discount] Error applying discount to item:", e);
 			} finally {
 				item._discount_processing = false;
 			}
@@ -677,7 +662,7 @@ export default {
 					// Show error
 					frappe.show_alert({
 						message: validation.message,
-						indicator: 'red'
+						indicator: "red",
 					});
 
 					// Revert to previous valid discount
@@ -699,14 +684,13 @@ export default {
 
 				this.recalculateItemPrice(item);
 
-				console.log('[Discount] Manual discount applied:', discount, '%');
+				console.log("[Discount] Manual discount applied:", discount, "%");
 				return true;
-
 			} catch (e) {
-				console.error('[Discount] Validation error:', e);
+				console.error("[Discount] Validation error:", e);
 				frappe.show_alert({
-					message: 'Error validating discount',
-					indicator: 'red'
+					message: "Error validating discount",
+					indicator: "red",
 				});
 				return false;
 			}
@@ -717,20 +701,11 @@ export default {
 			const discountPct = Math.max(0, Number(item.discount_percentage || 0));
 			item.discount_percentage = discountPct;
 
-			item.discount_amount = this.flt(
-				(gross * discountPct) / 100,
-				this.currency_precision
-			);
+			item.discount_amount = this.flt((gross * discountPct) / 100, this.currency_precision);
 
-			item.rate = this.flt(
-				(gross - item.discount_amount) / (item.qty || 1),
-				this.currency_precision
-			);
+			item.rate = this.flt((gross - item.discount_amount) / (item.qty || 1), this.currency_precision);
 
-			item.amount = this.flt(
-				item.qty * item.rate,
-				this.currency_precision
-			);
+			item.amount = this.flt(item.qty * item.rate, this.currency_precision);
 
 			this.$nextTick(() => {
 				this.update_totals();
@@ -740,16 +715,16 @@ export default {
 		},
 
 		clearVehicleDiscounts() {
-			console.log('[Discount] Clearing all vehicle discounts');
-			
-			this.items.forEach(item => {
+			console.log("[Discount] Clearing all vehicle discounts");
+
+			this.items.forEach((item) => {
 				if (item._auto_discount_applied) {
 					item.discount_percentage = 0;
 					item.discount_amount = 0;
 					item._auto_discount_applied = false;
 					item._vehicle_discount_rule = null;
 					item._max_discount_allowed = 0;
-					
+
 					// Recalculate price
 					const gross = Number(item.price_list_rate || 0) * Number(item.qty || 1);
 					item.rate = this.flt(gross / (item.qty || 1), this.currency_precision);
@@ -823,19 +798,16 @@ export default {
 
 				itemRow.discount_amount = this.flt(
 					(gross * itemRow.discount_percentage) / 100,
-					this.currency_precision
+					this.currency_precision,
 				);
 
 				// 🔥 UPDATE RATE & AMOUNT
 				itemRow.rate = this.flt(
 					(gross - itemRow.discount_amount) / itemRow.qty,
-					this.currency_precision
+					this.currency_precision,
 				);
 
-				itemRow.amount = this.flt(
-					itemRow.qty * itemRow.rate,
-					this.currency_precision
-				);
+				itemRow.amount = this.flt(itemRow.qty * itemRow.rate, this.currency_precision);
 
 				// 🔥 NOW totals will work
 				this.$nextTick(() => {
@@ -843,12 +815,10 @@ export default {
 					this.apply_additional_discount();
 					this.$forceUpdate();
 				});
-
 			} catch (e) {
 				console.error("[AutoDiscount] Failed:", e);
 			}
 		},
-
 
 		recalculateTotals() {
 			const precision = this.currency_precision;
@@ -861,7 +831,7 @@ export default {
 			const finalTotal = subtotal + tax - discount + roundOff;
 
 			this.invoice_doc.net_total = this.flt(subtotal, precision);
-			this.invoice_doc.total = this.flt(finalTotal, precision);     
+			this.invoice_doc.total = this.flt(finalTotal, precision);
 			this.invoice_doc.grand_total = this.flt(finalTotal, precision);
 			this.invoice_doc.rounded_total = this.invoice_doc.grand_total;
 		},
@@ -889,7 +859,10 @@ export default {
 					.filter((col) => {
 						if (col.required) return true;
 						if (col.key === "price_list_rate") return true;
-						if (col.key === "discount_percentage" && this.pos_profile.posa_display_discount_percentage)
+						if (
+							col.key === "discount_percentage" &&
+							this.pos_profile.posa_display_discount_percentage
+						)
 							return true;
 						if (col.key === "discount_amount" && this.pos_profile.posa_display_discount_amount)
 							return true;
@@ -904,7 +877,6 @@ export default {
 
 		// Add this NEW method to handle frequent card application
 		handleApplyFrequentCard(cardData) {
-
 			try {
 				// Create free item object with all required fields
 				const freeItem = {
@@ -949,7 +921,6 @@ export default {
 		},
 
 		validateDiscount(item, discountPercentage) {
-
 			if (item._auto_discount_applied || item._vehicle_discount_rule) {
 				return true;
 			}
@@ -969,10 +940,7 @@ export default {
 
 			if (invoiceCap !== null && discountPercentage > invoiceCap) {
 				frappe.show_alert({
-					message: __(
-						"Maximum allowed discount for this customer is {0}%",
-						[invoiceCap]
-					),
+					message: __("Maximum allowed discount for this customer is {0}%", [invoiceCap]),
 					indicator: "red",
 				});
 				return false;
@@ -1030,12 +998,9 @@ export default {
 			}
 		},
 
-
-
 		async applyItemGroupDiscount({ group, percentage }) {
-
 			//  ENGINE OIL BLOCK
-			if (group && group.toLowerCase().includes('engine oil')) {
+			if (group && group.toLowerCase().includes("engine oil")) {
 				frappe.show_alert({
 					message: __("Group discount is not allowed for Engine Oil items"),
 					indicator: "red",
@@ -1047,7 +1012,6 @@ export default {
 			let itemsRejected = 0;
 
 			for (const item of this.items) {
-
 				if ((item.item_group || "").trim() !== group) {
 					continue;
 				}
@@ -1068,15 +1032,9 @@ export default {
 
 				item.discount_percentage = percentage;
 
-				item.discount_amount = this.flt(
-					(gross * percentage) / 100,
-					this.currency_precision
-				);
+				item.discount_amount = this.flt((gross * percentage) / 100, this.currency_precision);
 
-				item.rate = this.flt(
-					(gross - item.discount_amount) / item.qty,
-					this.currency_precision
-				);
+				item.rate = this.flt((gross - item.discount_amount) / item.qty, this.currency_precision);
 
 				item.amount = this.flt(item.qty * item.rate, this.currency_precision);
 				itemsUpdated++;
@@ -1098,10 +1056,7 @@ export default {
 			return { applied: itemsUpdated, rejected: itemsRejected };
 		},
 
-
-
 		checkForEngineOilItem() {
-
 			if (!this.items || this.items.length === 0) {
 				return false;
 			}
@@ -1109,7 +1064,6 @@ export default {
 			const hasOilItem = this.items.some((item) => {
 				return this.isEngineOil(item);
 			});
-
 
 			return hasOilItem;
 		},
@@ -1163,7 +1117,6 @@ export default {
 				return;
 			}
 
-
 			// Add custom fields for service employee
 			this.invoice_doc.custom_service_employee = this.service_employee;
 			this.invoice_doc.custom_service_employee_name = this.service_employee_name;
@@ -1175,7 +1128,6 @@ export default {
 			if (this.service_employee_department) {
 				this.invoice_doc.custom_service_employee_department = this.service_employee_department;
 			}
-
 
 			// Force update
 			this.$forceUpdate();
@@ -1196,7 +1148,6 @@ export default {
 		},
 
 		apply_additional_discount() {
-
 			// Get subtotal from computed property (already calculated)
 			const totalBeforeDiscount = this.subtotal;
 			let discountAmount = 0;
@@ -1212,7 +1163,6 @@ export default {
 
 			// Update discount_amount (this triggers grand_total recalculation)
 			this.discount_amount = Math.round(discountAmount);
-
 
 			// Sync to invoice_doc
 			if (this.invoice_doc) {
@@ -1234,19 +1184,16 @@ export default {
 			// Subtotal AFTER discounts
 			this.subtotal = this.flt(
 				this.items.reduce((sum, i) => sum + i.qty * i.rate, 0),
-				this.currency_precision
+				this.currency_precision,
 			);
 
 			// Total qty
-			this.total_qty = this.items.reduce(
-				(sum, i) => sum + Math.trunc(i.qty),
-				0
-			);
+			this.total_qty = this.items.reduce((sum, i) => sum + Math.trunc(i.qty), 0);
 
 			//  TOTAL ITEMS DISCOUNT (CRITICAL FIX)
 			this.total_items_discount_amount = this.flt(
 				this.items.reduce((sum, i) => sum + (i.discount_amount || 0), 0),
-				this.currency_precision
+				this.currency_precision,
 			);
 
 			// Sync into invoice_doc
@@ -1255,10 +1202,8 @@ export default {
 			}
 		},
 
-
 		// Handle item dropped from ItemsSelector to ItemsTable
 		handleItemDrop(item) {
-
 			// Use the existing add_item method to add the dropped item
 			this.add_item(item);
 
@@ -1275,7 +1220,6 @@ export default {
 
 		handleShowCoupons() {
 			this.eventBus.emit("show_coupons", "true");
-		
 		},
 
 		get_draft_invoices() {
@@ -1291,7 +1235,6 @@ export default {
 		},
 
 		show_payment() {
-
 			this.recalculateTotals();
 
 			const invoice = this.prepareForPayment();
@@ -1468,15 +1411,7 @@ export default {
 
 		// Override setFormatedFloat for qty field to handle stock limits and return mode
 		setFormatedQty(item, field_name, precision, no_negative, value) {
-			let parsedValue = Math.trunc(
-				this.setFormatedFloat(
-					item,
-					field_name,
-					0,        
-					no_negative,
-					value
-				)
-			);
+			let parsedValue = Math.trunc(this.setFormatedFloat(item, field_name, 0, no_negative, value));
 
 			// Ensure integer is stored
 			item[field_name] = parsedValue;
@@ -1491,10 +1426,9 @@ export default {
 					item[field_name] = parsedValue;
 
 					this.eventBus.emit("show_message", {
-						title: __(
-							"Maximum available quantity is {0}. Quantity adjusted to match stock.",
-							[parsedValue]
-						),
+						title: __("Maximum available quantity is {0}. Quantity adjusted to match stock.", [
+							parsedValue,
+						]),
 						color: "error",
 					});
 				} else {
@@ -1516,16 +1450,13 @@ export default {
 				this.packed_items
 					.filter((it) => it.bundle_id === item.bundle_id)
 					.forEach((ch) => {
-						ch.qty = Math.trunc(
-							item.qty * (ch.child_qty_per_bundle || 1)
-						);
+						ch.qty = Math.trunc(item.qty * (ch.child_qty_per_bundle || 1));
 						this.calc_stock_qty(ch, ch.qty);
 					});
 			}
 
 			return parsedValue;
 		},
-
 
 		async fetch_available_currencies() {
 			try {
@@ -1534,7 +1465,6 @@ export default {
 				});
 
 				if (r.message) {
-
 					// Get base currency for reference
 					const baseCurrency = this.pos_profile.currency;
 
@@ -1644,7 +1574,6 @@ export default {
 		},
 
 		update_item_rates() {
-
 			this.items.forEach((item) => {
 				try {
 					// ===== DEFENSIVE: ensure item object exists =====
@@ -1655,10 +1584,12 @@ export default {
 
 					// ===== DEFENSIVE: ensure qty is numeric and service items keep qty=1 =====
 					const parsedQty = Number(item.qty);
-					const looksLikeService = item.is_service_item === 1 || item.service_item === 1
-						|| /Carwash|car wash|bike wash|bikewash/i.test(item.item_group || item.item_name || '');
+					const looksLikeService =
+						item.is_service_item === 1 ||
+						item.service_item === 1 ||
+						/Carwash|car wash|bike wash|bikewash/i.test(item.item_group || item.item_name || "");
 					if (looksLikeService) {
-						item.qty = (Number.isFinite(parsedQty) && parsedQty > 0) ? parsedQty : 1;
+						item.qty = Number.isFinite(parsedQty) && parsedQty > 0 ? parsedQty : 1;
 						item.is_service_item = 1;
 						item.update_stock = 0;
 					} else {
@@ -1678,13 +1609,16 @@ export default {
 							const ex = this.exchange_rate || 1;
 							item.base_rate = (Number(item.rate) || 0) / ex;
 							item.base_price_list_rate = (Number(item.price_list_rate) || 0) / ex;
-							item.base_discount_amount = (Number(item.discount_amount || 0)) / ex;
+							item.base_discount_amount = Number(item.discount_amount || 0) / ex;
 						}
 					}
 
 					// Preserve discount amounts if base_discount_amount is missing
 					const existingDiscount = Number(item.discount_amount || 0);
-					if ((!Number.isFinite(item.base_discount_amount) || item.base_discount_amount === 0) && existingDiscount) {
+					if (
+						(!Number.isFinite(item.base_discount_amount) || item.base_discount_amount === 0) &&
+						existingDiscount
+					) {
 						const baseCurrency = this.price_list_currency || this.pos_profile.currency;
 						if (this.selected_currency === baseCurrency) {
 							item.base_discount_amount = existingDiscount;
@@ -1713,9 +1647,18 @@ export default {
 						const ex = this.exchange_rate || 1;
 
 						// Convert base currency values to the selected currency
-						const converted_price = this.flt((Number(item.base_price_list_rate) || 0) * ex, this.currency_precision);
-						const converted_rate = this.flt((Number(item.base_rate) || 0) * ex, this.currency_precision);
-						const converted_discount = this.flt((Number(item.base_discount_amount) || 0) * ex, this.currency_precision);
+						const converted_price = this.flt(
+							(Number(item.base_price_list_rate) || 0) * ex,
+							this.currency_precision,
+						);
+						const converted_rate = this.flt(
+							(Number(item.base_rate) || 0) * ex,
+							this.currency_precision,
+						);
+						const converted_discount = this.flt(
+							(Number(item.base_discount_amount) || 0) * ex,
+							this.currency_precision,
+						);
 
 						// Preserve previous non-zero values if conversion results in tiny noise
 						const prev_price = Number(item.price_list_rate) || 0;
@@ -1724,9 +1667,11 @@ export default {
 
 						const tinyThreshold = 0.000001;
 
-						item.price_list_rate = (Math.abs(converted_price) < tinyThreshold) ? prev_price : converted_price;
-						item.rate = (Math.abs(converted_rate) < tinyThreshold) ? prev_rate : converted_rate;
-						item.discount_amount = (Math.abs(converted_discount) < tinyThreshold) ? prev_discount : converted_discount;
+						item.price_list_rate =
+							Math.abs(converted_price) < tinyThreshold ? prev_price : converted_price;
+						item.rate = Math.abs(converted_rate) < tinyThreshold ? prev_rate : converted_rate;
+						item.discount_amount =
+							Math.abs(converted_discount) < tinyThreshold ? prev_discount : converted_discount;
 					}
 
 					// Always recalculate final amounts (use numeric values)
@@ -1739,8 +1684,7 @@ export default {
 
 					// Engine oil
 					if (this.isEngineOil(item)) {
-						const precision =
-							this.pos_profile?.posa_decimal_precision ?? this.currency_precision;
+						const precision = this.pos_profile?.posa_decimal_precision ?? this.currency_precision;
 
 						item.price_list_rate = this.flt(item.price_list_rate, precision);
 						item.rate = this.flt(item.rate, precision);
@@ -1757,16 +1701,12 @@ export default {
 					// Clear skip flag
 					if (item) item._skip_calc = false;
 				}
-
-
 			});
 
 			// Force UI update after all calculations
 			this.$forceUpdate && this.$forceUpdate();
 
 			this.apply_additional_discount && this.apply_additional_discount();
-
-			
 		},
 
 		formatCurrency(value, precision = null) {
@@ -1878,7 +1818,6 @@ export default {
 		},
 
 		get_invoice_doc() {
-
 			if (!this.invoice_doc) {
 				this.invoice_doc = {
 					doctype: "Sales Invoice",
@@ -1893,9 +1832,12 @@ export default {
 			// DEFENSE 0: Protect service items in-place BEFORE any processing
 			// This prevents other code (rate updates, expands) from accidentally zeroing qty
 			try {
-				this.items.forEach(it => {
+				this.items.forEach((it) => {
 					if (!it) return;
-					const looksLikeService = (it.is_service_item || it.service_item) || /carwash|car wash|bike wash|bikewash/i.test(it.item_group || it.item_name || '');
+					const looksLikeService =
+						it.is_service_item ||
+						it.service_item ||
+						/carwash|car wash|bike wash|bikewash/i.test(it.item_group || it.item_name || "");
 					if (looksLikeService) {
 						const q = Number(it.qty);
 						if (!Number.isFinite(q) || q <= 0) {
@@ -1917,23 +1859,27 @@ export default {
 			// If invoice contains ONLY service items, disable stock updates/validation
 			try {
 				// Use current items list (this.items) or fallback to invoice_doc.items
-				const itemsForCheck = this.items.length ? this.items : (this.invoice_doc && this.invoice_doc.items) || [];
+				const itemsForCheck = this.items.length
+					? this.items
+					: (this.invoice_doc && this.invoice_doc.items) || [];
 
-				const allService = itemsForCheck.length > 0 && itemsForCheck.every(function (it) {
-					const ig = (it.item_group || "").toString().toLowerCase();
-					const name = (it.item_name || "").toString().toLowerCase();
-					const code = (it.item_code || "").toString().toLowerCase();
-					return (
-						ig.includes("carwash") ||
-						ig.includes("car wash") ||
-						ig.includes("bike wash") ||
-						ig.includes("bikewash") ||
-						name.includes("wash") ||
-						code.includes("wash") ||
-						it.service_item === 1 ||
-						it.is_service_item === 1
-					);
-				});
+				const allService =
+					itemsForCheck.length > 0 &&
+					itemsForCheck.every(function (it) {
+						const ig = (it.item_group || "").toString().toLowerCase();
+						const name = (it.item_name || "").toString().toLowerCase();
+						const code = (it.item_code || "").toString().toLowerCase();
+						return (
+							ig.includes("carwash") ||
+							ig.includes("car wash") ||
+							ig.includes("bike wash") ||
+							ig.includes("bikewash") ||
+							name.includes("wash") ||
+							code.includes("wash") ||
+							it.service_item === 1 ||
+							it.is_service_item === 1
+						);
+					});
 
 				if (allService) {
 					// Prevent server from doing stock validation / stock ledger updates on document
@@ -1960,7 +1906,9 @@ export default {
 							}
 
 							// Defensive: normalize rate to number
-							itemRow.rate = Number.isFinite(Number(itemRow.rate ?? itemRow.price ?? 0)) ? Number(itemRow.rate ?? itemRow.price ?? 0) : 0;
+							itemRow.rate = Number.isFinite(Number(itemRow.rate ?? itemRow.price ?? 0))
+								? Number(itemRow.rate ?? itemRow.price ?? 0)
+								: 0;
 
 							// ensure flags numeric
 							itemRow.is_service_item = itemRow.is_service_item ? 1 : 0;
@@ -1975,10 +1923,9 @@ export default {
 				console.warn("[Invoice] Error while disabling stock update for service-only invoice:", e);
 			}
 
-
 			// Normalize items into invoice_doc.items (do not completely replace source item objects)
 			try {
-				this.invoice_doc.items = (this.items || []).map(it => {
+				this.invoice_doc.items = (this.items || []).map((it) => {
 					const row = { ...it };
 
 					// Parse numeric fields defensively
@@ -1986,20 +1933,28 @@ export default {
 					const rate = Number(row.rate ?? row.price ?? 0);
 
 					// If item marked as service (or looks like carwash), default invalid qty -> 1
-					const looksLikeService = row.is_service_item || row.service_item || /carwash|car wash|bike wash|bikewash/i.test(row.item_group || row.item_name || '');
+					const looksLikeService =
+						row.is_service_item ||
+						row.service_item ||
+						/carwash|car wash|bike wash|bikewash/i.test(row.item_group || row.item_name || "");
 					if (looksLikeService) {
-						row.qty = (Number.isFinite(qty) && qty > 0) ? qty : 1;
+						row.qty = Number.isFinite(qty) && qty > 0 ? qty : 1;
 					} else {
-						row.qty = (Number.isFinite(qty) && qty > 0) ? qty : 0;
+						row.qty = Number.isFinite(qty) && qty > 0 ? qty : 0;
 					}
 
 					row.rate = Number.isFinite(rate) ? rate : 0;
 
 					// flags
 					row.is_service_item = row.is_service_item ? 1 : 0;
-					row.update_stock = typeof row.update_stock !== 'undefined' ? row.update_stock : (row.is_service_item ? 0 : 1);
+					row.update_stock =
+						typeof row.update_stock !== "undefined"
+							? row.update_stock
+							: row.is_service_item
+								? 0
+								: 1;
 					row.group_discount_percentage = it.group_discount_percentage || 0;
-					row.group_discount_applied = it.group_discount_applied || '';
+					row.group_discount_applied = it.group_discount_applied || "";
 
 					return row;
 				});
@@ -2018,21 +1973,23 @@ export default {
 			this.invoice_doc.net_total = (this.invoice_doc.items || []).reduce((sum, line) => {
 				const q = Number(line.qty);
 				const r = Number(line.rate);
-				const safeQ = (Number.isFinite(q) && q > 0) ? q : 0;
+				const safeQ = Number.isFinite(q) && q > 0 ? q : 0;
 				const safeR = Number.isFinite(r) ? r : 0;
 				return sum + safeQ * safeR;
 			}, 0);
 
 			this.invoice_doc.total_qty = (this.invoice_doc.items || []).reduce((sum, line) => {
 				const q = Number(line.qty);
-				return sum + ((Number.isFinite(q) && q > 0) ? q : 0);
+				return sum + (Number.isFinite(q) && q > 0 ? q : 0);
 			}, 0);
 
 			// Keep rest of totals/fields
 			this.invoice_doc.discount_amount = this.flt(this.discount_amount || 0);
 			this.invoice_doc.additional_discount = this.flt(this.additional_discount || 0);
-			this.invoice_doc.additional_discount_percentage = this.flt(this.additional_discount_percentage || 0);
-           
+			this.invoice_doc.additional_discount_percentage = this.flt(
+				this.additional_discount_percentage || 0,
+			);
+
 			if (!this.invoice_doc.total_taxes_and_charges) {
 				this.invoice_doc.total_taxes_and_charges = 0;
 			}
@@ -2088,7 +2045,6 @@ export default {
 
 		// Get full invoice with all calculated values
 		getFullInvoiceData() {
-
 			const invoiceData = {
 				// Basic info
 				name: this.invoice_doc?.name || "",
@@ -2133,22 +2089,24 @@ export default {
 
 		// Ensure invoice_doc is updated before payment
 		prepareForPayment() {
-
 			// Call get_invoice_doc to ensure sync
 			const invoiceData = this.get_invoice_doc();
 
 			// Always use frontend-calculated totals to ensure item discounts are properly included
 			// This fixes the issue where backend-calculated totals don't include item-level discounts
 			console.log("[prepareForPayment] Called from:", new Error().stack);
-			console.log("[prepareForPayment] Current item rates:", this.items.map(i => ({
-				item: i.item_code,
-				qty: i.qty,
-				rate: i.rate,
-				discount_percentage: i.discount_percentage,
-				discount_amount: i.discount_amount,
-				price_list_rate: i.price_list_rate,
-				amount: i.qty * i.rate
-			})));
+			console.log(
+				"[prepareForPayment] Current item rates:",
+				this.items.map((i) => ({
+					item: i.item_code,
+					qty: i.qty,
+					rate: i.rate,
+					discount_percentage: i.discount_percentage,
+					discount_amount: i.discount_amount,
+					price_list_rate: i.price_list_rate,
+					amount: i.qty * i.rate,
+				})),
+			);
 
 			invoiceData.total = this.Total;
 			invoiceData.net_total = this.net_total;
@@ -2178,7 +2136,6 @@ export default {
 				invoiceData.apply_discount_on = "Net Total";
 			}
 
-
 			// Recalculate base currency amounts
 			const exchangeRate = this.exchange_rate || this.conversion_rate || 1;
 			invoiceData.base_total = invoiceData.total * exchangeRate;
@@ -2189,7 +2146,7 @@ export default {
 				invoiceData.base_discount_amount = invoiceData.discount_amount * exchangeRate;
 			}
 
-			// LOYALTY DATA 
+			// LOYALTY DATA
 			if (this.customer_info?.loyalty_program) {
 				invoiceData.loyalty_program = this.customer_info.loyalty_program;
 			}
@@ -2380,7 +2337,6 @@ export default {
 
 		// UPDATE: save_and_clear_invoice method - CORRECTED VERSION
 		async save_and_clear_invoice() {
-
 			// Basic validations
 			if (!this.items || this.items.length === 0) {
 				frappe.show_alert({
@@ -2393,7 +2349,6 @@ export default {
 			// ===== FIX: CARWASH QTY VALIDATION =====
 			this.items.forEach((item, idx) => {
 				if (this.isCarWashItem(item)) {
-
 					// CRITICAL: Force qty to 1 for CarWash items
 					if (item.qty === null || item.qty === undefined || item.qty === 0) {
 						item.qty = 1;
@@ -2410,7 +2365,7 @@ export default {
 			// ===== END FIX =====
 
 			// Check if all items are Carwash items (service items only)
-			const hasOnlyServiceItems = this.items.every(item => {
+			const hasOnlyServiceItems = this.items.every((item) => {
 				return this.isCarWashItem(item);
 			});
 
@@ -2429,13 +2384,13 @@ export default {
 				const blockSale =
 					!this.stock_settings.allow_negative_stock ||
 					this.pos_profile.posa_block_sale_beyond_available_qty;
-				const insufficientStockItems = this.items.filter(item => {
+				const insufficientStockItems = this.items.filter((item) => {
 					// Only check stock for non-carwash items
-					return !this.isCarWashItem(item) && (item.actual_qty < item.qty);
+					return !this.isCarWashItem(item) && item.actual_qty < item.qty;
 				});
 
 				if (insufficientStockItems.length > 0 && blockSale) {
-					const itemNames = insufficientStockItems.map(i => i.item_name).join(', ');
+					const itemNames = insufficientStockItems.map((i) => i.item_name).join(", ");
 					frappe.show_alert({
 						message: this.__("Insufficient stock for: {0}", [itemNames]),
 						indicator: "error",
@@ -2444,9 +2399,12 @@ export default {
 				}
 
 				if (insufficientStockItems.length > 0 && !blockSale) {
-					const itemNames = insufficientStockItems.map(i => i.item_name).join(', ');
+					const itemNames = insufficientStockItems.map((i) => i.item_name).join(", ");
 					frappe.show_alert({
-						message: this.__("Insufficient stock for: {0}. Proceeding may create negative stock.", [itemNames]),
+						message: this.__(
+							"Insufficient stock for: {0}. Proceeding may create negative stock.",
+							[itemNames],
+						),
 						indicator: "warning",
 					});
 				}
@@ -2458,7 +2416,7 @@ export default {
 			}
 
 			// ===== CRITICAL: APPLY CARWASH FIXES TO ITEMS BEFORE SAVE =====
-			let itemsToSave = this.items.map(it => {
+			let itemsToSave = this.items.map((it) => {
 				const row = { ...it };
 
 				// For CarWash items, FORCE qty to 1
@@ -2523,14 +2481,12 @@ export default {
 			this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no || "";
 
 			// Odometer reading and oil item flag
-			this.invoice_doc.custom_odometer_reading =
-				this.custom_odometer_reading || null;
+			this.invoice_doc.custom_odometer_reading = this.custom_odometer_reading || null;
 
 			// Set oil item flag based on items
-			const hasOilItem = this.items.some(item => this.isEngineOil(item));
+			const hasOilItem = this.items.some((item) => this.isEngineOil(item));
 
 			this.invoice_doc.custom_has_oil_item = hasOilItem ? 1 : 0;
-			
 
 			// Required: ensure parent doctype is set for insert
 			this.invoice_doc.doctype = "Sales Invoice";
@@ -2607,7 +2563,6 @@ export default {
 				if (!openingShiftName && this.invoice_doc.posa_pos_opening_shift) {
 					openingShiftName = String(this.invoice_doc.posa_pos_opening_shift);
 				}
-
 
 				if (openingShiftName) {
 					const shiftResp = await frappe.call({
@@ -2773,9 +2728,13 @@ export default {
 									this.invoice_doc.custom_service_employee,
 								// ===== NEW: ADD TO EVENT =====
 								contact_mobile: saved_doc.contact_mobile || this.invoice_doc.contact_mobile,
-								custom_vehicle_no: saved_doc.custom_vehicle_no || this.invoice_doc.custom_vehicle_no,
-								custom_odometer_reading: saved_doc.custom_odometer_reading || this.invoice_doc.custom_odometer_reading,
-								custom_has_oil_item: saved_doc.custom_has_oil_item || this.invoice_doc.custom_has_oil_item,
+								custom_vehicle_no:
+									saved_doc.custom_vehicle_no || this.invoice_doc.custom_vehicle_no,
+								custom_odometer_reading:
+									saved_doc.custom_odometer_reading ||
+									this.invoice_doc.custom_odometer_reading,
+								custom_has_oil_item:
+									saved_doc.custom_has_oil_item || this.invoice_doc.custom_has_oil_item,
 								// ===== END NEW =====
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
@@ -2828,7 +2787,6 @@ export default {
 			}
 		},
 		async save_invoice() {
-
 			let invoice = this.get_invoice_doc();
 
 			if (!invoice) {
@@ -2848,7 +2806,6 @@ export default {
 		},
 
 		clear_invoice({ skipCustomerClear = false } = {}) {
-
 			// Reset all data
 			this.invoice_doc = null;
 			this.customer = "";
@@ -2885,7 +2842,6 @@ export default {
 				this.eventBus.emit("clear_vehicle_number");
 				this.eventBus.emit("clear_all_fields");
 			}
-
 		},
 		// Handle item reordering from drag and drop
 		handleItemReorder(reorderData) {
@@ -2919,32 +2875,31 @@ export default {
 	},
 
 	mounted() {
+		this.eventBus.on("apply_vehicle_discount", async (data) => {
+			console.log("[Discount] Apply vehicle discount event received:", data);
 
-		this.eventBus.on('apply_vehicle_discount', async (data) => {
-			console.log('[Discount] Apply vehicle discount event received:', data);
-			
 			if (data && data.vehicle_no) {
 				// Set vehicle number if not already set
 				if (!this.custom_vehicle_no) {
 					this.custom_vehicle_no = data.vehicle_no;
-					
+
 					if (this.invoice_doc) {
 						this.invoice_doc.custom_vehicle_no = data.vehicle_no;
 					}
 				}
-				
+
 				// Apply discounts to all items
 				await this.applyVehicleDiscountsToAllItems();
 			}
 		});
 
-		this.eventBus.on('clear_vehicle_discounts', () => {
+		this.eventBus.on("clear_vehicle_discounts", () => {
 			this.clearVehicleDiscounts();
 		});
 
 		// const originalAddItem = this.eventBus._events?.add_item?.[0];
 		// this.eventBus.off('add_item');
-		
+
 		// this.eventBus.on('add_item', async (item) => {
 		// 	// Call original add_item handler if exists
 		// 	if (originalAddItem) {
@@ -2964,7 +2919,7 @@ export default {
 		// 	}
 		// });
 
-		this.eventBus.on('validate_item_discount', async (data) => {
+		this.eventBus.on("validate_item_discount", async (data) => {
 			const { item, discount } = data;
 			await this.validateAndApplyManualDiscount(item, discount);
 		});
@@ -2982,18 +2937,18 @@ export default {
 		});
 
 		// Get items by group for discount calculation
-		this.eventBus.on('get_items_by_group', (data) => {
+		this.eventBus.on("get_items_by_group", (data) => {
 			const { group, callback } = data;
-			const itemsInGroup = this.items.filter(item => {
-				return (item.item_group || '').trim() === group;
+			const itemsInGroup = this.items.filter((item) => {
+				return (item.item_group || "").trim() === group;
 			});
-			if (typeof callback === 'function') {
+			if (typeof callback === "function") {
 				callback(itemsInGroup);
 			}
 		});
 
 		// Apply group discount to all items in that group
-		this.eventBus.on('apply_group_discount', async (data) => {
+		this.eventBus.on("apply_group_discount", async (data) => {
 			const { group } = data;
 			const rawDiscount =
 				typeof data.discountPercentage === "number"
@@ -3001,14 +2956,14 @@ export default {
 					: Number(data.percentage || 0);
 			const discountPercentage = Number.isFinite(rawDiscount) ? rawDiscount : 0;
 
-			console.log('[GroupDiscount] Applying to group:', group, 'discount:', discountPercentage);
+			console.log("[GroupDiscount] Applying to group:", group, "discount:", discountPercentage);
 
 			let itemsUpdated = 0;
 			let itemsRejected = 0;
 			const attempted = [];
 
 			for (const item of this.items) {
-				if ((item.item_group || '').trim() === group && !this.isEngineOil(item)) {
+				if ((item.item_group || "").trim() === group && !this.isEngineOil(item)) {
 					attempted.push(item);
 					if (!this.validateDiscount(item, discountPercentage)) {
 						itemsRejected++;
@@ -3026,10 +2981,16 @@ export default {
 						item.original_rate = item.rate;
 						item.original_price_list_rate = item.price_list_rate;
 					}
-					if (item.original_discount_amount === undefined || item.original_discount_amount === null) {
+					if (
+						item.original_discount_amount === undefined ||
+						item.original_discount_amount === null
+					) {
 						item.original_discount_amount = item.discount_amount || 0;
 					}
-					if (item.original_price_list_rate === undefined || item.original_price_list_rate === null) {
+					if (
+						item.original_price_list_rate === undefined ||
+						item.original_price_list_rate === null
+					) {
 						item.original_price_list_rate = item.price_list_rate || item.original_rate || 0;
 					}
 
@@ -3048,7 +3009,7 @@ export default {
 				}
 			}
 
-			console.log('[GroupDiscount] Updated', itemsUpdated, 'items');
+			console.log("[GroupDiscount] Updated", itemsUpdated, "items");
 
 			if (typeof data.callback === "function") {
 				data.callback({
@@ -3065,13 +3026,13 @@ export default {
 		});
 
 		// Remove group discount
-		this.eventBus.on('remove_group_discount', (data) => {
+		this.eventBus.on("remove_group_discount", (data) => {
 			const { group } = data;
 
-			console.log('[GroupDiscount] Removing from group:', group);
+			console.log("[GroupDiscount] Removing from group:", group);
 
-			this.items.forEach(item => {
-				if ((item.item_group || '').trim() === group && item.group_discount_applied) {
+			this.items.forEach((item) => {
+				if ((item.item_group || "").trim() === group && item.group_discount_applied) {
 					// Restore original values
 					if (item.original_rate) {
 						item.rate = item.original_rate;
@@ -3099,7 +3060,6 @@ export default {
 			this.recalculateTotals();
 		});
 
-
 		this.eventBus.on("update_manual_round_off", (roundOff) => {
 			this.invoice_doc.rounding_adjustment = this.flt(roundOff, this.currency_precision);
 			this.recalculateTotals();
@@ -3113,7 +3073,6 @@ export default {
 
 		// Listen for odometer data updates from InvoiceSummary
 		this.eventBus.on("update_odometer_data", (data) => {
-
 			this.custom_odometer_reading = data.custom_odometer_reading;
 			this.contact_mobile = data.contact_mobile || "";
 			this.custom_vehicle_no = data.custom_vehicle_no || "";
@@ -3124,7 +3083,6 @@ export default {
 				this.invoice_doc.custom_odometer_reading = data.custom_odometer_reading;
 				this.invoice_doc.contact_mobile = data.contact_mobile || "";
 				this.invoice_doc.custom_vehicle_no = data.custom_vehicle_no || "";
-
 			}
 
 			// Broadcast update
@@ -3133,7 +3091,6 @@ export default {
 
 		// Listen for customer details from Customer component
 		this.eventBus.on("update_customer_details", (data) => {
-
 			// Store customer mobile and vehicle
 			this.contact_mobile = data.contact_mobile || "";
 			this.custom_vehicle_no = data.custom_vehicle_no || "";
@@ -3146,7 +3103,6 @@ export default {
 		});
 
 		this.eventBus.on("employee_selected", (data) => {
-
 			if (!data || !data.employee_id) {
 				// Employee cleared
 				this.clearServiceEmployee();
@@ -3164,7 +3120,6 @@ export default {
 		});
 
 		this.eventBus.on("check_items_for_service", (data) => {
-
 			const hasCarWashService = this.checkForCarWashServices();
 
 			if (data && typeof data.callback === "function") {
@@ -3254,15 +3209,14 @@ export default {
 			this.fetch_price_lists();
 			this.update_price_list();
 
-			
-          // Emit item groups immediately after profile is registered
+			// Emit item groups immediately after profile is registered
 			this.$nextTick(() => {
-				const groups = [...new Set(
-					(this.items || [])
-						.map(item => (item.item_group || '').trim())
-						.filter(Boolean)
-				)];
-				this.eventBus.emit('register_item_groups', groups);
+				const groups = [
+					...new Set(
+						(this.items || []).map((item) => (item.item_group || "").trim()).filter(Boolean),
+					),
+				];
+				this.eventBus.emit("register_item_groups", groups);
 			});
 		});
 
@@ -3285,13 +3239,11 @@ export default {
 					addedItem.discount_locked = 1;
 				}
 
-
 				if (this.custom_vehicle_no && !addedItem._manual_discount_set) {
 					await this.applyVehicleDiscountToItem(addedItem);
 				}
 			});
 		});
-
 
 		// this.eventBus.on("add_item", (item) => {
 		// 	this.add_item(item);
@@ -3432,18 +3384,17 @@ export default {
 		this.eventBus.off("employee_selected");
 		this.eventBus.off("check_items_for_service");
 
-
 		this.eventBus.off("update_odometer_data");
-        this.eventBus.off("update_customer_details");
+		this.eventBus.off("update_customer_details");
 		this.eventBus.off("update_manual_round_off");
 
-		this.eventBus.off('get_items_by_group');
-		this.eventBus.off('apply_group_discount');
-		this.eventBus.off('remove_group_discount');
+		this.eventBus.off("get_items_by_group");
+		this.eventBus.off("apply_group_discount");
+		this.eventBus.off("remove_group_discount");
 
-		this.eventBus.off('apply_vehicle_discount');
-		this.eventBus.off('clear_vehicle_discounts');
-		this.eventBus.off('validate_item_discount');
+		this.eventBus.off("apply_vehicle_discount");
+		this.eventBus.off("clear_vehicle_discounts");
+		this.eventBus.off("validate_item_discount");
 	},
 
 	// Register global keyboard shortcuts when component is created
@@ -3474,12 +3425,12 @@ export default {
 				});
 
 				this.$nextTick(() => {
-					(this.items || []).forEach(item => {
+					(this.items || []).forEach((item) => {
 						item.discount_locked = 0;
 						this.applyVehicleAutoDiscount(item);
 					});
 				});
-			}
+			},
 		},
 
 		items_group: {
@@ -3489,7 +3440,7 @@ export default {
 					this.availableItemGroups = newVal;
 				}
 			},
-			deep: true
+			deep: true,
 		},
 
 		customer(newVal) {
@@ -3511,12 +3462,10 @@ export default {
 			}
 		},
 
-
-		// ITEMS WATCH 
+		// ITEMS WATCH
 		items: {
 			deep: true,
 			handler(newItems) {
-
 				if (this.invoice_doc) {
 					this.invoice_doc.items = newItems;
 				}
@@ -3543,13 +3492,13 @@ export default {
 
 				// Update item groups when items change
 				this.$nextTick(() => {
-					const groups = [...new Set(
-						(newItems || [])
-							.map(item => (item.item_group || '').trim())
-							.filter(Boolean)
-					)];
-					console.log('[Invoice] Emitting item groups:', groups);
-					this.eventBus.emit('register_item_groups', groups);
+					const groups = [
+						...new Set(
+							(newItems || []).map((item) => (item.item_group || "").trim()).filter(Boolean),
+						),
+					];
+					console.log("[Invoice] Emitting item groups:", groups);
+					this.eventBus.emit("register_item_groups", groups);
 				});
 
 				this.$nextTick(() => {
@@ -3560,27 +3509,20 @@ export default {
 						this.invoice_doc.total_qty = this.total_qty;
 
 						this.invoice_doc.custom_odometer_reading =
-							this.custom_odometer_reading ||
-							this.invoice_doc.custom_odometer_reading ||
-							null;
+							this.custom_odometer_reading || this.invoice_doc.custom_odometer_reading || null;
 
 						this.invoice_doc.contact_mobile =
-							this.contact_mobile ||
-							this.invoice_doc.contact_mobile ||
-							"";
+							this.contact_mobile || this.invoice_doc.contact_mobile || "";
 
 						this.invoice_doc.custom_vehicle_no =
-							this.custom_vehicle_no ||
-							this.invoice_doc.custom_vehicle_no ||
-							"";
+							this.custom_vehicle_no || this.invoice_doc.custom_vehicle_no || "";
 					}
-
 
 					//  RE-VALIDATE DISCOUNTS ON QTY / ITEM CHANGE
 					this.$nextTick(() => {
 						if (!this.maxDiscountInfo) return;
 
-						this.items.forEach(item => {
+						this.items.forEach((item) => {
 							if (item._auto_discount_applied) return;
 
 							if (item.discount_percentage > 0) {
@@ -3597,10 +3539,9 @@ export default {
 
 					this.$forceUpdate();
 					this.apply_additional_discount();
-
 				});
 
-				newItems.forEach(item => {
+				newItems.forEach((item) => {
 					if (!item.discount_locked && this.custom_vehicle_no) {
 						this.applyVehicleAutoDiscount(item);
 					}
@@ -3653,13 +3594,10 @@ export default {
 			},
 		},
 	},
-
-
 };
 </script>
 
 <style scoped>
-
 .invoice-header {
 	background: white;
 	border-radius: 14px;
@@ -3677,8 +3615,8 @@ export default {
 }
 
 .modern-items {
-  border-radius: 8px;
-  overflow: hidden;
+	border-radius: 8px;
+	overflow: hidden;
 }
 
 /* table row spacing */
@@ -3828,79 +3766,77 @@ export default {
 	opacity: 1;
 }
 
-
 .items-table-wrapper {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+	flex: 1;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
 }
 
 .items-table-wrapper :deep(.v-table) {
-  font-size: 13px;
+	font-size: 13px;
 }
 /* DESKTOP (1920px+) */
 @media (min-width: 1920px) {
-  .items-table-wrapper :deep(.v-table__wrapper) {
-    overflow-x: auto;
-    overflow-y: auto;
-  }
+	.items-table-wrapper :deep(.v-table__wrapper) {
+		overflow-x: auto;
+		overflow-y: auto;
+	}
 
-  .items-table-wrapper :deep(th) {
-    padding: 12px 8px;
-    font-size: 13px;
-    font-weight: 600;
-  }
+	.items-table-wrapper :deep(th) {
+		padding: 12px 8px;
+		font-size: 13px;
+		font-weight: 600;
+	}
 
-  .items-table-wrapper :deep(td) {
-    padding: 10px 8px;
-    font-size: 12px;
-  }
+	.items-table-wrapper :deep(td) {
+		padding: 10px 8px;
+		font-size: 12px;
+	}
 }
 
 /* LAPTOP (1280px - 1919px) */
 @media (min-width: 1280px) and (max-width: 1919px) {
-  .items-table-wrapper :deep(.v-table__wrapper) {
-    overflow-x: auto;
-    overflow-y: auto;
-  }
+	.items-table-wrapper :deep(.v-table__wrapper) {
+		overflow-x: auto;
+		overflow-y: auto;
+	}
 
-  .items-table-wrapper :deep(th) {
-    padding: 10px 6px;
-    font-size: 12px;
-    font-weight: 600;
-  }
+	.items-table-wrapper :deep(th) {
+		padding: 10px 6px;
+		font-size: 12px;
+		font-weight: 600;
+	}
 
-  .items-table-wrapper :deep(td) {
-    padding: 8px 6px;
-    font-size: 11px;
-  }
+	.items-table-wrapper :deep(td) {
+		padding: 8px 6px;
+		font-size: 11px;
+	}
 
-  /* Reduce column widths on laptop */
-  .items-table-wrapper :deep(.v-col-md-1) {
-    flex: 0 0 calc(8.33% - 4px);
-  }
-  
-  .items-table-wrapper :deep(.v-col-md-2) {
-    flex: 0 0 calc(16.66% - 4px);
-  }
+	/* Reduce column widths on laptop */
+	.items-table-wrapper :deep(.v-col-md-1) {
+		flex: 0 0 calc(8.33% - 4px);
+	}
+
+	.items-table-wrapper :deep(.v-col-md-2) {
+		flex: 0 0 calc(16.66% - 4px);
+	}
 }
 
 /* Hide less important columns on laptop */
 @media (max-width: 1400px) {
-  .items-table-wrapper :deep(.col-hide-laptop) {
-    display: none;
-  }
+	.items-table-wrapper :deep(.col-hide-laptop) {
+		display: none;
+	}
 }
 /* Responsive input fields */
 .items-table-wrapper :deep(.v-text-field) {
-  margin: 0;
+	margin: 0;
 }
 
 .items-table-wrapper :deep(.v-text-field__loader) {
-  display: none;
+	display: none;
 }
-
 
 /* New styles for improved column switches */
 :deep(.column-switch) {
@@ -3923,23 +3859,22 @@ export default {
 
 /* Fixed Controls Footer — COMPACT */
 .invoice-controls {
-  position: sticky;
-  bottom: 0;
-  flex-shrink: 0;
-  background: white;
-  border-top: 1px dashed #e5e7eb;
-  margin-top: 4px !important;
-  padding: 2px 4px 4px !important;
-  gap: 2px !important;
-  align-items: stretch;
-  line-height: 1 !important;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  max-height: clamp(260px, 36vh, 320px);
+	position: sticky;
+	bottom: 0;
+	flex-shrink: 0;
+	background: white;
+	border-top: 1px dashed #e5e7eb;
+	margin-top: 4px !important;
+	padding: 2px 4px 4px !important;
+	gap: 2px !important;
+	align-items: stretch;
+	line-height: 1 !important;
+	z-index: 100;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	max-height: clamp(260px, 36vh, 320px);
 }
-
 
 .cards {
 	border-radius: 16px;
@@ -4012,25 +3947,25 @@ export default {
 }
 
 .item-group-discount-card {
-  background: linear-gradient(135deg, rgba(25, 118, 210, 0.08), rgba(66, 165, 245, 0.04));
-  border: 1px solid rgba(25, 118, 210, 0.2);
-  border-radius: 12px !important;
-  transition: all 0.3s ease;
+	background: linear-gradient(135deg, rgba(25, 118, 210, 0.08), rgba(66, 165, 245, 0.04));
+	border: 1px solid rgba(25, 118, 210, 0.2);
+	border-radius: 12px !important;
+	transition: all 0.3s ease;
 }
 
 .item-group-discount-card:hover {
-  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
+	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
 }
 
 .discounts-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
 }
 
 :deep(.v-theme--dark) .item-group-discount-card {
-  background: linear-gradient(135deg, rgba(144, 202, 249, 0.08), rgba(66, 165, 245, 0.04));
-  border-color: rgba(144, 202, 249, 0.2);
+	background: linear-gradient(135deg, rgba(144, 202, 249, 0.08), rgba(66, 165, 245, 0.04));
+	border-color: rgba(144, 202, 249, 0.2);
 }
 
 /* tighten button sizes and ensure good tap targets */
@@ -4051,13 +3986,13 @@ export default {
 	font-size: 18px !important;
 }
 .invoice-wrapper {
-  min-height: 0;
-  overflow: hidden;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .invoice-content {
-  overflow-y: auto;
-  padding-bottom: 8px !important;
+	overflow-y: auto;
+	padding-bottom: 8px !important;
 }
 
 /* On small screens, increase touch target slightly */
@@ -4065,17 +4000,17 @@ export default {
 	.item-action-btn,
 	/* Qty buttons */
   	.qty-btn {
-			min-width: 36px;
-			min-height: 36px;
-			border-radius: 10px;
-			font-weight: 700;
-		}
+		min-width: 36px;
+		min-height: 36px;
+		border-radius: 10px;
+		font-weight: 700;
+	}
 	.qty-value {
 		min-width: 64px;
 		font-size: 1rem;
 	}
 }
 .items-table-wrapper {
-  margin-top: 12px;
+	margin-top: 12px;
 }
 </style>

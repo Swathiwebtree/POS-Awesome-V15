@@ -54,23 +54,14 @@ def is_service_item(item_code=None, item_group=None, is_stock_item_flag=None):
     item_group = get_item_group(item_code, item_group)
     if is_stock_item_flag is not None:
         return bool(item_group and not is_engine_oil(item_group) and int(is_stock_item_flag) == 0)
-    return bool(
-        item_group
-        and not is_engine_oil(item_group)
-        and item_group in get_all_service_groups()
-    )
+    return bool(item_group and not is_engine_oil(item_group) and item_group in get_all_service_groups())
 
 
 def is_stock_item(item_code=None, item_group=None, is_stock_item_flag=None):
     item_group = get_item_group(item_code, item_group)
     if is_stock_item_flag is not None:
         return bool(item_group and not is_engine_oil(item_group) and int(is_stock_item_flag) == 1)
-    return bool(
-        item_group
-        and not is_engine_oil(item_group)
-        and item_group in get_all_stock_groups()
-    )
-
+    return bool(item_group and not is_engine_oil(item_group) and item_group in get_all_stock_groups())
 
 
 def get_customer_discount_config(customer):
@@ -85,7 +76,6 @@ def get_customer_discount_config(customer):
         ],
         as_dict=True,
     )
-
 
 
 @frappe.whitelist()
@@ -134,7 +124,6 @@ def get_max_discount(customer):
             rule[0].other_condition if rule and hasattr(rule[0], "other_condition") else None
         ),
     }
-
 
 
 @frappe.whitelist()
@@ -220,7 +209,6 @@ def get_customer_item_discount(customer, item_code):
     return result
 
 
-
 @frappe.whitelist()
 def validate_discount(customer, item_code, discount_percentage):
 
@@ -239,9 +227,9 @@ def validate_discount(customer, item_code, discount_percentage):
     if max_allowed is not None:
         if discount_percentage > max_allowed:
             return {
-            "is_valid": False,
-            "message": f"Discount exceeds maximum allowed {max_allowed}%",
-            "max_allowed": max_allowed,
-          }
+                "is_valid": False,
+                "message": f"Discount exceeds maximum allowed {max_allowed}%",
+                "max_allowed": max_allowed,
+            }
 
     return {"is_valid": True, "max_allowed": max_allowed}

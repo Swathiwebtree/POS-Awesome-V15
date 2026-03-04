@@ -28,7 +28,7 @@ def auto_assign_loyalty_program(customer_doc):
     program = frappe.db.get_value(
         "Loyalty Program",
         {
-            "docstatus": 1,  
+            "docstatus": 1,
             "auto_opt_in": 1,
             "company": frappe.defaults.get_user_default("Company"),
         },
@@ -109,15 +109,14 @@ def update_loyalty_points(customer_name, company_name, points_amount):
 
         loyalty_program = customer.loyalty_program
         loyalty_program_doc = frappe.get_doc("Loyalty Program", loyalty_program)
-        
+
         redemption_amount = flt(points_amount)
-        
+
         if flt(loyalty_program_doc.conversion_factor):
             redemption_amount = flt(points_amount * loyalty_program_doc.conversion_factor)
 
-      
         # Check available points (Redeem ONLY)
-       
+
         current_points = get_loyalty_points(customer_name, loyalty_program, company_name)
 
         frappe.logger().info(
@@ -126,36 +125,38 @@ def update_loyalty_points(customer_name, company_name, points_amount):
         )
 
         if current_points < points_amount:
-           frappe.throw(_("Insufficient loyalty points. Available: {0}, Requested: {1}")
-                        .format(current_points, points_amount),
-                        frappe.ValidationError,
-                        )
+            frappe.throw(
+                _("Insufficient loyalty points. Available: {0}, Requested: {1}").format(
+                    current_points, points_amount
+                ),
+                frappe.ValidationError,
+            )
 
-        
         #   Loyalty Point Entry (NEGATIVE only)
-       
-        loyalty_point_entry = frappe.get_doc({
-            "doctype": "Loyalty Point Entry",
-            "customer": customer_name,
-            "loyalty_program": loyalty_program,
-            "company": company_name,
-            "loyalty_points": -points_amount,     
-            "purchase_amount": redemption_amount,  
-            "expiry_date": frappe.utils.add_days(
-                frappe.utils.nowdate(),
-                loyalty_program_doc.expiry_duration or 365,
-            ),
-            "posting_date": frappe.utils.nowdate(),
-            "posting_time": frappe.utils.nowtime(),
-        })
+
+        loyalty_point_entry = frappe.get_doc(
+            {
+                "doctype": "Loyalty Point Entry",
+                "customer": customer_name,
+                "loyalty_program": loyalty_program,
+                "company": company_name,
+                "loyalty_points": -points_amount,
+                "purchase_amount": redemption_amount,
+                "expiry_date": frappe.utils.add_days(
+                    frappe.utils.nowdate(),
+                    loyalty_program_doc.expiry_duration or 365,
+                ),
+                "posting_date": frappe.utils.nowdate(),
+                "posting_time": frappe.utils.nowtime(),
+            }
+        )
 
         loyalty_point_entry.insert(ignore_permissions=True)
         loyalty_point_entry.submit()
         frappe.db.commit()
 
-       
         #  Return updated balance
-       
+
         new_balance = get_loyalty_points(customer_name, loyalty_program, company_name)
 
         frappe.logger().info(
@@ -179,7 +180,6 @@ def update_loyalty_points(customer_name, company_name, points_amount):
             "status": "error",
             "message": _("Error redeeming loyalty points: {0}").format(str(e)),
         }
-
 
 
 # ---------------- POS Customer Utilities ----------------
@@ -419,7 +419,6 @@ def get_customer_info(customer):
         res["state"] = addr.state or ""
         res["country"] = addr.country or ""
 
-  
     vehicles = frappe.db.sql(
         """
         SELECT
@@ -447,7 +446,7 @@ def get_customer_info(customer):
                 "name": v.get("name"),
                 "vehicle_no": v.get("vehicle_no"),
                 "model": v.get("model", ""),
-                "make": v.get("make", ""),   
+                "make": v.get("make", ""),
                 "odometer": v.get("odometer", ""),
                 "chasis_no": v.get("chasis_no", ""),
                 "customer_name": customer_doc.customer_name,
@@ -460,7 +459,6 @@ def get_customer_info(customer):
         res["vehicle_no"] = res["vehicles"][0]["vehicle_no"]
 
     return res
-
 
 
 @frappe.whitelist()
@@ -582,7 +580,6 @@ def _build_customer_info(customer_name):
         res["state"] = addr.state or ""
         res["country"] = addr.country or ""
 
-   
     vehicles = frappe.db.sql(
         """
         SELECT
@@ -606,7 +603,7 @@ def _build_customer_info(customer_name):
             "name": v.get("name"),
             "vehicle_no": v.get("vehicle_no"),
             "model": v.get("model", ""),
-            "make": v.get("make", ""),   
+            "make": v.get("make", ""),
             "chasis_no": v.get("chasis_no", ""),
             "odometer": v.get("odometer", ""),
             "customer_name": customer_doc.customer_name,
@@ -621,7 +618,6 @@ def _build_customer_info(customer_name):
         res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
 
     return res
-
 
 
 @frappe.whitelist()
@@ -777,14 +773,18 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
             vehicle_data = vehicle_data or {}
 
             # Log incoming payload for debugging (won't expose in production logs beyond configured logging)
-            frappe.logger().debug(f"POS Awesome create_customer_with_vehicle - payload customer: {customer_data}, vehicle: {vehicle_data}")
+            frappe.logger().debug(
+                f"POS Awesome create_customer_with_vehicle - payload customer: {customer_data}, vehicle: {vehicle_data}"
+            )
 
             # If frontend accidentally sends vehicle_no as the customer name/id, remove it.
             v_no = vehicle_data.get("vehicle_no")
             for suspect_key in ("name", "customer_id", "customer"):
                 if suspect_key in customer_data and v_no and str(customer_data.get(suspect_key)) == str(v_no):
                     customer_data.pop(suspect_key, None)
-                    frappe.logger().info(f"Removed suspicious customer field '{suspect_key}' equal to vehicle_no to avoid naming collision")
+                    frappe.logger().info(
+                        f"Removed suspicious customer field '{suspect_key}' equal to vehicle_no to avoid naming collision"
+                    )
 
             # Remove vehicle fields accidentally attached to customer payload (they shouldn't determine customer name)
             for k in ("vehicle_no", "license_plate", "plate", "plate_no"):
@@ -812,14 +812,22 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                             # sanitize simple dangerous chars and trim
                             safe_candidate = str(candidate).strip()[:140].replace("/", "-").replace("\\", "-")
                             customer_data[name_field] = safe_candidate
-                            frappe.logger().info("Autoname required field '%s' missing — assigned fallback value '%s'" % (name_field, safe_candidate))
+                            frappe.logger().info(
+                                "Autoname required field '%s' missing — assigned fallback value '%s'"
+                                % (name_field, safe_candidate)
+                            )
                         else:
                             # no sensible fallback — raise clear error
                             frappe.log_error(
-                                "Autoname requires field '%s' but payload is missing/empty. payload: %s" % (name_field, cstr(customer_data)),
+                                "Autoname requires field '%s' but payload is missing/empty. payload: %s"
+                                % (name_field, cstr(customer_data)),
                                 "POS Awesome - Customer create autoname validation",
                             )
-                            frappe.throw(_("Cannot create Customer: required field '{0}' is missing or empty").format(name_field))
+                            frappe.throw(
+                                _("Cannot create Customer: required field '{0}' is missing or empty").format(
+                                    name_field
+                                )
+                            )
             except Exception:
                 # If meta lookup fails, let Frappe attempt insert and produce its normal error
                 frappe.log_error(frappe.get_traceback(), "POS Awesome - autoname pre-check error")
@@ -890,17 +898,28 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
             # --- Fallback ensure: if autoname requires customer_name and it's still empty, inject safe fallback ---
             try:
                 if not customer_doc.customer_name or not str(customer_doc.customer_name).strip():
-                    candidate = cd.get("customer_name") or cd.get("mobile_no") or cd.get("email_id") or (vehicle_data.get("vehicle_no") if vehicle_data else None)
+                    candidate = (
+                        cd.get("customer_name")
+                        or cd.get("mobile_no")
+                        or cd.get("email_id")
+                        or (vehicle_data.get("vehicle_no") if vehicle_data else None)
+                    )
                     if candidate:
                         safe_candidate = str(candidate).strip()[:140].replace("/", "-").replace("\\", "-")
                         customer_doc.customer_name = safe_candidate
-                        frappe.logger().info("Assigned fallback customer_name '%s' to avoid naming issues" % safe_candidate)
+                        frappe.logger().info(
+                            "Assigned fallback customer_name '%s' to avoid naming issues" % safe_candidate
+                        )
                     else:
                         # last resort: generate a short safe id
                         customer_doc.customer_name = "POS-CUST-" + frappe.generate_hash(length=6)
-                        frappe.logger().info("Assigned generated fallback customer_name for POS customer creation")
+                        frappe.logger().info(
+                            "Assigned generated fallback customer_name for POS customer creation"
+                        )
             except Exception:
-                frappe.log_error(frappe.get_traceback(), "POS Awesome - fallback customer_name assignment error")
+                frappe.log_error(
+                    frappe.get_traceback(), "POS Awesome - fallback customer_name assignment error"
+                )
 
             try:
                 customer_doc.insert(ignore_permissions=True)
@@ -1111,6 +1130,7 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
 
         # Force-sync linked vehicle data so Customer and Vehicle dialogs reflect each other immediately.
         try:
+
             def _has_col(dt, fieldname):
                 try:
                     return frappe.db.has_column(dt, fieldname)
@@ -1137,7 +1157,9 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                         vm_updates["mobile_no"] = sync_mobile
                 if vm_updates:
                     try:
-                        frappe.db.set_value(VM_DOCTYPE, {"name": effective_vehicle_no}, vm_updates, update_modified=False)
+                        frappe.db.set_value(
+                            VM_DOCTYPE, {"name": effective_vehicle_no}, vm_updates, update_modified=False
+                        )
                     except Exception:
                         pass
                     try:
@@ -1174,7 +1196,9 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                         veh_updates["tel_mobile"] = sync_mobile
                 if veh_updates:
                     try:
-                        frappe.db.set_value("Vehicle", {"name": effective_vehicle_no}, veh_updates, update_modified=False)
+                        frappe.db.set_value(
+                            "Vehicle", {"name": effective_vehicle_no}, veh_updates, update_modified=False
+                        )
                     except Exception:
                         pass
                     try:
@@ -1216,17 +1240,15 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         vehicle_response = None
         if vehicle_doc:
             vehicle_response = {
-        "name": getattr(vehicle_doc, "name", None),
-        "vehicle_no": getattr(vehicle_doc, "vehicle_no", None)
-            or getattr(vehicle_doc, "name", None),
-        "make": getattr(vehicle_doc, "make", None),
-        "model": getattr(vehicle_doc, "model", None),
-        "mobile_no": getattr(vehicle_doc, "tel_mobile", None)
-            or getattr(vehicle_doc, "mobile_no", None),
-        "customer": getattr(vehicle_doc, "customer", None),
-        "odometer": getattr(vehicle_doc, "odometer", None),
-    }
-
+                "name": getattr(vehicle_doc, "name", None),
+                "vehicle_no": getattr(vehicle_doc, "vehicle_no", None) or getattr(vehicle_doc, "name", None),
+                "make": getattr(vehicle_doc, "make", None),
+                "model": getattr(vehicle_doc, "model", None),
+                "mobile_no": getattr(vehicle_doc, "tel_mobile", None)
+                or getattr(vehicle_doc, "mobile_no", None),
+                "customer": getattr(vehicle_doc, "customer", None),
+                "odometer": getattr(vehicle_doc, "odometer", None),
+            }
 
         return {"customer": customer_response, "vehicle": vehicle_response}
 
@@ -1611,7 +1633,7 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
 
     # STEP 1: Search Customers Directly
     customer_results = frappe.db.sql(
-    """
+        """
     SELECT 
         c.name,
         c.customer_name,
@@ -1637,9 +1659,9 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
     )
     LIMIT %(limit)s
     """,
-    {"like": like_pattern, "limit": limit},
-    as_dict=1,
-   )
+        {"like": like_pattern, "limit": limit},
+        as_dict=1,
+    )
 
     vehicle_results = []
     try:
@@ -1763,7 +1785,6 @@ def search_vehicles(search_term="", limit=20):
     """
 
     return frappe.db.sql(query, {"like": like, "limit": limit}, as_dict=1)
-
 
 
 @frappe.whitelist()

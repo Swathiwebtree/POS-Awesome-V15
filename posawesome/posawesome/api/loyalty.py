@@ -12,7 +12,6 @@ def on_invoice_submit(doc, method):
 
     program = frappe.get_doc("Loyalty Program", doc.loyalty_program)
 
-    
     collection_factor = 0
 
     for rule in program.collection_rules:
@@ -29,25 +28,25 @@ def on_invoice_submit(doc, method):
     if points <= 0:
         return
 
-    entry = frappe.get_doc({
-        "doctype": "Loyalty Point Entry",
-        "customer": doc.customer,
-        "loyalty_program": doc.loyalty_program,
-        "company": doc.company,
-        "loyalty_points": points,
-        "purchase_amount": doc.net_total,
-        "expiry_date": add_days(
-            nowdate(),
-            program.expiry_duration or 365
-        ),
-        "posting_date": nowdate(),
-        "posting_time": nowtime(),
-        "reference_doctype": "Sales Invoice",
-        "reference_name": doc.name,
-    })
+    entry = frappe.get_doc(
+        {
+            "doctype": "Loyalty Point Entry",
+            "customer": doc.customer,
+            "loyalty_program": doc.loyalty_program,
+            "company": doc.company,
+            "loyalty_points": points,
+            "purchase_amount": doc.net_total,
+            "expiry_date": add_days(nowdate(), program.expiry_duration or 365),
+            "posting_date": nowdate(),
+            "posting_time": nowtime(),
+            "reference_doctype": "Sales Invoice",
+            "reference_name": doc.name,
+        }
+    )
 
     entry.insert(ignore_permissions=True)
     entry.submit()
+
 
 def validate_loyalty_redeem(doc, method=None):
     if flt(doc.loyalty_points) >= 0:
@@ -68,7 +67,8 @@ def validate_loyalty_redeem(doc, method=None):
 
     if abs(doc.loyalty_points) > flt(current_points):
         frappe.throw(
-            _("Insufficient loyalty points. Available: {0}, Tried: {1}")
-            .format(current_points, abs(doc.loyalty_points)),
+            _("Insufficient loyalty points. Available: {0}, Tried: {1}").format(
+                current_points, abs(doc.loyalty_points)
+            ),
             frappe.ValidationError,
         )

@@ -289,7 +289,6 @@ export default {
 		 * This method handles navigation with proper routing for different route types
 		 */
 		handlePageChange(page) {
-
 			// Find the item that matches the page name
 			const item = this.items.find((i) => i.name === page || i.text === page);
 
@@ -307,7 +306,6 @@ export default {
 				console.warn(`No route defined for page: ${page}`);
 				return;
 			}
-
 
 			// Handle different routing types
 			if (routeType === "frappe") {

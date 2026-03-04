@@ -284,7 +284,6 @@ export default {
 	box-shadow: var(--shadow-md);
 }
 
-
 .header-text {
 	flex: 1;
 }

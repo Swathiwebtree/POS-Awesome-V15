@@ -216,86 +216,106 @@
 					</v-row>
 				</div>
 				<v-row class="items items-body" :class="{ 'compact-items-body': hideFilters }">
-					<v-col cols="12" class="pt-0 mt-0 items-body-col" :class="{ 'compact-items-body-col': hideFilters }">
+					<v-col
+						cols="12"
+						class="pt-0 mt-0 items-body-col"
+						:class="{ 'compact-items-body-col': hideFilters }"
+					>
 						<div class="items-content-wrapper">
-						<!--REAL CENTER SPINNER -->
-						<div v-if="loading" class="items-spinner-overlay">
-							<v-progress-circular indeterminate size="48" width="4" color="primary" />
-						</div>
-						<div v-if="items_view == 'card'" class="items-card-container">
-							<div v-if="loading" class="items-card-grid">
-								<Skeleton v-for="n in 8" :key="n" class="mb-4" height="120" />
+							<!--REAL CENTER SPINNER -->
+							<div v-if="loading" class="items-spinner-overlay">
+								<v-progress-circular indeterminate size="48" width="4" color="primary" />
 							</div>
-							<div
-								v-else
-								class="items-card-grid"
-								ref="itemsContainer"
-								@scroll.passive="onCardScroll"
-								:class="{ 'item-container': isOverflowing }"
-							>
-  							<div v-if="!loading && displayed_items.length === 0" class="no-items-found">
+							<div v-if="items_view == 'card'" class="items-card-container">
+								<div v-if="loading" class="items-card-grid">
+									<Skeleton v-for="n in 8" :key="n" class="mb-4" height="120" />
+								</div>
+								<div
+									v-else
+									class="items-card-grid"
+									ref="itemsContainer"
+									@scroll.passive="onCardScroll"
+									:class="{ 'item-container': isOverflowing }"
+								>
+									<div
+										v-if="!loading && displayed_items.length === 0"
+										class="no-items-found"
+									>
 										{{ __("No items found") }}
 									</div>
 
-									 <template v-else>
-										<div v-for="item in displayed_items" :key="item.item_code"
-											class="card-item-card" @click="select_item($event, item)" :draggable="true"
-											@dragstart="onDragStart($event, item)" @dragend="onDragEnd">
-
-
-
-									<div class="card-item-image-container">
-										<v-img
-											:src="item.image || placeholderImage"
-											class="card-item-image"
-											aspect-ratio="1"
-											:alt="item.item_name"
+									<template v-else>
+										<div
+											v-for="item in displayed_items"
+											:key="item.item_code"
+											class="card-item-card"
+											@click="select_item($event, item)"
+											:draggable="true"
+											@dragstart="onDragStart($event, item)"
+											@dragend="onDragEnd"
 										>
-											<template v-slot:placeholder>
-												<div class="image-placeholder">
-													<v-icon size="40" color="grey-lighten-2"
-														>mdi-image</v-icon
-													>
-												</div>
-											</template>
-										</v-img>
-									</div>
-									<div class="card-item-content">
-										<div class="card-item-header">
-											<h4 class="card-item-name">{{ item.item_name }}</h4>
-											<span class="card-item-code">{{ item.item_code }}</span>
-										</div>
-										<div class="card-item-details">
-											<div class="card-item-price">
-												<div class="primary-price">
-													<span class="currency-symbol">
-														{{
-															currencySymbol(
-																item.original_currency ||
-																	pos_profile.currency,
-															)
-														}}
-													</span>
-													<span class="price-amount">
-														{{ formatByPrecision(item.base_price_list_rate || item.rate) }}
-													</span>
-												</div>
-												<div
-													v-if="
-														pos_profile.posa_allow_multi_currency &&
-														selected_currency !== pos_profile.currency
-													"
-													class="secondary-price"
+											<div class="card-item-image-container">
+												<v-img
+													:src="item.image || placeholderImage"
+													class="card-item-image"
+													aspect-ratio="1"
+													:alt="item.item_name"
 												>
-													<span class="currency-symbol">{{
-														currencySymbol(selected_currency)
-													}}</span>
-													<span class="price-amount">
-														{{ formatByPrecision(item.base_price_list_rate || item.rate) }}
-													</span>
-												</div>
+													<template v-slot:placeholder>
+														<div class="image-placeholder">
+															<v-icon size="40" color="grey-lighten-2"
+																>mdi-image</v-icon
+															>
+														</div>
+													</template>
+												</v-img>
 											</div>
-											<!-- <div class="card-item-stock">
+											<div class="card-item-content">
+												<div class="card-item-header">
+													<h4 class="card-item-name">{{ item.item_name }}</h4>
+													<span class="card-item-code">{{ item.item_code }}</span>
+												</div>
+												<div class="card-item-details">
+													<div class="card-item-price">
+														<div class="primary-price">
+															<span class="currency-symbol">
+																{{
+																	currencySymbol(
+																		item.original_currency ||
+																			pos_profile.currency,
+																	)
+																}}
+															</span>
+															<span class="price-amount">
+																{{
+																	formatByPrecision(
+																		item.base_price_list_rate ||
+																			item.rate,
+																	)
+																}}
+															</span>
+														</div>
+														<div
+															v-if="
+																pos_profile.posa_allow_multi_currency &&
+																selected_currency !== pos_profile.currency
+															"
+															class="secondary-price"
+														>
+															<span class="currency-symbol">{{
+																currencySymbol(selected_currency)
+															}}</span>
+															<span class="price-amount">
+																{{
+																	formatByPrecision(
+																		item.base_price_list_rate ||
+																			item.rate,
+																	)
+																}}
+															</span>
+														</div>
+													</div>
+													<!-- <div class="card-item-stock">
 												<v-icon size="small" class="stock-icon"
 													>mdi-package-variant</v-icon
 												>
@@ -314,58 +334,61 @@
 												</span>
 												<span class="stock-uom">{{ item.stock_uom || "" }}</span>
 											</div> -->
+												</div>
+											</div>
 										</div>
-									</div>
+									</template>
 								</div>
-							</template>
 							</div>
-						</div>
-						<div v-else class="items-table-container">
-							<v-data-table-virtual
-								:headers="headers"
-								:items="displayed_items"
-								class="sleek-data-table overflow-y-auto"
-								:style="{ height: hideFilters ? '100%' : 'calc(100% - 80px)' }"
-								item-key="item_code"
-								fixed-header
-								height="100%"
-								:header-props="headerProps"
-								:no-data-text="__('No items found')"
-								@click:row="click_item_row"
-								@scroll.passive="onListScroll"
-							>
-								<template v-slot:item.rate="{ item }">
-									<div>
-										<div class="#4169E1">
-											{{
-												currencySymbol(item.original_currency || pos_profile.currency)
-											}}
-											{{ 
-											formatByPrecision(item.base_price_list_rate || item.rate)
-											 }}
+							<div v-else class="items-table-container">
+								<v-data-table-virtual
+									:headers="headers"
+									:items="displayed_items"
+									class="sleek-data-table overflow-y-auto"
+									:style="{ height: hideFilters ? '100%' : 'calc(100% - 80px)' }"
+									item-key="item_code"
+									fixed-header
+									height="100%"
+									:header-props="headerProps"
+									:no-data-text="__('No items found')"
+									@click:row="click_item_row"
+									@scroll.passive="onListScroll"
+								>
+									<template v-slot:item.rate="{ item }">
+										<div>
+											<div class="#4169E1">
+												{{
+													currencySymbol(
+														item.original_currency || pos_profile.currency,
+													)
+												}}
+												{{
+													formatByPrecision(item.base_price_list_rate || item.rate)
+												}}
+											</div>
+											<div
+												v-if="
+													pos_profile.posa_allow_multi_currency &&
+													selected_currency !== pos_profile.currency
+												"
+												class="text-success"
+											>
+												{{ currencySymbol(selected_currency) }}
+												{{ formatByPrecision(item.rate) }}
+											</div>
 										</div>
-										<div
-											v-if="
-												pos_profile.posa_allow_multi_currency &&
-												selected_currency !== pos_profile.currency
-											"
-											class="text-success"
+									</template>
+									<template v-slot:item.actual_qty="{ item }">
+										<span
+											class="golden--text"
+											:class="{ 'negative-number': isNegative(item.actual_qty) }"
+											>{{
+												format_number(item.actual_qty, hide_qty_decimals ? 0 : 4)
+											}}</span
 										>
-											{{ currencySymbol(selected_currency) }}
-											{{ formatByPrecision(item.rate) }}
-
-										</div>
-									</div>
-								</template>
-								<template v-slot:item.actual_qty="{ item }">
-									<span
-										class="golden--text"
-										:class="{ 'negative-number': isNegative(item.actual_qty) }"
-										>{{ format_number(item.actual_qty, hide_qty_decimals ? 0 : 4) }}</span
-									>
-								</template>
-							</v-data-table-virtual>
-						</div>
+									</template>
+								</v-data-table-virtual>
+							</div>
 						</div>
 					</v-col>
 				</v-row>
@@ -438,7 +461,7 @@ export default {
 		Skeleton,
 	},
 	data: () => ({
-		itemGroupCache: new Map(),	
+		itemGroupCache: new Map(),
 		pos_profile: {},
 		flags: {},
 		items_view: "list",
@@ -525,7 +548,6 @@ export default {
 			default: false,
 		},
 	},
-
 
 	watch: {
 		externalSearch(newVal) {
@@ -668,7 +690,6 @@ export default {
 				console.log("Loading item group with custom API:", newVal);
 				await this.get_items_from_custom_api(true);
 				this.items_loaded = true;
-
 			} catch (error) {
 				console.error("Failed to load item group:", error);
 
@@ -676,10 +697,13 @@ export default {
 					await this.get_items(true);
 				} catch (fallbackError) {
 					console.error("Fallback also failed:", fallbackError);
-					frappe.show_alert({
-						message: "Failed to load items. Please try again.",
-						indicator: "red"
-					}, 3);
+					frappe.show_alert(
+						{
+							message: "Failed to load items. Please try again.",
+							indicator: "red",
+						},
+						3,
+					);
 				}
 			} finally {
 				this.loading = false;
@@ -714,7 +738,6 @@ export default {
 				this.clearSearch();
 			}
 		}, 300),
-
 
 		// Refresh item prices whenever the user changes currency
 		selected_currency() {
@@ -751,7 +774,6 @@ export default {
 	},
 
 	methods: {
-
 		formatByPrecision(value) {
 			const num = Number(value || 0);
 			return num.toFixed(this.decimalPrecision);
@@ -791,9 +813,7 @@ export default {
 				filtered = filtered.filter((item) => {
 					const barcodeMatch =
 						Array.isArray(item.item_barcode) &&
-						item.item_barcode.some(
-							(b) => b.barcode && b.barcode.toLowerCase().includes(term)
-						);
+						item.item_barcode.some((b) => b.barcode && b.barcode.toLowerCase().includes(term));
 
 					return (
 						item.item_code?.toLowerCase().includes(term) ||
@@ -807,56 +827,46 @@ export default {
 		},
 
 		async fetchItems({ search = "", item_group = "ALL", reset = false } = {}) {
-		if (reset) {
-			this.items = [];
-			this.page = 1;
-			this.hasMore = true;
-		}
-
-		if (!this.hasMore) return;
-
-		this.loading = true;
-
-		const filters = [];
-
-		if (item_group && item_group !== "ALL") {
-			filters.push(["item_group", "=", item_group]);
-		}
-
-		if (search) {
-			filters.push([
-				"name",
-				"like",
-				`%${search}%`
-			]);
-		}
-
-		const r = await frappe.call({
-			method: "frappe.client.get_list",
-			args: {
-				doctype: "Item",
-				fields: [
-					"name",
-					"item_name",
-					"item_group",
-					"image",
-					"stock_uom"
-				],
-				filters,
-				limit_page_length: 50,
-				limit_start: (this.page - 1) * 50
+			if (reset) {
+				this.items = [];
+				this.page = 1;
+				this.hasMore = true;
 			}
-		});
 
-		if (r.message && r.message.length) {
-			this.items.push(...r.message);
-			this.page++;
-		} else {
-			this.hasMore = false;
-		}
+			if (!this.hasMore) return;
 
-		this.loading = false;
-	},
+			this.loading = true;
+
+			const filters = [];
+
+			if (item_group && item_group !== "ALL") {
+				filters.push(["item_group", "=", item_group]);
+			}
+
+			if (search) {
+				filters.push(["name", "like", `%${search}%`]);
+			}
+
+			const r = await frappe.call({
+				method: "frappe.client.get_list",
+				args: {
+					doctype: "Item",
+					fields: ["name", "item_name", "item_group", "image", "stock_uom"],
+					filters,
+					limit_page_length: 50,
+					limit_start: (this.page - 1) * 50,
+				},
+			});
+
+			if (r.message && r.message.length) {
+				this.items.push(...r.message);
+				this.page++;
+			} else {
+				this.hasMore = false;
+			}
+
+			this.loading = false;
+		},
 
 		async fetchServerItemsTimestamp() {
 			try {
@@ -1021,7 +1031,6 @@ export default {
 				}
 			});
 		},
-
 
 		checkItemContainerOverflow() {
 			const el = this.$refs.itemsContainer;
@@ -1371,7 +1380,6 @@ export default {
 						limit: vm.itemsPageLimit,
 						start_after: null,
 						include_image: 1,
-						
 					},
 				});
 
@@ -1693,9 +1701,9 @@ export default {
 						search_value: search || "",
 						price_list: vm.customer_price_list || vm.pos_profile.selling_price_list,
 						warehouse: vm.pos_profile.warehouse,
-						customer: vm.customer
+						customer: vm.customer,
 					},
-					freeze: false
+					freeze: false,
 				});
 
 				const data = response.message;
@@ -1710,13 +1718,15 @@ export default {
 				}
 
 				// Process items
-				const processedItems = data.items.map(item => {
+				const processedItems = data.items.map((item) => {
 					// Ensure UOMs
 					if (!item.item_uoms || item.item_uoms.length === 0) {
-						item.item_uoms = [{
-							uom: item.stock_uom || "Nos",
-							conversion_factor: 1.0
-						}];
+						item.item_uoms = [
+							{
+								uom: item.stock_uom || "Nos",
+								conversion_factor: 1.0,
+							},
+						];
 					}
 
 					// Set default quantity
@@ -1752,34 +1762,38 @@ export default {
 				vm.loadProgress = progress;
 				vm.eventBus.emit("data-load-progress", {
 					name: "items",
-					progress
+					progress,
 				});
 
 				// Show message if no results for search
 				if (vm.items.length === 0 && search) {
-					frappe.show_alert({
-						message: `${frappe._("No items found for")} "${search}"`,
-						indicator: "orange"
-					}, 3);
+					frappe.show_alert(
+						{
+							message: `${frappe._("No items found for")} "${search}"`,
+							indicator: "orange",
+						},
+						3,
+					);
 				}
 
 				console.log(`✓ Loaded ${vm.items.length} of ${vm.totalItemCount} items`);
-
 			} catch (error) {
 				console.error("Failed to load items from custom API:", error);
 
 				// Show user-friendly error
-				frappe.show_alert({
-					message: frappe._("Failed to load items. Using fallback method..."),
-					indicator: "orange"
-				}, 3);
+				frappe.show_alert(
+					{
+						message: frappe._("Failed to load items. Using fallback method..."),
+						indicator: "orange",
+					},
+					3,
+				);
 
 				// Fallback to original method
 				if (typeof vm.get_items === "function") {
 					console.log("Falling back to original get_items method");
 					await vm.get_items(force_server);
 				}
-
 			} finally {
 				vm.loading = false;
 			}
@@ -1829,9 +1843,9 @@ export default {
 						search_value: this.get_search(this.first_search) || "",
 						price_list: this.customer_price_list || this.pos_profile.selling_price_list,
 						warehouse: this.pos_profile.warehouse,
-						customer: this.customer
+						customer: this.customer,
 					},
-					freeze: false
+					freeze: false,
 				});
 
 				if (!response.message || !response.message.items) {
@@ -1846,13 +1860,15 @@ export default {
 				}
 
 				// Process and append items
-				newItems.forEach(item => {
+				newItems.forEach((item) => {
 					// Ensure UOMs
 					if (!item.item_uoms || item.item_uoms.length === 0) {
-						item.item_uoms = [{
-							uom: item.stock_uom || "Nos",
-							conversion_factor: 1.0
-						}];
+						item.item_uoms = [
+							{
+								uom: item.stock_uom || "Nos",
+								conversion_factor: 1.0,
+							},
+						];
 					}
 
 					// Ensure barcode array
@@ -1882,11 +1898,12 @@ export default {
 				this.loadProgress = progress;
 				this.eventBus.emit("data-load-progress", {
 					name: "items",
-					progress
+					progress,
 				});
 
-				console.log(`✓ Loaded ${newItems.length} items. Total: ${this.items.length}/${this.totalItemCount}`);
-
+				console.log(
+					`✓ Loaded ${newItems.length} items. Total: ${this.items.length}/${this.totalItemCount}`,
+				);
 			} catch (error) {
 				console.error("Error loading more items:", error);
 
@@ -1894,11 +1911,13 @@ export default {
 				this.currentPage -= 1;
 
 				// Show user-friendly error
-				frappe.show_alert({
-					message: "Failed to load more items. Please scroll again.",
-					indicator: "orange"
-				}, 2);
-
+				frappe.show_alert(
+					{
+						message: "Failed to load more items. Please scroll again.",
+						indicator: "orange",
+					},
+					2,
+				);
 			} finally {
 				this.loading = false;
 			}
@@ -1965,7 +1984,6 @@ export default {
 			return items_headers;
 		},
 		select_item(event, item) {
-
 			// Add visual feedback
 			const card = event.currentTarget;
 			if (card) {
@@ -1984,8 +2002,7 @@ export default {
 				if (target && source && this.fly) {
 					this.fly(source, target, this.flyConfig);
 				}
-			} catch (e) {
-			}
+			} catch (e) {}
 
 			// Add the item
 			this.add_item(item);
@@ -2009,13 +2026,13 @@ export default {
 			await this.add_item(item);
 		},
 		async add_item(item) {
-
 			item = { ...item };
 
 			// ===== CARWASH SPECIFIC LOGIC =====
-			const isCarWash = item.item_group &&
-				(item.item_group.toLowerCase().includes('car wash') ||
-					item.item_group.toLowerCase().includes('carwash'));
+			const isCarWash =
+				item.item_group &&
+				(item.item_group.toLowerCase().includes("car wash") ||
+					item.item_group.toLowerCase().includes("carwash"));
 
 			if (isCarWash) {
 				// Ensure qty is a number (never string or undefined)
@@ -2026,10 +2043,9 @@ export default {
 
 				// If there is any local property that other code uses to detect qty changes,
 				// update it too (defensive).
-				if (typeof item._barcode_qty !== 'undefined') {
+				if (typeof item._barcode_qty !== "undefined") {
 					item._barcode_qty = false;
 				}
-			
 
 				// Set quantity for regular items (keeps your existing logic)
 				const hasBarcodeQty = item._barcode_qty;
@@ -2078,9 +2094,7 @@ export default {
 			this.eventBus.emit("item-added");
 
 			// Show success feedback
-			const message = isCarWash
-				? `Added: ${item.item_name} (Service)`
-				: `Added: ${item.item_name}`;
+			const message = isCarWash ? `Added: ${item.item_name} (Service)` : `Added: ${item.item_name}`;
 			frappe.show_alert(
 				{
 					message: message,
@@ -2104,11 +2118,10 @@ export default {
 			});
 		},
 
-
 		// ===== HELPER METHOD: Check if item is CarWash =====
 		isCarWashItem(item) {
 			if (!item) return false;
-			return item.item_group === 'Carwash';
+			return item.item_group === "Carwash";
 		},
 
 		// ===== UPDATE: enter_event method to handle CarWash in barcode scanning =====
@@ -2636,10 +2649,13 @@ export default {
 					}
 				} catch (fallbackError) {
 					console.error("[ItemsSelector] Fallback failed:", fallbackError);
-					frappe.show_alert({
-						message: "Failed to reload items",
-						indicator: "red"
-					}, 2);
+					frappe.show_alert(
+						{
+							message: "Failed to reload items",
+							indicator: "red",
+						},
+						2,
+					);
 				}
 			}
 		},
@@ -2668,7 +2684,6 @@ export default {
 			}
 		},
 		onBarcodeScanned(scannedCode) {
-
 			// mark this search as coming from a scanner
 			this.search_from_scanner = true;
 
@@ -2787,7 +2802,6 @@ export default {
 			});
 		},
 		async addScannedItemToInvoice(item, scannedCode, qtyFromBarcode = null) {
-
 			// Clone the item to avoid mutating list data
 			const newItem = { ...item };
 
@@ -2840,9 +2854,7 @@ export default {
 			await this.add_item(newItem);
 
 			// Show success message
-			const successMsg = isCarWash
-				? `Added: ${item.item_name} (Service)`
-				: `Added: ${item.item_name}`;
+			const successMsg = isCarWash ? `Added: ${item.item_name} (Service)` : `Added: ${item.item_name}`;
 			frappe.show_alert(
 				{
 					message: successMsg,
@@ -3077,11 +3089,10 @@ export default {
 	},
 
 	computed: {
-
-		 decimalPrecision() {
+		decimalPrecision() {
 			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
 		},
-		
+
 		headers() {
 			return this.getItemsHeaders();
 		},
@@ -3354,138 +3365,138 @@ export default {
 
 <style scoped>
 .items-selector {
-  width: 100%;
-  height: 100%;
+	width: 100%;
+	height: 100%;
 }
 /* DESKTOP (1920px+) */
 @media (min-width: 1920px) {
-  .items-selector :deep(.items-grid) {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    padding: 10px;
-  }
+	.items-selector :deep(.items-grid) {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 12px;
+		padding: 10px;
+	}
 
-  .items-selector :deep(.item-card) {
-    min-height: 140px;
-    padding: 12px;
-  }
+	.items-selector :deep(.item-card) {
+		min-height: 140px;
+		padding: 12px;
+	}
 
-  .items-selector :deep(.item-title) {
-    font-size: 13px;
-  }
+	.items-selector :deep(.item-title) {
+		font-size: 13px;
+	}
 
-  .items-selector :deep(.item-price) {
-    font-size: 14px;
-  }
+	.items-selector :deep(.item-price) {
+		font-size: 14px;
+	}
 }
 /* LAPTOP (1280px - 1919px) */
 @media (min-width: 1280px) and (max-width: 1919px) {
-  .items-selector :deep(.items-grid) {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    padding: 8px;
-  }
+	.items-selector :deep(.items-grid) {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 10px;
+		padding: 8px;
+	}
 
-  .items-selector :deep(.item-card) {
-    min-height: 120px;
-    padding: 10px;
-  }
+	.items-selector :deep(.item-card) {
+		min-height: 120px;
+		padding: 10px;
+	}
 
-  .items-selector :deep(.item-title) {
-    font-size: 12px;
-  }
+	.items-selector :deep(.item-title) {
+		font-size: 12px;
+	}
 
-  .items-selector :deep(.item-price) {
-    font-size: 12px;
-  }
+	.items-selector :deep(.item-price) {
+		font-size: 12px;
+	}
 
-  .items-selector :deep(.item-code) {
-    font-size: 11px;
-  }
+	.items-selector :deep(.item-code) {
+		font-size: 11px;
+	}
 }
 /* Reduce further at 1350px */
 @media (max-width: 1400px) {
-  .items-selector :deep(.items-grid) {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
+	.items-selector :deep(.items-grid) {
+		grid-template-columns: repeat(2, 1fr);
+		gap: 8px;
+	}
 
-  .items-selector :deep(.item-card) {
-    min-height: 100px;
-    padding: 8px;
-  }
+	.items-selector :deep(.item-card) {
+		min-height: 100px;
+		padding: 8px;
+	}
 
-  .items-selector :deep(.item-title) {
-    font-size: 11px;
-  }
+	.items-selector :deep(.item-title) {
+		font-size: 11px;
+	}
 
-  .items-selector :deep(.item-price) {
-    font-size: 11px;
-  }
+	.items-selector :deep(.item-price) {
+		font-size: 11px;
+	}
 }
 .items-selector :deep(.items-list) {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 }
 
 /* Search and filter bar */
 .items-selector :deep(.search-bar) {
-  padding: 8px;
-  margin-bottom: 8px;
+	padding: 8px;
+	margin-bottom: 8px;
 }
 
 .items-selector :deep(.filter-controls) {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 8px;
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	padding: 8px;
 }
 
 @media (max-width: 1400px) {
-  .items-selector :deep(.filter-controls) {
-    gap: 6px;
-    padding: 6px;
-  }
+	.items-selector :deep(.filter-controls) {
+		gap: 6px;
+		padding: 6px;
+	}
 }
 
 /* List view responsiveness */
 .items-selector :deep(.items-list) {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 }
 
 .items-selector :deep(.list-item) {
-  padding: 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
+	padding: 12px;
+	border: 1px solid #e0e0e0;
+	border-radius: 6px;
 }
 
 @media (max-width: 1400px) {
-  .items-selector :deep(.list-item) {
-    padding: 10px;
-  }
+	.items-selector :deep(.list-item) {
+		padding: 10px;
+	}
 }
 
 /* Responsive button group */
 .items-selector :deep(.view-toggle) {
-  display: flex;
-  gap: 4px;
+	display: flex;
+	gap: 4px;
 }
 
 .items-selector :deep(.view-toggle .v-btn) {
-  padding: 6px 12px;
-  font-size: 12px;
+	padding: 6px 12px;
+	font-size: 12px;
 }
 
 @media (max-width: 1400px) {
-  .items-selector :deep(.view-toggle .v-btn) {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
+	.items-selector :deep(.view-toggle .v-btn) {
+		padding: 4px 8px;
+		font-size: 11px;
+	}
 }
 
 .settings-btn {
@@ -3531,10 +3542,26 @@ export default {
 	background-color: #fafafa !important;
 }
 
-:deep([data-theme="dark"]) .dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-table__wrapper),
-:deep([data-theme="dark"]) .dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-data-table__wrapper),
-:deep(.v-theme--dark) .dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-table__wrapper),
-:deep(.v-theme--dark) .dynamic-padding.compact-layout .items-table-container .sleek-data-table :deep(.v-data-table__wrapper) {
+:deep([data-theme="dark"])
+	.dynamic-padding.compact-layout
+	.items-table-container
+	.sleek-data-table
+	:deep(.v-table__wrapper),
+:deep([data-theme="dark"])
+	.dynamic-padding.compact-layout
+	.items-table-container
+	.sleek-data-table
+	:deep(.v-data-table__wrapper),
+:deep(.v-theme--dark)
+	.dynamic-padding.compact-layout
+	.items-table-container
+	.sleek-data-table
+	:deep(.v-table__wrapper),
+:deep(.v-theme--dark)
+	.dynamic-padding.compact-layout
+	.items-table-container
+	.sleek-data-table
+	:deep(.v-data-table__wrapper) {
 	background-color: #2d2d2d !important;
 }
 
@@ -3724,8 +3751,9 @@ export default {
 	border-radius: 12px;
 	cursor: pointer;
 	background-color: transparent;
-	transition: background-color 0.15s ease,
-	            transform 0.12s ease;
+	transition:
+		background-color 0.15s ease,
+		transform 0.12s ease;
 }
 
 .sleek-data-table :deep(tbody tr:hover),
@@ -4286,30 +4314,30 @@ export default {
 	}
 }
 .items-spinner-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.6);
+	position: absolute;
+	inset: 0;
+	z-index: 200;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(255, 255, 255, 0.6);
 }
 
 :deep([data-theme="dark"]) .items-spinner-overlay,
 :deep(.v-theme--dark) .items-spinner-overlay {
-  background: rgba(18, 18, 18, 0.6);
+	background: rgba(18, 18, 18, 0.6);
 }
 .items-content-wrapper {
-  position: relative;
-  height: 100%;
+	position: relative;
+	height: 100%;
 }
 
 .no-items-found {
-  width: 100%;
-  text-align: center;
-  padding: 48px 16px;
-  color: #9e9e9e;
-  font-size: 0.95rem;
+	width: 100%;
+	text-align: center;
+	padding: 48px 16px;
+	color: #9e9e9e;
+	font-size: 0.95rem;
 }
 
 /* Final override: always-visible borders for sticky search/filter fields */
@@ -4323,6 +4351,4 @@ export default {
 :deep(.sticky-header .v-field__overlay) {
 	opacity: 0 !important;
 }
-
-
 </style>

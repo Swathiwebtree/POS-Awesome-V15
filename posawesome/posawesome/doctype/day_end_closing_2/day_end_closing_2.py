@@ -6,4 +6,4 @@ from frappe.model.document import Document
 
 
 class DayEndClosing_2(Document):
-	pass
+    pass

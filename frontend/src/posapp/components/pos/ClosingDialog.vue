@@ -54,8 +54,7 @@
 									hide-default-footer
 									density="compact"
 								>
-
-								<template #headers>
+									<template #headers>
 										<tr>
 											<th class="text-left">Mode of Payment</th>
 											<th class="text-right">Opening Amount</th>
@@ -72,56 +71,65 @@
 
 									<!-- Opening -->
 									<template v-slot:item.opening_amount="{ item }">
-										{{ companyCurrencySymbol }}{{ formatCurrency(item.opening_amount || 0) }}
+										{{ companyCurrencySymbol
+										}}{{ formatCurrency(item.opening_amount || 0) }}
 									</template>
 
 									<!-- Expected -->
 									<template v-slot:item.expected_amount="{ item }">
-										{{ companyCurrencySymbol }}{{ formatCurrency(item.expected_amount || 0) }}
+										{{ companyCurrencySymbol
+										}}{{ formatCurrency(item.expected_amount || 0) }}
 									</template>
 
 									<!-- Closing (INPUT) -->
 									<template v-slot:item.closing_amount="{ item }">
-										<v-text-field v-model.number="item.closing_amount" single-line type="number"
-											density="compact" variant="outlined" hide-details
-											:prefix="companyCurrencySymbol" />
+										<v-text-field
+											v-model.number="item.closing_amount"
+											single-line
+											type="number"
+											density="compact"
+											variant="outlined"
+											hide-details
+											:prefix="companyCurrencySymbol"
+										/>
 									</template>
 
 									<!-- Difference -->
 									<template v-slot:item.difference="{ item }">
-										<div :class="{
-											'difference-cell-warning':
-												(Number(item.expected_amount) || 0) -
-												(Number(item.closing_amount) || 0) > 0,
+										<div
+											:class="{
+												'difference-cell-warning':
+													(Number(item.expected_amount) || 0) -
+														(Number(item.closing_amount) || 0) >
+													0,
 
-											'difference-cell-excess':
-												(Number(item.expected_amount) || 0) -
-												(Number(item.closing_amount) || 0) < 0
-										}">
+												'difference-cell-excess':
+													(Number(item.expected_amount) || 0) -
+														(Number(item.closing_amount) || 0) <
+													0,
+											}"
+										>
 											{{ companyCurrencySymbol }}
 											{{
 												formatCurrency(
 													(Number(item.expected_amount) || 0) -
-													(Number(item.closing_amount) || 0)
-											)
+														(Number(item.closing_amount) || 0),
+												)
 											}}
 										</div>
 									</template>
-
-
-
 								</v-data-table>
 								<!-- Grand totals -->
 								<v-divider class="my-4" />
 
 								<div class="d-flex justify-end pr-4 text-subtitle-1 font-weight-bold">
-									{{ __("Total Expected") }} :
-									{{ companyCurrencySymbol }}{{ formatCurrency(totalExpectedAmount) }}
+									{{ __("Total Expected") }} : {{ companyCurrencySymbol
+									}}{{ formatCurrency(totalExpectedAmount) }}
 								</div>
 
 								<div class="d-flex justify-end pr-4 text-subtitle-1 font-weight-bold mt-1">
-									{{ __("Total Closing") }} :
-									{{ companyCurrencySymbol }}{{ formatCurrency(totalClosingAmount) }}
+									{{ __("Total Closing") }} : {{ companyCurrencySymbol
+									}}{{ formatCurrency(totalClosingAmount) }}
 								</div>
 							</v-col>
 						</v-row>
@@ -206,7 +214,6 @@ export default {
 	}),
 
 	computed: {
-
 		hasAnyDifference() {
 			return (this.dialog_data.payment_reconciliation || []).some((p) => {
 				const expected = Number(p.expected_amount) || 0;
@@ -218,13 +225,13 @@ export default {
 		totalExpectedAmount() {
 			return (this.dialog_data.payment_reconciliation || []).reduce(
 				(sum, p) => sum + (Number(p.expected_amount) || 0),
-				0
+				0,
 			);
 		},
 		totalClosingAmount() {
 			return (this.dialog_data.payment_reconciliation || []).reduce(
 				(sum, p) => sum + (Number(p.closing_amount) || 0),
-				0
+				0,
 			);
 		},
 		isDarkTheme() {
@@ -284,20 +291,19 @@ export default {
 			const hasAnyDifference = reconciliation.some((p) => {
 				const expected = Number(p.expected_amount) || 0;
 				const closing = Number(p.closing_amount) || 0;
-				return expected - closing !== 0; 
+				return expected - closing !== 0;
 			});
 
 			if (hasAnyDifference) {
 				frappe.show_alert({
 					message: this.__(
-						"Closing amount must exactly match expected amount for all payment modes before closing the shift."
+						"Closing amount must exactly match expected amount for all payment modes before closing the shift.",
 					),
 					indicator: "red",
 				});
 				frappe.utils.play_sound("error");
 				return;
 			}
-
 
 			// 3. Prepare payload
 			const balance_details = reconciliation.map((p) => ({
@@ -351,7 +357,7 @@ export default {
 			try {
 				// 1. Remove all localStorage entries
 				const localStorageKeys = [...Object.keys(localStorage)];
-				localStorageKeys.forEach(key => {
+				localStorageKeys.forEach((key) => {
 					try {
 						localStorage.removeItem(key);
 					} catch (e) {
@@ -363,7 +369,7 @@ export default {
 				sessionStorage.clear();
 
 				// 3. Clear all cookies
-				document.cookie.split(";").forEach(c => {
+				document.cookie.split(";").forEach((c) => {
 					const eqPos = c.indexOf("=");
 					const name = eqPos > -1 ? c.substr(0, eqPos).trim() : c.trim();
 					if (name) {
@@ -398,7 +404,7 @@ export default {
 				}
 
 				// 6. Clear service workers
-				if ('serviceWorker' in navigator) {
+				if ("serviceWorker" in navigator) {
 					try {
 						const registrations = await navigator.serviceWorker.getRegistrations();
 						for (let registration of registrations) {
@@ -414,7 +420,7 @@ export default {
 				}
 
 				// 7. Invalidate Service Worker cache storage
-				if ('caches' in window) {
+				if ("caches" in window) {
 					try {
 						const cacheNames = await caches.keys();
 						for (const cacheName of cacheNames) {
@@ -486,13 +492,9 @@ export default {
 					closing_amount: closing,
 					difference: 0,
 					currency:
-						p.currency ||
-						data.currency ||
-						(this.pos_profile && this.pos_profile.currency) ||
-						"",
+						p.currency || data.currency || (this.pos_profile && this.pos_profile.currency) || "",
 				};
 			});
-
 
 			data.payment_reconciliation = recon;
 
@@ -757,7 +759,6 @@ export default {
 	color: #2e7d32;
 	font-weight: 600;
 }
-
 
 /* ensure overlay visually hides underlying UI a bit more */
 :deep(.v-overlay__scrim) {

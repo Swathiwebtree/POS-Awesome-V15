@@ -6,4 +6,4 @@ from frappe.tests.utils import FrappeTestCase
 
 
 class TestCashCounting_2(FrappeTestCase):
-	pass
+    pass

@@ -49,22 +49,34 @@
 							</v-col>
 
 							<v-col cols="6">
-								<v-autocomplete density="compact" color="primary" :label="frappe._('Make')+ ' *'"
-									v-model="make" :items="make_list" :loading="loading_makes"
-									@update:search="search_makes" clearable>
+								<v-autocomplete
+									density="compact"
+									color="primary"
+									:label="frappe._('Make') + ' *'"
+									v-model="make"
+									:items="make_list"
+									:loading="loading_makes"
+									@update:search="search_makes"
+									clearable
+								>
 									<template #no-data>
 										<div class="pa-2 text-center text-caption text-medium-emphasis">
 											{{ __("No makes found. Type to add a new one.") }}
 										</div>
 									</template>
 								</v-autocomplete>
-
 							</v-col>
 
 							<v-col cols="6">
-								<v-text-field density="compact" color="primary" :label="frappe._('Model No')+ ' *'"
-									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'" hide-details class="dark-field"
-									v-model="model" />
+								<v-text-field
+									density="compact"
+									color="primary"
+									:label="frappe._('Model No') + ' *'"
+									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+									hide-details
+									class="dark-field"
+									v-model="model"
+								/>
 							</v-col>
 
 							<v-col cols="6">
@@ -196,10 +208,7 @@ export default {
 
 				if (res?.message) {
 					const customerMobile =
-						res.message.mobile_no ||
-						res.message.mobile_number ||
-						res.message.phone ||
-						"";
+						res.message.mobile_no || res.message.mobile_number || res.message.phone || "";
 
 					// Preserve explicit vehicle mobile in edit mode. Only auto-fill
 					// from customer when mobile is currently empty.
@@ -212,7 +221,6 @@ export default {
 			}
 		},
 	},
-
 
 	methods: {
 		reset_dialog() {
@@ -275,7 +283,6 @@ export default {
 				this.loading_makes = false;
 			}
 		},
-
 
 		// single entry point to open and populate the dialog
 		async open_dialog(payload = {}) {
@@ -377,7 +384,6 @@ export default {
 				});
 				return;
 			}
-
 
 			this.loading = true;
 			try {

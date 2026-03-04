@@ -177,52 +177,59 @@ def get_sales_person_names():
 
         if profile:
             allowed = [
-                d.get("sales_person")
-                for d in profile.get("posa_sales_persons", [])
-                if d.get("sales_person")
+                d.get("sales_person") for d in profile.get("posa_sales_persons", []) if d.get("sales_person")
             ]
 
         results = []
 
         if allowed:
-            direct = frappe.get_all(
-                "Sales Person",
-                filters=[
-                    ["name", "in", allowed],
-                    ["enabled", "=", 1],
-                    ["is_group", "=", 0],
-                ],
-                fields=["name", "sales_person_name", "parent_sales_person"],
-                limit_page_length=100000,
-            ) or []
+            direct = (
+                frappe.get_all(
+                    "Sales Person",
+                    filters=[
+                        ["name", "in", allowed],
+                        ["enabled", "=", 1],
+                        ["is_group", "=", 0],
+                    ],
+                    fields=["name", "sales_person_name", "parent_sales_person"],
+                    limit_page_length=100000,
+                )
+                or []
+            )
 
-            members = frappe.get_all(
-                "Sales Person",
-                filters=[
-                    ["parent_sales_person", "in", allowed],
-                    ["enabled", "=", 1],
-                    ["is_group", "=", 0],
-                ],
-                fields=["name", "sales_person_name", "parent_sales_person"],
-                limit_page_length=100000,
-            ) or []
+            members = (
+                frappe.get_all(
+                    "Sales Person",
+                    filters=[
+                        ["parent_sales_person", "in", allowed],
+                        ["enabled", "=", 1],
+                        ["is_group", "=", 0],
+                    ],
+                    fields=["name", "sales_person_name", "parent_sales_person"],
+                    limit_page_length=100000,
+                )
+                or []
+            )
 
             seen = set()
-            for r in (direct + members):
+            for r in direct + members:
                 if r["name"] not in seen:
                     results.append(r)
                     seen.add(r["name"])
         else:
-            results = frappe.get_all(
-                "Sales Person",
-                filters=[
-                    ["enabled", "=", 1],
-                    ["is_group", "=", 0],
-                ],
-                fields=["name", "sales_person_name", "parent_sales_person"],
-                order_by="sales_person_name",
-                limit_page_length=100000,
-            ) or []
+            results = (
+                frappe.get_all(
+                    "Sales Person",
+                    filters=[
+                        ["enabled", "=", 1],
+                        ["is_group", "=", 0],
+                    ],
+                    fields=["name", "sales_person_name", "parent_sales_person"],
+                    order_by="sales_person_name",
+                    limit_page_length=100000,
+                )
+                or []
+            )
 
         logger.info(f"Found {len(results)} sales persons")
 
@@ -234,7 +241,6 @@ def get_sales_person_names():
             message=frappe.get_traceback(),
         )
         return []
-
 
 
 @frappe.whitelist()
