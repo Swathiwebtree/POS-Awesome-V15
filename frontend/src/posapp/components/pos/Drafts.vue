@@ -48,7 +48,14 @@
 				<template v-slot:item.customer="{ item }">
 					<div class="d-flex align-center gap-1">
 						<span class="customer-name">{{ item.customer_name || item.customer }}</span>
-						<v-chip v-if="item.is_corporate" color="teal" text="black" size="x-small" variant="tonal" class="ml-1">
+						<v-chip
+							v-if="item.is_corporate"
+							color="teal"
+							text="black"
+							size="x-small"
+							variant="tonal"
+							class="ml-1"
+						>
 							{{ __("Corporate") }}
 						</v-chip>
 					</div>
@@ -318,7 +325,7 @@ export default {
 			{ title: __("Amount"), value: "grand_total", align: "end", sortable: false, width: "120px" },
 		],
 		_employeeNameCache: {},
-	    _customerTypeCache: {},
+		_customerTypeCache: {},
 		_customerNameCache: {},
 	}),
 	computed: {
@@ -427,8 +434,9 @@ export default {
 				// Mark is_corporate on drafts based on resolved customer type
 				drafts = drafts.map((d) => {
 					const custType = this._customerTypeCache[d.customer];
-					d.is_corporate = (custType === "Company");
-					d.customer_name = d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
+					d.is_corporate = custType === "Company";
+					d.customer_name =
+						d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
 					return d;
 				});
 
@@ -523,7 +531,7 @@ export default {
 				await this._resolveCustomerTypes([nd.customer]);
 			}
 			const custType = this._customerTypeCache[nd.customer];
-			nd.is_corporate = (custType === "Company");
+			nd.is_corporate = custType === "Company";
 			nd.customer_name = nd.customer_name || this._customerNameCache[nd.customer] || nd.customer || "";
 
 			this.dialog_data = this.dialog_data.filter((d) => d.name !== nd.name);
@@ -610,66 +618,68 @@ export default {
 
 					console.log("[Invoice] Draft loaded:", invoice);
 
-				const normalizedOdometer =
-					typeof invoice.custom_odometer_reading !== "undefined" && invoice.custom_odometer_reading !== null
-						? invoice.custom_odometer_reading
-						: "";
-				const normalizedHasOilItem = Boolean(Number(invoice.custom_has_oil_item)) || invoice.custom_has_oil_item === true;
+					const normalizedOdometer =
+						typeof invoice.custom_odometer_reading !== "undefined" &&
+						invoice.custom_odometer_reading !== null
+							? invoice.custom_odometer_reading
+							: "";
+					const normalizedHasOilItem =
+						Boolean(Number(invoice.custom_has_oil_item)) || invoice.custom_has_oil_item === true;
 
-                this.eventBus.emit("load_invoice_customer", {
-                    customer: invoice.customer,
-                    customer_name: invoice.customer_name || invoice.customer,
-                    invoice_name: invoice.name || "",
-                    contact_mobile: invoice.contact_mobile || "",
-                    custom_vehicle_no: invoice.custom_vehicle_no || "",
-                    custom_odometer_reading: normalizedOdometer,
-                    custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
-                });
+					this.eventBus.emit("load_invoice_customer", {
+						customer: invoice.customer,
+						customer_name: invoice.customer_name || invoice.customer,
+						invoice_name: invoice.name || "",
+						contact_mobile: invoice.contact_mobile || "",
+						custom_vehicle_no: invoice.custom_vehicle_no || "",
+						custom_odometer_reading: normalizedOdometer,
+						custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
+					});
 
-				// Keep InvoiceSummary/Invoice state aligned even when draft is loaded from Drafts panel
-				this.eventBus.emit("set_contact_mobile", invoice.contact_mobile || "");
-				this.eventBus.emit("set_custom_vehicle_no", invoice.custom_vehicle_no || "");
-				this.eventBus.emit("set_custom_odometer_reading", normalizedOdometer);
-				this.eventBus.emit("set_custom_has_oil_item", normalizedHasOilItem);
-				this.eventBus.emit("load_odometer_data", {
-					custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
-					custom_odometer_reading: normalizedOdometer,
-					contact_mobile: invoice.contact_mobile || "",
-					custom_vehicle_no: invoice.custom_vehicle_no || "",
+					// Keep InvoiceSummary/Invoice state aligned even when draft is loaded from Drafts panel
+					this.eventBus.emit("set_contact_mobile", invoice.contact_mobile || "");
+					this.eventBus.emit("set_custom_vehicle_no", invoice.custom_vehicle_no || "");
+					this.eventBus.emit("set_custom_odometer_reading", normalizedOdometer);
+					this.eventBus.emit("set_custom_has_oil_item", normalizedHasOilItem);
+					this.eventBus.emit("load_odometer_data", {
+						custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
+						custom_odometer_reading: normalizedOdometer,
+						contact_mobile: invoice.contact_mobile || "",
+						custom_vehicle_no: invoice.custom_vehicle_no || "",
+					});
+					this.eventBus.emit("update_odometer_data", {
+						custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
+						custom_odometer_reading: normalizedOdometer,
+						contact_mobile: invoice.contact_mobile || "",
+						custom_vehicle_no: invoice.custom_vehicle_no || "",
+					});
+
+					// ✅ EMIT TO LOAD ITEMS
+					if (invoice.items && invoice.items.length > 0) {
+						this.eventBus.emit("load_invoice_items", invoice.items);
+					}
+
+					// Show success message
+					frappe.show_alert({
+						message: `Draft invoice ${draftName} loaded successfully`,
+						indicator: "green",
+					});
+
+					console.log("[Invoice] Draft loading completed");
+				} else {
+					frappe.show_alert({
+						message: "Failed to load draft invoice",
+						indicator: "red",
+					});
+				}
+			} catch (err) {
+				console.error("[Invoice] Error loading draft:", err);
+				frappe.show_alert({
+					message: "Error loading draft invoice",
+					indicator: "red",
 				});
-				this.eventBus.emit("update_odometer_data", {
-					custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
-					custom_odometer_reading: normalizedOdometer,
-					contact_mobile: invoice.contact_mobile || "",
-					custom_vehicle_no: invoice.custom_vehicle_no || "",
-				});
-                
-                // ✅ EMIT TO LOAD ITEMS
-                if (invoice.items && invoice.items.length > 0) {
-                    this.eventBus.emit("load_invoice_items", invoice.items);
-                }
-                
-                // Show success message
-                frappe.show_alert({
-                    message: `Draft invoice ${draftName} loaded successfully`,
-                    indicator: "green",
-                });
-                
-                console.log("[Invoice] Draft loading completed");
-            } else {
-                frappe.show_alert({
-                    message: "Failed to load draft invoice",
-                    indicator: "red",
-                });
-            }
-        } catch (err) {
-            console.error("[Invoice] Error loading draft:", err);
-            frappe.show_alert({
-                message: "Error loading draft invoice",
-                indicator: "red",
-            });
-        }
-    });
+			}
+		});
 		this.eventBus.on("open_drafts", async (data) => {
 			if (Array.isArray(data) && data.length) {
 				const normalized = this._normalizeAndSort(data);
@@ -713,8 +723,9 @@ export default {
 
 					// for is_corporate flag
 					const custType = this._customerTypeCache[d.customer];
-					d.is_corporate = (custType === "Company");
-					d.customer_name = d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
+					d.is_corporate = custType === "Company";
+					d.customer_name =
+						d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
 
 					return d;
 				});

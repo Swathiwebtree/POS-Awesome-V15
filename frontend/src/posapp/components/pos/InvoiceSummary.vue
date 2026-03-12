@@ -2059,9 +2059,7 @@ export default {
 
 		this.eventBus.on("set_custom_odometer_reading", (value) => {
 			this.odometerReading =
-				typeof value !== "undefined" && value !== null && value !== ""
-					? value
-					: null;
+				typeof value !== "undefined" && value !== null && value !== "" ? value : null;
 			if (this.odometerReading !== null) {
 				this.activateOdometerLoadLock();
 			}
