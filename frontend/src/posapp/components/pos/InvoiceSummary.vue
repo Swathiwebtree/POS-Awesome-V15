@@ -992,6 +992,7 @@ export default {
 
 			showOdometerField: false,
 			odometerReading: null,
+			odometerLoadLockUntil: 0,
 			vehicleNumber: "",
 			mobileNumber: "",
 
@@ -1398,6 +1399,25 @@ export default {
 			};
 
 			this.eventBus.emit("update_odometer_data", odometerData);
+		},
+		normalizeOilItemFlag(value) {
+			return Boolean(Number(value)) || value === true;
+		},
+		activateOdometerLoadLock(durationMs = 2000) {
+			this.odometerLoadLockUntil = Date.now() + durationMs;
+		},
+		isOdometerLoadLocked() {
+			return Date.now() < (this.odometerLoadLockUntil || 0);
+		},
+		applyOdometerData(data = {}) {
+			this.showOdometerField = this.normalizeOilItemFlag(data.custom_has_oil_item);
+			this.odometerReading =
+				typeof data.custom_odometer_reading !== "undefined" && data.custom_odometer_reading !== null
+					? data.custom_odometer_reading
+					: null;
+			this.vehicleNumber = data.custom_vehicle_no || this.vehicleNumber || "";
+			this.mobileNumber = data.contact_mobile || this.mobileNumber || "";
+			this.activateOdometerLoadLock();
 		},
 
 		clearOdometerFields() {
@@ -2015,17 +2035,49 @@ export default {
 			this.showOdometerField = shouldShow;
 
 			if (!shouldShow) {
-				this.clearOdometerFields();
+				// During draft/job-order hydration, item-watch can briefly emit false
+				// and then true; don't wipe loaded values in that window.
+				if (!this.isOdometerLoadLocked()) {
+					this.clearOdometerFields();
+				}
 			}
 		});
 
 		// Listen for odometer data from parent (when loading draft)
 		this.eventBus.on("load_odometer_data", (data) => {
 			if (data) {
-				this.showOdometerField = data.custom_has_oil_item === 1;
-				this.odometerReading = data.custom_odometer_reading || null;
-				this.vehicleNumber = data.custom_vehicle_no || "";
-				this.mobileNumber = data.contact_mobile || "";
+				this.applyOdometerData(data);
+			}
+		});
+
+		this.eventBus.on("set_custom_has_oil_item", (value) => {
+			this.showOdometerField = this.normalizeOilItemFlag(value);
+			if (this.showOdometerField) {
+				this.activateOdometerLoadLock();
+			}
+		});
+
+		this.eventBus.on("set_custom_odometer_reading", (value) => {
+			this.odometerReading =
+				typeof value !== "undefined" && value !== null && value !== ""
+					? value
+					: null;
+			if (this.odometerReading !== null) {
+				this.activateOdometerLoadLock();
+			}
+		});
+
+		this.eventBus.on("set_custom_vehicle_no", (value) => {
+			this.vehicleNumber = value || "";
+			if (this.vehicleNumber) {
+				this.activateOdometerLoadLock();
+			}
+		});
+
+		this.eventBus.on("set_contact_mobile", (value) => {
+			this.mobileNumber = value || "";
+			if (this.mobileNumber) {
+				this.activateOdometerLoadLock();
 			}
 		});
 
@@ -2082,6 +2134,10 @@ export default {
 		this.eventBus.off("employee_selected", this.handleExternalEmployeeSelected);
 		this.eventBus.off("show_odometer_field");
 		this.eventBus.off("load_odometer_data");
+		this.eventBus.off("set_custom_has_oil_item");
+		this.eventBus.off("set_custom_odometer_reading");
+		this.eventBus.off("set_custom_vehicle_no");
+		this.eventBus.off("set_contact_mobile");
 		this.eventBus.off("update_customer_details");
 		this.eventBus.off("payment_completed", this.resetAfterPayment);
 		this.eventBus.off("confirm_cancel_sale", this.handleConfirmedCancelSale);

@@ -47,15 +47,8 @@
 
 				<template v-slot:item.customer="{ item }">
 					<div class="d-flex align-center gap-1">
-						<span class="customer-name">{{ item.customer }}</span>
-						<v-chip
-							v-if="item.is_corporate"
-							color="teal"
-							text="black"
-							size="x-small"
-							variant="tonal"
-							class="ml-1"
-						>
+						<span class="customer-name">{{ item.customer_name || item.customer }}</span>
+						<v-chip v-if="item.is_corporate" color="teal" text="black" size="x-small" variant="tonal" class="ml-1">
 							{{ __("Corporate") }}
 						</v-chip>
 					</div>
@@ -325,7 +318,8 @@ export default {
 			{ title: __("Amount"), value: "grand_total", align: "end", sortable: false, width: "120px" },
 		],
 		_employeeNameCache: {},
-		_customerTypeCache: {},
+	    _customerTypeCache: {},
+		_customerNameCache: {},
 	}),
 	computed: {
 		isDarkTheme() {
@@ -433,7 +427,8 @@ export default {
 				// Mark is_corporate on drafts based on resolved customer type
 				drafts = drafts.map((d) => {
 					const custType = this._customerTypeCache[d.customer];
-					d.is_corporate = custType === "Company";
+					d.is_corporate = (custType === "Company");
+					d.customer_name = d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
 					return d;
 				});
 
@@ -489,7 +484,7 @@ export default {
 					args: {
 						doctype: "Customer",
 						filters: [["name", "in", customerIds]],
-						fields: ["name", "customer_type"],
+						fields: ["name", "customer_type", "customer_name"],
 						limit_page_length: customerIds.length,
 					},
 				});
@@ -499,6 +494,7 @@ export default {
 				(list || []).forEach((rec) => {
 					// store exact customer_type (could be "Individual", "Company", etc.)
 					this._customerTypeCache[rec.name] = rec.customer_type || "";
+					this._customerNameCache[rec.name] = rec.customer_name || rec.name;
 				});
 			} catch (err) {
 				console.warn("[Drafts] Customer type lookup failed", err);
@@ -527,7 +523,8 @@ export default {
 				await this._resolveCustomerTypes([nd.customer]);
 			}
 			const custType = this._customerTypeCache[nd.customer];
-			nd.is_corporate = custType === "Company";
+			nd.is_corporate = (custType === "Company");
+			nd.customer_name = nd.customer_name || this._customerNameCache[nd.customer] || nd.customer || "";
 
 			this.dialog_data = this.dialog_data.filter((d) => d.name !== nd.name);
 			this.dialog_data.unshift(nd);
@@ -544,6 +541,7 @@ export default {
 			return {
 				name: item.name,
 				customer: item.customer || "",
+				customer_name: item.customer_name || "",
 				posting_date,
 				posting_time,
 				grand_total: item.grand_total != null ? item.grand_total : 0,
@@ -612,86 +610,66 @@ export default {
 
 					console.log("[Invoice] Draft loaded:", invoice);
 
-					// ✅ SET THE INVOICE DOC
-					this.invoice_doc = invoice;
-					this.loaded_draft_name = draftName;
+				const normalizedOdometer =
+					typeof invoice.custom_odometer_reading !== "undefined" && invoice.custom_odometer_reading !== null
+						? invoice.custom_odometer_reading
+						: "";
+				const normalizedHasOilItem = Boolean(Number(invoice.custom_has_oil_item)) || invoice.custom_has_oil_item === true;
 
-					// ✅ EMIT TO LOAD CUSTOMER & VEHICLE
-					console.log("[Invoice] 🔍 DEBUG EMISSION POINT 1 ==============================");
-					console.log("[Invoice] Emitting load_invoice_customer from first location");
-					console.log("[Invoice] Invoice data being used:", {
-						name: invoice.name,
-						customer: invoice.customer,
-						customer_name: invoice.customer_name,
-						contact_mobile: invoice.contact_mobile,
-						custom_vehicle_no: invoice.custom_vehicle_no,
-						custom_service_employee: invoice.custom_service_employee,
-						// Check all possible vehicle fields
-						vehicle_no: invoice.vehicle_no,
-						vehicle_number: invoice.vehicle_number,
-						custom_vehicle_number: invoice.custom_vehicle_number,
-						// Check if invoice has invoice_doc
-						has_invoice_doc: !!invoice.invoice_doc,
-						invoice_doc_custom_vehicle_no: invoice.invoice_doc?.custom_vehicle_no,
-						invoice_doc_contact_mobile: invoice.invoice_doc?.contact_mobile,
-					});
+                this.eventBus.emit("load_invoice_customer", {
+                    customer: invoice.customer,
+                    customer_name: invoice.customer_name || invoice.customer,
+                    invoice_name: invoice.name || "",
+                    contact_mobile: invoice.contact_mobile || "",
+                    custom_vehicle_no: invoice.custom_vehicle_no || "",
+                    custom_odometer_reading: normalizedOdometer,
+                    custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
+                });
 
-					console.log("[Invoice] Component state at emission time:", {
-						this_customer: this.customer,
-						this_contact_mobile: this.contact_mobile,
-						this_custom_vehicle_no: this.custom_vehicle_no,
-						this_custom_service_employee: this.custom_service_employee,
-					});
-
-					console.log("[Invoice] 🚀 EMITTING with values:", {
-						customer: invoice.customer,
-						customer_name: invoice.customer_name || invoice.customer,
-						invoice_name: invoice.name || "",
-						contact_mobile: invoice.contact_mobile || "",
-						custom_vehicle_no: invoice.custom_vehicle_no || "",
-						has_vehicle: !!(
-							invoice.custom_vehicle_no ||
-							invoice.vehicle_no ||
-							invoice.vehicle_number ||
-							invoice.custom_vehicle_number
-						),
-						has_mobile: !!invoice.contact_mobile,
-					});
-
-					this.eventBus.emit("load_invoice_customer", {
-						customer: invoice.customer,
-						customer_name: invoice.customer_name || invoice.customer,
-						invoice_name: invoice.name || "",
-						contact_mobile: invoice.contact_mobile || "",
-						custom_vehicle_no: invoice.custom_vehicle_no || "",
-					});
-
-					// ✅ EMIT TO LOAD ITEMS
-					if (invoice.items && invoice.items.length > 0) {
-						this.eventBus.emit("load_invoice_items", invoice.items);
-					}
-
-					// Show success message
-					frappe.show_alert({
-						message: `Draft invoice ${draftName} loaded successfully`,
-						indicator: "green",
-					});
-
-					console.log("[Invoice] Draft loading completed");
-				} else {
-					frappe.show_alert({
-						message: "Failed to load draft invoice",
-						indicator: "red",
-					});
-				}
-			} catch (err) {
-				console.error("[Invoice] Error loading draft:", err);
-				frappe.show_alert({
-					message: "Error loading draft invoice",
-					indicator: "red",
+				// Keep InvoiceSummary/Invoice state aligned even when draft is loaded from Drafts panel
+				this.eventBus.emit("set_contact_mobile", invoice.contact_mobile || "");
+				this.eventBus.emit("set_custom_vehicle_no", invoice.custom_vehicle_no || "");
+				this.eventBus.emit("set_custom_odometer_reading", normalizedOdometer);
+				this.eventBus.emit("set_custom_has_oil_item", normalizedHasOilItem);
+				this.eventBus.emit("load_odometer_data", {
+					custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
+					custom_odometer_reading: normalizedOdometer,
+					contact_mobile: invoice.contact_mobile || "",
+					custom_vehicle_no: invoice.custom_vehicle_no || "",
 				});
-			}
-		});
+				this.eventBus.emit("update_odometer_data", {
+					custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
+					custom_odometer_reading: normalizedOdometer,
+					contact_mobile: invoice.contact_mobile || "",
+					custom_vehicle_no: invoice.custom_vehicle_no || "",
+				});
+                
+                // ✅ EMIT TO LOAD ITEMS
+                if (invoice.items && invoice.items.length > 0) {
+                    this.eventBus.emit("load_invoice_items", invoice.items);
+                }
+                
+                // Show success message
+                frappe.show_alert({
+                    message: `Draft invoice ${draftName} loaded successfully`,
+                    indicator: "green",
+                });
+                
+                console.log("[Invoice] Draft loading completed");
+            } else {
+                frappe.show_alert({
+                    message: "Failed to load draft invoice",
+                    indicator: "red",
+                });
+            }
+        } catch (err) {
+            console.error("[Invoice] Error loading draft:", err);
+            frappe.show_alert({
+                message: "Error loading draft invoice",
+                indicator: "red",
+            });
+        }
+    });
 		this.eventBus.on("open_drafts", async (data) => {
 			if (Array.isArray(data) && data.length) {
 				const normalized = this._normalizeAndSort(data);
@@ -735,7 +713,8 @@ export default {
 
 					// for is_corporate flag
 					const custType = this._customerTypeCache[d.customer];
-					d.is_corporate = custType === "Company";
+					d.is_corporate = (custType === "Company");
+					d.customer_name = d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
 
 					return d;
 				});
