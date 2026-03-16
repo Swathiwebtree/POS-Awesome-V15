@@ -571,25 +571,68 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None, vehicle
 
 
 @frappe.whitelist()
-def get_vehicle_models(search_term=""):
+def get_vehicle_models(search_term="", make="", limit=500):
     """
-    Search and return a distinct list of Vehicle Model names for autocomplete.
+    Return distinct vehicle models, optionally filtered by selected make.
+    Works across Vehicle and Vehicle Master schemas.
     """
-    filters = {}
-    if search_term:
-        # Correctly format filter for a single field search
-        filters = [["model", "like", f"%{search_term}%"]]
+    search_term = (search_term or "").strip()
+    make = (make or "").strip()
+    try:
+        limit = int(limit or 500)
+    except Exception:
+        limit = 500
+    limit = min(max(limit, 1), 5000)
 
-    models = frappe.get_all(
+    values = set()
+
+    def _collect_models(table_label, model_columns, make_columns):
+        existing_models = [c for c in model_columns if _has_column(table_label, c)]
+        if not existing_models:
+            return
+        existing_makes = [c for c in make_columns if _has_column(table_label, c)]
+
+        for model_col in existing_models:
+            where_parts = [f"TRIM(IFNULL({model_col}, '')) != ''"]
+            params = []
+
+            if search_term:
+                where_parts.append(f"{model_col} LIKE %s")
+                params.append(f"%{search_term}%")
+
+            if make:
+                if not existing_makes:
+                    continue
+                make_expr = " OR ".join([f"LOWER(TRIM(IFNULL({c}, ''))) = LOWER(%s)" for c in existing_makes])
+                where_parts.append(f"({make_expr})")
+                params.extend([make] * len(existing_makes))
+
+            where_clause = " AND ".join(where_parts)
+            table_name = table_label if table_label.startswith("tab") else f"tab{table_label}"
+            rows = frappe.db.sql(
+                f"""
+                SELECT DISTINCT TRIM({model_col}) AS value
+                FROM `{table_name}`
+                WHERE {where_clause}
+                ORDER BY value ASC
+                LIMIT %s
+                """,
+                tuple(params + [limit]),
+                as_dict=True,
+            )
+            for row in rows:
+                value = (row.get("value") or "").strip()
+                if value:
+                    values.add(value)
+
+    _collect_models("Vehicle", ["model", "vehicle_model", "model_no"], ["make", "vehicle_make", "brand"])
+    _collect_models(
         VEHICLE_DOCTYPE,
-        filters=filters,
-        fields=["DISTINCT model"],
-        order_by="model asc",
-        limit_page_length=20,
+        ["model", "vehicle_model", "model_no"],
+        ["make", "vehicle_make", "brand", "manufacturer"],
     )
 
-    # Return a list of strings (model names)
-    return [d.get("model") for d in models if d.get("model")]
+    return sorted(values, key=lambda x: x.lower())[:limit]
 
 
 @frappe.whitelist()
@@ -761,26 +804,36 @@ def get_vehicle_makes(search_term="", limit=500):
 
     make_set = set()
 
-    def _collect_from(doctype, fieldname):
-        if not _has_column(doctype, fieldname):
+    def _collect_from(table_label, fieldname):
+        if not _has_column(table_label, fieldname):
             return
-        filters = []
+        table_name = table_label if table_label.startswith("tab") else f"tab{table_label}"
+        where_parts = [f"TRIM(IFNULL({fieldname}, '')) != ''"]
+        params = []
         if search_term:
-            filters = [[fieldname, "like", f"%{search_term}%"]]
-        rows = frappe.get_all(
-            doctype,
-            filters=filters,
-            fields=[fieldname],
-            order_by=f"{fieldname} asc",
-            limit_page_length=limit,
+            where_parts.append(f"{fieldname} LIKE %s")
+            params.append(f"%{search_term}%")
+        where_clause = " AND ".join(where_parts)
+        rows = frappe.db.sql(
+            f"""
+            SELECT DISTINCT TRIM({fieldname}) AS value
+            FROM `{table_name}`
+            WHERE {where_clause}
+            ORDER BY value ASC
+            LIMIT %s
+            """,
+            tuple(params + [limit]),
+            as_dict=True,
         )
         for row in rows:
-            value = (row.get(fieldname) or "").strip()
+            value = (row.get("value") or "").strip()
             if value:
                 make_set.add(value)
 
     _collect_from("Vehicle", "make")
     _collect_from(VEHICLE_DOCTYPE, "make")
     _collect_from(VEHICLE_DOCTYPE, "vehicle_make")
+    _collect_from("Vehicle", "vehicle_make")
+    _collect_from("Vehicle", "brand")
 
     return sorted(make_set, key=lambda x: x.lower())[:limit]
