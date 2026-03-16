@@ -542,6 +542,11 @@ export default {
 				});
 			}
 		},
+		getCustomerDisplayName(item) {
+			if (!item) return "";
+			const row = item.raw || item;
+			return row.custom_display_name || row.customer_name || row.name || "";
+		},
 		// --- Helper to normalize customer rows --
 		_normalizeCustomerRow(r) {
 			// Ensure we always have is_corporate boolean present in each customer row
@@ -550,6 +555,7 @@ export default {
 			const isCorporate = !!(r.is_corporate || r.is_company);
 			return {
 				...r,
+				custom_display_name: r.custom_display_name || r.customer_name || r.name || "",
 				is_corporate: isCorporate,
 				is_company: r.is_company || isCorporate,
 			};
