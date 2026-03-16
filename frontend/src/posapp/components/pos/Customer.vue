@@ -603,17 +603,17 @@ export default {
 
 			this.customers.splice(idx, 1, merged);
 			return merged;
-			},
-			normalizeCustomerValue(value) {
-				if (value && typeof value === "object") {
-					const candidate = value.name || value.customer || value.customer_name || "";
-					return String(candidate || "").trim();
-				}
-				return String(value || "").trim();
-			},
+		},
+		normalizeCustomerValue(value) {
+			if (value && typeof value === "object") {
+				const candidate = value.name || value.customer || value.customer_name || "";
+				return String(candidate || "").trim();
+			}
+			return String(value || "").trim();
+		},
 
-			// --- Customer Methods ---
-			onCustomerMenuToggle(isOpen) {
+		// --- Customer Methods ---
+		onCustomerMenuToggle(isOpen) {
 			this.isMenuOpen = isOpen;
 			if (isOpen) {
 				this.internalCustomer = null;
@@ -720,11 +720,11 @@ export default {
 			}
 		},
 
-			onCustomerChange(val) {
-				val = this.normalizeCustomerValue(val);
-				// When loading from a draft, internalCustomer is set programmatically
-				// which may trigger this. Skip to avoid showing false "already selected" error.
-				if (this._skipNextCustomerSearch) {
+		onCustomerChange(val) {
+			val = this.normalizeCustomerValue(val);
+			// When loading from a draft, internalCustomer is set programmatically
+			// which may trigger this. Skip to avoid showing false "already selected" error.
+			if (this._skipNextCustomerSearch) {
 				return;
 			}
 			if (val && this.jobOrderCustomer && val !== this.jobOrderCustomer) {
@@ -750,12 +750,12 @@ export default {
 
 			this.tempSelectedCustomer = val;
 
-				if (!this.isMenuOpen && val) {
-					this.customer = val;
-					this.internalCustomer = val;
-					this.eventBus.emit("update_customer", val);
-					this.fetchAndEmitCustomerDetails(val);
-					if (!(this.jobOrderCustomer && this.jobOrderVehicleNo)) {
+			if (!this.isMenuOpen && val) {
+				this.customer = val;
+				this.internalCustomer = val;
+				this.eventBus.emit("update_customer", val);
+				this.fetchAndEmitCustomerDetails(val);
+				if (!(this.jobOrderCustomer && this.jobOrderVehicleNo)) {
 					this.fetchVehiclesForCustomer(val);
 				}
 				this.selectedVehicle = null;
@@ -1828,13 +1828,13 @@ export default {
 					return;
 				}
 
-					const customerName = this.normalizeCustomerValue(payload.customer);
-					if (!customerName) {
-						this.customer = null;
-						this.internalCustomer = null;
-						this.selectedVehicle = null;
-						return;
-					}
+				const customerName = this.normalizeCustomerValue(payload.customer);
+				if (!customerName) {
+					this.customer = null;
+					this.internalCustomer = null;
+					this.selectedVehicle = null;
+					return;
+				}
 				const requestedVehicleNo = String(
 					payload.custom_vehicle_no ||
 						payload.vehicle_no ||
@@ -2045,21 +2045,21 @@ export default {
 					}
 				});
 
-					this.eventBus.on("set_customer", (customer) => {
-						const customerName = this.normalizeCustomerValue(customer);
-						this.customer = customerName;
-						this.internalCustomer = customerName;
-						if (this.jobOrderCustomer && customerName !== this.jobOrderCustomer) {
-							this.jobOrderCustomer = null;
-							this.jobOrderVehicleNo = null;
-							this.jobOrderLoading = false;
-							this.jobOrderLockUntil = 0;
-						}
-						if (this.jobOrderCustomer === customerName && this.jobOrderVehicleNo) {
-							return;
-						}
-						this.fetchVehiclesForCustomer(customerName);
-					});
+				this.eventBus.on("set_customer", (customer) => {
+					const customerName = this.normalizeCustomerValue(customer);
+					this.customer = customerName;
+					this.internalCustomer = customerName;
+					if (this.jobOrderCustomer && customerName !== this.jobOrderCustomer) {
+						this.jobOrderCustomer = null;
+						this.jobOrderVehicleNo = null;
+						this.jobOrderLoading = false;
+						this.jobOrderLockUntil = 0;
+					}
+					if (this.jobOrderCustomer === customerName && this.jobOrderVehicleNo) {
+						return;
+					}
+					this.fetchVehiclesForCustomer(customerName);
+				});
 
 				// Handle both customer and vehicle data from UpdateCustomer.vue
 				this.eventBus.on("add_customer_to_list", async (data) => {
