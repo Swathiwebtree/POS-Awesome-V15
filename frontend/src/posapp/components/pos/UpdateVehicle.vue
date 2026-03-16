@@ -272,7 +272,7 @@ export default {
 			try {
 				const res = await frappe.call({
 					method: "posawesome.posawesome.api.vehicles.get_vehicle_makes",
-					args: { search_term },
+					args: { search_term, limit: 1000 },
 				});
 
 				this.make_list = res.message || [];

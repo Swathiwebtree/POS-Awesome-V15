@@ -274,6 +274,7 @@ def get_customer_names(pos_profile=None, limit=200, start_after=None, modified_a
             "email_id",
             "tax_id",
             "customer_name",
+            "custom_display_name",
             "primary_address",
         ]
 
@@ -371,6 +372,7 @@ def get_customer_info(customer):
     res["posa_discount"] = getattr(customer_doc, "posa_discount", None)
     res["name"] = customer_doc.name
     res["customer_name"] = customer_doc.customer_name
+    res["custom_display_name"] = getattr(customer_doc, "custom_display_name", None) or customer_doc.customer_name
 
     res["customer_group_price_list"] = frappe.get_value(
         "Customer Group", customer_doc.customer_group, "default_price_list"
@@ -488,7 +490,7 @@ def search_customers_new(query=None, limit=20):
             """
             SELECT name
             FROM `tabCustomer`
-            WHERE (LOWER(customer_name) LIKE LOWER(%s) OR mobile_no LIKE %s)
+            WHERE (LOWER(customer_name) LIKE LOWER(%s) OR LOWER(custom_display_name) LIKE LOWER(%s) OR mobile_no LIKE %s)
             ORDER BY customer_name ASC
             LIMIT %s
             """,
@@ -532,6 +534,7 @@ def _build_customer_info(customer_name):
     res["is_corporate"] = bool(getattr(customer_doc, "is_company", False))
     res["name"] = customer_doc.name
     res["customer_name"] = customer_doc.customer_name
+    res["custom_display_name"] = getattr(customer_doc, "custom_display_name", None) or customer_doc.customer_name
 
     res["customer_group_price_list"] = frappe.get_value(
         "Customer Group", customer_doc.customer_group, "default_price_list"
@@ -638,6 +641,7 @@ def get_customer_by_mobile(mobile_no):
         return {
             "name": customer_doc.name,
             "customer_name": customer_doc.customer_name,
+            "custom_display_name": getattr(customer_doc, "custom_display_name", None) or customer_doc.customer_name,
             "mobile_no": customer_doc.mobile_no,
             "email_id": customer_doc.email_id,
             "tax_id": customer_doc.tax_id,
@@ -684,6 +688,7 @@ def get_customer_by_vehicle(vehicle_no):
                 "customer": {
                     "name": cust_doc.name,
                     "customer_name": cust_doc.customer_name,
+                    "custom_display_name": getattr(cust_doc, "custom_display_name", None) or cust_doc.customer_name,
                     "email_id": getattr(cust_doc, "email_id", ""),
                     "mobile_no": getattr(cust_doc, "mobile_no", ""),
                     "tax_id": getattr(cust_doc, "tax_id", ""),
@@ -845,6 +850,7 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
             # update safe fields if provided
             for fld in [
                 "customer_name",
+                "custom_display_name",
                 "tax_id",
                 "mobile_no",
                 "email_id",
@@ -874,6 +880,7 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
             cd = customer_data
             customer_doc = frappe.new_doc("Customer")
             customer_doc.customer_name = cd.get("customer_name")
+            customer_doc.custom_display_name = cd.get("custom_display_name") or cd.get("customer_name")
             customer_doc.customer_type = cd.get("customer_type", "Individual")
             customer_doc.customer_group = cd.get("customer_group") or frappe.defaults.get_user_default(
                 "Customer Group"
@@ -1230,6 +1237,7 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         customer_response = {
             "name": customer_doc.name,
             "customer_name": customer_doc.customer_name,
+            "custom_display_name": getattr(customer_doc, "custom_display_name", None) or customer_doc.customer_name,
             "mobile_no": customer_doc.mobile_no,
             "email_id": customer_doc.email_id,
             "tax_id": customer_doc.tax_id,
@@ -1309,6 +1317,7 @@ def create_customer(
     territory=None,
     customer_type=None,
     gender=None,
+    custom_display_name=None,
     method="create",
     address_line1=None,
     city=None,
@@ -1335,6 +1344,7 @@ def create_customer(
                 {
                     "doctype": "Customer",
                     "customer_name": customer_name,
+                    "custom_display_name": custom_display_name or customer_name,
                     "posa_referral_company": company,
                     "tax_id": tax_id,
                     "mobile_no": mobile_no,
@@ -1384,6 +1394,7 @@ def create_customer(
     elif method == "update":
         customer_doc = frappe.get_doc("Customer", customer_id)
         customer_doc.customer_name = customer_name
+        customer_doc.custom_display_name = custom_display_name or customer_name
         customer_doc.tax_id = tax_id
         customer_doc.mobile_no = mobile_no
         customer_doc.email_id = email_id
@@ -1469,12 +1480,13 @@ def search_customers(search_term="", pos_profile=None, limit=20):
     # Use SQL for OR across many fields (more reliable & fast)
     rows = frappe.db.sql(
         """
-        SELECT name, customer_name, mobile_no, email_id, COALESCE(tax_id, '') AS tax_id, COALESCE(vehicle_no, '') AS vehicle_no
+        SELECT name, customer_name, COALESCE(custom_display_name, customer_name) AS custom_display_name, mobile_no, email_id, COALESCE(tax_id, '') AS tax_id, COALESCE(vehicle_no, '') AS vehicle_no
         FROM `tabCustomer`
         WHERE disabled = 0
         AND (
             name LIKE %(like)s
             OR customer_name LIKE %(like)s
+            OR custom_display_name LIKE %(like)s
             OR mobile_no LIKE %(like)s
             OR email_id LIKE %(like)s
             OR tax_id LIKE %(like)s
@@ -1617,13 +1629,21 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
     """
     search_term = (search_term or "").strip()
     limit = int(limit or 20)
+    has_custom_display_name = False
+    try:
+        has_custom_display_name = frappe.db.has_column("tabCustomer", "custom_display_name")
+    except Exception:
+        has_custom_display_name = False
 
     if not search_term:
         # Return recent customers
+        fields = ["name", "customer_name", "mobile_no", "email_id", "tax_id"]
+        if has_custom_display_name:
+            fields.insert(2, "custom_display_name")
         return frappe.get_all(
             "Customer",
             filters=[["disabled", "=", 0]],
-            fields=["name", "customer_name", "mobile_no", "email_id", "tax_id"],
+            fields=fields,
             limit_page_length=limit,
             order_by="modified desc",
         )
@@ -1632,11 +1652,19 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
     like_pattern = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
 
     # STEP 1: Search Customers Directly
+    custom_display_select = (
+        "c.custom_display_name"
+        if has_custom_display_name
+        else "c.customer_name AS custom_display_name"
+    )
+    custom_display_where = "OR c.custom_display_name LIKE %(like)s" if has_custom_display_name else ""
+
     customer_results = frappe.db.sql(
-        """
+        f"""
     SELECT 
         c.name,
         c.customer_name,
+        {custom_display_select},
         c.mobile_no,
         c.email_id,
         c.tax_id,
@@ -1653,6 +1681,7 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
     AND (
         c.name LIKE %(like)s
         OR c.customer_name LIKE %(like)s
+        {custom_display_where}
         OR c.mobile_no LIKE %(like)s
         OR c.email_id LIKE %(like)s
         OR c.tax_id LIKE %(like)s
@@ -1691,7 +1720,11 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
                 customer_data = frappe.db.get_value(
                     "Customer",
                     vehicle.customer,
-                    ["name", "customer_name", "mobile_no", "email_id", "tax_id"],
+                    (
+                        ["name", "customer_name", "custom_display_name", "mobile_no", "email_id", "tax_id", "customer_type"]
+                        if has_custom_display_name
+                        else ["name", "customer_name", "mobile_no", "email_id", "tax_id", "customer_type"]
+                    ),
                     as_dict=1,
                 )
 
@@ -1700,6 +1733,9 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
                         {
                             "name": customer_data.name,
                             "customer_name": customer_data.customer_name,
+                            "custom_display_name": (
+                                customer_data.get("custom_display_name") or customer_data.customer_name
+                            ),
                             "mobile_no": customer_data.mobile_no or "",
                             "email_id": customer_data.email_id or "",
                             "tax_id": customer_data.tax_id or "",
@@ -1796,13 +1832,45 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
     customer = (customer or "").strip() or None
     limit = min(max(int(limit or 20), 1), 200)
 
+    def _enrich_customer_fields(rows):
+        rows = rows or []
+        customer_ids = list({r.get("customer") for r in rows if r.get("customer")})
+        if not customer_ids:
+            return rows
+
+        customer_rows = frappe.get_all(
+            "Customer",
+            filters={"name": ["in", customer_ids]},
+            fields=["name", "customer_name", "custom_display_name", "mobile_no"],
+        )
+        customer_map = {c.name: c for c in customer_rows}
+
+        for r in rows:
+            cust = customer_map.get(r.get("customer"))
+            if not cust:
+                r["custom_display_name"] = r.get("custom_display_name") or r.get("customer_name") or r.get("customer")
+                r["customer_name"] = r.get("customer_name") or ""
+                r["mobile_no"] = r.get("mobile_no") or ""
+                continue
+            r["customer_name"] = r.get("customer_name") or cust.customer_name or ""
+            r["custom_display_name"] = (
+                r.get("custom_display_name")
+                or cust.custom_display_name
+                or cust.customer_name
+                or r.get("customer")
+                or ""
+            )
+            r["mobile_no"] = r.get("mobile_no") or cust.mobile_no or ""
+
+        return rows
+
     # No search term → simple get_all
     if not search_term:
         filters = {}
         if customer:
             filters["customer"] = customer
 
-        return frappe.get_all(
+        vehicles = frappe.get_all(
             "Vehicle Master",
             filters=filters,
             fields=[
@@ -1816,6 +1884,7 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
             limit_page_length=limit,
             order_by="modified desc",
         )
+        return _enrich_customer_fields(vehicles)
 
     # Prefix + contains patterns. Prefix is cheaper; contains gives expected UX.
     like_pattern = f"{search_term}%"
@@ -1850,8 +1919,12 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
                 vm.model,
                 vm.customer,
                 vm.odometer,
-                vm.chasis_no
+                vm.chasis_no,
+                c.customer_name,
+                COALESCE(c.custom_display_name, c.customer_name) AS custom_display_name,
+                c.mobile_no
             FROM `tabVehicle Master` vm
+            LEFT JOIN `tabCustomer` c ON c.name = vm.customer
             WHERE vm.vehicle_no = %(vehicle_no)s
             {exact_customer_clause}
             ORDER BY vm.modified DESC
@@ -1873,8 +1946,12 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
                 vm.model,
                 vm.customer,
                 vm.odometer,
-                vm.chasis_no
+                vm.chasis_no,
+                c.customer_name,
+                COALESCE(c.custom_display_name, c.customer_name) AS custom_display_name,
+                c.mobile_no
             FROM `tabVehicle Master` vm
+            LEFT JOIN `tabCustomer` c ON c.name = vm.customer
             WHERE vm.vehicle_no LIKE %(like)s
             {customer_clause}
             ORDER BY vm.modified DESC
@@ -1896,8 +1973,12 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
                 vm.model,
                 vm.customer,
                 vm.odometer,
-                vm.chasis_no
+                vm.chasis_no,
+                c.customer_name,
+                COALESCE(c.custom_display_name, c.customer_name) AS custom_display_name,
+                c.mobile_no
             FROM `tabVehicle Master` vm
+            LEFT JOIN `tabCustomer` c ON c.name = vm.customer
             WHERE vm.vehicle_no LIKE %(contains)s
             {customer_clause}
             ORDER BY vm.modified DESC

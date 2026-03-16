@@ -330,6 +330,8 @@ def get_vehicle_and_customer(vehicle_no):
             "customer": {
                 "name": cust_doc.name,
                 "customer_name": getattr(cust_doc, "customer_name", ""),
+                "custom_display_name": getattr(cust_doc, "custom_display_name", None)
+                or getattr(cust_doc, "customer_name", ""),
                 "email_id": getattr(cust_doc, "email_id", ""),
                 "mobile_no": getattr(cust_doc, "mobile_no", ""),
                 "tax_id": getattr(cust_doc, "tax_id", ""),
@@ -548,6 +550,7 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None, vehicle
 
             row["customer"] = customer_name
             row["customer_name"] = cust_doc.customer_name
+            row["custom_display_name"] = getattr(cust_doc, "custom_display_name", None) or cust_doc.customer_name
             if not row.get("mobile_no"):
                 row["mobile_no"] = cust_doc.mobile_no or ""
             row["email_id"] = cust_doc.email_id or ""
@@ -671,6 +674,8 @@ def get_customer_by_vehicle(vehicle_no):
         "customer": {
             "name": cust_doc.name,
             "customer_name": getattr(cust_doc, "customer_name", ""),
+            "custom_display_name": getattr(cust_doc, "custom_display_name", None)
+            or getattr(cust_doc, "customer_name", ""),
             "email_id": getattr(cust_doc, "email_id", ""),
             "mobile_no": getattr(cust_doc, "mobile_no", ""),
             "tax_id": getattr(cust_doc, "tax_id", ""),
@@ -724,37 +729,56 @@ def get_all_vehicles(limit=500):
     customers = frappe.get_all(
         "Customer",
         filters={"name": ["in", customer_names]},
-        fields=["name", "customer_name", "mobile_no"],
+        fields=["name", "customer_name", "custom_display_name", "mobile_no"],
     )
     customer_map = {c.name: c for c in customers}
 
     for v in vehicles:
         cust = customer_map.get(v.customer)
         v["customer_name"] = cust.customer_name if cust else ""
+        v["custom_display_name"] = (
+            (cust.custom_display_name or cust.customer_name) if cust else (v.get("customer_name") or "")
+        )
         v["mobile_no"] = cust.mobile_no if cust else ""
 
     return vehicles
 
 
 @frappe.whitelist()
-def get_vehicle_makes(search_term=""):
-    conditions = ""
-    values = []
+def get_vehicle_makes(search_term="", limit=500):
+    """
+    Return vehicle makes for POS dropdown.
+    Includes makes stored in both Vehicle and Vehicle Master doctypes.
+    """
+    search_term = (search_term or "").strip()
+    try:
+        limit = int(limit or 500)
+    except Exception:
+        limit = 500
+    limit = min(max(limit, 1), 2000)
 
-    if search_term:
-        conditions = "WHERE make LIKE %s"
-        values.append(f"%{search_term}%")
+    make_set = set()
 
-    makes = frappe.db.sql(
-        f"""
-        SELECT DISTINCT make
-        FROM `tabVehicle`
-        {conditions}
-        ORDER BY make ASC
-        LIMIT 20
-        """,
-        values,
-        as_dict=True,
-    )
+    def _collect_from(doctype, fieldname):
+        if not _has_column(doctype, fieldname):
+            return
+        filters = []
+        if search_term:
+            filters = [[fieldname, "like", f"%{search_term}%"]]
+        rows = frappe.get_all(
+            doctype,
+            filters=filters,
+            fields=[fieldname],
+            order_by=f"{fieldname} asc",
+            limit_page_length=limit,
+        )
+        for row in rows:
+            value = (row.get(fieldname) or "").strip()
+            if value:
+                make_set.add(value)
 
-    return [d["make"] for d in makes if d.get("make")]
+    _collect_from("Vehicle", "make")
+    _collect_from(VEHICLE_DOCTYPE, "make")
+    _collect_from(VEHICLE_DOCTYPE, "vehicle_make")
+
+    return sorted(make_set, key=lambda x: x.lower())[:limit]

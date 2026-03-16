@@ -71,7 +71,7 @@
 				:label="frappe._('Customer / Mobile No')"
 				v-model="internalCustomer"
 				:items="filteredCustomers"
-				item-title="customer_name"
+				:item-title="getCustomerDisplayName"
 				item-value="name"
 				:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 				:no-data-text="
@@ -120,10 +120,15 @@
 
 				<template #item="{ props, item }">
 					<v-list-item v-bind="props">
-						<v-list-item-title>{{ item.raw.customer_name }}</v-list-item-title>
-						<v-list-item-subtitle v-if="item.raw.customer_name !== item.raw.name">
-							<div>ID: {{ item.raw.name }}</div>
-						</v-list-item-subtitle>
+						                                          <v-list-item-title>
+                                                        {{ item.raw.custom_display_name || item.raw.customer_name ||
+                                                        item.raw.name }}
+                                                </v-list-item-title>
+
+                                                <v-list-item-subtitle
+                                                        v-if="(item.raw.custom_display_name || item.raw.customer_name || '') !== item.raw.name">
+                                                        <div>ID: {{ item.raw.name }}</div>
+                                                </v-list-item-subtitle>
 						<v-list-item-subtitle v-if="item.raw.mobile_no">
 							<div>Mobile: {{ item.raw.mobile_no }}</div>
 						</v-list-item-subtitle>

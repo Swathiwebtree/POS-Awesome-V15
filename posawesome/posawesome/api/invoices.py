@@ -790,11 +790,14 @@ def submit_invoice(invoice, data):
 
         try:
             invoice_doc.submit()
+            outstanding_remaining = flt(
+                frappe.db.get_value(invoice_doc.doctype, invoice_doc.name, "outstanding_amount") or 0
+            )
             for payment in paymentsPayload:
                 if payment.get("amount", 0) > 0:
                     actual_payment_method = payment.get("mode_of_payment")
                     payment_account = payment.get("account")
-                    payment_amount = payment.get("amount", 0)
+                    payment_amount = flt(payment.get("amount", 0))
 
                     if not payment_account and actual_payment_method:
                         # payment_account = get_bank_cash_account(actual_payment_method, invoice_doc.company)
@@ -846,15 +849,21 @@ def submit_invoice(invoice, data):
                     advance_payment_entry.flags.ignore_permissions = True
                     frappe.flags.ignore_account_permission = True
 
-                    # Set references if linking to invoice
-                    advance_payment_entry.append(
-                        "references",
-                        {
-                            "reference_doctype": "Sales Invoice",
-                            "reference_name": invoice_doc.name,
-                            "allocated_amount": payment_amount,
-                        },
-                    )
+                    # Never allocate more than the invoice outstanding amount.
+                    allocated_amount = min(payment_amount, max(outstanding_remaining, 0))
+                    if allocated_amount > 0:
+                        advance_payment_entry.append(
+                            "references",
+                            {
+                                "reference_doctype": "Sales Invoice",
+                                "reference_name": invoice_doc.name,
+                                "allocated_amount": allocated_amount,
+                            },
+                        )
+                        outstanding_remaining = flt(
+                            outstanding_remaining - allocated_amount,
+                            invoice_doc.precision("outstanding_amount"),
+                        )
 
                     advance_payment_entry.insert()
                     advance_payment_entry.submit()
