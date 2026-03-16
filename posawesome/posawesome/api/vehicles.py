@@ -550,7 +550,9 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None, vehicle
 
             row["customer"] = customer_name
             row["customer_name"] = cust_doc.customer_name
-            row["custom_display_name"] = getattr(cust_doc, "custom_display_name", None) or cust_doc.customer_name
+            row["custom_display_name"] = (
+                getattr(cust_doc, "custom_display_name", None) or cust_doc.customer_name
+            )
             if not row.get("mobile_no"):
                 row["mobile_no"] = cust_doc.mobile_no or ""
             row["email_id"] = cust_doc.email_id or ""

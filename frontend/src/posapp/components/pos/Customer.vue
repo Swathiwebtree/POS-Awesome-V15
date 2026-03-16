@@ -120,15 +120,18 @@
 
 				<template #item="{ props, item }">
 					<v-list-item v-bind="props">
-						                                          <v-list-item-title>
-                                                        {{ item.raw.custom_display_name || item.raw.customer_name ||
-                                                        item.raw.name }}
-                                                </v-list-item-title>
+						<v-list-item-title>
+							{{ item.raw.custom_display_name || item.raw.customer_name || item.raw.name }}
+						</v-list-item-title>
 
-                                                <v-list-item-subtitle
-                                                        v-if="(item.raw.custom_display_name || item.raw.customer_name || '') !== item.raw.name">
-                                                        <div>ID: {{ item.raw.name }}</div>
-                                                </v-list-item-subtitle>
+						<v-list-item-subtitle
+							v-if="
+								(item.raw.custom_display_name || item.raw.customer_name || '') !==
+								item.raw.name
+							"
+						>
+							<div>ID: {{ item.raw.name }}</div>
+						</v-list-item-subtitle>
 						<v-list-item-subtitle v-if="item.raw.mobile_no">
 							<div>Mobile: {{ item.raw.mobile_no }}</div>
 						</v-list-item-subtitle>

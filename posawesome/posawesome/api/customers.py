@@ -372,7 +372,9 @@ def get_customer_info(customer):
     res["posa_discount"] = getattr(customer_doc, "posa_discount", None)
     res["name"] = customer_doc.name
     res["customer_name"] = customer_doc.customer_name
-    res["custom_display_name"] = getattr(customer_doc, "custom_display_name", None) or customer_doc.customer_name
+    res["custom_display_name"] = (
+        getattr(customer_doc, "custom_display_name", None) or customer_doc.customer_name
+    )
 
     res["customer_group_price_list"] = frappe.get_value(
         "Customer Group", customer_doc.customer_group, "default_price_list"
@@ -534,7 +536,9 @@ def _build_customer_info(customer_name):
     res["is_corporate"] = bool(getattr(customer_doc, "is_company", False))
     res["name"] = customer_doc.name
     res["customer_name"] = customer_doc.customer_name
-    res["custom_display_name"] = getattr(customer_doc, "custom_display_name", None) or customer_doc.customer_name
+    res["custom_display_name"] = (
+        getattr(customer_doc, "custom_display_name", None) or customer_doc.customer_name
+    )
 
     res["customer_group_price_list"] = frappe.get_value(
         "Customer Group", customer_doc.customer_group, "default_price_list"
@@ -641,7 +645,8 @@ def get_customer_by_mobile(mobile_no):
         return {
             "name": customer_doc.name,
             "customer_name": customer_doc.customer_name,
-            "custom_display_name": getattr(customer_doc, "custom_display_name", None) or customer_doc.customer_name,
+            "custom_display_name": getattr(customer_doc, "custom_display_name", None)
+            or customer_doc.customer_name,
             "mobile_no": customer_doc.mobile_no,
             "email_id": customer_doc.email_id,
             "tax_id": customer_doc.tax_id,
@@ -688,7 +693,8 @@ def get_customer_by_vehicle(vehicle_no):
                 "customer": {
                     "name": cust_doc.name,
                     "customer_name": cust_doc.customer_name,
-                    "custom_display_name": getattr(cust_doc, "custom_display_name", None) or cust_doc.customer_name,
+                    "custom_display_name": getattr(cust_doc, "custom_display_name", None)
+                    or cust_doc.customer_name,
                     "email_id": getattr(cust_doc, "email_id", ""),
                     "mobile_no": getattr(cust_doc, "mobile_no", ""),
                     "tax_id": getattr(cust_doc, "tax_id", ""),
@@ -1237,7 +1243,8 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         customer_response = {
             "name": customer_doc.name,
             "customer_name": customer_doc.customer_name,
-            "custom_display_name": getattr(customer_doc, "custom_display_name", None) or customer_doc.customer_name,
+            "custom_display_name": getattr(customer_doc, "custom_display_name", None)
+            or customer_doc.customer_name,
             "mobile_no": customer_doc.mobile_no,
             "email_id": customer_doc.email_id,
             "tax_id": customer_doc.tax_id,
@@ -1653,9 +1660,7 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
 
     # STEP 1: Search Customers Directly
     custom_display_select = (
-        "c.custom_display_name"
-        if has_custom_display_name
-        else "c.customer_name AS custom_display_name"
+        "c.custom_display_name" if has_custom_display_name else "c.customer_name AS custom_display_name"
     )
     custom_display_where = "OR c.custom_display_name LIKE %(like)s" if has_custom_display_name else ""
 
@@ -1721,7 +1726,15 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
                     "Customer",
                     vehicle.customer,
                     (
-                        ["name", "customer_name", "custom_display_name", "mobile_no", "email_id", "tax_id", "customer_type"]
+                        [
+                            "name",
+                            "customer_name",
+                            "custom_display_name",
+                            "mobile_no",
+                            "email_id",
+                            "tax_id",
+                            "customer_type",
+                        ]
                         if has_custom_display_name
                         else ["name", "customer_name", "mobile_no", "email_id", "tax_id", "customer_type"]
                     ),
@@ -1848,7 +1861,9 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
         for r in rows:
             cust = customer_map.get(r.get("customer"))
             if not cust:
-                r["custom_display_name"] = r.get("custom_display_name") or r.get("customer_name") or r.get("customer")
+                r["custom_display_name"] = (
+                    r.get("custom_display_name") or r.get("customer_name") or r.get("customer")
+                )
                 r["customer_name"] = r.get("customer_name") or ""
                 r["mobile_no"] = r.get("mobile_no") or ""
                 continue
