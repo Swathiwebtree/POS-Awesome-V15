@@ -414,7 +414,8 @@ def update_invoice(data):
         invoice_doc.rounding_adjustment = incoming_rounding_adjustment
         invoice_doc.rounded_total = flt(invoice_doc.grand_total + incoming_rounding_adjustment)
         invoice_doc.base_rounded_total = flt(
-            invoice_doc.base_grand_total + (incoming_rounding_adjustment * flt(invoice_doc.conversion_rate or 1))
+            invoice_doc.base_grand_total
+            + (incoming_rounding_adjustment * flt(invoice_doc.conversion_rate or 1))
         )
     elif incoming_rounded_total is not None:
         invoice_doc.rounded_total = flt(incoming_rounded_total)

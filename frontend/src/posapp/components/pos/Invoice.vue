@@ -1995,8 +1995,14 @@ export default {
 				this.invoice_doc.total_taxes_and_charges = 0;
 			}
 
-			const manualRoundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision);
-			const effectiveGrandTotal = this.flt(this.grand_total || this.subtotal || 0, this.currency_precision);
+			const manualRoundOff = this.flt(
+				this.invoice_doc.rounding_adjustment || 0,
+				this.currency_precision,
+			);
+			const effectiveGrandTotal = this.flt(
+				this.grand_total || this.subtotal || 0,
+				this.currency_precision,
+			);
 			const effectiveRoundedTotal =
 				manualRoundOff !== 0
 					? this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision)
@@ -2054,7 +2060,10 @@ export default {
 
 		// Get full invoice with all calculated values
 		getFullInvoiceData() {
-			const manualRoundOff = this.flt(this.invoice_doc?.rounding_adjustment || 0, this.currency_precision);
+			const manualRoundOff = this.flt(
+				this.invoice_doc?.rounding_adjustment || 0,
+				this.currency_precision,
+			);
 			const effectiveGrandTotal = this.flt(this.grand_total || 0, this.currency_precision);
 			const effectiveRoundedTotal =
 				manualRoundOff !== 0
@@ -2125,7 +2134,10 @@ export default {
 				})),
 			);
 
-			const manualRoundOff = this.flt(this.invoice_doc?.rounding_adjustment || 0, this.currency_precision);
+			const manualRoundOff = this.flt(
+				this.invoice_doc?.rounding_adjustment || 0,
+				this.currency_precision,
+			);
 			const effectiveGrandTotal = this.flt(this.grand_total || 0, this.currency_precision);
 			const effectiveRoundedTotal =
 				manualRoundOff !== 0
