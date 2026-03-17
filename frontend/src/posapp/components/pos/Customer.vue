@@ -589,7 +589,8 @@ export default {
 
 			const existing = this.customers[idx] || {};
 			const resolvedCustomerName =
-				(extra.customer_name || existing.customer_name || existing.name || id).toString().trim() || id;
+				(extra.customer_name || existing.customer_name || existing.name || id).toString().trim() ||
+				id;
 			const resolvedDisplayName =
 				(
 					extra.custom_display_name ||
@@ -915,8 +916,7 @@ export default {
 						model: r.model || "",
 						customer: r.customer || "",
 						customer_name: r.customer_name || "",
-						custom_display_name:
-							r.custom_display_name || r.customer_name || r.customer || "",
+						custom_display_name: r.custom_display_name || r.customer_name || r.customer || "",
 						mobile_no: r.mobile_no || "",
 						odometer: r.odometer || 0,
 					}));
@@ -968,8 +968,7 @@ export default {
 					vehicle_no: v.vehicle_no,
 					customer: v.customer,
 					customer_name: v.customer_name || "",
-					custom_display_name:
-						v.custom_display_name || v.customer_name || v.customer || "",
+					custom_display_name: v.custom_display_name || v.customer_name || v.customer || "",
 					mobile_no: v.mobile_no || "",
 				}));
 			} catch (e) {
@@ -1226,8 +1225,7 @@ export default {
 								serverResults = (resp.message || []).map((c) => ({
 									name: c.name,
 									customer_name: c.customer_name,
-									custom_display_name:
-										c.custom_display_name || c.customer_name || c.name,
+									custom_display_name: c.custom_display_name || c.customer_name || c.name,
 									mobile_no: c.mobile_no || "",
 									email_id: c.email_id || "",
 									vehicle_no: c.vehicle_no || "",
@@ -1696,8 +1694,7 @@ export default {
 							make: r.make,
 							mobile_no: r.mobile_no,
 							customer_name: r.customer_name,
-							custom_display_name:
-								r.custom_display_name || r.customer_name || r.customer,
+							custom_display_name: r.custom_display_name || r.customer_name || r.customer,
 							customer: r.customer,
 						}));
 					}
@@ -1724,8 +1721,7 @@ export default {
 								make: v.make,
 								mobile_no: v.mobile_no,
 								customer_name: v.customer_name,
-								custom_display_name:
-									v.custom_display_name || v.customer_name || v.customer,
+								custom_display_name: v.custom_display_name || v.customer_name || v.customer,
 								customer: v.customer,
 							});
 						}
@@ -2262,9 +2258,7 @@ export default {
 							{
 								customer_name: customer.customer_name || customer.name,
 								custom_display_name:
-									customer.custom_display_name ||
-									customer.customer_name ||
-									customer.name,
+									customer.custom_display_name || customer.customer_name || customer.name,
 								mobile_no: customer.mobile_no || "",
 								email_id: customer.email_id || "",
 								tax_id: customer.tax_id || "",
