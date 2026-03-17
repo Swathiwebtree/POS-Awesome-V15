@@ -933,11 +933,7 @@ export default {
 		totalInvoiceAmount() {
 			if (!this.invoice_doc) return 0;
 
-			// Use rounded_total if available, otherwise use verified grand total
-			return this.flt(
-				this.invoice_doc.rounded_total || this.verifiedGrandTotal,
-				this.currency_precision,
-			);
+			return this.flt(this.getEffectiveInvoiceTotal(), this.currency_precision);
 		},
 
 		// Verify tax calculation
@@ -1003,10 +999,7 @@ export default {
 			) {
 				invoice_total = this.flt(this.invoice_doc.grand_total, this.currency_precision);
 			} else {
-				invoice_total = this.flt(
-					this.invoice_doc.rounded_total || this.invoice_doc.grand_total,
-					this.currency_precision,
-				);
+				invoice_total = this.flt(this.getEffectiveInvoiceTotal(), this.currency_precision);
 			}
 
 			let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
@@ -1026,10 +1019,7 @@ export default {
 			) {
 				invoice_total = this.flt(this.invoice_doc.grand_total, this.currency_precision);
 			} else {
-				invoice_total = this.flt(
-					this.invoice_doc.rounded_total || this.invoice_doc.grand_total,
-					this.currency_precision,
-				);
+				invoice_total = this.flt(this.getEffectiveInvoiceTotal(), this.currency_precision);
 			}
 
 			let change = this.flt(this.total_payments - invoice_total, this.currency_precision);
@@ -1198,7 +1188,7 @@ export default {
 				// If credit sale is disabled, set cash payment to invoice total
 				this.invoice_doc.payments.forEach((payment) => {
 					if (payment.mode_of_payment && payment.mode_of_payment.toLowerCase() === "cash") {
-						payment.amount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
+						payment.amount = this.getEffectiveInvoiceTotal();
 					}
 				});
 			}
@@ -1685,7 +1675,7 @@ export default {
 			if (!hasPaymentSet) {
 				const default_payment = this.invoice_doc.payments.find((payment) => payment.default === 1);
 				if (default_payment) {
-					const amount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
+					const amount = this.getEffectiveInvoiceTotal();
 					default_payment.amount = -Math.abs(amount);
 					if (default_payment.base_amount !== undefined) {
 						default_payment.base_amount = -Math.abs(amount);
@@ -1797,7 +1787,7 @@ export default {
 				!this.is_credit_sale &&
 				!this.invoice_doc.is_return &&
 				!hasPaymentAmount &&
-				(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
+				this.getEffectiveInvoiceTotal() > 0
 			) {
 				this.eventBus.emit("show_message", {
 					title: `Please enter payment amount`,
@@ -1819,8 +1809,8 @@ export default {
 				if (has_cash_payment && cash_amount > 0) {
 					if (
 						!this.pos_profile.posa_allow_partial_payment &&
-						cash_amount < (this.invoice_doc.rounded_total || this.invoice_doc.grand_total) &&
-						(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
+						cash_amount < this.getEffectiveInvoiceTotal() &&
+						this.getEffectiveInvoiceTotal() > 0
 					) {
 						this.eventBus.emit("show_message", {
 							title: `Cash payment cannot be less than invoice total when partial payment is not allowed`,
@@ -1834,8 +1824,8 @@ export default {
 			if (
 				!this.is_credit_sale &&
 				!this.pos_profile.posa_allow_partial_payment &&
-				this.total_payments < (this.invoice_doc.rounded_total || this.invoice_doc.grand_total) &&
-				(this.invoice_doc.rounded_total || this.invoice_doc.grand_total) > 0
+				this.total_payments < this.getEffectiveInvoiceTotal() &&
+				this.getEffectiveInvoiceTotal() > 0
 			) {
 				this.eventBus.emit("show_message", {
 					title: `The amount paid is not complete`,
@@ -1893,8 +1883,7 @@ export default {
 			}
 			if (
 				!this.invoice_doc.is_return &&
-				this.redeemed_customer_credit >
-					(this.invoice_doc.rounded_total || this.invoice_doc.grand_total)
+				this.redeemed_customer_credit > this.getEffectiveInvoiceTotal()
 			) {
 				this.eventBus.emit("show_message", {
 					title: `Cannot redeem customer credit more than invoice total`,
@@ -2149,7 +2138,7 @@ export default {
 		},
 		set_full_amount(idx) {
 			const isReturn = this.invoice_doc.is_return || this.invoiceType === "Return";
-			const totalAmount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
+			const totalAmount = this.getEffectiveInvoiceTotal();
 
 			const payment = this.invoice_doc.payments.find((p) => p.idx === idx);
 			if (!payment) return;
@@ -2433,7 +2422,7 @@ export default {
 					.then((r) => {
 						const data = r.message;
 						if (data.length) {
-							const amount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
+							const amount = this.getEffectiveInvoiceTotal();
 							let remainAmount = amount;
 							data.forEach((row) => {
 								if (remainAmount > 0) {
@@ -2777,7 +2766,7 @@ export default {
 		set_mpesa_payment(payment) {
 			this.pos_profile.use_customer_credit = true;
 			this.redeem_customer_credit = true;
-			const invoiceAmount = this.invoice_doc.rounded_total || this.invoice_doc.grand_total;
+			const invoiceAmount = this.getEffectiveInvoiceTotal();
 			let amount =
 				payment.unallocated_amount > invoiceAmount ? invoiceAmount : payment.unallocated_amount;
 			amount = amount > 0 ? amount : 0;
@@ -2908,9 +2897,30 @@ export default {
 		formatCurrency(value) {
 			return this.$options.mixins[0].methods.formatCurrency.call(this, value, this.currency_precision);
 		},
+		getEffectiveInvoiceTotal() {
+			if (!this.invoice_doc) return 0;
+
+			if (
+				this.invoice_doc.rounded_total !== undefined &&
+				this.invoice_doc.rounded_total !== null &&
+				!Number.isNaN(Number(this.invoice_doc.rounded_total))
+			) {
+				return Number(this.invoice_doc.rounded_total);
+			}
+
+			if (
+				this.verifiedGrandTotal !== undefined &&
+				this.verifiedGrandTotal !== null &&
+				!Number.isNaN(Number(this.verifiedGrandTotal))
+			) {
+				return Number(this.verifiedGrandTotal);
+			}
+
+			return Number(this.invoice_doc.grand_total || 0);
+		},
 		// Get change amount for display
 		get_change_amount() {
-			return Math.max(0, this.total_payments - this.invoice_doc.grand_total);
+			return Math.max(0, this.total_payments - this.getEffectiveInvoiceTotal());
 		},
 		// Sync any invoices stored offline and show pending/synced counts
 		async syncPendingInvoices() {

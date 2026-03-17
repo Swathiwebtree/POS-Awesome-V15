@@ -259,6 +259,8 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 @frappe.whitelist()
 def update_invoice(data):
     data = json.loads(data)
+    incoming_rounding_adjustment = flt(data.get("rounding_adjustment") or 0)
+    incoming_rounded_total = data.get("rounded_total")
 
     pos_profile = data.get("pos_profile")
     doctype = "Sales Invoice"
@@ -407,9 +409,19 @@ def update_invoice(data):
     # ===== ALWAYS RECALCULATE TOTALS AFTER TAX INJECTION =====
     invoice_doc.calculate_taxes_and_totals()
 
-    # Ensure rounded_total is set
-    if not invoice_doc.rounded_total:
+    # Preserve manual round-off from POS when provided; otherwise use normal ERPNext flow.
+    if incoming_rounding_adjustment:
+        invoice_doc.rounding_adjustment = incoming_rounding_adjustment
+        invoice_doc.rounded_total = flt(invoice_doc.grand_total + incoming_rounding_adjustment)
+        invoice_doc.base_rounded_total = flt(
+            invoice_doc.base_grand_total + (incoming_rounding_adjustment * flt(invoice_doc.conversion_rate or 1))
+        )
+    elif incoming_rounded_total is not None:
+        invoice_doc.rounded_total = flt(incoming_rounded_total)
+        invoice_doc.rounding_adjustment = flt(invoice_doc.rounded_total - invoice_doc.grand_total)
+    elif not invoice_doc.rounded_total:
         invoice_doc.rounded_total = invoice_doc.grand_total
+        invoice_doc.rounding_adjustment = flt(invoice_doc.rounded_total - invoice_doc.grand_total)
 
     # Ensure base tax total is set
     invoice_doc.base_total_taxes_and_charges = invoice_doc.total_taxes_and_charges
@@ -516,6 +528,7 @@ def update_invoice(data):
     response["base_total_taxes_and_charges"] = flt(invoice_doc.base_total_taxes_and_charges)
     response["grand_total"] = flt(invoice_doc.grand_total)
     response["rounded_total"] = flt(invoice_doc.rounded_total)
+    response["rounding_adjustment"] = flt(invoice_doc.rounding_adjustment)
     response["total"] = flt(invoice_doc.total)
     response["net_total"] = flt(invoice_doc.net_total)
     response["base_grand_total"] = flt(invoice_doc.base_grand_total)

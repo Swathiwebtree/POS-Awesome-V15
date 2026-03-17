@@ -81,6 +81,13 @@ export default {
 
 	// Calculate rounded total
 	rounded_total() {
+		const manualRoundOff = this.flt(this.invoice_doc?.rounding_adjustment || 0, this.currency_precision);
+		if (manualRoundOff !== 0) {
+			const manuallyRounded = this.flt(this.grand_total + manualRoundOff, this.currency_precision);
+			console.log("[invoiceComputed] rounded_total (manual):", manuallyRounded);
+			return manuallyRounded;
+		}
+
 		const rounded = this.roundAmount(this.grand_total);
 		console.log("[invoiceComputed] rounded_total:", rounded);
 		return rounded;

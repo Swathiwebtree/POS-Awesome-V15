@@ -823,17 +823,18 @@ export default {
 		recalculateTotals() {
 			const precision = this.currency_precision;
 
-			const subtotal = this.flt(this.subtotal || 0, precision);
-			const tax = this.flt(this.total_tax || 0, precision);
-			const discount = this.flt(this.total_items_discount_amount || 0, precision);
 			const roundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, precision);
+			const grandTotal = this.flt(this.grand_total || 0, precision);
+			const roundedTotal =
+				roundOff !== 0
+					? this.flt(grandTotal + roundOff, precision)
+					: this.flt(this.rounded_total || grandTotal, precision);
 
-			const finalTotal = subtotal + tax - discount + roundOff;
-
-			this.invoice_doc.net_total = this.flt(subtotal, precision);
-			this.invoice_doc.total = this.flt(finalTotal, precision);
-			this.invoice_doc.grand_total = this.flt(finalTotal, precision);
-			this.invoice_doc.rounded_total = this.invoice_doc.grand_total;
+			this.invoice_doc.net_total = this.flt(this.net_total || 0, precision);
+			this.invoice_doc.total = this.flt(this.Total || 0, precision);
+			this.invoice_doc.grand_total = grandTotal;
+			this.invoice_doc.rounded_total = roundedTotal;
+			this.invoice_doc.rounding_adjustment = roundOff;
 		},
 
 		initializeItemsHeaders() {
@@ -1994,9 +1995,17 @@ export default {
 				this.invoice_doc.total_taxes_and_charges = 0;
 			}
 
-			// Always sync computed totals so payment uses the latest discounted values
-			this.invoice_doc.grand_total = this.grand_total || this.subtotal || 0;
-			this.invoice_doc.rounded_total = this.rounded_total || this.invoice_doc.grand_total;
+			const manualRoundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision);
+			const effectiveGrandTotal = this.flt(this.grand_total || this.subtotal || 0, this.currency_precision);
+			const effectiveRoundedTotal =
+				manualRoundOff !== 0
+					? this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision)
+					: this.flt(this.rounded_total ?? effectiveGrandTotal, this.currency_precision);
+
+			// Always sync computed totals so payment and backend receive the correct round-off fields
+			this.invoice_doc.grand_total = effectiveGrandTotal;
+			this.invoice_doc.rounded_total = effectiveRoundedTotal;
+			this.invoice_doc.rounding_adjustment = manualRoundOff;
 
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
@@ -2045,6 +2054,13 @@ export default {
 
 		// Get full invoice with all calculated values
 		getFullInvoiceData() {
+			const manualRoundOff = this.flt(this.invoice_doc?.rounding_adjustment || 0, this.currency_precision);
+			const effectiveGrandTotal = this.flt(this.grand_total || 0, this.currency_precision);
+			const effectiveRoundedTotal =
+				manualRoundOff !== 0
+					? this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision)
+					: this.flt(this.rounded_total ?? effectiveGrandTotal, this.currency_precision);
+
 			const invoiceData = {
 				// Basic info
 				name: this.invoice_doc?.name || "",
@@ -2060,8 +2076,9 @@ export default {
 				total_taxes_and_charges: this.total_tax || 0,
 				total: this.subtotal || 0,
 				discount_amount: this.discount_amount || 0,
-				grand_total: this.grand_total || 0,
-				rounded_total: this.rounded_total || this.grand_total || 0,
+				grand_total: effectiveGrandTotal,
+				rounded_total: effectiveRoundedTotal,
+				rounding_adjustment: manualRoundOff,
 
 				// Additional discounts
 				additional_discount: this.additional_discount || 0,
@@ -2108,10 +2125,18 @@ export default {
 				})),
 			);
 
+			const manualRoundOff = this.flt(this.invoice_doc?.rounding_adjustment || 0, this.currency_precision);
+			const effectiveGrandTotal = this.flt(this.grand_total || 0, this.currency_precision);
+			const effectiveRoundedTotal =
+				manualRoundOff !== 0
+					? this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision)
+					: this.flt(this.rounded_total ?? effectiveGrandTotal, this.currency_precision);
+
 			invoiceData.total = this.Total;
 			invoiceData.net_total = this.net_total;
-			invoiceData.grand_total = this.grand_total;
-			invoiceData.rounded_total = this.rounded_total;
+			invoiceData.grand_total = effectiveGrandTotal;
+			invoiceData.rounded_total = effectiveRoundedTotal;
+			invoiceData.rounding_adjustment = manualRoundOff;
 			invoiceData._posa_invoice_instance_id = this.invoice_instance_id;
 
 			console.log("[prepareForPayment] Setting invoice totals:", {
