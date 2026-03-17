@@ -241,12 +241,7 @@ export default {
 	methods: {
 		getCustomerDisplayLabel(customer) {
 			if (!customer) return "";
-			return (
-				customer.custom_display_name ||
-				customer.customer_name ||
-				customer.name ||
-				""
-			);
+			return customer.custom_display_name || customer.customer_name || customer.name || "";
 		},
 
 		reset_dialog() {
