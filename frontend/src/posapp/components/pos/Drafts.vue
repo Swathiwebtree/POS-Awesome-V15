@@ -390,6 +390,7 @@ export default {
 					"grand_total",
 					"currency",
 					"custom_service_employee",
+					"custom_service_employee_name",
 					"custom_has_oil_item",
 					"custom_odometer_reading",
 					"custom_vehicle_no",

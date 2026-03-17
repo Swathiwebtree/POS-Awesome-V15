@@ -2341,12 +2341,15 @@ export default {
 	overflow: hidden;
 	flex-wrap: nowrap;
 	white-space: nowrap;
+	font-size: clamp(0.66rem, 0.8vw, 0.82rem);
+	line-height: 1.1;
 }
 
 .employee-selection-name {
 	color: #0f9fb3;
 	font-weight: 600;
 	min-width: 0;
+	flex: 1 1 auto;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -2354,8 +2357,11 @@ export default {
 
 .employee-selection-id {
 	color: #48b8c6;
-	font-size: 0.92em;
-	flex: 0 0 auto;
+	font-size: 0.88em;
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
@@ -2373,6 +2379,11 @@ export default {
 	max-width: 100% !important;
 	min-width: 0 !important;
 	overflow: hidden !important;
+	font-size: inherit !important;
+}
+
+:deep(.employee-summary-field .v-field__input) {
+	font-size: clamp(0.66rem, 0.8vw, 0.82rem) !important;
 }
 
 :deep(.v-theme--dark) .employee-selection-id,

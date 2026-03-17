@@ -672,10 +672,34 @@ export default {
 
 					// If the loaded invoice has a service employee, tell other components.
 					if (r.message.custom_service_employee) {
-						// If server included a helper name (custom_service_employee_name) prefer that
+						let employeeName = r.message.custom_service_employee_name || null;
+
+						// Older/mobile-created drafts may only store the employee code on the invoice.
+						if (!employeeName) {
+							try {
+								const employeeResp = await frappe.call({
+									method: "frappe.client.get_value",
+									args: {
+										doctype: "Employee",
+										fieldname: ["employee_name"],
+										filters: {
+											name: r.message.custom_service_employee,
+										},
+									},
+								});
+								employeeName = employeeResp?.message?.employee_name || null;
+							} catch (employeeError) {
+								console.warn(
+									"[POS] Failed to resolve employee name for loaded draft:",
+									r.message.custom_service_employee,
+									employeeError,
+								);
+							}
+						}
+
 						this.eventBus.emit("employee_selected", {
 							employee_id: r.message.custom_service_employee,
-							employee_name: r.message.custom_service_employee_name || null,
+							employee_name: employeeName,
 						});
 					}
 
