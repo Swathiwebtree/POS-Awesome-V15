@@ -804,36 +804,34 @@ def get_vehicle_makes(search_term="", limit=500):
 
     make_set = set()
 
-    def _collect_from(table_label, fieldname):
-        if not _has_column(table_label, fieldname):
+    def _collect_from(table_label, make_columns):
+        existing_make_columns = [c for c in make_columns if _has_column(table_label, c)]
+        if not existing_make_columns:
             return
-        table_name = table_label if table_label.startswith("tab") else f"tab{table_label}"
-        where_parts = [f"TRIM(IFNULL({fieldname}, '')) != ''"]
-        params = []
-        if search_term:
-            where_parts.append(f"{fieldname} LIKE %s")
-            params.append(f"%{search_term}%")
-        where_clause = " AND ".join(where_parts)
-        rows = frappe.db.sql(
-            f"""
-            SELECT DISTINCT TRIM({fieldname}) AS value
-            FROM `{table_name}`
-            WHERE {where_clause}
-            ORDER BY value ASC
-            LIMIT %s
-            """,
-            tuple(params + [limit]),
-            as_dict=True,
-        )
-        for row in rows:
-            value = (row.get("value") or "").strip()
-            if value:
-                make_set.add(value)
 
-    _collect_from("Vehicle", "make")
-    _collect_from(VEHICLE_DOCTYPE, "make")
-    _collect_from(VEHICLE_DOCTYPE, "vehicle_make")
-    _collect_from("Vehicle", "vehicle_make")
-    _collect_from("Vehicle", "brand")
+        fields = list(dict.fromkeys(["name"] + existing_make_columns))
+        fetch_limit = max(limit * 10, 5000)
+
+        try:
+            rows = frappe.get_all(
+                table_label,
+                fields=fields,
+                order_by="modified desc",
+                limit_page_length=fetch_limit,
+            )
+        except Exception:
+            return
+
+        for row in rows:
+            value = _first_field_value(row, existing_make_columns)
+            value = (value or "").strip()
+            if not value:
+                continue
+            if search_term and search_term.lower() not in value.lower():
+                continue
+            make_set.add(value)
+
+    _collect_from("Vehicle", ["make", "vehicle_make", "brand", "manufacturer"])
+    _collect_from(VEHICLE_DOCTYPE, ["make", "vehicle_make", "brand", "manufacturer"])
 
     return sorted(make_set, key=lambda x: x.lower())[:limit]

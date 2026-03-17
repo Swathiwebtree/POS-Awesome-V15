@@ -7,6 +7,7 @@ import json
 import frappe
 from frappe.utils import nowdate
 from frappe import _
+from frappe.contacts.doctype.contact.contact import get_default_contact
 from erpnext.accounts.party import get_party_bank_account
 from erpnext.accounts.doctype.payment_request.payment_request import (
     get_dummy_message,
@@ -278,6 +279,11 @@ def redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, c
                     "payment_type": "Receive",
                     "party_type": "Customer",
                     "party": invoice_doc.customer,
+                    "party_name": (
+                        frappe.db.get_value("Customer", invoice_doc.customer, "custom_display_name")
+                        or frappe.db.get_value("Customer", invoice_doc.customer, "customer_name")
+                        or invoice_doc.customer
+                    ),
                     "paid_amount": payment.amount,
                     "received_amount": payment.amount,
                     "paid_from": invoice_doc.debit_to,
@@ -301,6 +307,12 @@ def redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, c
             ensure_child_doctype(payment_entry_doc, "references", "Payment Entry Reference")
             payment_entry_doc.flags.ignore_permissions = True
             frappe.flags.ignore_account_permission = True
+            try:
+                default_contact = get_default_contact("Customer", invoice_doc.customer)
+                if default_contact:
+                    payment_entry_doc.contact_person = default_contact
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "POS Payment contact resolution warning")
             payment_entry_doc.save()
             payment_entry_doc.submit()
 

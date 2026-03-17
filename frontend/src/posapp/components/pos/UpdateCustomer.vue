@@ -75,6 +75,15 @@
 									class="mb-3"
 								/>
 
+								<v-text-field
+									v-model="custom_display_name"
+									:label="__('Display Name')"
+									density="comfortable"
+									color="primary"
+									hide-details="auto"
+									class="mb-3"
+								/>
+
 								<v-autocomplete
 									v-model="group"
 									:items="groups"
@@ -174,6 +183,7 @@ export default {
 		// Customer fields
 		customer_id: "",
 		customer_name: "",
+		custom_display_name: "",
 		tax_id: "",
 		mobile_no: "",
 		address_line1: "",
@@ -241,6 +251,7 @@ export default {
 		},
 		clear_customer() {
 			this.customer_name = "";
+			this.custom_display_name = "";
 			this.tax_id = "";
 			this.mobile_no = "";
 			this.address_line1 = "";
@@ -287,6 +298,7 @@ export default {
 				// populate customer fields
 				this.customer_id = payload.name;
 				this.customer_name = payload.customer_name || "";
+				this.custom_display_name = payload.custom_display_name || payload.customer_name || "";
 				this.tax_id = payload.tax_id || "";
 				this.mobile_no = payload.mobile_no || "";
 				this.address_line1 = payload.address_line1 || "";
@@ -475,6 +487,7 @@ export default {
 			const customerArgs = {
 				customer_id: this.customer_id,
 				customer_name: this.customer_name,
+				custom_display_name: this.custom_display_name || this.customer_name || "Cash Customer",
 				tax_id: this.tax_id,
 				mobile_no: this.mobile_no,
 				address_line1: this.address_line1,

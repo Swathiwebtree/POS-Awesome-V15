@@ -18,6 +18,7 @@ from erpnext.accounts.utils import (
     reconcile_against_document,
 )
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+from frappe.contacts.doctype.contact.contact import get_default_contact
 
 
 def create_payment_entry(
@@ -65,6 +66,7 @@ def create_payment_entry(
 
     # Create payment entry with minimal db calls
     pe = frappe.new_doc("Payment Entry")
+    customer_doc = frappe.get_cached_doc("Customer", customer)
     pe.payment_type = payment_type
     pe.company = company
     pe.cost_center = cost_center or erpnext.get_default_cost_center(company)
@@ -72,6 +74,11 @@ def create_payment_entry(
     pe.mode_of_payment = mode_of_payment
     pe.party_type = party_type
     pe.party = customer
+    pe.party_name = (
+        getattr(customer_doc, "custom_display_name", None)
+        or getattr(customer_doc, "customer_name", None)
+        or customer
+    )
     pe.paid_from = party_account if payment_type == "Receive" else bank.account
     pe.paid_to = party_account if payment_type == "Pay" else bank.account
     pe.paid_from_account_currency = (
@@ -90,6 +97,12 @@ def create_payment_entry(
         if bank_account:
             pe.bank_account = bank_account
             pe.set_bank_account_data()
+    try:
+        default_contact = get_default_contact("Customer", customer)
+        if default_contact:
+            pe.contact_person = default_contact
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "POS Payment Entry contact resolution warning")
 
     # Set required fields
     pe.setup_party_account_field()

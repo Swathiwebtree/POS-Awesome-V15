@@ -34,12 +34,27 @@
 									class="dark-field"
 									v-model="customer"
 									:items="customer_list"
-									item-title="customer_name"
+									:item-title="getCustomerDisplayLabel"
 									item-value="name"
 									:loading="loading_customers"
 									@update:search="search_customers"
 									clearable
 								>
+									<template #item="{ props, item }">
+										<v-list-item v-bind="props">
+											<v-list-item-title>
+												{{ getCustomerDisplayLabel(item.raw) }}
+											</v-list-item-title>
+											<v-list-item-subtitle v-if="item.raw.mobile_no">
+												{{ item.raw.mobile_no }}
+											</v-list-item-subtitle>
+										</v-list-item>
+									</template>
+
+									<template #selection="{ item }">
+										<span>{{ getCustomerDisplayLabel(item.raw) }}</span>
+									</template>
+
 									<template #no-data>
 										<div class="pa-2 text-center text-caption text-medium-emphasis">
 											{{ __("No customers found. Start typing to search.") }}
@@ -57,6 +72,7 @@
 									:items="make_list"
 									:loading="loading_makes"
 									@update:search="search_makes"
+									hide-details
 									clearable
 								>
 									<template #no-data>
@@ -223,6 +239,16 @@ export default {
 	},
 
 	methods: {
+		getCustomerDisplayLabel(customer) {
+			if (!customer) return "";
+			return (
+				customer.custom_display_name ||
+				customer.customer_name ||
+				customer.name ||
+				""
+			);
+		},
+
 		reset_dialog() {
 			this.vehicle_id = null;
 			this.vehicle_no = "";
@@ -272,7 +298,7 @@ export default {
 			try {
 				const res = await frappe.call({
 					method: "posawesome.posawesome.api.vehicles.get_vehicle_makes",
-					args: { search_term, limit: 1000 },
+					args: { search_term, limit: 5000 },
 				});
 
 				this.make_list = res.message || [];
@@ -341,6 +367,14 @@ export default {
 								this.customer_list.push({
 									name: cust_doc_res.message.name,
 									customer_name: cust_doc_res.message.customer_name,
+									custom_display_name:
+										cust_doc_res.message.custom_display_name ||
+										cust_doc_res.message.customer_name,
+									mobile_no:
+										cust_doc_res.message.mobile_no ||
+										cust_doc_res.message.mobile_number ||
+										cust_doc_res.message.phone ||
+										"",
 								});
 							}
 						} catch (e) {
