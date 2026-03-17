@@ -553,9 +553,12 @@ export default {
 			if (!r) return r;
 			// Accept either is_corporate or is_company from server/local storage
 			const isCorporate = !!(r.is_corporate || r.is_company);
+			const customerName = r.customer_name || r.name || "";
+			const customDisplayName = r.custom_display_name || customerName || r.name || "";
 			return {
 				...r,
-				custom_display_name: r.custom_display_name || r.customer_name || r.name || "",
+				customer_name: customerName,
+				custom_display_name: customDisplayName,
 				is_corporate: isCorporate,
 				is_company: r.is_company || isCorporate,
 			};
@@ -567,11 +570,13 @@ export default {
 
 			const displayName = (customerDisplayName || "").toString().trim() || id;
 			const idx = this.customers.findIndex((c) => c.name === id);
+			const customerName = (extra.customer_name || "").toString().trim() || id;
 
 			if (idx === -1) {
 				const inserted = this._normalizeCustomerRow({
 					name: id,
-					customer_name: displayName,
+					customer_name: customerName,
+					custom_display_name: displayName,
 					mobile_no: extra.mobile_no || "",
 					email_id: extra.email_id || "",
 					tax_id: extra.tax_id || "",
@@ -583,14 +588,23 @@ export default {
 			}
 
 			const existing = this.customers[idx] || {};
-			const resolvedName =
-				existing.customer_name && existing.customer_name !== existing.name
-					? existing.customer_name
-					: displayName;
+			const resolvedCustomerName =
+				(extra.customer_name || existing.customer_name || existing.name || id).toString().trim() || id;
+			const resolvedDisplayName =
+				(
+					extra.custom_display_name ||
+					existing.custom_display_name ||
+					displayName ||
+					resolvedCustomerName ||
+					id
+				)
+					.toString()
+					.trim() || resolvedCustomerName;
 
 			const merged = this._normalizeCustomerRow({
 				...existing,
-				customer_name: resolvedName,
+				customer_name: resolvedCustomerName,
+				custom_display_name: resolvedDisplayName,
 				mobile_no: existing.mobile_no || extra.mobile_no || "",
 				email_id: existing.email_id || extra.email_id || "",
 				tax_id: existing.tax_id || extra.tax_id || "",
@@ -699,8 +713,13 @@ export default {
 					this.selected_customer_is_corporate = isCorporate;
 					this._upsertCustomerInList(
 						customerData.name || customerNameString,
-						customerData.customer_name || customerNameString,
+						customerData.custom_display_name || customerData.customer_name || customerNameString,
 						{
+							customer_name: customerData.customer_name || customerNameString,
+							custom_display_name:
+								customerData.custom_display_name ||
+								customerData.customer_name ||
+								customerNameString,
 							mobile_no: mobile,
 							email_id: customerData.email_id || "",
 							tax_id: customerData.tax_id || "",
@@ -799,6 +818,7 @@ export default {
 			const inputText = event.target.value?.toLowerCase() || "";
 			const matched = this.customers.find((cust) => {
 				return (
+					cust.custom_display_name?.toLowerCase().includes(inputText) ||
 					cust.customer_name?.toLowerCase().includes(inputText) ||
 					cust.name?.toLowerCase().includes(inputText) ||
 					cust.mobile_no?.toLowerCase().includes(inputText)
@@ -868,6 +888,8 @@ export default {
 									model: v.model || "",
 									customer: v.customer || "",
 									customer_name: v.customer_name || "",
+									custom_display_name:
+										v.custom_display_name || v.customer_name || v.customer || "",
 									mobile_no: v.mobile_no || "",
 									odometer: v.odometer || 0,
 								}));
@@ -893,6 +915,8 @@ export default {
 						model: r.model || "",
 						customer: r.customer || "",
 						customer_name: r.customer_name || "",
+						custom_display_name:
+							r.custom_display_name || r.customer_name || r.customer || "",
 						mobile_no: r.mobile_no || "",
 						odometer: r.odometer || 0,
 					}));
@@ -944,6 +968,8 @@ export default {
 					vehicle_no: v.vehicle_no,
 					customer: v.customer,
 					customer_name: v.customer_name || "",
+					custom_display_name:
+						v.custom_display_name || v.customer_name || v.customer || "",
 					mobile_no: v.mobile_no || "",
 				}));
 			} catch (e) {
@@ -972,7 +998,7 @@ export default {
 					const local = await db.table("vehicles").where("vehicle_no").equals(vehicleNo).first();
 					if (local) {
 						customerName = local.customer;
-						customerDisplayName = local.customer_name || "";
+						customerDisplayName = local.custom_display_name || local.customer_name || "";
 						customerMobileNo = local.mobile_no || "";
 						vehicleData = {
 							name: local.name,
@@ -980,6 +1006,8 @@ export default {
 							make: local.make || "",
 							model: local.model || "",
 							customer_name: local.customer_name,
+							custom_display_name:
+								local.custom_display_name || local.customer_name || local.customer,
 						};
 					}
 				} catch (e) {
@@ -1007,8 +1035,17 @@ export default {
 				if (customerName) {
 					this._upsertCustomerInList(
 						customerName,
-						customerDisplayName || vehicleData?.customer_name || customerName,
+						customerDisplayName ||
+							vehicleData?.custom_display_name ||
+							vehicleData?.customer_name ||
+							customerName,
 						{
+							customer_name: vehicleData?.customer_name || customerName,
+							custom_display_name:
+								customerDisplayName ||
+								vehicleData?.custom_display_name ||
+								vehicleData?.customer_name ||
+								customerName,
 							mobile_no: customerMobileNo || vehicleData?.mobile_no || "",
 							vehicle_no: vehicleData?.vehicle_no || vehicleNo,
 						},
@@ -1156,6 +1193,8 @@ export default {
 					const filtered = all.filter((c) => {
 						try {
 							return (
+								(c.custom_display_name &&
+									c.custom_display_name.toString().toLowerCase().includes(q)) ||
 								(c.customer_name && c.customer_name.toString().toLowerCase().includes(q)) ||
 								(c.name && c.name.toString().toLowerCase().includes(q)) ||
 								(c.mobile_no && c.mobile_no.toString().toLowerCase().includes(q)) ||
@@ -1187,6 +1226,8 @@ export default {
 								serverResults = (resp.message || []).map((c) => ({
 									name: c.name,
 									customer_name: c.customer_name,
+									custom_display_name:
+										c.custom_display_name || c.customer_name || c.name,
 									mobile_no: c.mobile_no || "",
 									email_id: c.email_id || "",
 									vehicle_no: c.vehicle_no || "",
@@ -1214,6 +1255,7 @@ export default {
 						return {
 							name: norm.name,
 							customer_name: norm.customer_name,
+							custom_display_name: norm.custom_display_name,
 							mobile_no: norm.mobile_no || "",
 							email_id: norm.email_id || "",
 							vehicle_no: norm.vehicle_no || "",
@@ -1654,6 +1696,8 @@ export default {
 							make: r.make,
 							mobile_no: r.mobile_no,
 							customer_name: r.customer_name,
+							custom_display_name:
+								r.custom_display_name || r.customer_name || r.customer,
 							customer: r.customer,
 						}));
 					}
@@ -1680,6 +1724,8 @@ export default {
 								make: v.make,
 								mobile_no: v.mobile_no,
 								customer_name: v.customer_name,
+								custom_display_name:
+									v.custom_display_name || v.customer_name || v.customer,
 								customer: v.customer,
 							});
 						}
@@ -1744,10 +1790,17 @@ export default {
 			this.vehicle_no = vehicle.vehicle_no || "";
 			this.vehicleSearchTerm = "";
 			this.vehicleSearchResults = [];
-			this._upsertCustomerInList(vehicle.customer, vehicle.customer_name || vehicle.customer, {
-				mobile_no: vehicle.mobile_no || "",
-				vehicle_no: vehicle.vehicle_no || "",
-			});
+			this._upsertCustomerInList(
+				vehicle.customer,
+				vehicle.custom_display_name || vehicle.customer_name || vehicle.customer,
+				{
+					customer_name: vehicle.customer_name || vehicle.customer,
+					custom_display_name:
+						vehicle.custom_display_name || vehicle.customer_name || vehicle.customer,
+					mobile_no: vehicle.mobile_no || "",
+					vehicle_no: vehicle.vehicle_no || "",
+				},
+			);
 
 			this.eventBus.emit("vehicle_selected", vehicle.name);
 
@@ -1891,7 +1944,9 @@ export default {
 				if (!existsInList) {
 					this.customers.unshift({
 						name: customerName,
-						customer_name: customerName,
+						customer_name: payload.customer_name || customerName,
+						custom_display_name:
+							payload.custom_display_name || payload.customer_name || customerName,
 						mobile_no: "",
 						email_id: "",
 						vehicle_no: "",
@@ -1930,6 +1985,8 @@ export default {
 							vehicle_no: requestedVehicleNo,
 							customer: customerName,
 							customer_name: payload.customer_name || customerName,
+							custom_display_name:
+								payload.custom_display_name || payload.customer_name || customerName,
 							mobile_no: payload.contact_mobile || "",
 						};
 						this.vehicles = [matchedVehicle, ...(this.vehicles || [])];
@@ -1969,6 +2026,7 @@ export default {
 			if (val) {
 				const matched = this.customers.find((cust) => {
 					return (
+						cust.custom_display_name?.toLowerCase().includes(val.toLowerCase()) ||
 						cust.customer_name?.toLowerCase().includes(val.toLowerCase()) ||
 						cust.name?.toLowerCase().includes(val.toLowerCase()) ||
 						cust.mobile_no?.toLowerCase().includes(val.toLowerCase())
@@ -2068,6 +2126,8 @@ export default {
 
 					// ensure the object has the flag
 					customer.is_corporate = !!(customer.is_corporate || customer.is_company);
+					customer.custom_display_name =
+						customer.custom_display_name || customer.customer_name || customer.name;
 
 					const index = this.customers.findIndex((c) => c.name === customer.name);
 					if (index !== -1) {
@@ -2174,11 +2234,16 @@ export default {
 					);
 
 					if (!matchedVehicle) {
+						const currentCustomer = this.customers.find((c) => c.name === this.customer) || {};
 						matchedVehicle = {
 							name: `draft-vehicle::${this.customer}::${normalized}`,
 							vehicle_no: normalized,
 							customer: this.customer,
-							customer_name: this.customer,
+							customer_name: currentCustomer.customer_name || this.customer,
+							custom_display_name:
+								currentCustomer.custom_display_name ||
+								currentCustomer.customer_name ||
+								this.customer,
 							mobile_no: "",
 						};
 						this.vehicles = [matchedVehicle, ...(this.vehicles || [])];
@@ -2191,11 +2256,20 @@ export default {
 
 				this.eventBus.on("set_customer_from_vehicle", (customer) => {
 					if (customer && customer.name) {
-						this._upsertCustomerInList(customer.name, customer.customer_name || customer.name, {
-							mobile_no: customer.mobile_no || "",
-							email_id: customer.email_id || "",
-							tax_id: customer.tax_id || "",
-						});
+						this._upsertCustomerInList(
+							customer.name,
+							customer.custom_display_name || customer.customer_name || customer.name,
+							{
+								customer_name: customer.customer_name || customer.name,
+								custom_display_name:
+									customer.custom_display_name ||
+									customer.customer_name ||
+									customer.name,
+								mobile_no: customer.mobile_no || "",
+								email_id: customer.email_id || "",
+								tax_id: customer.tax_id || "",
+							},
+						);
 						this.customer = customer.name;
 						this.internalCustomer = customer.name;
 						this.eventBus.emit("update_customer", customer.name);

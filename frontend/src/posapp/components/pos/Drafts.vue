@@ -47,7 +47,9 @@
 
 				<template v-slot:item.customer="{ item }">
 					<div class="d-flex align-center gap-1">
-						<span class="customer-name">{{ item.customer_name || item.customer }}</span>
+						<span class="customer-name">
+							{{ item.custom_display_name || item.customer_name || item.customer }}
+						</span>
 						<v-chip
 							v-if="item.is_corporate"
 							color="teal"
@@ -327,6 +329,7 @@ export default {
 		_employeeNameCache: {},
 		_customerTypeCache: {},
 		_customerNameCache: {},
+		_customerDisplayNameCache: {},
 	}),
 	computed: {
 		isDarkTheme() {
@@ -385,6 +388,7 @@ export default {
 				fields: [
 					"name",
 					"customer",
+					"customer_name",
 					"posting_date",
 					"posting_time",
 					"grand_total",
@@ -438,6 +442,12 @@ export default {
 					d.is_corporate = custType === "Company";
 					d.customer_name =
 						d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
+					d.custom_display_name =
+						d.custom_display_name ||
+						this._customerDisplayNameCache[d.customer] ||
+						d.customer_name ||
+						d.customer ||
+						"";
 					return d;
 				});
 
@@ -493,7 +503,7 @@ export default {
 					args: {
 						doctype: "Customer",
 						filters: [["name", "in", customerIds]],
-						fields: ["name", "customer_type", "customer_name"],
+						fields: ["name", "customer_type", "customer_name", "custom_display_name"],
 						limit_page_length: customerIds.length,
 					},
 				});
@@ -504,6 +514,8 @@ export default {
 					// store exact customer_type (could be "Individual", "Company", etc.)
 					this._customerTypeCache[rec.name] = rec.customer_type || "";
 					this._customerNameCache[rec.name] = rec.customer_name || rec.name;
+					this._customerDisplayNameCache[rec.name] =
+						rec.custom_display_name || rec.customer_name || rec.name;
 				});
 			} catch (err) {
 				console.warn("[Drafts] Customer type lookup failed", err);
@@ -534,6 +546,12 @@ export default {
 			const custType = this._customerTypeCache[nd.customer];
 			nd.is_corporate = custType === "Company";
 			nd.customer_name = nd.customer_name || this._customerNameCache[nd.customer] || nd.customer || "";
+			nd.custom_display_name =
+				nd.custom_display_name ||
+				this._customerDisplayNameCache[nd.customer] ||
+				nd.customer_name ||
+				nd.customer ||
+				"";
 
 			this.dialog_data = this.dialog_data.filter((d) => d.name !== nd.name);
 			this.dialog_data.unshift(nd);
@@ -551,6 +569,7 @@ export default {
 				name: item.name,
 				customer: item.customer || "",
 				customer_name: item.customer_name || "",
+				custom_display_name: item.custom_display_name || "",
 				posting_date,
 				posting_time,
 				grand_total: item.grand_total != null ? item.grand_total : 0,
@@ -630,6 +649,8 @@ export default {
 					this.eventBus.emit("load_invoice_customer", {
 						customer: invoice.customer,
 						customer_name: invoice.customer_name || invoice.customer,
+						custom_display_name:
+							invoice.custom_display_name || invoice.customer_name || invoice.customer,
 						invoice_name: invoice.name || "",
 						contact_mobile: invoice.contact_mobile || "",
 						custom_vehicle_no: invoice.custom_vehicle_no || "",
@@ -727,6 +748,12 @@ export default {
 					d.is_corporate = custType === "Company";
 					d.customer_name =
 						d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
+					d.custom_display_name =
+						d.custom_display_name ||
+						this._customerDisplayNameCache[d.customer] ||
+						d.customer_name ||
+						d.customer ||
+						"";
 
 					return d;
 				});
