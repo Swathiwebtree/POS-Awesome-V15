@@ -440,6 +440,7 @@ export default {
 		loadProgress: 0,
 		totalCustomerCount: 0,
 		loadedCustomerCount: 0,
+		_skipNextCustomerSearch: false,
 		// Vehicle data
 		vehicles: [],
 		selectedVehicle: null,
@@ -625,6 +626,42 @@ export default {
 				return String(candidate || "").trim();
 			}
 			return String(value || "").trim();
+		},
+		cancelPendingCustomerSearch() {
+			if (this.searchDebounce && this.searchDebounce.cancel) {
+				this.searchDebounce.cancel();
+			}
+			this._skipNextCustomerSearch = true;
+		},
+		releasePendingCustomerSearch(delay = 600) {
+			setTimeout(() => {
+				this._skipNextCustomerSearch = false;
+			}, delay);
+		},
+		applyProgrammaticCustomerSelection(customer, extra = {}) {
+			const customerName = this.normalizeCustomerValue(customer);
+			if (!customerName) return;
+
+			this.cancelPendingCustomerSearch();
+			this._upsertCustomerInList(
+				customerName,
+				extra.custom_display_name || extra.customer_name || customerName,
+				{
+					customer_name: extra.customer_name || customerName,
+					custom_display_name:
+						extra.custom_display_name || extra.customer_name || customerName,
+					mobile_no: extra.mobile_no || "",
+					email_id: extra.email_id || "",
+					tax_id: extra.tax_id || "",
+					vehicle_no: extra.vehicle_no || "",
+					is_corporate: !!(extra.is_corporate || extra.is_company),
+				},
+			);
+
+			this.customer = customerName;
+			this.internalCustomer = customerName;
+			this.releasePendingCustomerSearch();
+			return customerName;
 		},
 
 		// --- Customer Methods ---
@@ -1922,10 +1959,7 @@ export default {
 				// which triggers searchDebounce. After 500ms, the debounce clears this.customers = []
 				// which causes the autocomplete to lose the customer display.
 				// Cancel any pending debounce and set a flag to skip the next search trigger.
-				if (this.searchDebounce && this.searchDebounce.cancel) {
-					this.searchDebounce.cancel();
-				}
-				this._skipNextCustomerSearch = true;
+				this.cancelPendingCustomerSearch();
 
 				// Set customer state
 				this.customer = customerName;
@@ -1997,10 +2031,7 @@ export default {
 				// Force Vue to re-render the autocomplete with the loaded customer
 				this.$nextTick(() => {
 					this.internalCustomer = customerName;
-					// Clear the skip flag after the autocomplete has settled
-					setTimeout(() => {
-						this._skipNextCustomerSearch = false;
-					}, 600);
+					this.releasePendingCustomerSearch();
 				});
 			} finally {
 				this._loadInvoiceCustomerInProgress = false;
@@ -2100,9 +2131,8 @@ export default {
 				});
 
 				this.eventBus.on("set_customer", (customer) => {
-					const customerName = this.normalizeCustomerValue(customer);
-					this.customer = customerName;
-					this.internalCustomer = customerName;
+					const customerName = this.applyProgrammaticCustomerSelection(customer);
+					if (!customerName) return;
 					if (this.jobOrderCustomer && customerName !== this.jobOrderCustomer) {
 						this.jobOrderCustomer = null;
 						this.jobOrderVehicleNo = null;
@@ -2139,9 +2169,8 @@ export default {
 					};
 					await setCustomerStorage([normalized]);
 
-					// select the new customer
-					this.customer = customer.name;
-					this.internalCustomer = customer.name;
+					// select the new customer without letting autocomplete search clear it
+					this.applyProgrammaticCustomerSelection(customer.name, customer);
 					this.selected_customer_is_corporate = !!customer.is_corporate;
 
 					// notify other components
