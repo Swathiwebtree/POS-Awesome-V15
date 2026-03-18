@@ -989,6 +989,7 @@ export default {
 			employeeFieldKey: 0,
 			loadingEmployees: false,
 			showEmployeeSelection: false,
+			employeeLoadLockUntil: 0,
 
 			showOdometerField: false,
 			odometerReading: null,
@@ -1409,6 +1410,12 @@ export default {
 		isOdometerLoadLocked() {
 			return Date.now() < (this.odometerLoadLockUntil || 0);
 		},
+		activateEmployeeLoadLock(durationMs = 2500) {
+			this.employeeLoadLockUntil = Date.now() + durationMs;
+		},
+		isEmployeeLoadLocked() {
+			return Date.now() < (this.employeeLoadLockUntil || 0);
+		},
 		applyOdometerData(data = {}) {
 			this.showOdometerField = this.normalizeOilItemFlag(data.custom_has_oil_item);
 			this.odometerReading =
@@ -1808,6 +1815,10 @@ export default {
 			// Emit event to parent to check items
 			this.eventBus.emit("check_items_for_service", {
 				callback: (hasCarWashService) => {
+					if (!hasCarWashService && this.isEmployeeLoadLocked() && this.selectedEmployee) {
+						return;
+					}
+
 					this.showEmployeeSelection = hasCarWashService;
 
 					// Fetch employees if needed and not already loaded
@@ -1838,6 +1849,7 @@ export default {
 
 			// show selector
 			this.showEmployeeSelection = true;
+			this.activateEmployeeLoadLock();
 
 			// if we already have employees loaded, set selection directly
 			if (empNameProvided) {
@@ -2096,6 +2108,10 @@ export default {
 
 		// EMPLOYEE SELECTION LISTENERS
 		this.eventBus.on("show_employee_selection", (shouldShow) => {
+			if (!shouldShow && this.isEmployeeLoadLocked() && this.selectedEmployee) {
+				return;
+			}
+
 			this.showEmployeeSelection = shouldShow;
 
 			if (shouldShow && this.employees.length === 0) {

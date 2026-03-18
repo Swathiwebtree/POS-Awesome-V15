@@ -1079,6 +1079,7 @@ export default {
 				const group = (item.item_group || "").toLowerCase();
 				const code = (item.item_code || "").toLowerCase();
 				const name = (item.item_name || "").toLowerCase();
+				const serviceItemFlag = item.service_item === 1 || item.is_service_item === 1;
 
 				const washMatch =
 					group.includes("car wash") ||
@@ -1094,7 +1095,7 @@ export default {
 					name.includes("bikewash") ||
 					name.includes("bike wash");
 
-				return washMatch;
+				return washMatch || serviceItemFlag;
 			});
 
 			return hasCarWashService;
