@@ -990,6 +990,7 @@ export default {
 			loadingEmployees: false,
 			showEmployeeSelection: false,
 			employeeLoadLockUntil: 0,
+			employeeSelectionEpoch: 0,
 
 			showOdometerField: false,
 			odometerReading: null,
@@ -1331,8 +1332,7 @@ export default {
 
 		resetAfterPayment() {
 			// Core sale state
-			this.selectedEmployee = null;
-			this.showEmployeeSelection = false;
+			this.resetEmployeeSelectionState();
 
 			this.showOdometerField = false;
 			this.odometerReading = null;
@@ -1415,6 +1415,22 @@ export default {
 		},
 		isEmployeeLoadLocked() {
 			return Date.now() < (this.employeeLoadLockUntil || 0);
+		},
+		startEmployeeSelectionSync() {
+			this.employeeSelectionEpoch += 1;
+			return this.employeeSelectionEpoch;
+		},
+		isCurrentEmployeeSelectionSync(epoch) {
+			return epoch === this.employeeSelectionEpoch;
+		},
+		resetEmployeeSelectionState({ hideSelector = true } = {}) {
+			this.employeeSelectionEpoch += 1;
+			this.employeeLoadLockUntil = 0;
+			this.selectedEmployee = null;
+			if (hideSelector) {
+				this.showEmployeeSelection = false;
+			}
+			this.closeEmployeeDropdown();
 		},
 		applyOdometerData(data = {}) {
 			this.showOdometerField = this.normalizeOilItemFlag(data.custom_has_oil_item);
@@ -1838,12 +1854,11 @@ export default {
 		async handleExternalEmployeeSelected(payload) {
 			// payload may be { employee_id, employee_name } or just employee_id (string)
 			if (!payload) {
-				this.selectedEmployee = null;
-				this.closeEmployeeDropdown();
-				this.showEmployeeSelection = false;
+				this.resetEmployeeSelectionState();
 				return;
 			}
 
+			const syncEpoch = this.startEmployeeSelectionSync();
 			const empId = payload.employee_id || payload;
 			const empNameProvided = payload.employee_name || null;
 
@@ -1862,6 +1877,7 @@ export default {
 						employee_name: empNameProvided,
 					});
 				}
+				if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
 				this.selectedEmployee = empId;
 				this.closeEmployeeDropdown();
 				return;
@@ -1870,6 +1886,7 @@ export default {
 			// No friendly name provided — ensure list loaded then set selection
 			if (this.employees.length === 0) {
 				await this.fetchEmployees();
+				if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
 			}
 
 			// if still not found, try to fetch the single employee explicitly
@@ -1887,9 +1904,11 @@ export default {
 				} catch (err) {
 					console.warn("[InvoiceSummary] Employee single fetch failed", err);
 				}
+				if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
 			}
 
 			if (found) {
+				if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
 				this.selectedEmployee = found.name;
 				this.closeEmployeeDropdown();
 				// show toast
@@ -1899,6 +1918,7 @@ export default {
 				});
 			} else {
 				// fallback: set id anyway so value exists and user can see placeholder
+				if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
 				this.selectedEmployee = empId;
 				this.closeEmployeeDropdown();
 			}
@@ -2121,8 +2141,7 @@ export default {
 
 		// Listen for clear employee selection event
 		this.eventBus.on("clear_employee_selection", () => {
-			this.selectedEmployee = null;
-			this.showEmployeeSelection = false;
+			this.resetEmployeeSelectionState();
 		});
 
 		// Check initially if we should show employee selection
