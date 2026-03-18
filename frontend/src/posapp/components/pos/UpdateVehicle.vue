@@ -270,8 +270,7 @@ export default {
 					customer_name: res.message.customer_name,
 					custom_display_name:
 						res.message.custom_display_name || res.message.customer_name || res.message.name,
-					mobile_no:
-						res.message.mobile_no || res.message.mobile_number || res.message.phone || "",
+					mobile_no: res.message.mobile_no || res.message.mobile_number || res.message.phone || "",
 				};
 
 				this.customer_list.push(customerDoc);

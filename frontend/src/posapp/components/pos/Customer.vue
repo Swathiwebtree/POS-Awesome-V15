@@ -648,8 +648,7 @@ export default {
 				extra.custom_display_name || extra.customer_name || customerName,
 				{
 					customer_name: extra.customer_name || customerName,
-					custom_display_name:
-						extra.custom_display_name || extra.customer_name || customerName,
+					custom_display_name: extra.custom_display_name || extra.customer_name || customerName,
 					mobile_no: extra.mobile_no || "",
 					email_id: extra.email_id || "",
 					tax_id: extra.tax_id || "",
