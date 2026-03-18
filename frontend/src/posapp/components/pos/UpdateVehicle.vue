@@ -244,6 +244,44 @@ export default {
 			return customer.custom_display_name || customer.customer_name || customer.name || "";
 		},
 
+		async ensureCustomerInList(customerName) {
+			if (!customerName) return null;
+
+			const existing = this.customer_list.find((c) => c.name === customerName);
+			if (existing) {
+				return existing;
+			}
+
+			try {
+				const res = await frappe.call({
+					method: "frappe.client.get",
+					args: {
+						doctype: "Customer",
+						name: customerName,
+					},
+				});
+
+				if (!res?.message) {
+					return null;
+				}
+
+				const customerDoc = {
+					name: res.message.name,
+					customer_name: res.message.customer_name,
+					custom_display_name:
+						res.message.custom_display_name || res.message.customer_name || res.message.name,
+					mobile_no:
+						res.message.mobile_no || res.message.mobile_number || res.message.phone || "",
+				};
+
+				this.customer_list.push(customerDoc);
+				return customerDoc;
+			} catch (e) {
+				console.warn("Failed to fetch customer for dialog:", e);
+				return null;
+			}
+		},
+
 		reset_dialog() {
 			this.vehicle_id = null;
 			this.vehicle_no = "";
@@ -352,35 +390,20 @@ export default {
 					}
 
 					// ensure chosen customer exists in the dropdown list
-					if (this.customer && !this.customer_list.find((c) => c.name === this.customer)) {
-						try {
-							const cust_doc_res = await frappe.call({
-								method: "frappe.client.get",
-								args: { doctype: "Customer", name: this.customer },
-							});
-							if (cust_doc_res && cust_doc_res.message) {
-								this.customer_list.push({
-									name: cust_doc_res.message.name,
-									customer_name: cust_doc_res.message.customer_name,
-									custom_display_name:
-										cust_doc_res.message.custom_display_name ||
-										cust_doc_res.message.customer_name,
-									mobile_no:
-										cust_doc_res.message.mobile_no ||
-										cust_doc_res.message.mobile_number ||
-										cust_doc_res.message.phone ||
-										"",
-								});
-							}
-						} catch (e) {
-							// ignore missing customer; still open dialog
-							console.warn("Failed to fetch customer for dialog:", e);
-						}
+					if (this.customer) {
+						await this.ensureCustomerInList(this.customer);
 					}
 				} else {
 					// payload may include preselected customer or vehicle_no
 					if (payload && payload.customer) this.customer = payload.customer;
 					if (payload && payload.vehicle_no) this.vehicle_no = payload.vehicle_no;
+
+					if (this.customer) {
+						const customerDoc = await this.ensureCustomerInList(this.customer);
+						if (customerDoc && !this.mobile_no) {
+							this.mobile_no = customerDoc.mobile_no || "";
+						}
+					}
 				}
 			} finally {
 				this.isPrefilling = false;

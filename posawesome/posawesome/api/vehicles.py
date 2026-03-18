@@ -803,33 +803,42 @@ def get_vehicle_makes(search_term="", limit=500):
     limit = min(max(limit, 1), 2000)
 
     make_set = set()
+    fetch_limit = max(limit * 10, 5000)
 
     def _collect_from(table_label, make_columns):
+        table_name = table_label if str(table_label).startswith("tab") else f"tab{table_label}"
         existing_make_columns = [c for c in make_columns if _has_column(table_label, c)]
-        if not existing_make_columns:
+        if not existing_make_columns or len(make_set) >= limit:
             return
 
-        fields = list(dict.fromkeys(["name"] + existing_make_columns))
-        fetch_limit = max(limit * 10, 5000)
+        for column in existing_make_columns:
+            try:
+                conditions = [f"COALESCE(`{column}`, '') != ''"]
+                params = {"limit": fetch_limit}
+                if search_term:
+                    conditions.append(f"`{column}` LIKE %(search)s")
+                    params["search"] = f"%{search_term}%"
 
-        try:
-            rows = frappe.get_all(
-                table_label,
-                fields=fields,
-                order_by="modified desc",
-                limit_page_length=fetch_limit,
-            )
-        except Exception:
-            return
+                rows = frappe.db.sql(
+                    f"""
+                    SELECT DISTINCT TRIM(`{column}`) AS make
+                    FROM `{table_name}`
+                    WHERE {' AND '.join(conditions)}
+                    ORDER BY TRIM(`{column}`) ASC
+                    LIMIT %(limit)s
+                    """,
+                    params,
+                    as_dict=True,
+                )
+            except Exception:
+                continue
 
-        for row in rows:
-            value = _first_field_value(row, existing_make_columns)
-            value = (value or "").strip()
-            if not value:
-                continue
-            if search_term and search_term.lower() not in value.lower():
-                continue
-            make_set.add(value)
+            for row in rows:
+                value = (row.get("make") or "").strip()
+                if value:
+                    make_set.add(value)
+                if len(make_set) >= limit:
+                    return
 
     _collect_from("Vehicle", ["make", "vehicle_make", "brand", "manufacturer"])
     _collect_from(VEHICLE_DOCTYPE, ["make", "vehicle_make", "brand", "manufacturer"])
