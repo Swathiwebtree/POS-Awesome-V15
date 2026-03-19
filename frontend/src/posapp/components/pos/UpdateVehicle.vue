@@ -71,7 +71,7 @@
 									v-model="make"
 									:items="make_list"
 									:loading="loading_makes"
-									@update:search="search_makes"
+									@update:search="onMakeSearch"
 									hide-details
 									clearable
 								>
@@ -192,6 +192,7 @@ export default {
 		color: "",
 		registration_number: "",
 		isPrefilling: false,
+		suppressMakeSearch: false,
 	}),
 
 	computed: {
@@ -342,10 +343,24 @@ export default {
 			}
 		},
 
+		onMakeSearch(search_term = "") {
+			// Vuetify emits `update:search` during programmatic selection/prefill,
+			// which was causing the list to be filtered down to only the selected make
+			// in Update mode. Ignore those emissions.
+			if (this.suppressMakeSearch) {
+				return;
+			}
+			if (search_term && this.make && search_term === this.make) {
+				return;
+			}
+			return this.search_makes(search_term);
+		},
+
 		// single entry point to open and populate the dialog
 		async open_dialog(payload = {}) {
 			this.reset_dialog();
 			this.isPrefilling = true;
+			this.suppressMakeSearch = true;
 			try {
 				// pre-load lists (no-op if server returns quickly)
 				await Promise.all([this.search_customers(), this.search_makes()]);
@@ -407,7 +422,11 @@ export default {
 			} finally {
 				this.isPrefilling = false;
 			}
+			// allow `v-autocomplete` to settle after programmatic value assignment
+			// before we start responding to search events.
 			this.vehicleDialog = true;
+			await this.$nextTick();
+			this.suppressMakeSearch = false;
 		},
 
 		async save_vehicle() {
@@ -472,10 +491,39 @@ export default {
 				}
 			} catch (err) {
 				console.error("Vehicle save failed:", err);
-				frappe.show_alert({
-					message: this.__("Failed to save vehicle. Check server logs for details."),
-					indicator: "red",
-				});
+				let msg = null;
+				try {
+					const serverMessages =
+						err?._server_messages ||
+						err?.responseJSON?._server_messages ||
+						err?.xhr?.responseJSON?._server_messages;
+
+					if (serverMessages) {
+						const msgs = JSON.parse(serverMessages);
+						if (Array.isArray(msgs) && msgs.length) {
+							const parsed = JSON.parse(msgs[0]);
+							msg = parsed?.message || parsed;
+						}
+					}
+
+					// Fallback: direct message from JSON response
+					msg =
+						msg ||
+						err?.responseJSON?.message ||
+						err?.xhr?.responseJSON?.message ||
+						err?.message ||
+						null;
+				} catch (e) {
+					msg = err?.message || null;
+				}
+
+				frappe.show_alert(
+					{
+						message: msg || this.__("Failed to save vehicle."),
+						indicator: "red",
+					},
+					5
+				);
 			} finally {
 				this.loading = false;
 			}

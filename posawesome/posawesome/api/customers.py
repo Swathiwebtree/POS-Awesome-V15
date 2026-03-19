@@ -11,7 +11,7 @@ from frappe.utils.caching import redis_cache
 from posawesome.posawesome.api import customer
 from .utils import get_active_pos_profile
 from .vehicles import create_vehicle
-from frappe.exceptions import ValidationError, LinkValidationError, DoesNotExistError
+from frappe.exceptions import ValidationError, LinkValidationError, DoesNotExistError, NameError
 
 from decimal import Decimal, InvalidOperation
 
@@ -935,8 +935,17 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                 )
 
             try:
+                # Defensive: client payloads (or internal new_doc state) sometimes carry placeholder names like
+                # "New Customer 1". Frappe rejects these during insert.
+                if getattr(customer_doc, "name", None) and str(customer_doc.name).startswith(
+                    f"New {customer_doc.doctype}"
+                ):
+                    customer_doc.name = None
+
                 customer_doc.insert(ignore_permissions=True)
                 frappe.db.commit()
+            except (ValidationError, LinkValidationError, DoesNotExistError, NameError):
+                raise
             except Exception as e:
                 frappe.log_error(frappe.get_traceback(), "POS Awesome - Customer create error")
                 frappe.throw(_("Failed to create Customer: {0}").format(cstr(e)))

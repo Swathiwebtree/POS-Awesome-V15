@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
+import json
+
 import frappe
 from frappe import _
+from frappe.utils import cstr
+from frappe.utils.response import build_response
 
 # Import specific exceptions for better error handling
 from frappe.exceptions import ValidationError, DoesNotExistError, NameError
@@ -9,6 +13,36 @@ from frappe.exceptions import ValidationError, DoesNotExistError, NameError
 # The custom DocType name as per your system
 VEHICLE_DOCTYPE = "Vehicle Master"
 CUSTOMER_DOCTYPE = "Customer"
+
+
+def _api_error(message, title=None, status_code=417, exc_type="ValidationError"):
+    """
+    Return a JSON error Response without raising an exception.
+
+    This avoids Frappe's `report_error()` path which can crash with BrokenPipeError
+    in some dev setups when it tries to print the traceback.
+    """
+    message = cstr(message)
+    payload = {
+        "message": message,
+        "exc_type": exc_type,
+        "_server_messages": json.dumps(
+            [
+                json.dumps(
+                    {
+                        "message": message,
+                        "title": cstr(title) if title else _("Error"),
+                        "indicator": "red",
+                    }
+                )
+            ]
+        ),
+    }
+    frappe.response.clear()
+    frappe.response.update(payload)
+    resp = build_response("json")
+    resp.status_code = int(status_code or 500)
+    return resp
 
 
 def _has_column(table, column):
@@ -156,9 +190,9 @@ def create_vehicle(
     # This prevents the call from hitting the internal Frappe Naming logic
     # if basic mandatory fields are missing (like the one used for DocType name).
     if not vehicle_no:
-        frappe.throw(_("Vehicle No. is mandatory."), title=_("Validation Error"))
+        return _api_error(_("Vehicle No. is mandatory."), title=_("Validation Error"), status_code=422)
     if not customer:
-        frappe.throw(_("Customer is mandatory."), title=_("Validation Error"))
+        return _api_error(_("Customer is mandatory."), title=_("Validation Error"), status_code=422)
 
     # We use a try block specifically around document operations
     try:
@@ -182,9 +216,10 @@ def create_vehicle(
         if method == "create":
             # Check for existing vehicle using vehicle_no as the unique key
             if frappe.db.exists(VEHICLE_DOCTYPE, vehicle_no):
-                frappe.throw(
+                return _api_error(
                     _("Vehicle No. {0} already exists in the system.").format(vehicle_no),
                     title=_("Already Exists"),
+                    status_code=409,
                 )
 
             # Create a new document dictionary
@@ -241,7 +276,11 @@ def create_vehicle(
             vehicle.save(ignore_permissions=True)
 
         else:
-            frappe.throw(_("Invalid method or missing vehicle ID for update."), title=_("API Error"))
+            return _api_error(
+                _("Invalid method or missing vehicle ID for update."),
+                title=_("API Error"),
+                status_code=400,
+            )
 
         # Commit changes and return the document
         frappe.db.commit()
@@ -270,18 +309,17 @@ def create_vehicle(
     # CRITICAL FIX: Explicitly catch Frappe-specific exceptions and re-raise them.
     # This pattern lets the Frappe framework handle the response properly.
     except (ValidationError, DoesNotExistError, NameError) as e:
-        # Log the error for server-side debugging
         frappe.log_error(message=frappe.get_traceback(), title="POS Awesome Validation/Data Error")
-        # Re-raise the original Frappe exception immediately
-        raise
+        return _api_error(cstr(e), title=_("Validation Error"), status_code=409)
 
     except Exception as e:
         # Catch all other unexpected errors
         frappe.log_error(message=frappe.get_traceback(), title="POS Awesome Vehicle API General Error")
-        # Throw a simple, generic error message only as a last resort
-        frappe.throw(
+        return _api_error(
             _("An unexpected server error occurred while processing the vehicle request."),
             title=_("Server Error"),
+            status_code=500,
+            exc_type="ServerError",
         )
 
 

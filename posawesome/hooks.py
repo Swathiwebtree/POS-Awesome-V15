@@ -120,6 +120,8 @@ doc_events = {
         "on_submit": "posawesome.posawesome.api.purchase_receipt.create_stock_entry_from_pr"
     },
     "Loyalty Point Entry": {"validate": "posawesome.posawesome.api.loyalty.validate_loyalty_redeem"},
+    # Enforce vehicle-number uniqueness (prevents two customers from sharing the same vehicle number).
+    "Vehicle": {"validate": "posawesome.posawesome.api.vehicle_number_validation.validate_vehicle_number"},
 }
 
 # Scheduled Tasks
