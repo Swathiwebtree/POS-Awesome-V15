@@ -74,4 +74,3 @@ def validate_vehicle_number(doc, method=None):
                 f" (Customer: {frappe.bold(existing_customer)})" if existing_customer else "",
             )
         )
-

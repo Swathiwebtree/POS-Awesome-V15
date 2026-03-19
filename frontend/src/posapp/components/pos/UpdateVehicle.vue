@@ -522,7 +522,7 @@ export default {
 						message: msg || this.__("Failed to save vehicle."),
 						indicator: "red",
 					},
-					5
+					5,
 				);
 			} finally {
 				this.loading = false;
