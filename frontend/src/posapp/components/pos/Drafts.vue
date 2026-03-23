@@ -502,7 +502,10 @@ export default {
 					args: {
 						doctype: "Customer",
 						filters: [["name", "in", customerIds]],
-						fields: ["name", "customer_type", "customer_name", "custom_display_name"],
+						// `custom_display_name` is an optional custom field and may not exist on all sites.
+						// Never request it via `frappe.client.get_list`, otherwise Frappe raises:
+						// "Field not permitted in query: custom_display_name".
+						fields: ["name", "customer_type", "customer_name"],
 						limit_page_length: customerIds.length,
 					},
 				});
@@ -513,8 +516,7 @@ export default {
 					// store exact customer_type (could be "Individual", "Company", etc.)
 					this._customerTypeCache[rec.name] = rec.customer_type || "";
 					this._customerNameCache[rec.name] = rec.customer_name || rec.name;
-					this._customerDisplayNameCache[rec.name] =
-						rec.custom_display_name || rec.customer_name || rec.name;
+					this._customerDisplayNameCache[rec.name] = rec.customer_name || rec.name;
 				});
 			} catch (err) {
 				console.warn("[Drafts] Customer type lookup failed", err);

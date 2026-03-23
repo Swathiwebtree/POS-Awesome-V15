@@ -956,110 +956,150 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
 
         # determine effective vehicle identifier to operate on
         effective_vehicle_no = vehicle_no_from_payload
+
+        # Normalize early to avoid mismatches (UI/DB comparisons are case-sensitive).
+        if effective_vehicle_no:
+            effective_vehicle_no = str(effective_vehicle_no).strip().upper()
+
+        def _candidate_vehicle_id_from_customer(doc):
+            """Return a candidate vehicle identifier stored on the customer (if any)."""
+            try:
+                if hasattr(doc, "custom_vehicle_no") and getattr(doc, "custom_vehicle_no"):
+                    return getattr(doc, "custom_vehicle_no")
+            except Exception:
+                pass
+            try:
+                if hasattr(doc, "vehicle_no") and getattr(doc, "vehicle_no"):
+                    return getattr(doc, "vehicle_no")
+            except Exception:
+                pass
+            return None
+
+        def _vehicle_exists_anywhere(candidate):
+            """Only accept a candidate if it already exists as Vehicle/Vehicle Master id or vehicle_no."""
+            if not candidate:
+                return False
+            candidate = str(candidate).strip().upper()
+            try:
+                if frappe.db.exists(VM_DOCTYPE, candidate):
+                    return True
+            except Exception:
+                pass
+            try:
+                if frappe.db.exists(VM_DOCTYPE, {"vehicle_no": candidate}):
+                    return True
+            except Exception:
+                pass
+            try:
+                if frappe.db.exists(VEHICLE_DOCTYPE, candidate):
+                    return True
+            except Exception:
+                pass
+            try:
+                if frappe.db.exists(VEHICLE_DOCTYPE, {"vehicle_no": candidate}):
+                    return True
+            except Exception:
+                pass
+            try:
+                if frappe.db.exists(VEHICLE_DOCTYPE, {"license_plate": candidate}):
+                    return True
+            except Exception:
+                pass
+            return False
+
+        # If frontend didn’t send vehicle_no, only use a customer-stored value when it points to an existing vehicle.
+        # This prevents accidental creation of bogus "vehicles" whose id equals the customer id (e.g. "CUST-001").
         if not effective_vehicle_no:
-            # prefer custom_vehicle_no or vehicle_no fields on customer if present
-            if hasattr(customer_doc, "custom_vehicle_no") and getattr(customer_doc, "custom_vehicle_no"):
-                effective_vehicle_no = getattr(customer_doc, "custom_vehicle_no")
-            elif hasattr(customer_doc, "vehicle_no") and getattr(customer_doc, "vehicle_no"):
-                effective_vehicle_no = getattr(customer_doc, "vehicle_no")
+            candidate = _candidate_vehicle_id_from_customer(customer_doc)
+            if candidate and _vehicle_exists_anywhere(candidate):
+                effective_vehicle_no = str(candidate).strip().upper()
 
         # only act on vehicles if we have an identifier
         if effective_vehicle_no:
             try:
-                # --- EXISTING ERPNext Vehicle ---
-                if frappe.db.exists(VEHICLE_DOCTYPE, effective_vehicle_no):
-                    vehicle_doc = frappe.get_doc(VEHICLE_DOCTYPE, effective_vehicle_no)
+                def _get_existing_vehicle_doc_by_number(vehicle_no: str):
+                    """Return existing Vehicle doc (ERPNext) by vehicle_no/license_plate/name."""
+                    if not vehicle_no:
+                        return None
+                    vno = str(vehicle_no).strip().upper()
                     try:
-                        # defensive updates
-                        if vehicle_data.get("make") is not None and hasattr(vehicle_doc, "make"):
-                            vehicle_doc.make = vehicle_data.get("make")
-                        if vehicle_data.get("model") is not None:
-                            try:
-                                if frappe.db.exists("Vehicle Model", vehicle_data.get("model")):
-                                    vehicle_doc.model = vehicle_data.get("model")
-                                else:
-                                    if hasattr(vehicle_doc, "model"):
-                                        vehicle_doc.model = vehicle_data.get("model")
-                            except Exception:
-                                if hasattr(vehicle_doc, "model"):
-                                    vehicle_doc.model = vehicle_data.get("model")
-                        if vehicle_data.get("mobile_no") is not None:
-                            if hasattr(vehicle_doc, "tel_mobile"):
-                                vehicle_doc.tel_mobile = vehicle_data.get("mobile_no")
-                            elif hasattr(vehicle_doc, "mobile_no"):
-                                vehicle_doc.mobile_no = vehicle_data.get("mobile_no")
-                        # odometer
-                        od_val = _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc)
-                        if od_val is not None:
-                            _set_odometer_on_doc(vehicle_doc, od_val)
-
-                        # ensure stable identifier and link to customer before saving
-                        if effective_vehicle_no:
-                            if hasattr(vehicle_doc, "vehicle_no"):
-                                vehicle_doc.vehicle_no = effective_vehicle_no
-                            elif hasattr(vehicle_doc, "license_plate"):
-                                vehicle_doc.license_plate = effective_vehicle_no
-                        if hasattr(vehicle_doc, "customer"):
-                            vehicle_doc.customer = customer_doc.name
-
-                        vehicle_doc.save(ignore_permissions=True)
-                        frappe.db.commit()
+                        if frappe.db.exists(VEHICLE_DOCTYPE, vno):
+                            return frappe.get_doc(VEHICLE_DOCTYPE, vno)
                     except Exception:
-                        frappe.log_error(frappe.get_traceback(), "Vehicle update error")
-
-                else:
-                    # --- CREATE ERPNext Vehicle ---
-                    v = frappe.new_doc(VEHICLE_DOCTYPE)
+                        pass
                     try:
-                        if vehicle_data.get("make") is not None and hasattr(v, "make"):
-                            v.make = vehicle_data.get("make")
-                        if vehicle_data.get("model") is not None and hasattr(v, "model"):
-                            v.model = vehicle_data.get("model")
-                        if vehicle_data.get("mobile_no") is not None:
-                            if hasattr(v, "tel_mobile"):
-                                v.tel_mobile = vehicle_data.get("mobile_no")
-                            elif hasattr(v, "mobile_no"):
-                                v.mobile_no = vehicle_data.get("mobile_no")
-
-                        # set obvious identifier fields if they exist
-                        if effective_vehicle_no:
-                            if hasattr(v, "vehicle_no"):
-                                v.vehicle_no = effective_vehicle_no
-                            elif hasattr(v, "license_plate"):
-                                try:
-                                    v.license_plate = effective_vehicle_no
-                                except Exception:
-                                    pass
-
-                        # link to customer if possible
-                        if hasattr(v, "customer"):
-                            v.customer = customer_doc.name
-
-                        # odometer
-                        od_val = _extract_odometer_from_payload_or_doc(vehicle_data, None)
-                        if od_val is not None:
-                            _set_odometer_on_doc(v, od_val)
-
-                        # attempt to set name if autoname uses a field that matches
-                        try:
-                            meta = frappe.get_meta(VEHICLE_DOCTYPE)
-                            if getattr(meta, "autoname", "").startswith("field:"):
-                                name_field = meta.autoname.split(":", 1)[1]
-                                if name_field in ("license_plate", "vehicle_no", "plate", "plate_no"):
-                                    v.name = effective_vehicle_no
-                        except Exception:
-                            pass
-
-                        v.insert(ignore_permissions=True)
-                        frappe.db.commit()
-                        vehicle_doc = v
+                        existing_name = frappe.db.get_value(VEHICLE_DOCTYPE, {"vehicle_no": vno}, "name")
+                        if existing_name:
+                            return frappe.get_doc(VEHICLE_DOCTYPE, existing_name)
                     except Exception:
-                        frappe.log_error(frappe.get_traceback(), "Vehicle create error")
-                        vehicle_doc = None
+                        pass
+                    try:
+                        existing_name = frappe.db.get_value(
+                            VEHICLE_DOCTYPE, {"license_plate": vno}, "name"
+                        )
+                        if existing_name:
+                            return frappe.get_doc(VEHICLE_DOCTYPE, existing_name)
+                    except Exception:
+                        pass
+                    return None
 
-                # --- VEHICLE MASTER (VM) create/update ---
+                def _get_existing_vm_doc_by_number(vehicle_no: str):
+                    """Return existing Vehicle Master doc by name/vehicle_no."""
+                    if not vehicle_no:
+                        return None
+                    vno = str(vehicle_no).strip().upper()
+                    try:
+                        if frappe.db.exists(VM_DOCTYPE, vno):
+                            return frappe.get_doc(VM_DOCTYPE, vno)
+                    except Exception:
+                        pass
+                    try:
+                        existing_name = frappe.db.get_value(VM_DOCTYPE, {"vehicle_no": vno}, "name")
+                        if existing_name:
+                            return frappe.get_doc(VM_DOCTYPE, existing_name)
+                    except Exception:
+                        pass
+                    return None
+
+                # If a vehicle already exists with this number, reuse it (but do not silently reassign owners).
+                existing_vehicle = _get_existing_vehicle_doc_by_number(effective_vehicle_no)
+                if existing_vehicle:
+                    existing_owner = getattr(existing_vehicle, "customer", None) or None
+                    if existing_owner and existing_owner != customer_doc.name:
+                        frappe.throw(
+                            _(
+                                "Vehicle {0} is already linked to another customer ({1})."
+                            ).format(effective_vehicle_no, existing_owner),
+                            ValidationError,
+                        )
+                    vehicle_doc = existing_vehicle
+
+                existing_vm = _get_existing_vm_doc_by_number(effective_vehicle_no)
+                if existing_vm:
+                    existing_owner = getattr(existing_vm, "customer", None) or None
+                    if existing_owner and existing_owner != customer_doc.name:
+                        frappe.throw(
+                            _(
+                                "Vehicle {0} is already linked to another customer ({1})."
+                            ).format(effective_vehicle_no, existing_owner),
+                            ValidationError,
+                        )
+                    vm_doc = existing_vm
+
+                # --- VEHICLE MASTER (VM) is the source of truth for POS ---
                 try:
-                    if vehicle_doc and frappe.db.exists(VM_DOCTYPE, vehicle_doc.name):
+                    if vm_doc:
+                        # ensure customer link is correct
+                        try:
+                            if hasattr(vm_doc, "customer"):
+                                vm_doc.customer = customer_doc.name
+                            if hasattr(vm_doc, "vehicle_no") and effective_vehicle_no:
+                                vm_doc.vehicle_no = effective_vehicle_no
+                            vm_doc.save(ignore_permissions=True)
+                            frappe.db.commit()
+                        except Exception:
+                            frappe.log_error(frappe.get_traceback(), "VM existing save error")
+                    elif vehicle_doc and frappe.db.exists(VM_DOCTYPE, vehicle_doc.name):
                         vm_doc = frappe.get_doc(VM_DOCTYPE, vehicle_doc.name)
                         try:
                             if vehicle_data.get("model") is not None and hasattr(vm_doc, "model"):
@@ -1081,7 +1121,7 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
 
                             # ensure vm has vehicle identifier and customer link
                             if hasattr(vm_doc, "vehicle_no"):
-                                vm_doc.vehicle_no = getattr(
+                                vm_doc.vehicle_no = effective_vehicle_no or getattr(
                                     vehicle_doc, "vehicle_no", getattr(vehicle_doc, "name", None)
                                 )
                             if hasattr(vm_doc, "customer"):
@@ -1091,49 +1131,102 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                             frappe.db.commit()
                         except Exception:
                             frappe.log_error(frappe.get_traceback(), "VM update error")
-                    elif vehicle_doc:
-                        # create new VM from vehicle_doc
+                    else:
+                        # create/update VM directly keyed by vehicle number (works even if ERPNext Vehicle fails)
                         vm = frappe.new_doc(VM_DOCTYPE)
                         try:
-                            vm.name = vehicle_doc.name
-                            if hasattr(vm, "vehicle_no"):
-                                vm.vehicle_no = getattr(
-                                    vehicle_doc, "vehicle_no", getattr(vehicle_doc, "name", None)
-                                )
+                            vm_meta = frappe.get_meta(VM_DOCTYPE)
+
+                            # Ensure stable id: most sites use name == vehicle number for Vehicle Master.
+                            vm.name = effective_vehicle_no
+                            if vm_meta.has_field("vehicle_no"):
+                                vm.vehicle_no = effective_vehicle_no
+                            if vm_meta.has_field("customer"):
+                                vm.customer = customer_doc.name
+                            if vehicle_data.get("model") is not None and vm_meta.has_field("model"):
+                                vm.model = vehicle_data.get("model")
+                            if vehicle_data.get("make") is not None:
+                                for f in ("make", "vehicle_make", "brand", "manufacturer"):
+                                    if vm_meta.has_field(f):
+                                        setattr(vm, f, vehicle_data.get("make"))
+                            if vehicle_data.get("mobile_no") is not None:
+                                if vm_meta.has_field("tel_mobile"):
+                                    vm.tel_mobile = vehicle_data.get("mobile_no")
+                                elif vm_meta.has_field("mobile_no"):
+                                    vm.mobile_no = vehicle_data.get("mobile_no")
+
                             if hasattr(vm, "customer"):
                                 vm.customer = customer_doc.name
-                            if vehicle_data.get("model") is not None and hasattr(vm, "model"):
-                                vm.model = vehicle_data.get("model")
-                            if vehicle_data.get("mobile_no") is not None and hasattr(vm, "tel_mobile"):
-                                vm.tel_mobile = vehicle_data.get("mobile_no")
                             od_val = _extract_odometer_from_payload_or_doc(vehicle_data, vehicle_doc)
                             if od_val is not None:
                                 _set_odometer_on_doc(vm, od_val)
-                            vm.insert(ignore_permissions=True)
+                            # Insert or update if already exists by name
+                            if frappe.db.exists(VM_DOCTYPE, vm.name):
+                                existing = frappe.get_doc(VM_DOCTYPE, vm.name)
+                                existing_meta = frappe.get_meta(VM_DOCTYPE)
+                                for fieldname in ("vehicle_no", "customer", "model"):
+                                    if existing_meta.has_field(fieldname) and getattr(vm, fieldname, None) is not None:
+                                        setattr(existing, fieldname, getattr(vm, fieldname))
+                                for fieldname in ("tel_mobile", "mobile_no"):
+                                    if existing_meta.has_field(fieldname) and getattr(vm, fieldname, None) is not None:
+                                        setattr(existing, fieldname, getattr(vm, fieldname))
+                                existing.save(ignore_permissions=True)
+                                vm_doc = existing
+                            else:
+                                vm.insert(ignore_permissions=True)
+                                vm_doc = vm
                             frappe.db.commit()
-                            vm_doc = vm
                         except Exception:
                             frappe.log_error(frappe.get_traceback(), "VM create error")
-                            vm_doc = None
-                    else:
-                        # fallback: VM exists by effective_vehicle_no
-                        if effective_vehicle_no and frappe.db.exists(VM_DOCTYPE, effective_vehicle_no):
-                            vm_doc = frappe.get_doc(VM_DOCTYPE, effective_vehicle_no)
-                            try:
-                                od_val = _extract_odometer_from_payload_or_doc(vehicle_data, None)
-                                if od_val is not None:
-                                    _set_odometer_on_doc(vm_doc, od_val)
-                                # ensure vm is linked to customer
-                                if hasattr(vm_doc, "customer"):
-                                    vm_doc.customer = customer_doc.name
-                                if hasattr(vm_doc, "vehicle_no"):
-                                    vm_doc.vehicle_no = effective_vehicle_no
-                                vm_doc.save(ignore_permissions=True)
-                                frappe.db.commit()
-                            except Exception:
-                                frappe.log_error(frappe.get_traceback(), "VM update fallback error")
+                            frappe.throw(
+                                _("Failed to create Vehicle Master for {0}.").format(effective_vehicle_no)
+                            )
                 except Exception:
                     frappe.log_error(frappe.get_traceback(), "Vehicle Master logic error")
+
+                # --- Best-effort sync ERPNext Vehicle (non-fatal) ---
+                try:
+                    if not vehicle_doc:
+                        vehicle_doc = _get_existing_vehicle_doc_by_number(effective_vehicle_no)
+                    if not vehicle_doc:
+                        v = frappe.new_doc(VEHICLE_DOCTYPE)
+                        v_meta = frappe.get_meta(VEHICLE_DOCTYPE)
+                        if v_meta.has_field("vehicle_no"):
+                            v.vehicle_no = effective_vehicle_no
+                        if v_meta.has_field("license_plate"):
+                            v.license_plate = effective_vehicle_no
+                        if v_meta.has_field("customer"):
+                            v.customer = customer_doc.name
+                        if vehicle_data.get("model") is not None and v_meta.has_field("model"):
+                            v.model = vehicle_data.get("model")
+                        if vehicle_data.get("make") is not None and v_meta.has_field("make"):
+                            v.make = vehicle_data.get("make")
+                        if vehicle_data.get("mobile_no") is not None:
+                            if v_meta.has_field("tel_mobile"):
+                                v.tel_mobile = vehicle_data.get("mobile_no")
+                            elif v_meta.has_field("mobile_no"):
+                                v.mobile_no = vehicle_data.get("mobile_no")
+                        v.insert(ignore_permissions=True)
+                        frappe.db.commit()
+                        vehicle_doc = v
+                    else:
+                        # update link when safe
+                        v_meta = frappe.get_meta(VEHICLE_DOCTYPE)
+                        if v_meta.has_field("customer"):
+                            vehicle_doc.customer = customer_doc.name
+                        if vehicle_data.get("model") is not None and v_meta.has_field("model"):
+                            vehicle_doc.model = vehicle_data.get("model")
+                        if vehicle_data.get("make") is not None and v_meta.has_field("make"):
+                            vehicle_doc.make = vehicle_data.get("make")
+                        if vehicle_data.get("mobile_no") is not None:
+                            if v_meta.has_field("tel_mobile"):
+                                vehicle_doc.tel_mobile = vehicle_data.get("mobile_no")
+                            elif v_meta.has_field("mobile_no"):
+                                vehicle_doc.mobile_no = vehicle_data.get("mobile_no")
+                        vehicle_doc.save(ignore_permissions=True)
+                        frappe.db.commit()
+                except Exception:
+                    frappe.log_error(frappe.get_traceback(), "Vehicle sync warning (non-fatal)")
 
             except Exception:
                 frappe.log_error(frappe.get_traceback(), "vehicle block error")
@@ -1262,10 +1355,26 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         }
 
         vehicle_response = None
-        if vehicle_doc:
+        # Prefer Vehicle Master in responses because POS dropdowns use Vehicle Master rows.
+        if vm_doc:
+            vehicle_response = {
+                "name": getattr(vm_doc, "name", None),
+                "vehicle_no": getattr(vm_doc, "vehicle_no", None) or effective_vehicle_no or getattr(vm_doc, "name", None),
+                "make": getattr(vm_doc, "make", None) if hasattr(vm_doc, "make") else vehicle_data.get("make"),
+                "model": getattr(vm_doc, "model", None) if hasattr(vm_doc, "model") else vehicle_data.get("model"),
+                "mobile_no": getattr(vm_doc, "tel_mobile", None)
+                or getattr(vm_doc, "mobile_no", None)
+                or vehicle_data.get("mobile_no"),
+                "customer": getattr(vm_doc, "customer", None) or customer_doc.name,
+                "odometer": getattr(vm_doc, "odometer", None) if hasattr(vm_doc, "odometer") else vehicle_data.get("odometer"),
+            }
+        elif vehicle_doc:
             vehicle_response = {
                 "name": getattr(vehicle_doc, "name", None),
-                "vehicle_no": getattr(vehicle_doc, "vehicle_no", None) or getattr(vehicle_doc, "name", None),
+                "vehicle_no": effective_vehicle_no
+                or getattr(vehicle_doc, "vehicle_no", None)
+                or getattr(vehicle_doc, "license_plate", None)
+                or getattr(vehicle_doc, "name", None),
                 "make": getattr(vehicle_doc, "make", None),
                 "model": getattr(vehicle_doc, "model", None),
                 "mobile_no": getattr(vehicle_doc, "tel_mobile", None)
@@ -1854,16 +1963,35 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
     customer = (customer or "").strip() or None
     limit = min(max(int(limit or 20), 1), 200)
 
+    has_custom_display_name = False
+    try:
+        has_custom_display_name = bool(
+            frappe.db.has_column("tabCustomer", "custom_display_name")
+            and frappe.get_meta("Customer").get_field("custom_display_name")
+        )
+    except Exception:
+        has_custom_display_name = False
+
+    custom_display_select = (
+        "COALESCE(c.custom_display_name, c.customer_name) AS custom_display_name"
+        if has_custom_display_name
+        else "c.customer_name AS custom_display_name"
+    )
+
     def _enrich_customer_fields(rows):
         rows = rows or []
         customer_ids = list({r.get("customer") for r in rows if r.get("customer")})
         if not customer_ids:
             return rows
 
+        customer_fields = ["name", "customer_name", "mobile_no"]
+        if has_custom_display_name:
+            customer_fields.insert(2, "custom_display_name")
+
         customer_rows = frappe.get_all(
             "Customer",
             filters={"name": ["in", customer_ids]},
-            fields=["name", "customer_name", "custom_display_name", "mobile_no"],
+            fields=customer_fields,
         )
         customer_map = {c.name: c for c in customer_rows}
 
@@ -1879,7 +2007,7 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
             r["customer_name"] = r.get("customer_name") or cust.customer_name or ""
             r["custom_display_name"] = (
                 r.get("custom_display_name")
-                or cust.custom_display_name
+                or getattr(cust, "custom_display_name", None)
                 or cust.customer_name
                 or r.get("customer")
                 or ""
@@ -1945,7 +2073,7 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
                 vm.odometer,
                 vm.chasis_no,
                 c.customer_name,
-                COALESCE(c.custom_display_name, c.customer_name) AS custom_display_name,
+                {custom_display_select},
                 c.mobile_no
             FROM `tabVehicle Master` vm
             LEFT JOIN `tabCustomer` c ON c.name = vm.customer
@@ -1972,7 +2100,7 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
                 vm.odometer,
                 vm.chasis_no,
                 c.customer_name,
-                COALESCE(c.custom_display_name, c.customer_name) AS custom_display_name,
+                {custom_display_select},
                 c.mobile_no
             FROM `tabVehicle Master` vm
             LEFT JOIN `tabCustomer` c ON c.name = vm.customer
@@ -1999,7 +2127,7 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
                 vm.odometer,
                 vm.chasis_no,
                 c.customer_name,
-                COALESCE(c.custom_display_name, c.customer_name) AS custom_display_name,
+                {custom_display_select},
                 c.mobile_no
             FROM `tabVehicle Master` vm
             LEFT JOIN `tabCustomer` c ON c.name = vm.customer

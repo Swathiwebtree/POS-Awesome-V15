@@ -443,8 +443,57 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None, vehicle
     if not customer_name:
         frappe.throw(_("Customer name is required"))
 
+    def _resolve_customer_id(customer_value: str) -> str:
+        """Accept Customer.name or (fallback) Customer.customer_name and resolve to Customer.name.
+
+        This is important because the POS UI may sometimes send the display text (customer_name)
+        instead of the document id (name). In that case, returning [] is confusing when vehicles exist.
+        """
+        customer_value = (customer_value or "").strip()
+        if not customer_value:
+            return customer_value
+
+        if frappe.db.exists("Customer", customer_value):
+            return customer_value
+
+        # Fallback: resolve by customer_name (and prefer a customer that has vehicles linked).
+        try:
+            candidates = frappe.get_all(
+                "Customer",
+                filters={"customer_name": customer_value},
+                fields=["name", "modified"],
+                order_by="modified desc",
+                limit_page_length=20,
+            )
+        except Exception:
+            candidates = []
+
+        if not candidates:
+            return customer_value
+
+        # Prefer customers that actually have vehicles.
+        try:
+            candidate_ids = [c.name for c in candidates if c.get("name")]
+            if candidate_ids:
+                rows = frappe.get_all(
+                    VEHICLE_DOCTYPE,
+                    filters={"customer": ["in", candidate_ids]},
+                    fields=["customer"],
+                    limit_page_length=1000,
+                )
+                has_vehicle = {r.customer for r in rows if r.get("customer")}
+                for c in candidates:
+                    if c.name in has_vehicle:
+                        return c.name
+        except Exception:
+            pass
+
+        # Otherwise, pick most recently modified.
+        return candidates[0].name
+
     limit = int(limit) if limit else 200
 
+    customer_name = _resolve_customer_id(customer_name)
     filters = {"customer": customer_name}
     vehicle_no = (vehicle_no or "").strip()
     if vehicle_no:
@@ -809,20 +858,35 @@ def get_all_vehicles(limit=500):
 
     # Fetch customer details in ONE query (important)
     customer_names = list({v.customer for v in vehicles if v.customer})
+    has_custom_display_name = False
+    try:
+        has_custom_display_name = bool(
+            frappe.db.has_column("tabCustomer", "custom_display_name")
+            and frappe.get_meta("Customer").get_field("custom_display_name")
+        )
+    except Exception:
+        has_custom_display_name = False
+
+    customer_fields = ["name", "customer_name", "mobile_no"]
+    if has_custom_display_name:
+        customer_fields.insert(2, "custom_display_name")
+
     customers = frappe.get_all(
         "Customer",
         filters={"name": ["in", customer_names]},
-        fields=["name", "customer_name", "custom_display_name", "mobile_no"],
+        fields=customer_fields,
     )
     customer_map = {c.name: c for c in customers}
 
     for v in vehicles:
         cust = customer_map.get(v.customer)
-        v["customer_name"] = cust.customer_name if cust else ""
+        v["customer_name"] = getattr(cust, "customer_name", "") if cust else ""
         v["custom_display_name"] = (
-            (cust.custom_display_name or cust.customer_name) if cust else (v.get("customer_name") or "")
+            (getattr(cust, "custom_display_name", None) or getattr(cust, "customer_name", ""))
+            if cust
+            else (v.get("customer_name") or "")
         )
-        v["mobile_no"] = cust.mobile_no if cust else ""
+        v["mobile_no"] = getattr(cust, "mobile_no", "") if cust else ""
 
     return vehicles
 

@@ -64,10 +64,15 @@
 											</template>
 											<template v-slot:subtitle>
 												<span class="text-caption">
-													{{ item.raw.name }}
-													<span v-if="item.raw.designation">
-														- {{ item.raw.designation }}</span
-													>
+													<template v-if="showOdometerField">
+														<span v-if="item.raw.designation">{{ item.raw.designation }}</span>
+													</template>
+													<template v-else>
+														{{ item.raw.name }}
+														<span v-if="item.raw.designation">
+															- {{ item.raw.designation }}</span
+														>
+													</template>
 												</span>
 											</template>
 										</v-list-item>
@@ -77,7 +82,9 @@
 											<span class="employee-selection-name">{{
 												item.raw.employee_name || item.raw.name
 											}}</span>
-											<span class="employee-selection-id">({{ item.raw.name }})</span>
+											<span v-if="!showOdometerField" class="employee-selection-id"
+												>({{ item.raw.name }})</span
+											>
 										</div>
 									</template>
 								</v-autocomplete>

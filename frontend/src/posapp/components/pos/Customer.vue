@@ -16,10 +16,26 @@
 				:label="__('Vehicle No')"
 				v-model="selectedVehicle"
 				hide-details
+				@update:menu="onVehicleMenuToggle"
 				@update:search="onVehicleSearch"
 				@update:modelValue="onVehicleSelect"
 				:menu-props="{ maxWidth: '80vw' }"
 			>
+				<template #selection="{ item }">
+					<span>
+						{{ item?.raw?.vehicle_no || item?.raw?.name || "" }}
+					</span>
+				</template>
+
+				<template #item="{ props, item }">
+					<!-- `props` already contains title/subtitle used by v-list-item; avoid rendering twice -->
+					<v-list-item
+						v-bind="props"
+						:title="item?.raw?.vehicle_no || item?.raw?.name || ''"
+						:subtitle="''"
+					/>
+				</template>
+
 				<template #prepend-inner>
 					<v-tooltip text="Edit vehicle">
 						<template #activator="{ props }">
@@ -489,10 +505,8 @@ export default {
 				return this.vehicleSearchResults;
 			}
 
-			// Default: show customer vehicles list.
-			if (this.customer && this.vehicles.length) {
-				return this.vehicles;
-			}
+			// Default: show vehicles list (all vehicles when no customer; customer vehicles when selected).
+			if (this.vehicles.length) return this.vehicles;
 
 			return [];
 		},
@@ -533,6 +547,17 @@ export default {
 
 		onVehicleMenuToggle(isOpen) {
 			if (isOpen) {
+				// If no customer is selected, show "all vehicles" list for the dropdown.
+				// This is fetched lazily on menu open to avoid loading on every page load.
+				if (
+					!this.customer &&
+					!this.vehicleSearchTerm &&
+					!this.loadingVehicles &&
+					(!this.vehicles || !this.vehicles.length)
+				) {
+					this.loadAllVehicles();
+				}
+
 				this.$nextTick(() => {
 					const dropdown = this.$refs.vehicleDropdown?.$el?.querySelector(
 						".v-overlay__content .v-select-list",
@@ -626,6 +651,31 @@ export default {
 				return String(candidate || "").trim();
 			}
 			return String(value || "").trim();
+		},
+		_resolveCustomerIdFromInput(val) {
+			const input = String(val || "").trim();
+			if (!input) return input;
+
+			// If it's already a known Customer.name, keep it.
+			if ((this.customers || []).some((c) => c && c.name === input)) {
+				return input;
+			}
+
+			// If user typed a display value (customer_name/custom_display_name), map it back to Customer.name when unique.
+			const needle = input.toLowerCase();
+			const matches = (this.customers || []).filter((c) => {
+				if (!c) return false;
+				const byCustomerName = String(c.customer_name || "").trim().toLowerCase() === needle;
+				const byDisplayName =
+					String(c.custom_display_name || "").trim().toLowerCase() === needle;
+				return byCustomerName || byDisplayName;
+			});
+
+			if (matches.length === 1) {
+				return matches[0].name;
+			}
+
+			return input;
 		},
 		cancelPendingCustomerSearch() {
 			if (this.searchDebounce && this.searchDebounce.cancel) {
@@ -778,6 +828,7 @@ export default {
 
 		onCustomerChange(val) {
 			val = this.normalizeCustomerValue(val);
+			val = this._resolveCustomerIdFromInput(val);
 			// When loading from a draft, internalCustomer is set programmatically
 			// which may trigger this. Skip to avoid showing false "already selected" error.
 			if (this._skipNextCustomerSearch) {
