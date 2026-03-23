@@ -1017,6 +1017,7 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         # only act on vehicles if we have an identifier
         if effective_vehicle_no:
             try:
+
                 def _get_existing_vehicle_doc_by_number(vehicle_no: str):
                     """Return existing Vehicle doc (ERPNext) by vehicle_no/license_plate/name."""
                     if not vehicle_no:
@@ -1034,9 +1035,7 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                     except Exception:
                         pass
                     try:
-                        existing_name = frappe.db.get_value(
-                            VEHICLE_DOCTYPE, {"license_plate": vno}, "name"
-                        )
+                        existing_name = frappe.db.get_value(VEHICLE_DOCTYPE, {"license_plate": vno}, "name")
                         if existing_name:
                             return frappe.get_doc(VEHICLE_DOCTYPE, existing_name)
                     except Exception:
@@ -1067,9 +1066,9 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                     existing_owner = getattr(existing_vehicle, "customer", None) or None
                     if existing_owner and existing_owner != customer_doc.name:
                         frappe.throw(
-                            _(
-                                "Vehicle {0} is already linked to another customer ({1})."
-                            ).format(effective_vehicle_no, existing_owner),
+                            _("Vehicle {0} is already linked to another customer ({1}).").format(
+                                effective_vehicle_no, existing_owner
+                            ),
                             ValidationError,
                         )
                     vehicle_doc = existing_vehicle
@@ -1079,9 +1078,9 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                     existing_owner = getattr(existing_vm, "customer", None) or None
                     if existing_owner and existing_owner != customer_doc.name:
                         frappe.throw(
-                            _(
-                                "Vehicle {0} is already linked to another customer ({1})."
-                            ).format(effective_vehicle_no, existing_owner),
+                            _("Vehicle {0} is already linked to another customer ({1}).").format(
+                                effective_vehicle_no, existing_owner
+                            ),
                             ValidationError,
                         )
                     vm_doc = existing_vm
@@ -1165,10 +1164,16 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                                 existing = frappe.get_doc(VM_DOCTYPE, vm.name)
                                 existing_meta = frappe.get_meta(VM_DOCTYPE)
                                 for fieldname in ("vehicle_no", "customer", "model"):
-                                    if existing_meta.has_field(fieldname) and getattr(vm, fieldname, None) is not None:
+                                    if (
+                                        existing_meta.has_field(fieldname)
+                                        and getattr(vm, fieldname, None) is not None
+                                    ):
                                         setattr(existing, fieldname, getattr(vm, fieldname))
                                 for fieldname in ("tel_mobile", "mobile_no"):
-                                    if existing_meta.has_field(fieldname) and getattr(vm, fieldname, None) is not None:
+                                    if (
+                                        existing_meta.has_field(fieldname)
+                                        and getattr(vm, fieldname, None) is not None
+                                    ):
                                         setattr(existing, fieldname, getattr(vm, fieldname))
                                 existing.save(ignore_permissions=True)
                                 vm_doc = existing
@@ -1359,14 +1364,24 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         if vm_doc:
             vehicle_response = {
                 "name": getattr(vm_doc, "name", None),
-                "vehicle_no": getattr(vm_doc, "vehicle_no", None) or effective_vehicle_no or getattr(vm_doc, "name", None),
-                "make": getattr(vm_doc, "make", None) if hasattr(vm_doc, "make") else vehicle_data.get("make"),
-                "model": getattr(vm_doc, "model", None) if hasattr(vm_doc, "model") else vehicle_data.get("model"),
+                "vehicle_no": getattr(vm_doc, "vehicle_no", None)
+                or effective_vehicle_no
+                or getattr(vm_doc, "name", None),
+                "make": (
+                    getattr(vm_doc, "make", None) if hasattr(vm_doc, "make") else vehicle_data.get("make")
+                ),
+                "model": (
+                    getattr(vm_doc, "model", None) if hasattr(vm_doc, "model") else vehicle_data.get("model")
+                ),
                 "mobile_no": getattr(vm_doc, "tel_mobile", None)
                 or getattr(vm_doc, "mobile_no", None)
                 or vehicle_data.get("mobile_no"),
                 "customer": getattr(vm_doc, "customer", None) or customer_doc.name,
-                "odometer": getattr(vm_doc, "odometer", None) if hasattr(vm_doc, "odometer") else vehicle_data.get("odometer"),
+                "odometer": (
+                    getattr(vm_doc, "odometer", None)
+                    if hasattr(vm_doc, "odometer")
+                    else vehicle_data.get("odometer")
+                ),
             }
         elif vehicle_doc:
             vehicle_response = {

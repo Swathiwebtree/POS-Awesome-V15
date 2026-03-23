@@ -665,9 +665,14 @@ export default {
 			const needle = input.toLowerCase();
 			const matches = (this.customers || []).filter((c) => {
 				if (!c) return false;
-				const byCustomerName = String(c.customer_name || "").trim().toLowerCase() === needle;
+				const byCustomerName =
+					String(c.customer_name || "")
+						.trim()
+						.toLowerCase() === needle;
 				const byDisplayName =
-					String(c.custom_display_name || "").trim().toLowerCase() === needle;
+					String(c.custom_display_name || "")
+						.trim()
+						.toLowerCase() === needle;
 				return byCustomerName || byDisplayName;
 			});
 

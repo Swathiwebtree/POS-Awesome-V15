@@ -65,7 +65,9 @@
 											<template v-slot:subtitle>
 												<span class="text-caption">
 													<template v-if="showOdometerField">
-														<span v-if="item.raw.designation">{{ item.raw.designation }}</span>
+														<span v-if="item.raw.designation">{{
+															item.raw.designation
+														}}</span>
 													</template>
 													<template v-else>
 														{{ item.raw.name }}
