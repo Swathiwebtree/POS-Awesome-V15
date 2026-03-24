@@ -48,7 +48,13 @@
 				<template v-slot:item.customer="{ item }">
 					<div class="d-flex align-center gap-1">
 						<span class="customer-name">
-							{{ item.custom_display_name || item.customer_name || item.customer }}
+							{{
+								item.custom_display_name ||
+								item.title ||
+								item.display_name ||
+								item.customer_name ||
+								item.customer
+							}}
 						</span>
 						<v-chip
 							v-if="item.is_corporate"
@@ -389,6 +395,9 @@ export default {
 					"name",
 					"customer",
 					"customer_name",
+					"custom_display_name",
+					"title",
+					"display_name",
 					"posting_date",
 					"posting_time",
 					"grand_total",
@@ -443,6 +452,8 @@ export default {
 						d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
 					d.custom_display_name =
 						d.custom_display_name ||
+						d.title ||
+						d.display_name ||
 						this._customerDisplayNameCache[d.customer] ||
 						d.customer_name ||
 						d.customer ||
@@ -549,6 +560,8 @@ export default {
 			nd.customer_name = nd.customer_name || this._customerNameCache[nd.customer] || nd.customer || "";
 			nd.custom_display_name =
 				nd.custom_display_name ||
+				nd.title ||
+				nd.display_name ||
 				this._customerDisplayNameCache[nd.customer] ||
 				nd.customer_name ||
 				nd.customer ||
@@ -571,6 +584,8 @@ export default {
 				customer: item.customer || "",
 				customer_name: item.customer_name || "",
 				custom_display_name: item.custom_display_name || "",
+				title: item.title || "",
+				display_name: item.display_name || "",
 				posting_date,
 				posting_time,
 				grand_total: item.grand_total != null ? item.grand_total : 0,
@@ -651,7 +666,11 @@ export default {
 						customer: invoice.customer,
 						customer_name: invoice.customer_name || invoice.customer,
 						custom_display_name:
-							invoice.custom_display_name || invoice.customer_name || invoice.customer,
+							invoice.custom_display_name ||
+							invoice.title ||
+							invoice.display_name ||
+							invoice.customer_name ||
+							invoice.customer,
 						invoice_name: invoice.name || "",
 						contact_mobile: invoice.contact_mobile || "",
 						custom_vehicle_no: invoice.custom_vehicle_no || "",
@@ -751,6 +770,8 @@ export default {
 						d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
 					d.custom_display_name =
 						d.custom_display_name ||
+						d.title ||
+						d.display_name ||
 						this._customerDisplayNameCache[d.customer] ||
 						d.customer_name ||
 						d.customer ||

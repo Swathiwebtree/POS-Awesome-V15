@@ -572,6 +572,10 @@ export default {
 						fields: [
 							"name",
 							"customer",
+							"customer_name",
+							"custom_display_name",
+							"title",
+							"display_name",
 							"posting_date",
 							"posting_time",
 							"grand_total",
