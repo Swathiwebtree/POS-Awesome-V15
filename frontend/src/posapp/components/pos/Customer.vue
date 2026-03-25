@@ -102,6 +102,7 @@
 				@update:menu="onCustomerMenuToggle"
 				@update:modelValue="onCustomerChange"
 				@update:search="onCustomerSearch"
+				@click:clear="onCustomerExplicitClear"
 				@keydown.enter="handleEnter"
 				:virtual-scroll="true"
 				:virtual-scroll-item-height="58"
@@ -484,6 +485,8 @@ export default {
 		// Guard to prevent duplicate load_invoice_customer event processing
 		_lastLoadInvoiceCustomerPayload: null,
 		_loadInvoiceCustomerInProgress: false,
+		ignoreCustomerClearUntil: 0,
+		allowCustomerClear: false,
 	}),
 
 	components: {
@@ -714,15 +717,22 @@ export default {
 
 			this.customer = customerName;
 			this.internalCustomer = customerName;
+			this.allowCustomerClear = false;
+			this.ignoreCustomerClearUntil = Date.now() + 1500;
 			this.releasePendingCustomerSearch();
 			return customerName;
+		},
+		onCustomerExplicitClear() {
+			this.allowCustomerClear = true;
 		},
 
 		// --- Customer Methods ---
 		onCustomerMenuToggle(isOpen) {
 			this.isMenuOpen = isOpen;
 			if (isOpen) {
-				this.internalCustomer = null;
+				if (!this.customer) {
+					this.internalCustomer = null;
+				}
 				this.$nextTick(() => {
 					setTimeout(() => {
 						const dropdown = this.$refs.customerDropdown?.$el?.querySelector(
@@ -874,6 +884,19 @@ export default {
 			}
 
 			if (!val) {
+				if (this.customer && !this.allowCustomerClear) {
+					this.internalCustomer = this.customer;
+					return;
+				}
+				if (
+					this.customer &&
+					!this.allowCustomerClear &&
+					Date.now() < (this.ignoreCustomerClearUntil || 0)
+				) {
+					this.internalCustomer = this.customer;
+					return;
+				}
+				this.allowCustomerClear = false;
 				this.customer = null;
 				this.internalCustomer = null;
 				this.vehicles = [];
