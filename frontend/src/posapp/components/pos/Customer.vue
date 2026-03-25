@@ -487,6 +487,7 @@ export default {
 		_loadInvoiceCustomerInProgress: false,
 		ignoreCustomerClearUntil: 0,
 		allowCustomerClear: false,
+		resetSearchOnCustomerMenuOpen: false,
 	}),
 
 	components: {
@@ -730,9 +731,18 @@ export default {
 		onCustomerMenuToggle(isOpen) {
 			this.isMenuOpen = isOpen;
 			if (isOpen) {
-				if (!this.customer) {
-					this.internalCustomer = null;
+				// Keep current selection visible when opening dropdown.
+				// Clearing model here causes the selected customer text to disappear.
+				this.internalCustomer = this.customer || this.internalCustomer || null;
+				this.resetSearchOnCustomerMenuOpen = true;
+				// Always show full customer list on dropdown open (even when a customer is selected).
+				if (this.searchDebounce && this.searchDebounce.cancel) {
+					this.searchDebounce.cancel();
 				}
+				this.searchTerm = "";
+				this.page = 0;
+				this.hasMore = true;
+				this.searchCustomers("");
 				this.$nextTick(() => {
 					setTimeout(() => {
 						const dropdown = this.$refs.customerDropdown?.$el?.querySelector(
@@ -745,6 +755,7 @@ export default {
 					}, 50);
 				});
 			} else {
+				this.resetSearchOnCustomerMenuOpen = false;
 				const dropdown = this.$refs.customerDropdown?.$el?.querySelector(
 					".v-overlay__content .v-select-list",
 				);
@@ -926,6 +937,31 @@ export default {
 			// search from clearing this.customers[] and blanking the autocomplete
 			if (this._skipNextCustomerSearch) {
 				return;
+			}
+
+			// First search event on menu open may contain selected value;
+			// reset it so dropdown shows full customer list.
+			if (this.isMenuOpen && this.resetSearchOnCustomerMenuOpen) {
+				this.resetSearchOnCustomerMenuOpen = false;
+				const selected = (this.customers || []).find((c) => c && c.name === this.customer) || {};
+				const current = String(val || "")
+					.trim()
+					.toLowerCase();
+				const selectedTokens = [
+					String(this.customer || "")
+						.trim()
+						.toLowerCase(),
+					String(selected.customer_name || "")
+						.trim()
+						.toLowerCase(),
+					String(selected.custom_display_name || "")
+						.trim()
+						.toLowerCase(),
+				].filter(Boolean);
+				if (!current || selectedTokens.includes(current)) {
+					this.searchDebounce("");
+					return;
+				}
 			}
 			this.searchDebounce(val);
 		},
