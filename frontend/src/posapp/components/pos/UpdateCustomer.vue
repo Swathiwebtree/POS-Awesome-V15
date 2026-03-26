@@ -286,9 +286,7 @@ export default {
 				if (cleaned.length > 8) {
 					this.vehicle_no_error = __("Only 8 characters required");
 				} else {
-					this.vehicle_no_error = __(
-						"Vehicle Number can contain only letters, numbers, and '-'",
-					);
+					this.vehicle_no_error = __("Vehicle Number can contain only letters, numbers, and '-'");
 				}
 			} else {
 				this.vehicle_no_error = "";
@@ -402,7 +400,11 @@ export default {
 				err = validatePhoneNumberLength(current, iso2);
 			}
 			const parsed = parsePhoneNumberFromString(current, iso2);
-			this.mobile_has_national = !!(parsed && parsed.nationalNumber && parsed.nationalNumber.length > 0);
+			this.mobile_has_national = !!(
+				parsed &&
+				parsed.nationalNumber &&
+				parsed.nationalNumber.length > 0
+			);
 			if (!this.mobile_has_national) {
 				this.mobile_is_valid = null;
 				this.mobile_error_message = "";

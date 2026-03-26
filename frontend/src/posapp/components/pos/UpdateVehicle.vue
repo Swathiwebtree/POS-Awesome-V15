@@ -265,8 +265,7 @@ export default {
 		},
 		validateVehicleNo(rawVal, cleanedVal = null) {
 			const raw = String(rawVal || "");
-			const cleaned =
-				typeof cleanedVal === "string" ? cleanedVal : raw.replace(/[^A-Za-z0-9-]/g, "");
+			const cleaned = typeof cleanedVal === "string" ? cleanedVal : raw.replace(/[^A-Za-z0-9-]/g, "");
 			if (!raw) {
 				this.vehicle_no_error = "";
 				return;
@@ -282,9 +281,7 @@ export default {
 				return;
 			}
 			if (!/^[A-Za-z0-9-]{1,8}$/.test(cleaned)) {
-				this.vehicle_no_error = this.__(
-					"Vehicle Number can contain only letters, numbers, and '-'",
-				);
+				this.vehicle_no_error = this.__("Vehicle Number can contain only letters, numbers, and '-'");
 				return;
 			}
 			this.vehicle_no_error = "";

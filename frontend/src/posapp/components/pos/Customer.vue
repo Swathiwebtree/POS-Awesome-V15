@@ -530,7 +530,9 @@ export default {
 	methods: {
 		sanitizeVehicleNo(val) {
 			if (!val) return "";
-			return String(val).replace(/[^A-Za-z0-9-]/g, "").slice(0, 8);
+			return String(val)
+				.replace(/[^A-Za-z0-9-]/g, "")
+				.slice(0, 8);
 		},
 		async loadAllVehicles() {
 			this.loadingVehicles = true;
