@@ -528,6 +528,10 @@ export default {
 	},
 
 	methods: {
+		sanitizeVehicleNo(val) {
+			if (!val) return "";
+			return String(val).replace(/[^A-Za-z0-9-]/g, "").slice(0, 8);
+		},
 		async loadAllVehicles() {
 			this.loadingVehicles = true;
 			try {
@@ -1092,7 +1096,8 @@ export default {
 		},
 
 		onVehicleSearch: _.debounce(async function (val) {
-			const term = (val || "").trim().toLowerCase();
+			const cleaned = this.sanitizeVehicleNo(val);
+			const term = (cleaned || "").trim().toLowerCase();
 			this.vehicleSearchTerm = term;
 
 			if (!term || term.length < 2) {
@@ -1131,7 +1136,8 @@ export default {
 		}, 300),
 
 		async onVehicleNoEnter() {
-			const vehicleNo = (this.vehicle_no || "").trim();
+			const vehicleNo = this.sanitizeVehicleNo(this.vehicle_no);
+			this.vehicle_no = vehicleNo;
 			if (!vehicleNo) return;
 
 			this.loadingVehicles = true;
@@ -2360,7 +2366,7 @@ export default {
 				});
 
 				this.eventBus.on("set_custom_vehicle_no", (value) => {
-					const normalized = String(value || "").trim();
+					const normalized = this.sanitizeVehicleNo(String(value || "").trim());
 					this.pendingDraftVehicleNo = normalized || null;
 					if (!normalized || !this.customer) return;
 

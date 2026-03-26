@@ -24,17 +24,34 @@
 									color="primary"
 									hide-details="auto"
 									:required="isCreateWithVehicle"
+									:error="!!vehicle_no_error"
+									:error-messages="vehicle_no_error"
+									@update:modelValue="onVehicleNoInput"
 									class="mb-3"
 								/>
 
-								<v-text-field
+								<vue-tel-input
 									v-model="mobile_no"
-									:label="__('Mobile No') + (isCreateWithVehicle ? ' *' : '')"
-									density="comfortable"
-									color="primary"
-									hide-details="auto"
-									class="mb-3"
+									:default-country="default_country_iso"
+									:auto-default-country="false"
+									:input-options="tel_input_options.inputOptions"
+									:dropdown-options="tel_input_options.dropdownOptions"
+									:valid-characters-only="true"
+									:strict-validation="true"
+									:only-countries="tel_only_countries"
+									mode="national"
+									@on-input="onPhoneInput"
+									@validate="onPhoneValidate"
+									@country-changed="onPhoneCountryChanged"
+									@blur="onPhoneBlur"
+									class="mb-3 posa-tel-input"
 								/>
+								<div
+									v-if="mobile_touched && mobile_has_national && mobile_is_valid === false"
+									class="text-caption text-error mt-1 mb-2"
+								>
+									{{ mobile_error_message || __("Mobile number is not valid") }}
+								</div>
 
 								<v-text-field
 									v-model="vehicle_model"
@@ -169,12 +186,18 @@
 </template>
 
 <script>
+import { parsePhoneNumberFromString, validatePhoneNumberLength } from "libphonenumber-js/max";
+import { VueTelInput } from "vue-tel-input";
+import "vue-tel-input/vue-tel-input.css";
 import { isOffline, saveOfflineCustomer } from "../../../offline/index.js";
 
 let _updateCustomerInstance = null;
 let _updateCustomerListenerRegistered = false;
 
 export default {
+	components: {
+		VueTelInput,
+	},
 	data: () => ({
 		customerDialog: false,
 		confirmDialog: false,
@@ -189,6 +212,34 @@ export default {
 		address_line1: "",
 		city: "",
 		country: "Pakistan",
+		default_country_iso: "",
+		tel_input_options: {
+			inputOptions: {
+				placeholder: "Mobile No",
+				showDialCode: false,
+			},
+			dropdownOptions: {
+				showFlags: true,
+				showDialCodeInList: true,
+				showDialCodeInSelection: true,
+				showSearchBox: true,
+			},
+		},
+		tel_only_countries: ["BH", "SA", "QA", "KW", "AE", "OM"],
+		gcc_rules: {
+			BH: { len: 8 },
+			KW: { len: 8 },
+			OM: { len: 8 },
+			QA: { len: 8 },
+			SA: { len: 9 },
+			AE: { len: 9 },
+		},
+		mobile_validation: null,
+		mobile_has_national: false,
+		mobile_touched: false,
+		mobile_is_valid: null,
+		mobile_error_message: "",
+		mobile_normalized: "",
 		email_id: "",
 		referral_code: "",
 		birthday: "",
@@ -211,6 +262,7 @@ export default {
 
 		// control - if this was explicitly opened as create-with-vehicle
 		isCreateWithVehicle: false,
+		vehicle_no_error: "",
 	}),
 	computed: {
 		isDarkTheme() {
@@ -222,6 +274,163 @@ export default {
 		},
 	},
 	methods: {
+		onVehicleNoInput(val) {
+			if (val == null) {
+				this.vehicle_no = "";
+				this.vehicle_no_error = "";
+				return;
+			}
+			const raw = String(val);
+			let cleaned = raw.replace(/[^A-Za-z0-9-]/g, "");
+			if (raw !== cleaned) {
+				if (cleaned.length > 8) {
+					this.vehicle_no_error = __("Only 8 characters required");
+				} else {
+					this.vehicle_no_error = __(
+						"Vehicle Number can contain only letters, numbers, and '-'",
+					);
+				}
+			} else {
+				this.vehicle_no_error = "";
+			}
+			if (cleaned.length > 8) {
+				this.vehicle_no_error = __("Only 8 characters required");
+				cleaned = cleaned.slice(0, 8);
+			}
+			if (cleaned !== this.vehicle_no) this.vehicle_no = cleaned;
+		},
+		async loadDefaultCountryIso() {
+			const countryName = (this.country || "").toString().trim();
+			if (!countryName) {
+				this.default_country_iso = "";
+				return;
+			}
+			try {
+				const res = await frappe.db.get_value("Country", countryName, "code");
+				const code = res && res.message && res.message.code ? String(res.message.code) : "";
+				const normalized = code ? code.toUpperCase() : "";
+				if (normalized && this.tel_only_countries.includes(normalized)) {
+					this.default_country_iso = normalized;
+				} else {
+					this.default_country_iso = this.tel_only_countries[0] || "";
+				}
+			} catch (e) {
+				console.warn("Failed to load country ISO code for", countryName, e);
+				this.default_country_iso = this.tel_only_countries[0] || "";
+			}
+		},
+		onPhoneValidate(phoneObject) {
+			this.mobile_validation = phoneObject || null;
+			this.mobile_has_national = !!(
+				phoneObject &&
+				phoneObject.nationalNumber &&
+				phoneObject.nationalNumber.length > 0
+			);
+		},
+		onPhoneInput(number, phoneObject) {
+			const iso2 =
+				(phoneObject && phoneObject.country ? phoneObject.country.iso2 : null) ||
+				this.default_country_iso ||
+				null;
+			if (!number) {
+				this.mobile_is_valid = null;
+				this.mobile_has_national = false;
+				this.mobile_error_message = "";
+				return;
+			}
+			if (!iso2) return;
+
+			const dialCode = phoneObject && phoneObject.country ? phoneObject.country.dialCode : "";
+			const national = phoneObject && phoneObject.nationalNumber ? phoneObject.nationalNumber : "";
+
+			let cleaned = String(number || "").replace(/[^\d+]/g, "");
+			if (!cleaned) return;
+
+			let current = cleaned;
+			let digitsOnly = "";
+			if (!current.startsWith("+")) {
+				digitsOnly = String(national || cleaned).replace(/\D/g, "");
+				if (!digitsOnly) return;
+				current = dialCode ? "+" + dialCode + digitsOnly : "+" + digitsOnly;
+			} else {
+				digitsOnly = current.replace(/\D/g, "");
+			}
+
+			const gccRule = this.gcc_rules[iso2];
+			if (gccRule) {
+				digitsOnly = digitsOnly.replace(/^0+/, "");
+				this.mobile_no = digitsOnly;
+
+				// Enforce exact GCC lengths using national digits
+				if (digitsOnly.length > gccRule.len) {
+					const trimmed = digitsOnly.slice(0, gccRule.len);
+					this.mobile_no = trimmed;
+					digitsOnly = trimmed;
+					current = dialCode ? "+" + dialCode + trimmed : "+" + trimmed;
+				}
+
+				this.mobile_has_national = digitsOnly.length > 0;
+				if (!this.mobile_has_national) {
+					this.mobile_is_valid = null;
+					this.mobile_error_message = "";
+					return;
+				}
+
+				if (digitsOnly.length < gccRule.len) {
+					this.mobile_is_valid = false;
+					this.mobile_error_message = __("Mobile number is too short");
+					return;
+				}
+
+				if (digitsOnly.length > gccRule.len) {
+					this.mobile_is_valid = false;
+					this.mobile_error_message = __("Mobile number is too long");
+					return;
+				}
+
+				this.mobile_is_valid = true;
+				this.mobile_error_message = "";
+				this.mobile_normalized = dialCode ? "+" + dialCode + digitsOnly : "+" + digitsOnly;
+				return;
+			}
+
+			let digits = current.replace(/\D/g, "");
+			let err = validatePhoneNumberLength(current, iso2);
+			while (digits.length > 0 && err === "TOO_LONG") {
+				digits = digits.slice(0, -1);
+				current = "+" + digits;
+				err = validatePhoneNumberLength(current, iso2);
+			}
+			const parsed = parsePhoneNumberFromString(current, iso2);
+			this.mobile_has_national = !!(parsed && parsed.nationalNumber && parsed.nationalNumber.length > 0);
+			if (!this.mobile_has_national) {
+				this.mobile_is_valid = null;
+				this.mobile_error_message = "";
+				return;
+			}
+			this.mobile_is_valid = parsed.isValid();
+			const lengthCheck = validatePhoneNumberLength(current, iso2);
+			if (lengthCheck === "TOO_SHORT") {
+				this.mobile_error_message = __("Mobile number is too short");
+			} else if (lengthCheck === "TOO_LONG") {
+				this.mobile_error_message = __("Mobile number is too long");
+			} else if (!this.mobile_is_valid) {
+				this.mobile_error_message = __("Mobile number is not valid for selected country");
+			} else {
+				this.mobile_error_message = "";
+			}
+			if (parsed && parsed.isValid()) {
+				this.mobile_normalized = parsed.number;
+			}
+		},
+		onPhoneCountryChanged(country) {
+			if (country && country.name) {
+				this.country = country.name;
+			}
+		},
+		onPhoneBlur() {
+			this.mobile_touched = true;
+		},
 		confirm_close() {
 			// If any data entered, ask confirmation
 			if (
@@ -257,6 +466,7 @@ export default {
 			this.address_line1 = "";
 			this.city = "";
 			this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
+			this.default_country_iso = "";
 			this.email_id = "";
 			this.referral_code = "";
 			this.birthday = "";
@@ -274,6 +484,13 @@ export default {
 			this.odometer = "";
 
 			this.isCreateWithVehicle = false;
+			this.vehicle_no_error = "";
+			this.mobile_validation = null;
+			this.mobile_has_national = false;
+			this.mobile_touched = false;
+			this.mobile_is_valid = null;
+			this.mobile_error_message = "";
+			this.mobile_normalized = "";
 		},
 
 		/**
@@ -371,12 +588,14 @@ export default {
 						console.warn("Failed to refresh selected vehicle for Update Customer", e);
 					}
 				}
+				await this.loadDefaultCountryIso();
 			} else {
 				// New customer: if caller asked for withVehicle then require vehicle fields during submit
 				// we still show vehicle fields for create (and update) per your request
 				// mark isCreateWithVehicle true only when wrapper.withVehicle === true
 				this.isCreateWithVehicle = !!(wrapper && wrapper.withVehicle === true);
 				this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
+				await this.loadDefaultCountryIso();
 			}
 		},
 
@@ -443,6 +662,29 @@ export default {
 			if (this.isCorporate && !this.tax_id) {
 				frappe.throw(__("VAT / TAX Number is required for corporate customers"));
 				return;
+			}
+			// Vehicle number max length
+			if (this.vehicle_no && String(this.vehicle_no).length > 8) {
+				frappe.throw(__("Only 8 characters required"));
+				return;
+			}
+			if (this.vehicle_no && !/^[A-Za-z0-9-]{1,8}$/.test(String(this.vehicle_no))) {
+				frappe.throw(__("Vehicle Number can contain only letters, numbers, and '-'"));
+				return;
+			}
+			if (this.vehicle_no_error) {
+				frappe.throw(this.vehicle_no_error);
+				return;
+			}
+			// Validate mobile number via vue-tel-input
+			if (this.mobile_no || (!this.customer_id && this.isCreateWithVehicle)) {
+				if (this.mobile_is_valid === false || !this.mobile_normalized) {
+					frappe.throw(this.mobile_error_message || __("Mobile number is not valid"));
+					return;
+				}
+				if (this.mobile_normalized) {
+					this.mobile_no = this.mobile_normalized;
+				}
 			}
 
 			// If this was an explicit create-with-vehicle flow, require vehicle + mobile
@@ -650,10 +892,12 @@ export default {
 			this.eventBus.on("register_pos_profile", (data) => {
 				this.pos_profile = data.pos_profile;
 				this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
+				this.loadDefaultCountryIso();
 			});
 			this.eventBus.on("payments_register_pos_profile", (data) => {
 				this.pos_profile = data.pos_profile;
 				this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
+				this.loadDefaultCountryIso();
 			});
 		}
 
@@ -663,6 +907,7 @@ export default {
 		this.getGenders();
 		this.group = frappe.defaults.get_user_default("Customer Group");
 		this.territory = frappe.defaults.get_user_default("Territory");
+		this.loadDefaultCountryIso();
 	},
 	beforeUnmount() {
 		_updateCustomerInstance = null;
@@ -700,5 +945,58 @@ export default {
 ::v-deep([data-theme="dark"]) .dark-field .v-field__overlay,
 ::v-deep(.v-theme--dark) .dark-field .v-field__overlay {
 	background-color: #1e1e1e !important;
+}
+
+/* Match vue-tel-input height to Vuetify comfortable text fields */
+:deep(.posa-tel-input) {
+	width: 100%;
+	border: 1px solid rgba(0, 0, 0, 0.38);
+	border-radius: 6px;
+	box-sizing: border-box;
+	height: 54px;
+}
+:deep(.posa-tel-input .vti__input) {
+	height: 54px;
+	line-height: 54px;
+	padding: 0 12px;
+	font-size: 14px;
+	box-sizing: border-box;
+	border: none;
+}
+:deep(.posa-tel-input .vti__dropdown) {
+	height: 54px;
+	border: none;
+}
+:deep(.posa-tel-input .vti__selection) {
+	height: 54px;
+	align-items: center;
+	padding: 0 8px;
+}
+:deep(.posa-tel-input .vti__selection .vti__flag) {
+	margin-top: 0;
+}
+:deep(.posa-tel-input .vti__dropdown-arrow) {
+	margin-top: 0;
+}
+:deep(.posa-tel-input .vti__input::placeholder) {
+	color: rgba(0, 0, 0, 0.6);
+}
+:deep([data-theme="dark"]) .posa-tel-input .vti__input::placeholder,
+:deep(.v-theme--dark) .posa-tel-input .vti__input::placeholder,
+::v-deep([data-theme="dark"]) .posa-tel-input .vti__input::placeholder,
+::v-deep(.v-theme--dark) .posa-tel-input .vti__input::placeholder {
+	color: rgba(255, 255, 255, 0.7);
+}
+
+/* Match focus style to other fields (no custom ring) */
+:deep(.posa-tel-input:focus-within) {
+	border-color: rgba(0, 0, 0, 0.38);
+	border-bottom-color: rgb(var(--v-theme-primary));
+	border-bottom-width: 2px;
+	border-style: solid;
+	box-shadow: none;
+}
+:deep(.posa-tel-input .vti__input:focus) {
+	outline: none;
 }
 </style>

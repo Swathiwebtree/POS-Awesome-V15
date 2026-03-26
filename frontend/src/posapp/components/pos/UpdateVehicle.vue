@@ -17,10 +17,12 @@
 									color="primary"
 									:label="frappe._('Vehicle No') + ' *'"
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									hide-details
+									hide-details="auto"
 									class="dark-field"
 									v-model="vehicle_no"
-									:readonly="!!vehicle_id"
+									:error="!!vehicle_no_error"
+									:error-messages="vehicle_no_error"
+									@update:modelValue="onVehicleNoInput"
 								></v-text-field>
 							</v-col>
 
@@ -177,6 +179,7 @@ export default {
 		loading: false,
 		vehicle_id: null,
 		vehicle_no: "",
+		vehicle_no_error: "",
 		customer: "",
 		customer_list: [],
 		loading_customers: false,
@@ -237,9 +240,55 @@ export default {
 				console.warn("Failed to fetch customer mobile:", e);
 			}
 		},
+		vehicle_no(newVal) {
+			if (!this.isPrefilling) {
+				this.validateVehicleNo(newVal);
+			}
+		},
 	},
 
 	methods: {
+		onVehicleNoInput(val) {
+			if (val == null) {
+				this.vehicle_no = "";
+				this.vehicle_no_error = "";
+				return;
+			}
+			const raw = String(val);
+			let cleaned = raw.replace(/[^A-Za-z0-9-]/g, "");
+			this.validateVehicleNo(raw, cleaned);
+			if (cleaned.length > 8) {
+				this.vehicle_no_error = this.__("Only 8 characters required");
+				cleaned = cleaned.slice(0, 8);
+			}
+			if (cleaned !== this.vehicle_no) this.vehicle_no = cleaned;
+		},
+		validateVehicleNo(rawVal, cleanedVal = null) {
+			const raw = String(rawVal || "");
+			const cleaned =
+				typeof cleanedVal === "string" ? cleanedVal : raw.replace(/[^A-Za-z0-9-]/g, "");
+			if (!raw) {
+				this.vehicle_no_error = "";
+				return;
+			}
+			if (raw !== cleaned) {
+				if (cleaned.length > 8) {
+					this.vehicle_no_error = this.__("Only 8 characters required");
+				} else {
+					this.vehicle_no_error = this.__(
+						"Vehicle Number can contain only letters, numbers, and '-'",
+					);
+				}
+				return;
+			}
+			if (!/^[A-Za-z0-9-]{1,8}$/.test(cleaned)) {
+				this.vehicle_no_error = this.__(
+					"Vehicle Number can contain only letters, numbers, and '-'",
+				);
+				return;
+			}
+			this.vehicle_no_error = "";
+		},
 		getCustomerDisplayLabel(customer) {
 			if (!customer) return "";
 			return customer.custom_display_name || customer.customer_name || customer.name || "";
@@ -285,6 +334,7 @@ export default {
 		reset_dialog() {
 			this.vehicle_id = null;
 			this.vehicle_no = "";
+			this.vehicle_no_error = "";
 			this.customer = "";
 			this.loading = false;
 			this.make = "";
@@ -390,6 +440,7 @@ export default {
 					// editing an existing vehicle
 					this.vehicle_id = payload.name;
 					this.vehicle_no = v.vehicle_no || payload.vehicle_no || "";
+					this.validateVehicleNo(this.vehicle_no);
 					this.customer = v.customer || payload.customer || "";
 					this.make = v.make || payload.make || "";
 					this.model = v.model || payload.model || "";
@@ -434,6 +485,27 @@ export default {
 				frappe.show_alert({
 					message: this.__("Please fill in all mandatory fields."),
 					indicator: "orange",
+				});
+				return;
+			}
+			if (String(this.vehicle_no).length > 8) {
+				frappe.show_alert({
+					message: this.__("Only 8 characters required"),
+					indicator: "red",
+				});
+				return;
+			}
+			if (this.vehicle_no && !/^[A-Za-z0-9-]{1,8}$/.test(String(this.vehicle_no))) {
+				frappe.show_alert({
+					message: this.__("Vehicle Number can contain only letters, numbers, and '-'"),
+					indicator: "red",
+				});
+				return;
+			}
+			if (this.vehicle_no_error) {
+				frappe.show_alert({
+					message: this.vehicle_no_error,
+					indicator: "red",
 				});
 				return;
 			}
