@@ -23,6 +23,7 @@
 									:error="!!vehicle_no_error"
 									:error-messages="vehicle_no_error"
 									@update:modelValue="onVehicleNoInput"
+									@blur="onVehicleNoBlur"
 								></v-text-field>
 							</v-col>
 
@@ -170,6 +171,7 @@
 
 <script>
 /* global frappe __ */
+import { parsePhoneNumberFromString } from "libphonenumber-js/max";
 let _updateVehicleInstance = null;
 let _updateVehicleListenerRegistered = false;
 
@@ -196,6 +198,36 @@ export default {
 		registration_number: "",
 		isPrefilling: false,
 		suppressMakeSearch: false,
+		selected_country_iso: "BH",
+		gcc_rules: {
+			BH: { dial: "973", len: 8 },
+			KW: { dial: "965", len: 8 },
+			OM: { dial: "968", len: 8 },
+			QA: { dial: "974", len: 8 },
+			SA: { dial: "966", len: 9 },
+			AE: { dial: "971", len: 9 },
+		},
+		gcc_country_aliases: {
+			BH: "BH",
+			Bahrain: "BH",
+			BAHRAIN: "BH",
+			KW: "KW",
+			Kuwait: "KW",
+			KUWAIT: "KW",
+			OM: "OM",
+			Oman: "OM",
+			OMAN: "OM",
+			QA: "QA",
+			Qatar: "QA",
+			QATAR: "QA",
+			SA: "SA",
+			"Saudi Arabia": "SA",
+			"SAUDI ARABIA": "SA",
+			AE: "AE",
+			UAE: "AE",
+			"United Arab Emirates": "AE",
+			"UNITED ARAB EMIRATES": "AE",
+		},
 	}),
 
 	computed: {
@@ -214,6 +246,7 @@ export default {
 			}
 			if (!newCustomer) {
 				this.mobile_no = "";
+				this.selected_country_iso = "BH";
 				return;
 			}
 
@@ -229,11 +262,13 @@ export default {
 				if (res?.message) {
 					const customerMobile =
 						res.message.mobile_no || res.message.mobile_number || res.message.phone || "";
+					this.selected_country_iso = this.getGccIsoFromCountry(res.message.country);
 
 					// Preserve explicit vehicle mobile in edit mode. Only auto-fill
 					// from customer when mobile is currently empty.
 					if (!this.mobile_no) {
 						this.mobile_no = customerMobile;
+						this.normalizeMobileForDisplay();
 					}
 				}
 			} catch (e) {
@@ -262,6 +297,65 @@ export default {
 				cleaned = cleaned.slice(0, 8);
 			}
 			if (cleaned !== this.vehicle_no) this.vehicle_no = cleaned;
+		},
+		onVehicleNoBlur() {
+			// Clear inline error when focus leaves the field.
+			// Submit validation will still block invalid values.
+			this.vehicle_no_error = "";
+		},
+		normalizeMobileForDisplay() {
+			const canonical = this.normalizeMobileForSave();
+			if (!canonical) {
+				this.mobile_no = "";
+				return;
+			}
+			this.mobile_no = canonical;
+			try {
+				const parsed = parsePhoneNumberFromString(canonical);
+				if (parsed && parsed.isValid()) {
+					this.mobile_no = parsed.formatInternational();
+				}
+			} catch (e) {
+				// keep canonical normalized value if formatting fails
+			}
+		},
+		normalizeMobileForSave() {
+			const raw = String(this.mobile_no || "").trim();
+			if (!raw) return "";
+			const digits = raw.replace(/\D/g, "");
+			if (!digits) return "";
+			const rule = this.getCurrentMobileRule();
+
+			// Preserve explicit international input.
+			if (raw.startsWith("+")) {
+				// Fix malformed short international values like +34565768.
+				if (digits.length === rule.len) {
+					return `+${rule.dial}${digits}`;
+				}
+				return `+${digits}`;
+			}
+
+			// GCC defaults: local numbers become +<dial><national>.
+			if (digits.startsWith(rule.dial) && digits.length > rule.dial.length) {
+				return `+${rule.dial}${digits.slice(rule.dial.length)}`;
+			}
+			if (digits.length === rule.len) {
+				return `+${rule.dial}${digits}`;
+			}
+
+			// Fallback to international format if input already contains country code digits.
+			return `+${digits}`;
+		},
+		getGccIsoFromCountry(countryValue) {
+			const raw = String(countryValue || "").trim();
+			if (!raw) return "BH";
+			if (this.gcc_country_aliases[raw]) return this.gcc_country_aliases[raw];
+			const upper = raw.toUpperCase();
+			if (this.gcc_country_aliases[upper]) return this.gcc_country_aliases[upper];
+			return "BH";
+		},
+		getCurrentMobileRule() {
+			return this.gcc_rules[this.selected_country_iso] || this.gcc_rules.BH;
 		},
 		validateVehicleNo(rawVal, cleanedVal = null) {
 			const raw = String(rawVal || "");
@@ -318,6 +412,7 @@ export default {
 					custom_display_name:
 						res.message.custom_display_name || res.message.customer_name || res.message.name,
 					mobile_no: res.message.mobile_no || res.message.mobile_number || res.message.phone || "",
+					country: res.message.country || "",
 				};
 
 				this.customer_list.push(customerDoc);
@@ -342,6 +437,7 @@ export default {
 			this.color = "";
 			this.registration_number = "";
 			this.make_list = []; // Reset make list
+			this.selected_country_iso = "BH";
 		},
 
 		close_dialog() {
@@ -442,6 +538,7 @@ export default {
 					this.make = v.make || payload.make || "";
 					this.model = v.model || payload.model || "";
 					this.mobile_no = v.mobile_no || payload.mobile_no || "";
+					this.normalizeMobileForDisplay();
 					this.chasis_no = v.chasis_no || payload.chasis_no || "";
 					this.color = v.color || payload.color || "";
 					this.registration_number = v.registration_number || payload.registration_number || "";
@@ -453,7 +550,10 @@ export default {
 
 					// ensure chosen customer exists in the dropdown list
 					if (this.customer) {
-						await this.ensureCustomerInList(this.customer);
+						const customerDoc = await this.ensureCustomerInList(this.customer);
+						if (customerDoc) {
+							this.selected_country_iso = this.getGccIsoFromCountry(customerDoc.country);
+						}
 					}
 				} else {
 					// payload may include preselected customer or vehicle_no
@@ -464,6 +564,10 @@ export default {
 						const customerDoc = await this.ensureCustomerInList(this.customer);
 						if (customerDoc && !this.mobile_no) {
 							this.mobile_no = customerDoc.mobile_no || "";
+							this.normalizeMobileForDisplay();
+						}
+						if (customerDoc) {
+							this.selected_country_iso = this.getGccIsoFromCountry(customerDoc.country);
 						}
 					}
 				}
@@ -507,7 +611,9 @@ export default {
 				return;
 			}
 			// Mobile validation
-			if (!this.mobile_no) {
+			const normalizedMobile = this.normalizeMobileForSave();
+			const mobileDigits = normalizedMobile.replace(/\D/g, "");
+			if (!mobileDigits) {
 				frappe.show_alert({
 					message: this.__("Mobile number is required"),
 					indicator: "red",
@@ -516,7 +622,7 @@ export default {
 			}
 
 			// Digits only
-			if (!/^[0-9]{8,15}$/.test(this.mobile_no)) {
+			if (!/^[0-9]{8,15}$/.test(mobileDigits)) {
 				frappe.show_alert({
 					message: this.__("Enter a valid mobile number (8–15 digits)"),
 					indicator: "red",
@@ -534,7 +640,8 @@ export default {
 					chasis_no: this.chasis_no || null,
 					color: this.color || null,
 					registration_number: this.registration_number || null,
-					mobile_no: this.mobile_no || null,
+					mobile_no: normalizedMobile || null,
+					country: this.selected_country_iso,
 					method: this.vehicle_id ? "update" : "create",
 					vehicle_id: this.vehicle_id,
 				};

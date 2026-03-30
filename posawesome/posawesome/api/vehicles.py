@@ -88,6 +88,75 @@ def _first_field_value(doc_or_dict, fields):
     return None
 
 
+GCC_PHONE_RULES = {
+    "BH": {"dial": "973", "len": 8},
+    "KW": {"dial": "965", "len": 8},
+    "OM": {"dial": "968", "len": 8},
+    "QA": {"dial": "974", "len": 8},
+    "SA": {"dial": "966", "len": 9},
+    "AE": {"dial": "971", "len": 9},
+}
+
+GCC_COUNTRY_ALIASES = {
+    "BH": "BH",
+    "BAHRAIN": "BH",
+    "KW": "KW",
+    "KUWAIT": "KW",
+    "OM": "OM",
+    "OMAN": "OM",
+    "QA": "QA",
+    "QATAR": "QA",
+    "SA": "SA",
+    "SAUDI ARABIA": "SA",
+    "SAUDI": "SA",
+    "AE": "AE",
+    "UAE": "AE",
+    "UNITED ARAB EMIRATES": "AE",
+}
+
+
+def _resolve_gcc_iso(country_value, fallback_iso="BH"):
+    key = cstr(country_value or "").strip().upper()
+    if key in GCC_COUNTRY_ALIASES:
+        return GCC_COUNTRY_ALIASES[key]
+    return fallback_iso if fallback_iso in GCC_PHONE_RULES else "BH"
+
+
+def _normalize_mobile_no(raw_value, country_value=None, fallback_iso="BH"):
+    """Normalize mobile to E.164-style format using GCC country rules."""
+    raw = cstr(raw_value or "").strip()
+    if not raw:
+        return ""
+
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        return ""
+
+    iso = _resolve_gcc_iso(country_value, fallback_iso=fallback_iso)
+    rule = GCC_PHONE_RULES.get(iso)
+    dial = rule["dial"]
+    national_len = int(rule["len"])
+
+    if digits.startswith("00"):
+        digits = digits[2:]
+
+    if raw.startswith("+"):
+        if digits.startswith(dial) and len(digits[len(dial) :]) == national_len:
+            return f"+{digits}"
+        if len(digits) == national_len:
+            return f"+{dial}{digits}"
+        return f"+{digits}"
+
+    if len(digits) == national_len:
+        return f"+{dial}{digits}"
+
+    if digits.startswith(dial) and len(digits[len(dial) :]) >= national_len:
+        normalized_local = digits[len(dial) :][-national_len:]
+        return f"+{dial}{normalized_local}"
+
+    return f"+{digits}"
+
+
 def _sync_vehicle_doctype(
     vehicle_name, vehicle_no, customer, model, make, chasis_no, color, registration_number, mobile_no
 ):
@@ -164,6 +233,7 @@ def create_vehicle(
     color=None,
     registration_number=None,
     mobile_no=None,
+    country=None,
     method="create",
     vehicle_id=None,
 ):
@@ -184,7 +254,7 @@ def create_vehicle(
     chasis_no = chasis_no or ""
     color = color or ""
     registration_number = registration_number or ""
-    mobile_no = mobile_no or ""
+    mobile_no = _normalize_mobile_no(mobile_no or "", country_value=country)
 
     # 2. Aggressive Pre-Validation for required fields
     # This prevents the call from hitting the internal Frappe Naming logic

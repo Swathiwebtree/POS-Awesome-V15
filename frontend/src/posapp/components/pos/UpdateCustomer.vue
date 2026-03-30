@@ -27,6 +27,7 @@
 									:error="!!vehicle_no_error"
 									:error-messages="vehicle_no_error"
 									@update:modelValue="onVehicleNoInput"
+									@blur="onVehicleNoBlur"
 									class="mb-3"
 								/>
 
@@ -186,7 +187,11 @@
 </template>
 
 <script>
-import { parsePhoneNumberFromString, validatePhoneNumberLength } from "libphonenumber-js/max";
+import {
+	parsePhoneNumberFromString,
+	validatePhoneNumberLength,
+	getCountryCallingCode,
+} from "libphonenumber-js/max";
 import { VueTelInput } from "vue-tel-input";
 import "vue-tel-input/vue-tel-input.css";
 import { isOffline, saveOfflineCustomer } from "../../../offline/index.js";
@@ -234,12 +239,29 @@ export default {
 			SA: { len: 9 },
 			AE: { len: 9 },
 		},
+		gcc_dial_to_iso: {
+			"973": "BH",
+			"965": "KW",
+			"968": "OM",
+			"974": "QA",
+			"966": "SA",
+			"971": "AE",
+		},
+		gcc_iso_to_country: {
+			BH: "Bahrain",
+			KW: "Kuwait",
+			OM: "Oman",
+			QA: "Qatar",
+			SA: "Saudi Arabia",
+			AE: "United Arab Emirates",
+		},
 		mobile_validation: null,
 		mobile_has_national: false,
 		mobile_touched: false,
 		mobile_is_valid: null,
 		mobile_error_message: "",
 		mobile_normalized: "",
+		selected_phone_iso: "",
 		email_id: "",
 		referral_code: "",
 		birthday: "",
@@ -297,6 +319,11 @@ export default {
 			}
 			if (cleaned !== this.vehicle_no) this.vehicle_no = cleaned;
 		},
+		onVehicleNoBlur() {
+			// Clear inline error when focus leaves the field.
+			// Submit validation will still block invalid values.
+			this.vehicle_no_error = "";
+		},
 		async loadDefaultCountryIso() {
 			const countryName = (this.country || "").toString().trim();
 			if (!countryName) {
@@ -330,6 +357,12 @@ export default {
 				(phoneObject && phoneObject.country ? phoneObject.country.iso2 : null) ||
 				this.default_country_iso ||
 				null;
+			if (phoneObject && phoneObject.country && phoneObject.country.iso2) {
+				this.selected_phone_iso = String(phoneObject.country.iso2).toUpperCase();
+				if (phoneObject.country.name) {
+					this.country = phoneObject.country.name;
+				}
+			}
 			if (!number) {
 				this.mobile_is_valid = null;
 				this.mobile_has_national = false;
@@ -429,6 +462,10 @@ export default {
 			if (country && country.name) {
 				this.country = country.name;
 			}
+			if (country && country.iso2) {
+				this.default_country_iso = String(country.iso2).toUpperCase();
+				this.selected_phone_iso = String(country.iso2).toUpperCase();
+			}
 		},
 		onPhoneBlur() {
 			this.mobile_touched = true;
@@ -502,12 +539,12 @@ export default {
 		 * - { customer: {...}, withVehicle: true } => wrapper shape
 		 */
 		async handleOpen(data) {
-			const wrapper = data && data.customer ? data : null;
-			const payload = wrapper ? wrapper.customer : data || {};
+		const wrapper = data && data.customer ? data : null;
+		const payload = wrapper ? wrapper.customer : data || {};
 
-			// Reset first
-			this.clear_customer();
-			this.customerDialog = true;
+		// Reset first
+		this.clear_customer();
+		this.customerDialog = true;
 
 			// If wrapper explicitly said create-with-vehicle, remember that for validation
 			this.isCreateWithVehicle = !!(wrapper && wrapper.withVehicle === true && !payload.name);
@@ -591,6 +628,8 @@ export default {
 					}
 				}
 				await this.loadDefaultCountryIso();
+				this.selected_phone_iso = this.default_country_iso;
+				this.normalizeMobileForTelInput();
 			} else {
 				// New customer: if caller asked for withVehicle then require vehicle fields during submit
 				// we still show vehicle fields for create (and update) per your request
@@ -598,6 +637,75 @@ export default {
 				this.isCreateWithVehicle = !!(wrapper && wrapper.withVehicle === true);
 				this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
 				await this.loadDefaultCountryIso();
+				this.selected_phone_iso = this.default_country_iso;
+				this.normalizeMobileForTelInput();
+			}
+		},
+		normalizeMobileForTelInput() {
+			const raw = String(this.mobile_no || "").trim();
+			if (!raw) return;
+			const iso2 = this.default_country_iso || "BH";
+			let parsed = null;
+			const code = getCountryCallingCode(iso2);
+			const rule = this.gcc_rules[iso2];
+
+			try {
+				if (raw.startsWith("+")) {
+					parsed = parsePhoneNumberFromString(raw);
+					const digits = raw.replace(/\D/g, "");
+					const dial = digits.slice(0, 3);
+					if (this.gcc_dial_to_iso[dial]) {
+						const detectedIso = this.gcc_dial_to_iso[dial];
+						this.default_country_iso = detectedIso;
+						this.selected_phone_iso = detectedIso;
+						this.country = this.gcc_iso_to_country[detectedIso] || this.country;
+					}
+					if (!parsed || !parsed.isValid()) {
+						// Recover malformed values like +34565768 into selected-country format.
+						let digits = raw.replace(/\D/g, "");
+						if (digits.startsWith(code)) {
+							digits = digits.slice(code.length);
+						}
+						digits = digits.replace(/^0+/, "");
+						if (rule && digits.length > rule.len) {
+							digits = digits.slice(-rule.len);
+						}
+						const full = `+${code}${digits}`;
+						this.mobile_no = full;
+						this.mobile_normalized = full;
+						this.mobile_is_valid = rule ? digits.length === rule.len : null;
+						return;
+					}
+				} else if (iso2) {
+					// Build deterministic E.164 from selected/default country.
+					// Handles both local and country-prefixed digit strings.
+					let digits = raw.replace(/\D/g, "");
+					if (digits.startsWith(code)) {
+						digits = digits.slice(code.length);
+					}
+					digits = digits.replace(/^0+/, "");
+					if (rule && digits.length > rule.len) {
+						digits = digits.slice(-rule.len);
+					}
+					const full = `+${code}${digits}`;
+					parsed = parsePhoneNumberFromString(full);
+					if (!parsed) {
+						this.mobile_no = full;
+						this.mobile_normalized = full;
+						this.mobile_is_valid = rule ? digits.length === rule.len : null;
+						return;
+					}
+				} else {
+					parsed = parsePhoneNumberFromString(raw);
+				}
+			} catch (e) {
+				parsed = null;
+			}
+
+			if (parsed && parsed.isValid()) {
+				this.mobile_no = parsed.number;
+				this.mobile_normalized = parsed.number;
+				this.mobile_is_valid = true;
 			}
 		},
 
@@ -646,6 +754,10 @@ export default {
 		// Submit create / update
 		submit_dialog() {
 			const vm = this;
+			if (this.selected_phone_iso && this.gcc_iso_to_country[this.selected_phone_iso]) {
+				this.country = this.gcc_iso_to_country[this.selected_phone_iso];
+				this.default_country_iso = this.selected_phone_iso;
+			}
 
 			// Basic validation
 			if (!this.customer_name) {

@@ -20,6 +20,80 @@ VEHICLE_DOCTYPE = "Vehicle"  # ERPNext Vehicle doctype
 VM_DOCTYPE = "Vehicle Master"  # Your custom Vehicle Master doctype (linked to Vehicle)
 
 
+GCC_PHONE_RULES = {
+    "BH": {"dial": "973", "len": 8},
+    "KW": {"dial": "965", "len": 8},
+    "OM": {"dial": "968", "len": 8},
+    "QA": {"dial": "974", "len": 8},
+    "SA": {"dial": "966", "len": 9},
+    "AE": {"dial": "971", "len": 9},
+}
+
+GCC_COUNTRY_ALIASES = {
+    "BH": "BH",
+    "BAHRAIN": "BH",
+    "KW": "KW",
+    "KUWAIT": "KW",
+    "OM": "OM",
+    "OMAN": "OM",
+    "QA": "QA",
+    "QATAR": "QA",
+    "SA": "SA",
+    "SAUDI ARABIA": "SA",
+    "SAUDI": "SA",
+    "AE": "AE",
+    "UAE": "AE",
+    "UNITED ARAB EMIRATES": "AE",
+}
+
+
+def _resolve_gcc_iso(country_value, fallback_iso="BH"):
+    key = cstr(country_value or "").strip().upper()
+    if key in GCC_COUNTRY_ALIASES:
+        return GCC_COUNTRY_ALIASES[key]
+    return fallback_iso if fallback_iso in GCC_PHONE_RULES else "BH"
+
+
+def _normalize_mobile_no(raw_value, country_value=None, fallback_iso="BH"):
+    """Normalize mobile to E.164-style format using GCC country rules."""
+    raw = cstr(raw_value or "").strip()
+    if not raw:
+        return ""
+
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        return ""
+
+    iso = _resolve_gcc_iso(country_value, fallback_iso=fallback_iso)
+    rule = GCC_PHONE_RULES.get(iso)
+    dial = rule["dial"]
+    national_len = int(rule["len"])
+
+    # Remove leading international prefix if present.
+    if digits.startswith("00"):
+        digits = digits[2:]
+
+    if raw.startswith("+"):
+        # Keep valid explicit country-coded values.
+        if digits.startswith(dial) and len(digits[len(dial) :]) == national_len:
+            return f"+{digits}"
+        # Recover malformed short +numbers as local national numbers for selected GCC country.
+        if len(digits) == national_len:
+            return f"+{dial}{digits}"
+        return f"+{digits}"
+
+    # Local national number.
+    if len(digits) == national_len:
+        return f"+{dial}{digits}"
+
+    # Already prefixed without '+'.
+    if digits.startswith(dial) and len(digits[len(dial) :]) >= national_len:
+        normalized_local = digits[len(dial) :][-national_len:]
+        return f"+{dial}{normalized_local}"
+
+    return f"+{digits}"
+
+
 # ---------------- LOYALTY POINTS FUNCTIONS ----------------
 def auto_assign_loyalty_program(customer_doc):
     if customer_doc.loyalty_program:
@@ -776,6 +850,31 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
     try:
         customer_data = json.loads(customer) if isinstance(customer, str) else (customer or {})
         vehicle_data = json.loads(vehicle) if isinstance(vehicle, str) else (vehicle or {})
+        customer_data = customer_data or {}
+        vehicle_data = vehicle_data or {}
+
+        pos_profile = {}
+        try:
+            pos_profile = json.loads(pos_profile_doc) if isinstance(pos_profile_doc, str) else (pos_profile_doc or {})
+        except Exception:
+            pos_profile = {}
+
+        country_context = (
+            customer_data.get("country")
+            or vehicle_data.get("country")
+            or pos_profile.get("posa_default_country")
+            or "BH"
+        )
+
+        # Normalize mobile fields early so all downstream writes stay consistent.
+        if "mobile_no" in customer_data:
+            customer_data["mobile_no"] = _normalize_mobile_no(
+                customer_data.get("mobile_no"), country_context
+            )
+        if "mobile_no" in vehicle_data:
+            vehicle_data["mobile_no"] = _normalize_mobile_no(
+                vehicle_data.get("mobile_no"), country_context
+            )
 
         # ------------------ Defensive sanitization & autoname pre-check ------------------
         try:
