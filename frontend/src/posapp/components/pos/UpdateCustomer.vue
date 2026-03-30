@@ -240,12 +240,12 @@ export default {
 			AE: { len: 9 },
 		},
 		gcc_dial_to_iso: {
-			"973": "BH",
-			"965": "KW",
-			"968": "OM",
-			"974": "QA",
-			"966": "SA",
-			"971": "AE",
+			973: "BH",
+			965: "KW",
+			968: "OM",
+			974: "QA",
+			966: "SA",
+			971: "AE",
 		},
 		gcc_iso_to_country: {
 			BH: "Bahrain",
@@ -539,12 +539,12 @@ export default {
 		 * - { customer: {...}, withVehicle: true } => wrapper shape
 		 */
 		async handleOpen(data) {
-		const wrapper = data && data.customer ? data : null;
-		const payload = wrapper ? wrapper.customer : data || {};
+			const wrapper = data && data.customer ? data : null;
+			const payload = wrapper ? wrapper.customer : data || {};
 
-		// Reset first
-		this.clear_customer();
-		this.customerDialog = true;
+			// Reset first
+			this.clear_customer();
+			this.customerDialog = true;
 
 			// If wrapper explicitly said create-with-vehicle, remember that for validation
 			this.isCreateWithVehicle = !!(wrapper && wrapper.withVehicle === true && !payload.name);

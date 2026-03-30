@@ -855,7 +855,9 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
 
         pos_profile = {}
         try:
-            pos_profile = json.loads(pos_profile_doc) if isinstance(pos_profile_doc, str) else (pos_profile_doc or {})
+            pos_profile = (
+                json.loads(pos_profile_doc) if isinstance(pos_profile_doc, str) else (pos_profile_doc or {})
+            )
         except Exception:
             pos_profile = {}
 
@@ -868,13 +870,9 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
 
         # Normalize mobile fields early so all downstream writes stay consistent.
         if "mobile_no" in customer_data:
-            customer_data["mobile_no"] = _normalize_mobile_no(
-                customer_data.get("mobile_no"), country_context
-            )
+            customer_data["mobile_no"] = _normalize_mobile_no(customer_data.get("mobile_no"), country_context)
         if "mobile_no" in vehicle_data:
-            vehicle_data["mobile_no"] = _normalize_mobile_no(
-                vehicle_data.get("mobile_no"), country_context
-            )
+            vehicle_data["mobile_no"] = _normalize_mobile_no(vehicle_data.get("mobile_no"), country_context)
 
         # ------------------ Defensive sanitization & autoname pre-check ------------------
         try:
