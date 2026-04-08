@@ -1457,7 +1457,7 @@ export default {
 									name: selectedCustomerName,
 									customer_name: selectedCustomerName,
 									custom_display_name: selectedCustomerName,
-							  });
+								});
 						this.customers.unshift(fallback);
 					}
 				}

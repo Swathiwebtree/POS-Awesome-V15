@@ -25,14 +25,20 @@ export const GCC_COUNTRY_ALIASES = {
 };
 
 export function resolveGccIso(countryValue, fallbackIso = "BH") {
-	const key = String(countryValue || "").trim().toUpperCase();
+	const key = String(countryValue || "")
+		.trim()
+		.toUpperCase();
 	if (GCC_COUNTRY_ALIASES[key]) return GCC_COUNTRY_ALIASES[key];
 	return GCC_PHONE_RULES[fallbackIso] ? fallbackIso : "BH";
 }
 
 export function resolveCountryIso(countryValue, fallbackIso = "BH") {
-	const fallback = String(fallbackIso || "").trim().toUpperCase();
-	const key = String(countryValue || "").trim().toUpperCase();
+	const fallback = String(fallbackIso || "")
+		.trim()
+		.toUpperCase();
+	const key = String(countryValue || "")
+		.trim()
+		.toUpperCase();
 	if (GCC_COUNTRY_ALIASES[key]) return GCC_COUNTRY_ALIASES[key];
 	if (!fallback) return "";
 	return GCC_PHONE_RULES[fallback] ? fallback : "";

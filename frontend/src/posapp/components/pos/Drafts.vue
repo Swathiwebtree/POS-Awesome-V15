@@ -33,9 +33,7 @@
 
 				<!-- Mobile -->
 				<template v-slot:item.contact_mobile="{ item }">
-					<span class="text-caption">{{
-						formatMobileForDisplay(item.contact_mobile)
-					}}</span>
+					<span class="text-caption">{{ formatMobileForDisplay(item.contact_mobile) }}</span>
 				</template>
 
 				<!-- Vehicle -->

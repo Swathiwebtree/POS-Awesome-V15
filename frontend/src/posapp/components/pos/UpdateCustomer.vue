@@ -190,12 +190,7 @@
 import { VueTelInput } from "vue-tel-input";
 import "vue-tel-input/vue-tel-input.css";
 import { isOffline, saveOfflineCustomer } from "../../../offline/index.js";
-import {
-	GCC_PHONE_RULES,
-	resolveGccIso,
-	toGccNationalDigits,
-	validateGccNational,
-} from "../../utils/phone";
+import { GCC_PHONE_RULES, resolveGccIso, toGccNationalDigits, validateGccNational } from "../../utils/phone";
 
 let _updateCustomerInstance = null;
 let _updateCustomerListenerRegistered = false;
