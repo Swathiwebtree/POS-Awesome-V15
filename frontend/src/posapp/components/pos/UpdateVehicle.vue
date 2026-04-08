@@ -140,9 +140,15 @@
 									color="primary"
 									:label="frappe._('Mobile No') + ' *'"
 									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-									hide-details
+									hide-details="auto"
 									class="dark-field"
 									v-model="mobile_no"
+									:maxlength="currentMobileRuleLength"
+									type="tel"
+									inputmode="numeric"
+									:error="!!mobile_no_error"
+									:error-messages="mobile_no_error"
+									@update:modelValue="onMobileInput"
 								></v-text-field>
 							</v-col>
 						</v-row>
@@ -171,7 +177,13 @@
 
 <script>
 /* global frappe __ */
-import { parsePhoneNumberFromString } from "libphonenumber-js/max";
+import {
+	GCC_PHONE_RULES,
+	resolveGccIso,
+	toGccE164,
+	toGccNationalDigits,
+	validateGccNational,
+} from "../../utils/phone";
 let _updateVehicleInstance = null;
 let _updateVehicleListenerRegistered = false;
 
@@ -193,20 +205,14 @@ export default {
 		make: "",
 		model: "", // Holds the selected or typed model name
 		mobile_no: "",
+		mobile_no_error: "",
 		chasis_no: "",
 		color: "",
 		registration_number: "",
 		isPrefilling: false,
 		suppressMakeSearch: false,
 		selected_country_iso: "BH",
-		gcc_rules: {
-			BH: { dial: "973", len: 8 },
-			KW: { dial: "965", len: 8 },
-			OM: { dial: "968", len: 8 },
-			QA: { dial: "974", len: 8 },
-			SA: { dial: "966", len: 9 },
-			AE: { dial: "971", len: 9 },
-		},
+		gcc_rules: GCC_PHONE_RULES,
 		gcc_country_aliases: {
 			BH: "BH",
 			Bahrain: "BH",
@@ -233,6 +239,9 @@ export default {
 	computed: {
 		isDarkTheme() {
 			return this.$theme && this.$theme.current === "dark";
+		},
+		currentMobileRuleLength() {
+			return this.getCurrentMobileRule().len;
 		},
 		is_valid() {
 			return this.vehicle_no && this.customer;
@@ -283,6 +292,18 @@ export default {
 	},
 
 	methods: {
+		onMobileInput(val) {
+			const national = toGccNationalDigits(val, this.selected_country_iso, "BH");
+			if (national !== this.mobile_no) {
+				this.mobile_no = national;
+			}
+			const result = validateGccNational(this.mobile_no, this.selected_country_iso, "BH");
+			if (result.isEmpty) {
+				this.mobile_no_error = "";
+				return;
+			}
+			this.mobile_no_error = result.isTooShort ? this.__("Mobile number is too short") : "";
+		},
 		onVehicleNoInput(val) {
 			if (val == null) {
 				this.vehicle_no = "";
@@ -304,55 +325,22 @@ export default {
 			this.vehicle_no_error = "";
 		},
 		normalizeMobileForDisplay() {
-			const canonical = this.normalizeMobileForSave();
+			const national = toGccNationalDigits(this.mobile_no, this.selected_country_iso, "BH");
+			const canonical = toGccE164(national, this.selected_country_iso, "BH");
 			if (!canonical) {
 				this.mobile_no = "";
+				this.mobile_no_error = "";
 				return;
 			}
-			this.mobile_no = canonical;
-			try {
-				const parsed = parsePhoneNumberFromString(canonical);
-				if (parsed && parsed.isValid()) {
-					this.mobile_no = parsed.formatInternational();
-				}
-			} catch (e) {
-				// keep canonical normalized value if formatting fails
-			}
+			this.mobile_no = national;
+			const result = validateGccNational(this.mobile_no, this.selected_country_iso, "BH");
+			this.mobile_no_error = result.isTooShort ? this.__("Mobile number is too short") : "";
 		},
 		normalizeMobileForSave() {
-			const raw = String(this.mobile_no || "").trim();
-			if (!raw) return "";
-			const digits = raw.replace(/\D/g, "");
-			if (!digits) return "";
-			const rule = this.getCurrentMobileRule();
-
-			// Preserve explicit international input.
-			if (raw.startsWith("+")) {
-				// Fix malformed short international values like +34565768.
-				if (digits.length === rule.len) {
-					return `+${rule.dial}${digits}`;
-				}
-				return `+${digits}`;
-			}
-
-			// GCC defaults: local numbers become +<dial><national>.
-			if (digits.startsWith(rule.dial) && digits.length > rule.dial.length) {
-				return `+${rule.dial}${digits.slice(rule.dial.length)}`;
-			}
-			if (digits.length === rule.len) {
-				return `+${rule.dial}${digits}`;
-			}
-
-			// Fallback to international format if input already contains country code digits.
-			return `+${digits}`;
+			return toGccE164(this.mobile_no, this.selected_country_iso, "BH");
 		},
 		getGccIsoFromCountry(countryValue) {
-			const raw = String(countryValue || "").trim();
-			if (!raw) return "BH";
-			if (this.gcc_country_aliases[raw]) return this.gcc_country_aliases[raw];
-			const upper = raw.toUpperCase();
-			if (this.gcc_country_aliases[upper]) return this.gcc_country_aliases[upper];
-			return "BH";
+			return resolveGccIso(countryValue, "BH");
 		},
 		getCurrentMobileRule() {
 			return this.gcc_rules[this.selected_country_iso] || this.gcc_rules.BH;
@@ -432,6 +420,7 @@ export default {
 			this.make = "";
 			this.model = "";
 			this.mobile_no = "";
+			this.mobile_no_error = "";
 			this.customer_list = [];
 			this.chasis_no = "";
 			this.color = "";
@@ -612,19 +601,20 @@ export default {
 			}
 			// Mobile validation
 			const normalizedMobile = this.normalizeMobileForSave();
-			const mobileDigits = normalizedMobile.replace(/\D/g, "");
-			if (!mobileDigits) {
+			const mobileValidation = validateGccNational(this.mobile_no, this.selected_country_iso, "BH");
+			if (!mobileValidation.national) {
 				frappe.show_alert({
 					message: this.__("Mobile number is required"),
 					indicator: "red",
 				});
 				return;
 			}
-
-			// Digits only
-			if (!/^[0-9]{8,15}$/.test(mobileDigits)) {
+			if (!mobileValidation.isComplete) {
 				frappe.show_alert({
-					message: this.__("Enter a valid mobile number (8–15 digits)"),
+					message:
+						this.__("Mobile number must be exactly") +
+						` ${mobileValidation.expectedLength} ` +
+						this.__("digits for selected country"),
 					indicator: "red",
 				});
 				return;

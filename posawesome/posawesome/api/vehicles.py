@@ -140,21 +140,24 @@ def _normalize_mobile_no(raw_value, country_value=None, fallback_iso="BH"):
     if digits.startswith("00"):
         digits = digits[2:]
 
-    if raw.startswith("+"):
-        if digits.startswith(dial) and len(digits[len(dial) :]) == national_len:
-            return f"+{digits}"
-        if len(digits) == national_len:
-            return f"+{dial}{digits}"
-        return f"+{digits}"
+    national = digits
+    if digits.startswith(dial) and len(digits) > len(dial):
+        national = digits[len(dial) :]
+    elif digits.startswith("0") and len(digits) == national_len + 1:
+        national = digits[1:]
 
-    if len(digits) == national_len:
-        return f"+{dial}{digits}"
+    if len(national) != national_len:
+        country_label = iso
+        for label, mapped_iso in GCC_COUNTRY_ALIASES.items():
+            if mapped_iso == iso and len(label) > 2:
+                country_label = label.title()
+                break
+        frappe.throw(
+            _("Mobile number for {0} must be exactly {1} digits").format(country_label, national_len),
+            ValidationError,
+        )
 
-    if digits.startswith(dial) and len(digits[len(dial) :]) >= national_len:
-        normalized_local = digits[len(dial) :][-national_len:]
-        return f"+{dial}{normalized_local}"
-
-    return f"+{digits}"
+    return f"+{dial}{national}"
 
 
 def _sync_vehicle_doctype(

@@ -1333,6 +1333,9 @@ export default {
 
 		async searchCustomers(term, append = false) {
 			try {
+				const selectedCustomerName = String(this.customer || "").trim();
+				const selectedCustomerSnapshot =
+					(this.customers || []).find((c) => c && c.name === selectedCustomerName) || null;
 				await checkDbHealth();
 				if (!db.isOpen()) await db.open();
 
@@ -1442,6 +1445,21 @@ export default {
 					this.customers.push(...results);
 				} else {
 					this.customers = results;
+					// Keep currently selected customer in the list so v-autocomplete
+					// does not blank out after background refresh/page reload.
+					if (
+						selectedCustomerName &&
+						!this.customers.some((c) => c && c.name === selectedCustomerName)
+					) {
+						const fallback = selectedCustomerSnapshot
+							? this._normalizeCustomerRow(selectedCustomerSnapshot)
+							: this._normalizeCustomerRow({
+									name: selectedCustomerName,
+									customer_name: selectedCustomerName,
+									custom_display_name: selectedCustomerName,
+							  });
+						this.customers.unshift(fallback);
+					}
 				}
 
 				// set pagination flags
@@ -2335,6 +2353,9 @@ export default {
 
 				this.eventBus.on("fetch_customer_details", async () => {
 					await this.get_customer_names();
+					if (this.customer) {
+						this.applyProgrammaticCustomerSelection(this.customer);
+					}
 				});
 
 				this.eventBus.on("add_vehicle_to_list", async (vehicle) => {

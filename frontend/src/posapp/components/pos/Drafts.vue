@@ -34,7 +34,7 @@
 				<!-- Mobile -->
 				<template v-slot:item.contact_mobile="{ item }">
 					<span class="text-caption">{{
-						item.contact_mobile !== "" ? item.contact_mobile : "—"
+						formatMobileForDisplay(item.contact_mobile)
 					}}</span>
 				</template>
 
@@ -225,7 +225,7 @@
 									<!-- Mobile -->
 									<template v-slot:item.contact_mobile="{ item }">
 										<span class="text-caption">{{
-											item.contact_mobile !== "" ? item.contact_mobile : "—"
+											formatMobileForDisplay(item.contact_mobile)
 										}}</span>
 									</template>
 
@@ -291,6 +291,7 @@
 
 <script>
 import format from "../../format";
+import { formatPhoneForDisplay, resolveCountryIso } from "../../utils/phone";
 
 export default {
 	props: {
@@ -350,6 +351,27 @@ export default {
 			if (!dateStr) return "";
 			const [year, month, day] = dateStr.split("-");
 			return `${day}/${month}/${year}`;
+		},
+		getDefaultCountryIso() {
+			const candidates = [
+				this.$parent?.pos_profile?.country,
+				this.$parent?.pos_profile?.country_code,
+				this.pos_profile?.country,
+				this.pos_profile?.country_code,
+				typeof frappe !== "undefined" ? frappe?.boot?.sysdefaults?.country : null,
+				typeof frappe !== "undefined" && frappe?.defaults?.get_default
+					? frappe.defaults.get_default("country")
+					: null,
+			];
+
+			for (const country of candidates) {
+				const iso = resolveCountryIso(country, "");
+				if (iso) return iso;
+			}
+			return null;
+		},
+		formatMobileForDisplay(value) {
+			return formatPhoneForDisplay(value, this.getDefaultCountryIso() || "BH");
 		},
 
 		isCurrentDraft(draftName) {

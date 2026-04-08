@@ -35,7 +35,7 @@
 									v-model="mobile_no"
 									:default-country="default_country_iso"
 									:auto-default-country="false"
-									:input-options="tel_input_options.inputOptions"
+									:input-options="telInputOptions"
 									:dropdown-options="tel_input_options.dropdownOptions"
 									:valid-characters-only="true"
 									:strict-validation="true"
@@ -187,14 +187,15 @@
 </template>
 
 <script>
-import {
-	parsePhoneNumberFromString,
-	validatePhoneNumberLength,
-	getCountryCallingCode,
-} from "libphonenumber-js/max";
 import { VueTelInput } from "vue-tel-input";
 import "vue-tel-input/vue-tel-input.css";
 import { isOffline, saveOfflineCustomer } from "../../../offline/index.js";
+import {
+	GCC_PHONE_RULES,
+	resolveGccIso,
+	toGccNationalDigits,
+	validateGccNational,
+} from "../../utils/phone";
 
 let _updateCustomerInstance = null;
 let _updateCustomerListenerRegistered = false;
@@ -222,6 +223,8 @@ export default {
 			inputOptions: {
 				placeholder: "Mobile No",
 				showDialCode: false,
+				type: "tel",
+				inputmode: "numeric",
 			},
 			dropdownOptions: {
 				showFlags: true,
@@ -231,14 +234,7 @@ export default {
 			},
 		},
 		tel_only_countries: ["BH", "SA", "QA", "KW", "AE", "OM"],
-		gcc_rules: {
-			BH: { len: 8 },
-			KW: { len: 8 },
-			OM: { len: 8 },
-			QA: { len: 8 },
-			SA: { len: 9 },
-			AE: { len: 9 },
-		},
+		gcc_rules: GCC_PHONE_RULES,
 		gcc_dial_to_iso: {
 			973: "BH",
 			965: "KW",
@@ -289,6 +285,14 @@ export default {
 	computed: {
 		isDarkTheme() {
 			return this.$theme && this.$theme.current === "dark";
+		},
+		telInputOptions() {
+			const iso = resolveGccIso(this.selected_phone_iso || this.default_country_iso || "BH");
+			const rule = this.gcc_rules[iso] || this.gcc_rules.BH;
+			return {
+				...this.tel_input_options.inputOptions,
+				maxlength: rule.len,
+			};
 		},
 		// Detect Corporate Customers
 		isCorporate() {
@@ -353,122 +357,85 @@ export default {
 			);
 		},
 		onPhoneInput(number, phoneObject) {
-			const iso2 =
+			const iso2 = resolveGccIso(
 				(phoneObject && phoneObject.country ? phoneObject.country.iso2 : null) ||
-				this.default_country_iso ||
-				null;
+					this.selected_phone_iso ||
+					this.default_country_iso ||
+					"BH",
+				"BH",
+			);
+			this.selected_phone_iso = iso2;
+			this.default_country_iso = iso2;
 			if (phoneObject && phoneObject.country && phoneObject.country.iso2) {
-				this.selected_phone_iso = String(phoneObject.country.iso2).toUpperCase();
+				this.selected_phone_iso = resolveGccIso(phoneObject.country.iso2, "BH");
 				if (phoneObject.country.name) {
 					this.country = phoneObject.country.name;
 				}
 			}
-			if (!number) {
+			if (!number && !this.mobile_no) {
 				this.mobile_is_valid = null;
 				this.mobile_has_national = false;
 				this.mobile_error_message = "";
-				return;
-			}
-			if (!iso2) return;
-
-			const dialCode = phoneObject && phoneObject.country ? phoneObject.country.dialCode : "";
-			const national = phoneObject && phoneObject.nationalNumber ? phoneObject.nationalNumber : "";
-
-			let cleaned = String(number || "").replace(/[^\d+]/g, "");
-			if (!cleaned) return;
-
-			let current = cleaned;
-			let digitsOnly = "";
-			if (!current.startsWith("+")) {
-				digitsOnly = String(national || cleaned).replace(/\D/g, "");
-				if (!digitsOnly) return;
-				current = dialCode ? "+" + dialCode + digitsOnly : "+" + digitsOnly;
-			} else {
-				digitsOnly = current.replace(/\D/g, "");
-			}
-
-			const gccRule = this.gcc_rules[iso2];
-			if (gccRule) {
-				digitsOnly = digitsOnly.replace(/^0+/, "");
-				this.mobile_no = digitsOnly;
-
-				// Enforce exact GCC lengths using national digits
-				if (digitsOnly.length > gccRule.len) {
-					const trimmed = digitsOnly.slice(0, gccRule.len);
-					this.mobile_no = trimmed;
-					digitsOnly = trimmed;
-					current = dialCode ? "+" + dialCode + trimmed : "+" + trimmed;
-				}
-
-				this.mobile_has_national = digitsOnly.length > 0;
-				if (!this.mobile_has_national) {
-					this.mobile_is_valid = null;
-					this.mobile_error_message = "";
-					return;
-				}
-
-				if (digitsOnly.length < gccRule.len) {
-					this.mobile_is_valid = false;
-					this.mobile_error_message = __("Mobile number is too short");
-					return;
-				}
-
-				if (digitsOnly.length > gccRule.len) {
-					this.mobile_is_valid = false;
-					this.mobile_error_message = __("Mobile number is too long");
-					return;
-				}
-
-				this.mobile_is_valid = true;
-				this.mobile_error_message = "";
-				this.mobile_normalized = dialCode ? "+" + dialCode + digitsOnly : "+" + digitsOnly;
+				this.mobile_normalized = "";
 				return;
 			}
 
-			let digits = current.replace(/\D/g, "");
-			let err = validatePhoneNumberLength(current, iso2);
-			while (digits.length > 0 && err === "TOO_LONG") {
-				digits = digits.slice(0, -1);
-				current = "+" + digits;
-				err = validatePhoneNumberLength(current, iso2);
+			const nationalCandidate =
+				(phoneObject && phoneObject.nationalNumber ? phoneObject.nationalNumber : null) ||
+				number ||
+				this.mobile_no;
+			const national = toGccNationalDigits(nationalCandidate, iso2, iso2);
+			if (national !== this.mobile_no) {
+				this.mobile_no = national;
 			}
-			const parsed = parsePhoneNumberFromString(current, iso2);
-			this.mobile_has_national = !!(
-				parsed &&
-				parsed.nationalNumber &&
-				parsed.nationalNumber.length > 0
-			);
+			const validation = validateGccNational(national, iso2, iso2);
+			this.mobile_has_national = !!validation.national.length;
 			if (!this.mobile_has_national) {
 				this.mobile_is_valid = null;
 				this.mobile_error_message = "";
+				this.mobile_normalized = "";
 				return;
 			}
-			this.mobile_is_valid = parsed.isValid();
-			const lengthCheck = validatePhoneNumberLength(current, iso2);
-			if (lengthCheck === "TOO_SHORT") {
+
+			if (validation.isTooShort) {
+				this.mobile_is_valid = false;
 				this.mobile_error_message = __("Mobile number is too short");
-			} else if (lengthCheck === "TOO_LONG") {
-				this.mobile_error_message = __("Mobile number is too long");
-			} else if (!this.mobile_is_valid) {
-				this.mobile_error_message = __("Mobile number is not valid for selected country");
-			} else {
-				this.mobile_error_message = "";
+				this.mobile_normalized = "";
+				return;
 			}
-			if (parsed && parsed.isValid()) {
-				this.mobile_normalized = parsed.number;
-			}
+
+			this.mobile_is_valid = validation.isComplete;
+			this.mobile_error_message = validation.isComplete
+				? ""
+				: __("Mobile number is not valid for selected country");
+			this.mobile_normalized = validation.e164 || "";
 		},
 		onPhoneCountryChanged(country) {
 			if (country && country.name) {
 				this.country = country.name;
 			}
 			if (country && country.iso2) {
-				this.default_country_iso = String(country.iso2).toUpperCase();
-				this.selected_phone_iso = String(country.iso2).toUpperCase();
+				const iso = resolveGccIso(country.iso2, "BH");
+				this.default_country_iso = iso;
+				this.selected_phone_iso = iso;
+				this.onPhoneInput(this.mobile_no, {
+					country: {
+						iso2: iso,
+						name: country.name || this.gcc_iso_to_country[iso],
+					},
+					nationalNumber: this.mobile_no,
+				});
 			}
 		},
 		onPhoneBlur() {
 			this.mobile_touched = true;
+			this.onPhoneInput(this.mobile_no, {
+				country: {
+					iso2: this.selected_phone_iso || this.default_country_iso || "BH",
+					name: this.country,
+				},
+				nationalNumber: this.mobile_no,
+			});
 		},
 		confirm_close() {
 			// If any data entered, ask confirmation
@@ -644,14 +611,10 @@ export default {
 		normalizeMobileForTelInput() {
 			const raw = String(this.mobile_no || "").trim();
 			if (!raw) return;
-			const iso2 = this.default_country_iso || "BH";
-			let parsed = null;
-			const code = getCountryCallingCode(iso2);
-			const rule = this.gcc_rules[iso2];
+			let iso2 = this.default_country_iso || "BH";
 
 			try {
 				if (raw.startsWith("+")) {
-					parsed = parsePhoneNumberFromString(raw);
 					const digits = raw.replace(/\D/g, "");
 					const dial = digits.slice(0, 3);
 					if (this.gcc_dial_to_iso[dial]) {
@@ -659,54 +622,19 @@ export default {
 						this.default_country_iso = detectedIso;
 						this.selected_phone_iso = detectedIso;
 						this.country = this.gcc_iso_to_country[detectedIso] || this.country;
+						iso2 = detectedIso;
 					}
-					if (!parsed || !parsed.isValid()) {
-						// Recover malformed values like +34565768 into selected-country format.
-						let digits = raw.replace(/\D/g, "");
-						if (digits.startsWith(code)) {
-							digits = digits.slice(code.length);
-						}
-						digits = digits.replace(/^0+/, "");
-						if (rule && digits.length > rule.len) {
-							digits = digits.slice(-rule.len);
-						}
-						const full = `+${code}${digits}`;
-						this.mobile_no = full;
-						this.mobile_normalized = full;
-						this.mobile_is_valid = rule ? digits.length === rule.len : null;
-						return;
-					}
-				} else if (iso2) {
-					// Build deterministic E.164 from selected/default country.
-					// Handles both local and country-prefixed digit strings.
-					let digits = raw.replace(/\D/g, "");
-					if (digits.startsWith(code)) {
-						digits = digits.slice(code.length);
-					}
-					digits = digits.replace(/^0+/, "");
-					if (rule && digits.length > rule.len) {
-						digits = digits.slice(-rule.len);
-					}
-					const full = `+${code}${digits}`;
-					parsed = parsePhoneNumberFromString(full);
-					if (!parsed) {
-						this.mobile_no = full;
-						this.mobile_normalized = full;
-						this.mobile_is_valid = rule ? digits.length === rule.len : null;
-						return;
-					}
-				} else {
-					parsed = parsePhoneNumberFromString(raw);
 				}
 			} catch (e) {
-				parsed = null;
+				// keep defaults
 			}
 
-			if (parsed && parsed.isValid()) {
-				this.mobile_no = parsed.number;
-				this.mobile_normalized = parsed.number;
-				this.mobile_is_valid = true;
-			}
+			const national = toGccNationalDigits(raw, iso2, iso2);
+			this.mobile_no = national;
+			const result = validateGccNational(national, iso2, iso2);
+			this.mobile_is_valid = result.isComplete ? true : result.isEmpty ? null : false;
+			this.mobile_error_message = result.isTooShort ? __("Mobile number is too short") : "";
+			this.mobile_normalized = result.e164 || "";
 		},
 
 		getCustomerGroups() {

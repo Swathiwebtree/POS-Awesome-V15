@@ -69,29 +69,27 @@ def _normalize_mobile_no(raw_value, country_value=None, fallback_iso="BH"):
     dial = rule["dial"]
     national_len = int(rule["len"])
 
-    # Remove leading international prefix if present.
     if digits.startswith("00"):
         digits = digits[2:]
 
-    if raw.startswith("+"):
-        # Keep valid explicit country-coded values.
-        if digits.startswith(dial) and len(digits[len(dial) :]) == national_len:
-            return f"+{digits}"
-        # Recover malformed short +numbers as local national numbers for selected GCC country.
-        if len(digits) == national_len:
-            return f"+{dial}{digits}"
-        return f"+{digits}"
+    national = digits
+    if digits.startswith(dial) and len(digits) > len(dial):
+        national = digits[len(dial) :]
+    elif digits.startswith("0") and len(digits) == national_len + 1:
+        national = digits[1:]
 
-    # Local national number.
-    if len(digits) == national_len:
-        return f"+{dial}{digits}"
+    if len(national) != national_len:
+        country_label = iso
+        for label, mapped_iso in GCC_COUNTRY_ALIASES.items():
+            if mapped_iso == iso and len(label) > 2:
+                country_label = label.title()
+                break
+        frappe.throw(
+            _("Mobile number for {0} must be exactly {1} digits").format(country_label, national_len),
+            ValidationError,
+        )
 
-    # Already prefixed without '+'.
-    if digits.startswith(dial) and len(digits[len(dial) :]) >= national_len:
-        normalized_local = digits[len(dial) :][-national_len:]
-        return f"+{dial}{normalized_local}"
-
-    return f"+{digits}"
+    return f"+{dial}{national}"
 
 
 # ---------------- LOYALTY POINTS FUNCTIONS ----------------
