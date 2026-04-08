@@ -10,7 +10,7 @@ from erpnext.accounts.doctype.loyalty_program.loyalty_program import (
 from frappe.utils.caching import redis_cache
 from posawesome.posawesome.api import customer
 from .utils import get_active_pos_profile
-from .vehicles import create_vehicle
+from .vehicles import create_vehicle, get_vehicles_by_customer, _sync_vehicle_doctype
 from frappe.exceptions import ValidationError, LinkValidationError, DoesNotExistError, NameError
 
 from decimal import Decimal, InvalidOperation
@@ -495,41 +495,8 @@ def get_customer_info(customer):
         res["state"] = addr.state or ""
         res["country"] = addr.country or ""
 
-    vehicles = frappe.db.sql(
-        """
-        SELECT
-            vm.name,
-            vm.vehicle_no,
-            vm.model,
-            v.make,
-            vm.odometer,
-            vm.chasis_no
-        FROM `tabVehicle Master` vm
-        LEFT JOIN `tabVehicle` v ON v.name = vm.name
-        WHERE vm.customer = %s
-        LIMIT 10
-        """,
-        (customer_doc.name,),
-        as_dict=True,
-    )
-
-    res["vehicles"] = []
-    for v in vehicles:
-        if not v.get("vehicle_no"):
-            continue
-        res["vehicles"].append(
-            {
-                "name": v.get("name"),
-                "vehicle_no": v.get("vehicle_no"),
-                "model": v.get("model", ""),
-                "make": v.get("make", ""),
-                "odometer": v.get("odometer", ""),
-                "chasis_no": v.get("chasis_no", ""),
-                "customer_name": customer_doc.customer_name,
-                "mobile_no": customer_doc.mobile_no,
-                "customer": customer_doc.name,
-            }
-        )
+    # Reuse vehicles API so make/model fallback behavior is consistent across POS screens.
+    res["vehicles"] = get_vehicles_by_customer(customer_doc.name, limit=10) or []
 
     if res["vehicles"]:
         res["vehicle_no"] = res["vehicles"][0]["vehicle_no"]
@@ -659,39 +626,8 @@ def _build_customer_info(customer_name):
         res["state"] = addr.state or ""
         res["country"] = addr.country or ""
 
-    vehicles = frappe.db.sql(
-        """
-        SELECT
-            vm.name,
-            vm.vehicle_no,
-            vm.model,
-            v.make,
-            vm.chasis_no,
-            vm.odometer
-        FROM `tabVehicle Master` vm
-        LEFT JOIN `tabVehicle` v ON v.name = vm.name
-        WHERE vm.customer = %s
-        LIMIT 10
-        """,
-        (customer_doc.name,),
-        as_dict=True,
-    )
-
-    res["vehicles"] = [
-        {
-            "name": v.get("name"),
-            "vehicle_no": v.get("vehicle_no"),
-            "model": v.get("model", ""),
-            "make": v.get("make", ""),
-            "chasis_no": v.get("chasis_no", ""),
-            "odometer": v.get("odometer", ""),
-            "customer_name": customer_doc.customer_name,
-            "mobile_no": customer_doc.mobile_no,
-            "customer": customer_doc.name,
-        }
-        for v in vehicles
-        if v.get("vehicle_no")
-    ]
+    # Keep search endpoint aligned with get_customer_info output.
+    res["vehicles"] = get_vehicles_by_customer(customer_doc.name, limit=10) or []
 
     if res["vehicles"]:
         res["vehicle_no"] = res["vehicles"][0].get("vehicle_no")
@@ -1189,6 +1125,19 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                                 vm_doc.customer = customer_doc.name
                             if hasattr(vm_doc, "vehicle_no") and effective_vehicle_no:
                                 vm_doc.vehicle_no = effective_vehicle_no
+                            if vehicle_data.get("model") is not None:
+                                for f in ("model", "vehicle_model", "model_no"):
+                                    if hasattr(vm_doc, f):
+                                        setattr(vm_doc, f, vehicle_data.get("model"))
+                            if vehicle_data.get("make") is not None:
+                                for f in ("make", "vehicle_make", "brand", "manufacturer"):
+                                    if hasattr(vm_doc, f):
+                                        setattr(vm_doc, f, vehicle_data.get("make"))
+                            if vehicle_data.get("mobile_no") is not None:
+                                if hasattr(vm_doc, "tel_mobile"):
+                                    vm_doc.tel_mobile = vehicle_data.get("mobile_no")
+                                elif hasattr(vm_doc, "mobile_no"):
+                                    vm_doc.mobile_no = vehicle_data.get("mobile_no")
                             vm_doc.save(ignore_permissions=True)
                             frappe.db.commit()
                         except Exception:
@@ -1204,6 +1153,10 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                                         vm_doc.model = vehicle_data.get("model")
                                 except Exception:
                                     vm_doc.model = vehicle_data.get("model")
+                            if vehicle_data.get("make") is not None:
+                                for f in ("make", "vehicle_make", "brand", "manufacturer"):
+                                    if hasattr(vm_doc, f):
+                                        setattr(vm_doc, f, vehicle_data.get("make"))
                             if vehicle_data.get("mobile_no") is not None:
                                 if hasattr(vm_doc, "tel_mobile"):
                                     vm_doc.tel_mobile = vehicle_data.get("mobile_no")
@@ -1264,6 +1217,12 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                                         and getattr(vm, fieldname, None) is not None
                                     ):
                                         setattr(existing, fieldname, getattr(vm, fieldname))
+                                for fieldname in ("make", "vehicle_make", "brand", "manufacturer"):
+                                    if (
+                                        existing_meta.has_field(fieldname)
+                                        and getattr(vm, fieldname, None) is not None
+                                    ):
+                                        setattr(existing, fieldname, getattr(vm, fieldname))
                                 for fieldname in ("tel_mobile", "mobile_no"):
                                     if (
                                         existing_meta.has_field(fieldname)
@@ -1299,8 +1258,10 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                             v.customer = customer_doc.name
                         if vehicle_data.get("model") is not None and v_meta.has_field("model"):
                             v.model = vehicle_data.get("model")
-                        if vehicle_data.get("make") is not None and v_meta.has_field("make"):
-                            v.make = vehicle_data.get("make")
+                        if vehicle_data.get("make") is not None:
+                            for f in ("make", "vehicle_make", "brand", "manufacturer"):
+                                if v_meta.has_field(f):
+                                    setattr(v, f, vehicle_data.get("make"))
                         if vehicle_data.get("mobile_no") is not None:
                             if v_meta.has_field("tel_mobile"):
                                 v.tel_mobile = vehicle_data.get("mobile_no")
@@ -1316,8 +1277,10 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                             vehicle_doc.customer = customer_doc.name
                         if vehicle_data.get("model") is not None and v_meta.has_field("model"):
                             vehicle_doc.model = vehicle_data.get("model")
-                        if vehicle_data.get("make") is not None and v_meta.has_field("make"):
-                            vehicle_doc.make = vehicle_data.get("make")
+                        if vehicle_data.get("make") is not None:
+                            for f in ("make", "vehicle_make", "brand", "manufacturer"):
+                                if v_meta.has_field(f):
+                                    setattr(vehicle_doc, f, vehicle_data.get("make"))
                         if vehicle_data.get("mobile_no") is not None:
                             if v_meta.has_field("tel_mobile"):
                                 vehicle_doc.tel_mobile = vehicle_data.get("mobile_no")
@@ -1345,6 +1308,22 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
 
         # Force-sync linked vehicle data so Customer and Vehicle dialogs reflect each other immediately.
         try:
+            if effective_vehicle_no:
+                _sync_vehicle_doctype(
+                    vehicle_name=(getattr(vehicle_doc, "name", None) if vehicle_doc else None),
+                    vehicle_no=effective_vehicle_no,
+                    customer=customer_doc.name,
+                    model=vehicle_data.get("model"),
+                    make=vehicle_data.get("make"),
+                    chasis_no=vehicle_data.get("chasis_no"),
+                    color=vehicle_data.get("color"),
+                    registration_number=vehicle_data.get("registration_number"),
+                    mobile_no=(
+                        vehicle_data.get("mobile_no")
+                        if vehicle_data.get("mobile_no") not in (None, "")
+                        else getattr(customer_doc, "mobile_no", None)
+                    ),
+                )
 
             def _has_col(dt, fieldname):
                 try:
@@ -1365,6 +1344,15 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                 vm_updates = {}
                 if sync_model not in (None, "") and _has_col(VM_DOCTYPE, "model"):
                     vm_updates["model"] = sync_model
+                if sync_make not in (None, ""):
+                    if _has_col(VM_DOCTYPE, "make"):
+                        vm_updates["make"] = sync_make
+                    if _has_col(VM_DOCTYPE, "vehicle_make"):
+                        vm_updates["vehicle_make"] = sync_make
+                    if _has_col(VM_DOCTYPE, "brand"):
+                        vm_updates["brand"] = sync_make
+                    if _has_col(VM_DOCTYPE, "manufacturer"):
+                        vm_updates["manufacturer"] = sync_make
                 if sync_mobile not in (None, ""):
                     if _has_col(VM_DOCTYPE, "tel_mobile"):
                         vm_updates["tel_mobile"] = sync_mobile
@@ -1463,10 +1451,17 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                 or effective_vehicle_no
                 or getattr(vm_doc, "name", None),
                 "make": (
-                    getattr(vm_doc, "make", None) if hasattr(vm_doc, "make") else vehicle_data.get("make")
+                    getattr(vm_doc, "make", None)
+                    or getattr(vm_doc, "vehicle_make", None)
+                    or getattr(vm_doc, "brand", None)
+                    or getattr(vm_doc, "manufacturer", None)
+                    or vehicle_data.get("make")
                 ),
                 "model": (
-                    getattr(vm_doc, "model", None) if hasattr(vm_doc, "model") else vehicle_data.get("model")
+                    getattr(vm_doc, "model", None)
+                    or getattr(vm_doc, "vehicle_model", None)
+                    or getattr(vm_doc, "model_no", None)
+                    or vehicle_data.get("model")
                 ),
                 "mobile_no": getattr(vm_doc, "tel_mobile", None)
                 or getattr(vm_doc, "mobile_no", None)
@@ -1485,8 +1480,13 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                 or getattr(vehicle_doc, "vehicle_no", None)
                 or getattr(vehicle_doc, "license_plate", None)
                 or getattr(vehicle_doc, "name", None),
-                "make": getattr(vehicle_doc, "make", None),
-                "model": getattr(vehicle_doc, "model", None),
+                "make": getattr(vehicle_doc, "make", None)
+                or getattr(vehicle_doc, "vehicle_make", None)
+                or getattr(vehicle_doc, "brand", None)
+                or getattr(vehicle_doc, "manufacturer", None),
+                "model": getattr(vehicle_doc, "model", None)
+                or getattr(vehicle_doc, "vehicle_model", None)
+                or getattr(vehicle_doc, "model_no", None),
                 "mobile_no": getattr(vehicle_doc, "tel_mobile", None)
                 or getattr(vehicle_doc, "mobile_no", None),
                 "customer": getattr(vehicle_doc, "customer", None),

@@ -656,18 +656,16 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None, vehicle
                     limit_page_length=1,
                 )
                 if not found and row.get("vehicle_no"):
-                    # Fallback by vehicle_no in case naming differs
-                    if _has_column(table_vehicle, "vehicle_no"):
+                    # Fallback by all common identifier columns in case naming differs
+                    vehicle_no_value = row.get("vehicle_no")
+                    for id_field in ("vehicle_no", "license_plate", "plate_no"):
+                        if found:
+                            break
+                        if not _has_column(table_vehicle, id_field):
+                            continue
                         found = frappe.get_all(
                             "Vehicle",
-                            filters={"vehicle_no": row.get("vehicle_no")},
-                            fields=v_fields,
-                            limit_page_length=1,
-                        )
-                    elif _has_column(table_vehicle, "license_plate"):
-                        found = frappe.get_all(
-                            "Vehicle",
-                            filters={"license_plate": row.get("vehicle_no")},
+                            filters={id_field: vehicle_no_value},
                             fields=v_fields,
                             limit_page_length=1,
                         )
@@ -682,7 +680,7 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None, vehicle
                     )
                     row["make"] = (
                         row.get("make")
-                        or _first_field_value(vehicle_doc, ["make", "vehicle_make", "brand"])
+                        or _first_field_value(vehicle_doc, ["make", "vehicle_make", "brand", "manufacturer"])
                         or ""
                     )
                     row["chasis_no"] = (
@@ -704,6 +702,47 @@ def get_vehicles_by_customer(customer_name, limit=200, start_after=None, vehicle
                         or ""
                     )
                     row["odometer"] = row.get("odometer") or vehicle_doc.get("odometer") or 0
+
+                    # If the resolved Vehicle by name has empty make/model, try alternate
+                    # identifier columns; some sites keep the richer data under a different row.
+                    if (not row.get("make") or not row.get("model")) and row.get("vehicle_no"):
+                        alternate_doc = None
+                        vehicle_no_value = row.get("vehicle_no")
+                        for id_field in ("vehicle_no", "license_plate", "plate_no"):
+                            if not _has_column(table_vehicle, id_field):
+                                continue
+                            try:
+                                alt = frappe.get_all(
+                                    "Vehicle",
+                                    filters={id_field: vehicle_no_value},
+                                    fields=v_fields,
+                                    limit_page_length=1,
+                                )
+                                if alt:
+                                    alternate_doc = alt[0]
+                                    break
+                            except Exception:
+                                continue
+
+                        if alternate_doc:
+                            if not row.get("model"):
+                                row["model"] = (
+                                    _first_field_value(
+                                        alternate_doc,
+                                        ["model", "vehicle_model", "model_no"],
+                                    )
+                                    or row.get("model")
+                                    or ""
+                                )
+                            if not row.get("make"):
+                                row["make"] = (
+                                    _first_field_value(
+                                        alternate_doc,
+                                        ["make", "vehicle_make", "brand", "manufacturer"],
+                                    )
+                                    or row.get("make")
+                                    or ""
+                                )
             except Exception:
                 # Non-fatal fallback failure; keep available Vehicle Master values.
                 pass

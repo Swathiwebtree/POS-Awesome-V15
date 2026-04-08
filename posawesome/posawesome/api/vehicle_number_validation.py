@@ -55,13 +55,18 @@ def validate_vehicle_number(doc, method=None):
     if getattr(doc, "name", None):
         filters["name"] = ["!=", doc.name]
 
-    existing = frappe.get_all("Vehicle", filters=filters, fields=["name", "customer"], limit_page_length=1)
+    query_fields = ["name"]
+    has_customer_field = bool(getattr(doc, "meta", None) and doc.meta.has_field("customer"))
+    if has_customer_field:
+        query_fields.append("customer")
+
+    existing = frappe.get_all("Vehicle", filters=filters, fields=query_fields, limit_page_length=1)
     if not existing:
         return
 
     row = existing[0]
-    existing_customer = row.get("customer")
-    this_customer = getattr(doc, "customer", None)
+    existing_customer = row.get("customer") if has_customer_field else None
+    this_customer = getattr(doc, "customer", None) if has_customer_field else None
 
     # If customers differ (or one is empty), block the duplicate.
     if existing_customer != this_customer:

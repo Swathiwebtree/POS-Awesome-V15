@@ -343,6 +343,32 @@ export default {
 				this.default_country_iso = this.tel_only_countries[0] || "";
 			}
 		},
+		detectIsoFromMobile(rawValue) {
+			const raw = String(rawValue || "").trim();
+			if (!raw) return "";
+			let digits = raw.replace(/\D/g, "");
+			if (!digits) return "";
+			if (digits.startsWith("00")) {
+				digits = digits.slice(2);
+			}
+			for (const dial of Object.keys(this.gcc_dial_to_iso)) {
+				if (digits.startsWith(String(dial))) {
+					return this.gcc_dial_to_iso[dial] || "";
+				}
+			}
+			return "";
+		},
+		async applyPhoneCountryFromMobileOrDefault() {
+			const detectedIso = this.detectIsoFromMobile(this.mobile_no);
+			if (detectedIso) {
+				this.default_country_iso = detectedIso;
+				this.selected_phone_iso = detectedIso;
+				this.country = this.gcc_iso_to_country[detectedIso] || this.country;
+				return;
+			}
+			await this.loadDefaultCountryIso();
+			this.selected_phone_iso = this.default_country_iso;
+		},
 		onPhoneValidate(phoneObject) {
 			this.mobile_validation = phoneObject || null;
 			this.mobile_has_national = !!(
@@ -550,17 +576,23 @@ export default {
 					}
 
 					this.vehicle_no = v.vehicle_no || "";
-					this.vehicle_make = v.make || "";
-					this.vehicle_model = v.model || "";
+					this.vehicle_make =
+						v.make || v.vehicle_make || v.brand || v.manufacturer || "";
+					this.vehicle_model = v.model || v.vehicle_model || v.model_no || "";
 					this.odometer = v.odometer || "";
 					if (!this.mobile_no) {
-						this.mobile_no = v.mobile_no || "";
+						this.mobile_no = v.mobile_no || v.tel_mobile || "";
 					}
 				} else {
 					// Fallback when vehicles array is absent but top-level values exist.
 					this.vehicle_no = payload.custom_vehicle_no || payload.vehicle_no || "";
-					this.vehicle_make = payload.vehicle_make || payload.make || "";
-					this.vehicle_model = payload.vehicle_model || payload.model || "";
+					this.vehicle_make =
+						payload.vehicle_make ||
+						payload.make ||
+						payload.brand ||
+						payload.manufacturer ||
+						"";
+					this.vehicle_model = payload.vehicle_model || payload.model || payload.model_no || "";
 					this.odometer = payload.odometer || "";
 				}
 
@@ -580,17 +612,28 @@ export default {
 						const latestVehicle = (vRes?.message || [])[0] || null;
 						if (latestVehicle) {
 							this.vehicle_no = latestVehicle.vehicle_no || this.vehicle_no;
-							this.vehicle_make = latestVehicle.make || this.vehicle_make || "";
-							this.vehicle_model = latestVehicle.model || this.vehicle_model || "";
+							this.vehicle_make =
+								latestVehicle.make ||
+								latestVehicle.vehicle_make ||
+								latestVehicle.brand ||
+								latestVehicle.manufacturer ||
+								this.vehicle_make ||
+								"";
+							this.vehicle_model =
+								latestVehicle.model ||
+								latestVehicle.vehicle_model ||
+								latestVehicle.model_no ||
+								this.vehicle_model ||
+								"";
 							this.odometer = latestVehicle.odometer || this.odometer || "";
-							this.mobile_no = latestVehicle.mobile_no || this.mobile_no || "";
+							this.mobile_no =
+								latestVehicle.mobile_no || latestVehicle.tel_mobile || this.mobile_no || "";
 						}
 					} catch (e) {
 						console.warn("Failed to refresh selected vehicle for Update Customer", e);
 					}
 				}
-				await this.loadDefaultCountryIso();
-				this.selected_phone_iso = this.default_country_iso;
+				await this.applyPhoneCountryFromMobileOrDefault();
 				this.normalizeMobileForTelInput();
 			} else {
 				// New customer: if caller asked for withVehicle then require vehicle fields during submit
@@ -598,8 +641,7 @@ export default {
 				// mark isCreateWithVehicle true only when wrapper.withVehicle === true
 				this.isCreateWithVehicle = !!(wrapper && wrapper.withVehicle === true);
 				this.country = (this.pos_profile && this.pos_profile.posa_default_country) || "Pakistan";
-				await this.loadDefaultCountryIso();
-				this.selected_phone_iso = this.default_country_iso;
+				await this.applyPhoneCountryFromMobileOrDefault();
 				this.normalizeMobileForTelInput();
 			}
 		},
@@ -609,16 +651,12 @@ export default {
 			let iso2 = this.default_country_iso || "BH";
 
 			try {
-				if (raw.startsWith("+")) {
-					const digits = raw.replace(/\D/g, "");
-					const dial = digits.slice(0, 3);
-					if (this.gcc_dial_to_iso[dial]) {
-						const detectedIso = this.gcc_dial_to_iso[dial];
-						this.default_country_iso = detectedIso;
-						this.selected_phone_iso = detectedIso;
-						this.country = this.gcc_iso_to_country[detectedIso] || this.country;
-						iso2 = detectedIso;
-					}
+				const detectedIso = this.detectIsoFromMobile(raw);
+				if (detectedIso) {
+					this.default_country_iso = detectedIso;
+					this.selected_phone_iso = detectedIso;
+					this.country = this.gcc_iso_to_country[detectedIso] || this.country;
+					iso2 = detectedIso;
 				}
 			} catch (e) {
 				// keep defaults
