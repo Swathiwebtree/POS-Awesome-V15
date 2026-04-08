@@ -576,8 +576,7 @@ export default {
 					}
 
 					this.vehicle_no = v.vehicle_no || "";
-					this.vehicle_make =
-						v.make || v.vehicle_make || v.brand || v.manufacturer || "";
+					this.vehicle_make = v.make || v.vehicle_make || v.brand || v.manufacturer || "";
 					this.vehicle_model = v.model || v.vehicle_model || v.model_no || "";
 					this.odometer = v.odometer || "";
 					if (!this.mobile_no) {
@@ -587,11 +586,7 @@ export default {
 					// Fallback when vehicles array is absent but top-level values exist.
 					this.vehicle_no = payload.custom_vehicle_no || payload.vehicle_no || "";
 					this.vehicle_make =
-						payload.vehicle_make ||
-						payload.make ||
-						payload.brand ||
-						payload.manufacturer ||
-						"";
+						payload.vehicle_make || payload.make || payload.brand || payload.manufacturer || "";
 					this.vehicle_model = payload.vehicle_model || payload.model || payload.model_no || "";
 					this.odometer = payload.odometer || "";
 				}
