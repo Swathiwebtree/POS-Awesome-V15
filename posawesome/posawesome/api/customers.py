@@ -787,6 +787,11 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         customer_data = customer_data or {}
         vehicle_data = vehicle_data or {}
 
+        # Treat blank optional vehicle fields as "not provided" to avoid clearing existing values on update.
+        for optional_field in ("make", "model", "mobile_no", "odometer"):
+            if optional_field in vehicle_data and cstr(vehicle_data.get(optional_field)).strip() == "":
+                vehicle_data[optional_field] = None
+
         pos_profile = {}
         try:
             pos_profile = (
@@ -806,7 +811,12 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         if "mobile_no" in customer_data:
             customer_data["mobile_no"] = _normalize_mobile_no(customer_data.get("mobile_no"), country_context)
         if "mobile_no" in vehicle_data:
-            vehicle_data["mobile_no"] = _normalize_mobile_no(vehicle_data.get("mobile_no"), country_context)
+            if vehicle_data.get("mobile_no") in (None, ""):
+                vehicle_data["mobile_no"] = None
+            else:
+                vehicle_data["mobile_no"] = _normalize_mobile_no(
+                    vehicle_data.get("mobile_no"), country_context
+                )
 
         # ------------------ Defensive sanitization & autoname pre-check ------------------
         try:
@@ -884,6 +894,8 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         # ---------- UPDATE OR CREATE CUSTOMER ----------
         if method == "update" and customer_id:
             cust = frappe.get_doc("Customer", customer_id)
+            previous_customer_name = cstr(getattr(cust, "customer_name", "")).strip()
+            previous_display_name = cstr(getattr(cust, "custom_display_name", "")).strip()
             # update safe fields if provided
             for fld in [
                 "customer_name",
@@ -897,6 +909,16 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
             ]:
                 if fld in customer_data and customer_data.get(fld) is not None:
                     setattr(cust, fld, customer_data.get(fld))
+
+            incoming_customer_name = cstr(customer_data.get("customer_name") or "").strip()
+            incoming_display_name = cstr(customer_data.get("custom_display_name") or "").strip()
+            # Keep display name aligned with customer name by default during edits.
+            if incoming_customer_name and (
+                not incoming_display_name
+                or incoming_display_name == previous_customer_name
+                or previous_display_name == previous_customer_name
+            ):
+                cust.custom_display_name = incoming_customer_name
             if customer_data.get("customer_group") is not None:
                 cust.customer_group = customer_data.get("customer_group")
             if customer_data.get("territory") is not None:

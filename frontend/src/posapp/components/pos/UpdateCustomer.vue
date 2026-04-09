@@ -72,13 +72,13 @@
 									class="mb-3"
 								/>
 
-								<v-text-field
+								<!-- <v-text-field
 									v-model="odometer"
 									:label="__('Odometer')"
 									density="comfortable"
 									color="primary"
-									hide-details="auto"
-								/>
+									hide-details="auto" 
+								/> -->
 							</v-col>
 
 							<!-- CUSTOMER COLUMN -->
@@ -276,6 +276,7 @@ export default {
 		// control - if this was explicitly opened as create-with-vehicle
 		isCreateWithVehicle: false,
 		vehicle_no_error: "",
+		initial_customer_name: "",
 	}),
 	computed: {
 		isDarkTheme() {
@@ -518,6 +519,7 @@ export default {
 			this.mobile_is_valid = null;
 			this.mobile_error_message = "";
 			this.mobile_normalized = "";
+			this.initial_customer_name = "";
 		},
 
 		/**
@@ -542,6 +544,7 @@ export default {
 				// populate customer fields
 				this.customer_id = payload.name;
 				this.customer_name = payload.customer_name || "";
+				this.initial_customer_name = payload.customer_name || "";
 				this.custom_display_name = payload.custom_display_name || payload.customer_name || "";
 				this.tax_id = payload.tax_id || "";
 				this.mobile_no = payload.mobile_no || "";
@@ -799,7 +802,20 @@ export default {
 			const customerArgs = {
 				customer_id: this.customer_id,
 				customer_name: this.customer_name,
-				custom_display_name: this.custom_display_name || this.customer_name || "Cash Customer",
+				custom_display_name: (() => {
+					const currentName = (this.customer_name || "").trim();
+					const previousName = (this.initial_customer_name || "").trim();
+					let displayName = (this.custom_display_name || "").trim();
+
+					// Keep display name in sync by default when only customer_name changed.
+					if (!displayName) {
+						displayName = currentName;
+					} else if (this.customer_id && previousName && displayName === previousName) {
+						displayName = currentName || displayName;
+					}
+
+					return displayName || "Cash Customer";
+				})(),
 				tax_id: this.tax_id,
 				mobile_no: this.mobile_no,
 				address_line1: this.address_line1,
