@@ -2313,10 +2313,7 @@ export default {
 					await setCustomerStorage([upsertedCustomer || normalized]);
 
 					// select the new customer without letting autocomplete search clear it
-					this.applyProgrammaticCustomerSelection(
-						normalized.name,
-						upsertedCustomer || normalized,
-					);
+					this.applyProgrammaticCustomerSelection(normalized.name, upsertedCustomer || normalized);
 					this.selected_customer_is_corporate = isCorporate;
 
 					// notify other components
