@@ -136,17 +136,12 @@
 				</template>
 
 				<template #item="{ props, item }">
-					<v-list-item v-bind="props">
-						<v-list-item-title>
-							{{ item.raw.custom_display_name || item.raw.customer_name || item.raw.name }}
-						</v-list-item-title>
-
-						<v-list-item-subtitle
-							v-if="
-								(item.raw.custom_display_name || item.raw.customer_name || '') !==
-								item.raw.name
-							"
-						>
+					<v-list-item
+						v-bind="props"
+						:title="item.raw.custom_display_name || item.raw.customer_name || item.raw.name"
+						:subtitle="''"
+					>
+						<v-list-item-subtitle v-if="item.raw.name">
 							<div>ID: {{ item.raw.name }}</div>
 						</v-list-item-subtitle>
 						<v-list-item-subtitle v-if="item.raw.mobile_no">
@@ -2289,44 +2284,55 @@ export default {
 				this.eventBus.on("add_customer_to_list", async (data) => {
 					const customer = data.customer || data;
 					const vehicle = data.vehicle || null;
+					const renamedFrom = String(customer.renamed_from || "").trim();
 
-					// ensure the object has the flag
-					customer.is_corporate = !!(customer.is_corporate || customer.is_company);
-					customer.custom_display_name =
-						customer.custom_display_name || customer.customer_name || customer.name;
-
-					const index = this.customers.findIndex((c) => c.name === customer.name);
-					if (index !== -1) {
-						this.customers.splice(index, 1, customer);
-					} else {
-						this.customers.push(customer);
-					}
-
-					// persist to local storage (ensure your storage schema accepts is_corporate)
-					const normalized = {
+					const isCorporate = !!(customer.is_corporate || customer.is_company);
+					const normalized = this._normalizeCustomerRow({
 						...customer,
-						is_corporate: !!(customer.is_corporate || customer.is_company),
-					};
-					await setCustomerStorage([normalized]);
+						is_corporate: isCorporate,
+					});
+
+					// If backend renamed the Customer ID, remove stale old key immediately.
+					if (renamedFrom && renamedFrom !== normalized.name) {
+						this.customers = (this.customers || []).filter((c) => c && c.name !== renamedFrom);
+						try {
+							await db.table("customers").delete(renamedFrom);
+						} catch (e) {
+							console.warn("Failed to delete renamed customer cache row", e);
+						}
+						if (this.customer === renamedFrom) this.customer = normalized.name;
+						if (this.internalCustomer === renamedFrom) this.internalCustomer = normalized.name;
+					}
+					const upsertedCustomer = this._upsertCustomerInList(
+						normalized.name,
+						normalized.custom_display_name || normalized.customer_name || normalized.name,
+						normalized,
+					);
+
+					// persist latest customer snapshot to local storage
+					await setCustomerStorage([upsertedCustomer || normalized]);
 
 					// select the new customer without letting autocomplete search clear it
-					this.applyProgrammaticCustomerSelection(customer.name, customer);
-					this.selected_customer_is_corporate = !!customer.is_corporate;
+					this.applyProgrammaticCustomerSelection(
+						normalized.name,
+						upsertedCustomer || normalized,
+					);
+					this.selected_customer_is_corporate = isCorporate;
 
 					// notify other components
-					this.eventBus.emit("update_customer", customer.name);
+					this.eventBus.emit("update_customer", normalized.name);
 					this.eventBus.emit("update_customer_details", {
-						contact_mobile: customer.mobile_no || "",
+						contact_mobile: normalized.mobile_no || "",
 						custom_vehicle_no: (vehicle && vehicle.vehicle_no) || "",
-						is_corporate: !!customer.is_corporate,
+						is_corporate: isCorporate,
 					});
 
 					if (vehicle && vehicle.vehicle_no) {
 						// Always refresh from source of truth after customer update so
 						// Update Vehicle dialog gets latest mobile/make/model values.
 						const jobVehicleNo =
-							this.jobOrderCustomer === customer.name ? this.jobOrderVehicleNo : null;
-						await this.fetchVehiclesForCustomer(customer.name, jobVehicleNo);
+							this.jobOrderCustomer === normalized.name ? this.jobOrderVehicleNo : null;
+						await this.fetchVehiclesForCustomer(normalized.name, jobVehicleNo);
 
 						const refreshed = (this.vehicles || []).find(
 							(v) => (v.vehicle_no || "").trim() === (vehicle.vehicle_no || "").trim(),
@@ -2338,8 +2344,8 @@ export default {
 						}
 					} else {
 						const jobVehicleNo =
-							this.jobOrderCustomer === customer.name ? this.jobOrderVehicleNo : null;
-						await this.fetchVehiclesForCustomer(customer.name, jobVehicleNo);
+							this.jobOrderCustomer === normalized.name ? this.jobOrderVehicleNo : null;
+						await this.fetchVehiclesForCustomer(normalized.name, jobVehicleNo);
 					}
 				});
 

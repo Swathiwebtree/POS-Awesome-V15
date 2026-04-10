@@ -12,6 +12,7 @@ from posawesome.posawesome.api import customer
 from .utils import get_active_pos_profile
 from .vehicles import create_vehicle, get_vehicles_by_customer, _sync_vehicle_doctype
 from frappe.exceptions import ValidationError, LinkValidationError, DoesNotExistError, NameError
+from frappe.model.rename_doc import rename_doc as model_rename_doc
 
 from decimal import Decimal, InvalidOperation
 
@@ -346,16 +347,17 @@ def get_customer_names(pos_profile=None, limit=200, start_after=None, modified_a
             "email_id",
             "tax_id",
             "customer_name",
-            "custom_display_name",
             "primary_address",
         ]
 
         try:
+            if frappe.db.has_column("tabCustomer", "custom_display_name"):
+                base_fields.append("custom_display_name")
             # check for actual DB column. Use table name 'tabCustomer'
             if frappe.db.has_column("tabCustomer", "is_company"):
                 base_fields.append("is_company")
         except Exception:
-            # If has_column fails for any reason, skip is_company (fail-safe)
+            # If has_column fails for any reason, skip optional fields (fail-safe)
             pass
 
         customers = frappe.get_all(
@@ -416,10 +418,68 @@ def _existing_fields(doctype, candidates):
         return [f for f in candidates if f == "name"] or ["name"]
 
 
+def _resolve_customer_doc_for_pos(customer):
+    """Resolve Customer doc safely for POS without throwing not-found errors."""
+    customer_key = cstr(customer or "").strip()
+    if not customer_key:
+        return None
+
+    # 1) Direct lookup by Customer.name
+    try:
+        if frappe.db.exists("Customer", customer_key):
+            return frappe.get_doc("Customer", customer_key)
+    except Exception:
+        pass
+
+    # 2) Fallback by customer_name (stale ID race after rename)
+    try:
+        alt_name = frappe.db.get_value("Customer", {"customer_name": customer_key}, "name")
+        if alt_name:
+            return frappe.get_doc("Customer", alt_name)
+    except Exception:
+        pass
+
+    # 3) Optional fallback by custom_display_name
+    try:
+        if frappe.db.has_column("tabCustomer", "custom_display_name"):
+            alt_name = frappe.db.get_value("Customer", {"custom_display_name": customer_key}, "name")
+            if alt_name:
+                return frappe.get_doc("Customer", alt_name)
+    except Exception:
+        pass
+
+    return None
+
+
 @frappe.whitelist()
 def get_customer_info(customer):
     """Get comprehensive customer information including vehicles."""
-    customer_doc = frappe.get_doc("Customer", customer)
+    customer_doc = _resolve_customer_doc_for_pos(customer)
+    if not customer_doc:
+        fallback_name = cstr(customer or "").strip()
+        return {
+            "name": fallback_name,
+            "customer_name": fallback_name,
+            "custom_display_name": fallback_name,
+            "email_id": "",
+            "mobile_no": "",
+            "image": None,
+            "loyalty_program": None,
+            "customer_price_list": None,
+            "customer_group": None,
+            "customer_type": None,
+            "territory": None,
+            "is_corporate": False,
+            "is_company": False,
+            "birthday": None,
+            "gender": None,
+            "tax_id": None,
+            "posa_discount": None,
+            "vehicles": [],
+            "vehicle_no": "",
+            "loyalty_points": 0,
+            "conversion_factor": 0,
+        }
 
     res = {"loyalty_points": 0, "conversion_factor": 0}
 
@@ -527,15 +587,30 @@ def search_customers_new(query=None, limit=20):
     search_term = f"%{q}%"
 
     try:
+        has_custom_display_name = False
+        try:
+            has_custom_display_name = frappe.db.has_column("tabCustomer", "custom_display_name")
+        except Exception:
+            has_custom_display_name = False
+
+        where_parts = [
+            "LOWER(customer_name) LIKE LOWER(%s)",
+            "mobile_no LIKE %s",
+        ]
+        values = [search_term, search_term]
+        if has_custom_display_name:
+            where_parts.insert(1, "LOWER(custom_display_name) LIKE LOWER(%s)")
+            values.insert(1, search_term)
+
         rows = frappe.db.sql(
-            """
+            f"""
             SELECT name
             FROM `tabCustomer`
-            WHERE (LOWER(customer_name) LIKE LOWER(%s) OR LOWER(custom_display_name) LIKE LOWER(%s) OR mobile_no LIKE %s)
+            WHERE ({' OR '.join(where_parts)})
             ORDER BY customer_name ASC
             LIMIT %s
             """,
-            (search_term, search_term, limit),
+            tuple(values + [limit]),
             as_dict=True,
         )
     except Exception:
@@ -894,6 +969,7 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
         # ---------- UPDATE OR CREATE CUSTOMER ----------
         if method == "update" and customer_id:
             cust = frappe.get_doc("Customer", customer_id)
+            renamed_from = None
             previous_customer_name = cstr(getattr(cust, "customer_name", "")).strip()
             previous_display_name = cstr(getattr(cust, "custom_display_name", "")).strip()
             # update safe fields if provided
@@ -934,6 +1010,37 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
             except Exception:
                 frappe.log_error(frappe.get_traceback(), "Customer update save error")
             customer_doc = cust
+
+            # Keep backend Customer ID (name) aligned with edited customer_name when changed in POS.
+            # This avoids confusing cases where display name changes but ID remains old (e.g. CUST-001).
+            rename_target = cstr(customer_data.get("customer_name") or "").strip()
+            current_name = cstr(customer_doc.name or "").strip()
+            if rename_target and current_name and rename_target != current_name:
+                if frappe.db.exists("Customer", rename_target):
+                    frappe.throw(
+                        _("Cannot rename Customer ID to '{0}' because it already exists").format(
+                            rename_target
+                        )
+                    )
+                try:
+                    model_rename_doc(
+                        doctype="Customer",
+                        old=current_name,
+                        new=rename_target,
+                        force=True,
+                        ignore_permissions=True,
+                        show_alert=False,
+                    )
+                    frappe.db.commit()
+                    renamed_from = current_name
+                    customer_doc = frappe.get_doc("Customer", rename_target)
+                except Exception:
+                    frappe.log_error(frappe.get_traceback(), "Customer ID rename error")
+                    frappe.throw(
+                        _("Customer was updated but failed to rename Customer ID to '{0}'").format(
+                            rename_target
+                        )
+                    )
         else:
             # create
             cd = customer_data
@@ -1457,6 +1564,7 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
             "customer_name": customer_doc.customer_name,
             "custom_display_name": getattr(customer_doc, "custom_display_name", None)
             or customer_doc.customer_name,
+            "renamed_from": renamed_from if method == "update" else None,
             "mobile_no": customer_doc.mobile_no,
             "email_id": customer_doc.email_id,
             "tax_id": customer_doc.tax_id,
