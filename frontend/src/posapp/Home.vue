@@ -389,7 +389,8 @@ export default {
 			}
 
 			const print_format = this.posProfile.print_format_for_online || this.posProfile.print_format;
-			const letter_head = this.posProfile.letter_head || 0;
+			// POS should always print without letterhead.
+			const no_letterhead = 1;
 			const doctype = this.posProfile.create_pos_invoice_instead_of_sales_invoice
 				? "POS Invoice"
 				: "Sales Invoice";
@@ -403,7 +404,7 @@ export default {
 				"&format=" +
 				print_format +
 				"&no_letterhead=" +
-				letter_head;
+				no_letterhead;
 
 			if (this.posProfile.posa_silent_print) {
 				silentPrint(url);
