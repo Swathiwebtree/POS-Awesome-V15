@@ -1043,17 +1043,14 @@ export default {
 		},
 
 		itemGroupsList() {
-			const parentItems = this.$parent?.items || [];
+			const sourceGroups =
+				Array.isArray(this.items_group) && this.items_group.length
+					? this.items_group
+					: this.availableItemGroups;
 
-			const uniqueGroups = [
-				...new Set(
-					parentItems
-						.map((item) => (item.item_group || "").trim())
-						.filter((group) => group && !group.toLowerCase().includes("engine oil")),
-				),
-			];
-
-			return uniqueGroups.sort();
+			return [...new Set((sourceGroups || []).map((g) => String(g || "").trim()).filter(Boolean))]
+				.filter((group) => group.toUpperCase() !== "ALL")
+				.sort((a, b) => a.localeCompare(b));
 		},
 
 		itemGroupSummary() {

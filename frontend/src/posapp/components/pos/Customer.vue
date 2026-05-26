@@ -99,6 +99,7 @@
 				:customFilter="() => true"
 				:disabled="effectiveReadonly || loadingCustomers"
 				:menu-props="{ closeOnContentClick: false, maxWidth: '80vw' }"
+				:loading="customerSearchLoading"
 				@update:menu="onCustomerMenuToggle"
 				@update:modelValue="onCustomerChange"
 				@update:search="onCustomerSearch"
@@ -440,6 +441,7 @@ export default {
 		effectiveReadonly: false,
 		customer_info: {},
 		loadingCustomers: false,
+		customerSearchLoading: false,
 		customers_loaded: false,
 		searchTerm: "",
 		page: 0,
@@ -468,6 +470,10 @@ export default {
 		vehicleFetchInFlight: false,
 		lastVehicleFetchKey: "",
 		lastVehicleFetchAt: 0,
+		latestVehicleSearchRequestId: 0,
+		activeVehicleSearchRequestId: 0,
+		latestCustomerSearchRequestId: 0,
+		activeCustomerSearchRequestId: 0,
 		jobOrderVehicleNo: null,
 		jobOrderCustomer: null,
 		pendingDraftVehicleNo: null,
@@ -1096,9 +1102,13 @@ export default {
 			const cleaned = this.sanitizeVehicleNo(val);
 			const term = (cleaned || "").trim().toLowerCase();
 			this.vehicleSearchTerm = term;
+			this.latestVehicleSearchRequestId += 1;
+			const requestId = this.latestVehicleSearchRequestId;
+			this.activeVehicleSearchRequestId = requestId;
 
 			if (!term || term.length < 2) {
 				this.vehicleSearchResults = [];
+				this.loadingVehicles = false;
 				return;
 			}
 
@@ -1110,10 +1120,11 @@ export default {
 					args: {
 						search_term: term,
 						customer: this.customer || null,
-						limit: 50,
+						limit: 20,
 					},
 				});
 
+				if (requestId !== this.activeVehicleSearchRequestId) return;
 				this.vehicleSearchResults = [];
 
 				this.vehicleSearchResults = (res.message || []).map((v) => ({
@@ -1125,10 +1136,13 @@ export default {
 					mobile_no: v.mobile_no || "",
 				}));
 			} catch (e) {
+				if (requestId !== this.activeVehicleSearchRequestId) return;
 				console.error("Vehicle search failed", e);
 				this.vehicleSearchResults = [];
 			} finally {
-				this.loadingVehicles = false;
+				if (requestId === this.activeVehicleSearchRequestId) {
+					this.loadingVehicles = false;
+				}
 			}
 		}, 300),
 
@@ -1328,6 +1342,7 @@ export default {
 
 		async searchCustomers(term, append = false) {
 			try {
+				const trimmedTerm = String(term || "").trim();
 				const selectedCustomerName = String(this.customer || "").trim();
 				const selectedCustomerSnapshot =
 					(this.customers || []).find((c) => c && c.name === selectedCustomerName) || null;
@@ -1340,8 +1355,10 @@ export default {
 
 				let results = [];
 
-				if (term) {
-					const q = term.toString().toLowerCase();
+				if (trimmedTerm && trimmedTerm.length < 2) {
+					results = [];
+				} else if (trimmedTerm) {
+					const q = trimmedTerm.toLowerCase();
 
 					// Load all local customers (we filter in-memory for reliable substring search).
 					const all = await db.table("customers").toArray();
@@ -1365,12 +1382,12 @@ export default {
 
 					// If nothing found locally, call server fallback (server does LIKE '%term%')
 					let serverResults = [];
-					if ((!filtered || filtered.length === 0) && term) {
+					if ((!filtered || filtered.length === 0) && trimmedTerm) {
 						try {
 							const resp = await frappe.call({
 								method: "posawesome.posawesome.api.customers.search_customers",
 								args: {
-									search_term: term,
+									search_term: trimmedTerm,
 									pos_profile:
 										this.pos_profile && this.pos_profile.pos_profile
 											? this.pos_profile.pos_profile
@@ -1925,11 +1942,6 @@ export default {
 				} else {
 					this.eventBus.emit("vehicle_selected", null);
 				}
-				if (this.vehicles.length > 1) {
-					this.$nextTick(() => {
-						this.$refs.vehicleDropdown?.focus();
-					});
-				}
 			} catch (err) {
 				console.error("Failed to fetch vehicles:", err);
 				this.vehicles = [];
@@ -1996,6 +2008,12 @@ export default {
 			this.eventBus.emit("apply_vehicle_discount", {
 				customer: this.customer || vehicle.customer,
 				vehicle_no: vehicle.vehicle_no,
+			});
+
+			// Keep only selected vehicle visible in the field after selection;
+			// do not leave the dropdown list open.
+			this.$nextTick(() => {
+				this.$refs.vehicleDropdown?.blur?.();
 			});
 		},
 	},
@@ -2178,20 +2196,38 @@ export default {
 		});
 
 		this.searchDebounce = _.debounce(async (val) => {
-			this.searchTerm = val || "";
+			const normalized = String(val || "").trim();
+			this.latestCustomerSearchRequestId += 1;
+			const requestId = this.latestCustomerSearchRequestId;
+			this.activeCustomerSearchRequestId = requestId;
+			this.searchTerm = normalized;
 			this.page = 0;
 			this.customers = [];
 			this.hasMore = true;
-			await this.searchCustomers(this.searchTerm);
+			const shouldSearch = this.searchTerm.length === 0 || this.searchTerm.length >= 2;
+			if (!shouldSearch) {
+				this.customerSearchLoading = false;
+				return;
+			}
+
+			this.customerSearchLoading = true;
+			try {
+				await this.searchCustomers(this.searchTerm);
+				if (requestId !== this.activeCustomerSearchRequestId) return;
+			} finally {
+				if (requestId === this.activeCustomerSearchRequestId) {
+					this.customerSearchLoading = false;
+				}
+			}
 
 			// FETCH VEHICLES DIRECTLY WHEN CUSTOMER SEARCH CHANGES
-			if (val) {
+			if (this.searchTerm && this.searchTerm.length >= 2) {
 				const matched = this.customers.find((cust) => {
 					return (
-						cust.custom_display_name?.toLowerCase().includes(val.toLowerCase()) ||
-						cust.customer_name?.toLowerCase().includes(val.toLowerCase()) ||
-						cust.name?.toLowerCase().includes(val.toLowerCase()) ||
-						cust.mobile_no?.toLowerCase().includes(val.toLowerCase())
+						cust.custom_display_name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+						cust.customer_name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+						cust.name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+						cust.mobile_no?.toLowerCase().includes(this.searchTerm.toLowerCase())
 					);
 				});
 
@@ -2206,7 +2242,7 @@ export default {
 					this.selectedVehicle = null;
 				}
 			}
-		}, 500);
+		}, 300);
 
 		// ADD EVENT LISTENERS
 		this.eventBus.on("clear_customer", () => {

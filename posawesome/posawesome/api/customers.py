@@ -1993,7 +1993,7 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
         List of customers with vehicle information if matched via vehicle
     """
     search_term = (search_term or "").strip()
-    limit = int(limit or 20)
+    limit = min(max(int(limit or 20), 1), 20)
     has_custom_display_name = False
     try:
         has_custom_display_name = frappe.db.has_column("tabCustomer", "custom_display_name")
@@ -2002,7 +2002,7 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
 
     if not search_term:
         # Return recent customers
-        fields = ["name", "customer_name", "mobile_no", "email_id", "tax_id"]
+        fields = ["name", "customer_name", "mobile_no"]
         if has_custom_display_name:
             fields.insert(2, "custom_display_name")
         return frappe.get_all(
@@ -2012,6 +2012,8 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
             limit_page_length=limit,
             order_by="modified desc",
         )
+    if len(search_term) < 2:
+        return []
 
     # Build safe LIKE pattern
     like_pattern = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
@@ -2029,8 +2031,8 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
         c.customer_name,
         {custom_display_select},
         c.mobile_no,
-        c.email_id,
-        c.tax_id,
+        '' AS email_id,
+        '' AS tax_id,
         CASE 
             WHEN c.customer_type = 'Company' THEN 1 
             ELSE 0 
@@ -2046,8 +2048,6 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
         OR c.customer_name LIKE %(like)s
         {custom_display_where}
         OR c.mobile_no LIKE %(like)s
-        OR c.email_id LIKE %(like)s
-        OR c.tax_id LIKE %(like)s
     )
     LIMIT %(limit)s
     """,
@@ -2059,14 +2059,22 @@ def search_customers_with_vehicles(search_term="", pos_profile=None, limit=20):
     try:
         vehicle_matches = frappe.db.sql(
             """
-            SELECT 
+            SELECT
                 vm.name as vehicle_id,
                 vm.vehicle_no,
+                vm.registration_number,
+                vm.plate_no,
                 vm.customer,
                 vm.model,
                 v.make
             FROM `tabVehicle Master` vm
-            WHERE vm.vehicle_no LIKE %(like)s
+            LEFT JOIN `tabCustomer` c ON c.name = vm.customer
+            WHERE (
+                vm.vehicle_no LIKE %(like)s
+                OR vm.registration_number LIKE %(like)s
+                OR vm.plate_no LIKE %(like)s
+                OR c.mobile_no LIKE %(like)s
+            )
             AND vm.customer IS NOT NULL
             AND vm.customer != ''
             LIMIT %(limit)s
@@ -2201,7 +2209,7 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
     """
     search_term = (search_term or "").strip()
     customer = (customer or "").strip() or None
-    limit = min(max(int(limit or 20), 1), 200)
+    limit = min(max(int(limit or 20), 1), 20)
 
     has_custom_display_name = False
     try:
@@ -2277,6 +2285,8 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
             order_by="modified desc",
         )
         return _enrich_customer_fields(vehicles)
+    if len(search_term) < 2:
+        return []
 
     # Prefix + contains patterns. Prefix is cheaper; contains gives expected UX.
     like_pattern = f"{search_term}%"
@@ -2329,12 +2339,14 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
         if vehicles:
             return vehicles
 
-        # Second pass: prefix match (fast path for typical typing)
+        # Second pass: prefix match across key searchable fields.
         vehicles = frappe.db.sql(
             f"""
             SELECT
                 vm.name,
                 vm.vehicle_no,
+                vm.registration_number,
+                vm.plate_no,
                 vm.model,
                 vm.customer,
                 vm.odometer,
@@ -2344,7 +2356,12 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
                 c.mobile_no
             FROM `tabVehicle Master` vm
             LEFT JOIN `tabCustomer` c ON c.name = vm.customer
-            WHERE vm.vehicle_no LIKE %(like)s
+            WHERE (
+                vm.vehicle_no LIKE %(like)s
+                OR vm.registration_number LIKE %(like)s
+                OR vm.plate_no LIKE %(like)s
+                OR c.mobile_no LIKE %(like)s
+            )
             {customer_clause}
             ORDER BY vm.modified DESC
             LIMIT %(limit)s
@@ -2362,6 +2379,8 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
             SELECT
                 vm.name,
                 vm.vehicle_no,
+                vm.registration_number,
+                vm.plate_no,
                 vm.model,
                 vm.customer,
                 vm.odometer,
@@ -2371,7 +2390,12 @@ def get_vehicles_by_search(search_term="", customer=None, limit=20):
                 c.mobile_no
             FROM `tabVehicle Master` vm
             LEFT JOIN `tabCustomer` c ON c.name = vm.customer
-            WHERE vm.vehicle_no LIKE %(contains)s
+            WHERE (
+                vm.vehicle_no LIKE %(contains)s
+                OR vm.registration_number LIKE %(contains)s
+                OR vm.plate_no LIKE %(contains)s
+                OR c.mobile_no LIKE %(contains)s
+            )
             {customer_clause}
             ORDER BY vm.modified DESC
             LIMIT %(limit)s
