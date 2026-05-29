@@ -1043,10 +1043,18 @@ export default {
 		},
 
 		itemGroupsList() {
+			const profileGroups = Array.isArray(this.pos_profile?.item_groups)
+				? this.pos_profile.item_groups
+						.map((g) => (g?.item_group || g?.name || "").toString().trim())
+						.filter(Boolean)
+				: [];
+
 			const sourceGroups =
-				Array.isArray(this.items_group) && this.items_group.length
-					? this.items_group
-					: this.availableItemGroups;
+				profileGroups.length > 0
+					? profileGroups
+					: Array.isArray(this.items_group) && this.items_group.length
+						? this.items_group
+						: this.availableItemGroups;
 
 			return [...new Set((sourceGroups || []).map((g) => String(g || "").trim()).filter(Boolean))]
 				.filter((group) => group.toUpperCase() !== "ALL")
@@ -1225,6 +1233,14 @@ export default {
 		},
 
 		openItemGroupDiscountDialog() {
+			const currentGroup = (this.item_group || "").toString().trim();
+			if (
+				currentGroup &&
+				currentGroup.toUpperCase() !== "ALL" &&
+				this.itemGroupsList.includes(currentGroup)
+			) {
+				this.selectedItemGroupForDiscount = currentGroup;
+			}
 			this.showItemGroupDiscountDialog = true;
 		},
 

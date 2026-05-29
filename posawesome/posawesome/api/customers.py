@@ -972,6 +972,8 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
             renamed_from = None
             previous_customer_name = cstr(getattr(cust, "customer_name", "")).strip()
             previous_display_name = cstr(getattr(cust, "custom_display_name", "")).strip()
+            previous_mobile_no = cstr(getattr(cust, "mobile_no", "")).strip()
+            previous_email_id = cstr(getattr(cust, "email_id", "")).strip()
             # update safe fields if provided
             for fld in [
                 "customer_name",
@@ -1041,6 +1043,21 @@ def create_customer_with_vehicle(customer, vehicle, company=None, pos_profile_do
                             rename_target
                         )
                     )
+
+            # Keep Customer primary contact fields in sync (Customer form shows these).
+            # Without this, mobile can update on vehicle records but remain stale on Contact.
+            try:
+                incoming_mobile = customer_data.get("mobile_no")
+                if incoming_mobile not in (None, ""):
+                    if cstr(incoming_mobile).strip() != previous_mobile_no:
+                        set_customer_info(customer_doc.name, "mobile_no", incoming_mobile)
+
+                incoming_email = customer_data.get("email_id")
+                if incoming_email not in (None, ""):
+                    if cstr(incoming_email).strip() != previous_email_id:
+                        set_customer_info(customer_doc.name, "email_id", incoming_email)
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "Customer contact sync warning")
         else:
             # create
             cd = customer_data
