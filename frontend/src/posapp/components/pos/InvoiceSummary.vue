@@ -1043,15 +1043,13 @@ export default {
 		},
 
 		itemGroupsList() {
-			const profileGroups = Array.isArray(this.pos_profile?.item_groups)
-				? this.pos_profile.item_groups
-						.map((g) => (g?.item_group || g?.name || "").toString().trim())
-						.filter(Boolean)
+			const itemBasedGroups = Array.isArray(this.$parent?.items)
+				? this.$parent.items.map((item) => (item?.item_group || "").toString().trim()).filter(Boolean)
 				: [];
 
 			const sourceGroups =
-				profileGroups.length > 0
-					? profileGroups
+				itemBasedGroups.length > 0
+					? itemBasedGroups
 					: Array.isArray(this.items_group) && this.items_group.length
 						? this.items_group
 						: this.availableItemGroups;
