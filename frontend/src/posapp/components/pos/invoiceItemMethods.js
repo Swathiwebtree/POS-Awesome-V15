@@ -188,9 +188,7 @@ export default {
 			if (row.charge_type === "Actual") {
 				taxAmount = this.flt ? this.flt(row.tax_amount || 0) : Number(row.tax_amount || 0);
 			} else {
-				taxAmount = this.flt
-					? this.flt((baseAmount * rowRate) / 100)
-					: (baseAmount * rowRate) / 100;
+				taxAmount = this.flt ? this.flt((baseAmount * rowRate) / 100) : (baseAmount * rowRate) / 100;
 			}
 
 			if (!inclusive) {
