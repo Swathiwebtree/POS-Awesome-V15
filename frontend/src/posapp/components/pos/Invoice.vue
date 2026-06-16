@@ -1241,7 +1241,7 @@ export default {
 
 			const invoice = this.prepareForPayment();
 			if (invoice && invoice.items && invoice.items.length > 0) {
-				this.eventBus.emit("payment_ready", invoice);
+				this.eventBus.emit("send_invoice_doc_payment", invoice);
 				this.eventBus.emit("show_payment", "true");
 			} else {
 				frappe.show_alert({
@@ -1993,7 +1993,10 @@ export default {
 			);
 
 			if (!this.invoice_doc.total_taxes_and_charges) {
-				this.invoice_doc.total_taxes_and_charges = 0;
+				this.invoice_doc.total_taxes_and_charges =
+					this.calculate_item_tax_from_items() ||
+					this.apply_tax_template_totals(this.invoice_doc) ||
+					0;
 			}
 
 			const manualRoundOff = this.flt(
@@ -2083,7 +2086,6 @@ export default {
 
 				// Amounts
 				net_total: this.net_total || 0,
-				total_taxes_and_charges: this.total_tax || 0,
 				total: this.subtotal || 0,
 				discount_amount: this.discount_amount || 0,
 				grand_total: effectiveGrandTotal,
@@ -2110,6 +2112,9 @@ export default {
 				// Other fields
 				...this.invoice_doc,
 			};
+
+			invoiceData.total_taxes_and_charges =
+				this.invoice_doc?.total_taxes_and_charges || this.total_tax || 0;
 
 			return invoiceData;
 		},
@@ -2147,6 +2152,8 @@ export default {
 
 			invoiceData.total = this.Total;
 			invoiceData.net_total = this.net_total;
+			invoiceData.total_taxes_and_charges =
+				this.invoice_doc?.total_taxes_and_charges || this.total_tax || 0;
 			invoiceData.grand_total = effectiveGrandTotal;
 			invoiceData.rounded_total = effectiveRoundedTotal;
 			invoiceData.rounding_adjustment = manualRoundOff;

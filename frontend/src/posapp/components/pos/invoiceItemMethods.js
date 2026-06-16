@@ -163,6 +163,63 @@ export default {
 		});
 		return this.flt ? this.flt(taxTotal, this.currency_precision || 2) : taxTotal;
 	},
+
+	apply_tax_template_totals(doc = this.invoice_doc) {
+		if (!this.pos_profile?.taxes_and_charges) {
+			return 0;
+		}
+
+		const tmpl = getTaxTemplate(this.pos_profile.taxes_and_charges);
+		if (!tmpl || !Array.isArray(tmpl.taxes) || !tmpl.taxes.length) {
+			return 0;
+		}
+
+		const baseAmount = this.flt
+			? this.flt(doc?.net_total ?? doc?.total ?? this.subtotal ?? this.Total ?? 0)
+			: Number(doc?.net_total ?? doc?.total ?? this.subtotal ?? this.Total ?? 0);
+		const inclusive = getTaxInclusiveSetting();
+		let runningTotal = baseAmount;
+		let totalTax = 0;
+
+		const taxes = tmpl.taxes.map((row) => {
+			const rowRate = this.flt ? this.flt(row.rate || 0) : Number(row.rate || 0);
+			let taxAmount = 0;
+
+			if (row.charge_type === "Actual") {
+				taxAmount = this.flt ? this.flt(row.tax_amount || 0) : Number(row.tax_amount || 0);
+			} else {
+				taxAmount = this.flt
+					? this.flt((baseAmount * rowRate) / 100)
+					: (baseAmount * rowRate) / 100;
+			}
+
+			if (!inclusive) {
+				runningTotal += taxAmount;
+			}
+
+			totalTax += taxAmount;
+
+			return {
+				account_head: row.account_head,
+				charge_type: row.charge_type || "On Net Total",
+				description: row.description,
+				rate: rowRate,
+				included_in_print_rate: row.charge_type === "Actual" ? 0 : inclusive ? 1 : 0,
+				tax_amount: taxAmount,
+				total: inclusive ? baseAmount : runningTotal,
+				base_tax_amount: taxAmount * (this.exchange_rate || 1),
+				base_total: (inclusive ? baseAmount : runningTotal) * (this.exchange_rate || 1),
+			};
+		});
+
+		if (doc) {
+			doc.taxes = taxes;
+			doc.total_taxes_and_charges = totalTax;
+		}
+
+		return this.flt ? this.flt(totalTax, this.currency_precision || 2) : totalTax;
+	},
+
 	// Create a new item object with default and calculated fields
 	get_new_item(item) {
 		return getNewItem(item, this);
@@ -548,6 +605,12 @@ export default {
 
 			console.log("[Invoice] Loaded taxes:", this.total_tax);
 		}
+
+		if (data.total_taxes_and_charges !== undefined && data.total_taxes_and_charges !== null) {
+			this.total_tax = parseFloat(data.total_taxes_and_charges) || 0;
+		}
+
+		this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
 
 		this.$nextTick(() => {
 			this.apply_additional_discount();

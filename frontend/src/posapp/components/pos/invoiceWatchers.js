@@ -37,10 +37,25 @@ export default {
 			if (this.isApplyingOffer) return;
 			this.handelOffers();
 			if (this.calculate_item_tax_from_items) {
-				const taxTotal = this.calculate_item_tax_from_items();
-				this.total_tax = taxTotal;
-				if (this.invoice_doc) {
-					this.invoice_doc.total_taxes_and_charges = taxTotal;
+				const hasBackendTaxTotal =
+					this.invoice_doc &&
+					this.invoice_doc.total_taxes_and_charges !== undefined &&
+					this.invoice_doc.total_taxes_and_charges !== null &&
+					this.invoice_doc.total_taxes_and_charges !== "";
+				if (!hasBackendTaxTotal) {
+					let taxTotal = this.calculate_item_tax_from_items();
+					if (!taxTotal && this.apply_tax_template_totals) {
+						taxTotal = this.apply_tax_template_totals({
+							net_total: this.subtotal || this.Total || 0,
+							total: this.subtotal || this.Total || 0,
+						});
+					}
+					this.total_tax = taxTotal;
+					if (this.invoice_doc) {
+						this.invoice_doc.total_taxes_and_charges = taxTotal;
+					}
+				} else {
+					this.total_tax = this.invoice_doc.total_taxes_and_charges;
 				}
 			}
 			this.$forceUpdate();

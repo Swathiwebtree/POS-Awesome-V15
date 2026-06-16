@@ -854,6 +854,8 @@ import {
 	getSalesPersonsStorage,
 	setSalesPersonsStorage,
 	updateLocalStock,
+	getTaxTemplate,
+	getTaxInclusiveSetting,
 } from "../../../offline/index.js";
 
 import renderOfflineInvoiceHTML from "../../../offline_print_template";
@@ -922,9 +924,9 @@ export default {
 		},
 
 		computedTaxAndCharges() {
-			const total = this.flt(this.invoice_doc?.total_taxes_and_charges || 0, this.currency_precision);
-			if (total === 0 && this.invoice_doc?.items?.some((item) => item.item_tax_rate)) {
-				return this.calculateItemTax();
+			let total = this.flt(this.invoice_doc?.total_taxes_and_charges || 0, this.currency_precision);
+			if (!total) {
+				total = this.calculateTemplateTaxTotal();
 			}
 			return total;
 		},
@@ -935,7 +937,6 @@ export default {
 
 			return this.flt(this.getEffectiveInvoiceTotal(), this.currency_precision);
 		},
-
 		// Verify tax calculation
 		taxBreakdown() {
 			if (!this.invoice_doc || !this.invoice_doc.taxes) return null;
@@ -1482,6 +1483,36 @@ export default {
 			this.custom_days_dialog = false;
 
 			console.log("[Payment] Payment data reset complete");
+		},
+
+		calculateTemplateTaxTotal() {
+			const templateName = this.pos_profile?.taxes_and_charges;
+			if (!templateName) return 0;
+
+			const tmpl = getTaxTemplate(templateName);
+			if (!tmpl || !Array.isArray(tmpl.taxes) || !tmpl.taxes.length) return 0;
+
+			const baseAmount = this.flt(
+				this.invoice_doc?.net_total ??
+					this.invoice_doc?.total ??
+					this.getEffectiveInvoiceTotal() ??
+					0,
+				this.currency_precision,
+			);
+			let totalTax = 0;
+
+			tmpl.taxes.forEach((row) => {
+				const rate = this.flt(row.rate || 0);
+				let taxAmount = 0;
+				if (row.charge_type === "Actual") {
+					taxAmount = this.flt(row.tax_amount || 0, this.currency_precision);
+				} else {
+					taxAmount = this.flt((baseAmount * rate) / 100, this.currency_precision);
+				}
+				totalTax += taxAmount;
+			});
+
+			return this.flt(totalTax, this.currency_precision);
 		},
 
 		calculateItemTax() {
@@ -2988,6 +3019,8 @@ export default {
 			const hasItemTaxRates = this.invoice_doc?.items?.some((item) => item.item_tax_rate);
 			if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0) && hasItemTaxRates) {
 				this.invoice_doc.total_taxes_and_charges = this.calculateItemTax();
+			} else if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0)) {
+				this.invoice_doc.total_taxes_and_charges = this.calculateTemplateTaxTotal();
 			}
 
 			if (this.invoice_doc && this.invoice_doc.posting_date) {
@@ -3120,6 +3153,8 @@ export default {
 					});
 				});
 				invoiceData.total_taxes_and_charges = this.flt(taxTotal, this.currency_precision);
+			} else if (!this.flt(invoiceData?.total_taxes_and_charges || 0)) {
+				invoiceData.total_taxes_and_charges = this.calculateTemplateTaxTotal();
 			}
 
 			// Ensure payments array exists
