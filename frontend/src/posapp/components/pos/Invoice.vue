@@ -513,6 +513,17 @@ export default {
 			}
 		},
 
+		hasUnsavedJobOrder() {
+			const doc = this.invoice_doc || {};
+			const hasContent =
+				(Array.isArray(doc.items) && doc.items.length > 0) ||
+				!!doc.customer ||
+				!!doc.custom_vehicle_no ||
+				!!doc.custom_odometer_reading ||
+				!!doc.contact_mobile;
+			return hasContent && !this.loaded_draft_name;
+		},
+
 		async applyVehicleDiscountsToAllItems() {
 			if (!this.custom_vehicle_no || !this.items || this.items.length === 0) {
 				console.log("[Discount] No vehicle or no items to apply discount");
@@ -2026,9 +2037,7 @@ export default {
 			this.invoice_doc.additional_discount_percentage = this.flt(
 				this.additional_discount_percentage || 0,
 			);
-			this.invoice_doc.loyalty_discount_amount = this.flt(
-				this.invoice_doc.loyalty_discount_amount || 0,
-			);
+			this.invoice_doc.loyalty_discount_amount = Number(this.invoice_doc.loyalty_discount_amount || 0);
 
 			if (!this.invoice_doc.total_taxes_and_charges) {
 				this.invoice_doc.total_taxes_and_charges =
@@ -2528,7 +2537,9 @@ export default {
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
 			this.invoice_doc.additional_discount = this.additional_discount || 0;
 			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
-			this.invoice_doc.loyalty_discount_amount = this.invoice_doc.loyalty_discount_amount || 0;
+			this.invoice_doc.loyalty_discount_amount = Number(
+				this.invoice_doc.loyalty_discount_amount || 0,
+			);
 			if (
 				(this.invoice_doc.discount_amount > 0 ||
 					this.invoice_doc.additional_discount > 0 ||

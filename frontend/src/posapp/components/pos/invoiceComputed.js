@@ -44,26 +44,28 @@ export default {
 	// Calculate net total (subtotal + delivery - pre-tax discounts)
 	net_total() {
 		let total = this.subtotal;
+		const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
 
 		// Add delivery charges
 		const delivery_charges = this.flt(this.delivery_charges_rate);
 		total += delivery_charges;
 
 		// Subtract invoice and loyalty discounts before tax
-		const invoice_discount = this.flt(this.discount_amount || this.additional_discount || 0);
-		const loyalty_discount = this.flt(
+		const invoice_discount = Number(this.discount_amount || this.additional_discount || 0);
+		const loyalty_discount = Number(
 			this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0,
 		);
 		total -= invoice_discount + loyalty_discount;
 
-		const result = this.flt(total, this.currency_precision);
+		const result = this.flt(total, moneyPrecision);
 		console.log("[invoiceComputed] net_total:", result);
 		return result;
 	},
 
 	// Calculate grand total (net_total + taxes - discount_amount)
 	grand_total() {
-		const net_total = this.flt(this.net_total || 0);
+		const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
+		const net_total = this.flt(this.net_total || 0, moneyPrecision);
 		let fallbackTax = this.calculate_item_tax_from_items ? this.calculate_item_tax_from_items() : 0;
 		if (!fallbackTax && this.apply_tax_template_totals) {
 			fallbackTax = this.apply_tax_template_totals({
@@ -71,8 +73,8 @@ export default {
 				total: this.subtotal,
 			});
 		}
-		const tax = this.flt(this.total_tax || fallbackTax || 0);
-		const total = this.flt(net_total + tax, this.currency_precision);
+		const tax = this.flt(this.total_tax || fallbackTax || 0, moneyPrecision);
+		const total = this.flt(net_total + tax, moneyPrecision);
 
 		console.log("[invoiceComputed] grand_total:", {
 			net_total,

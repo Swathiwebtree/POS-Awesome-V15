@@ -146,36 +146,36 @@ export default {
 
 	calculate_item_tax_from_items() {
 		let taxTotal = 0;
-		const subtotal = this.flt
-			? this.flt(this.subtotal ?? this.Total ?? 0, this.currency_precision || 2)
-			: Number(this.subtotal ?? this.Total ?? 0);
-		const invoiceDiscount = this.flt
-			? this.flt(this.discount_amount || this.additional_discount || 0, this.currency_precision || 2)
-			: Number(this.discount_amount || this.additional_discount || 0);
-		const loyaltyDiscount = this.flt
-			? this.flt(
-					this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0,
-					this.currency_precision || 2,
-				)
-			: Number(this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0);
-		const taxableSubtotal = subtotal - invoiceDiscount - loyaltyDiscount;
+		const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
+		const subtotal = Number(this.subtotal ?? this.Total ?? 0);
+		const invoiceDiscount = Number(this.discount_amount || this.additional_discount || 0);
+		const loyaltyDiscount = Number(
+			this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0,
+		);
+		const taxableSubtotal =
+			this.invoice_doc?.net_total != null
+				? Number(this.invoice_doc.net_total || 0)
+				: subtotal - invoiceDiscount - loyaltyDiscount;
 		const taxableFactor = subtotal ? taxableSubtotal / subtotal : 1;
 		(this.items || []).forEach((item) => {
 			if (!item || !item.item_tax_rate) return;
 			let taxMap = {};
 			try {
 				taxMap = JSON.parse(item.item_tax_rate);
-			} catch (e) {
+			} catch {
 				return;
 			}
 			const rate = item.net_rate ?? item.rate ?? 0;
-			const amount = item.net_amount ?? item.amount ?? rate * item.qty ?? 0;
-			const taxableAmount = this.flt ? this.flt(amount * taxableFactor) : amount * taxableFactor;
+			const quantity = Number(item.qty || 0);
+			const amount = item.net_amount ?? item.amount ?? rate * quantity;
+			const taxableAmount = this.flt
+				? this.flt(amount * taxableFactor, moneyPrecision)
+				: Number((amount * taxableFactor).toFixed(3));
 			Object.values(taxMap).forEach((taxRate) => {
 				taxTotal += (taxableAmount * taxRate) / 100;
 			});
 		});
-		return this.flt ? this.flt(taxTotal, this.currency_precision || 2) : taxTotal;
+		return this.flt ? this.flt(taxTotal, moneyPrecision) : taxTotal;
 	},
 
 	apply_tax_template_totals(doc = this.invoice_doc) {
@@ -188,22 +188,30 @@ export default {
 			return 0;
 		}
 
-		const baseAmount = this.flt
-			? this.flt(doc?.net_total ?? doc?.total ?? this.subtotal ?? this.Total ?? 0)
-			: Number(doc?.net_total ?? doc?.total ?? this.subtotal ?? this.Total ?? 0);
+		const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
+		const baseAmount =
+			doc?.net_total != null
+				? Number(doc.net_total || 0)
+				: Number(doc?.total ?? this.subtotal ?? this.Total ?? 0) -
+					Number(this.discount_amount || this.additional_discount || 0) -
+					Number(doc?.loyalty_discount_amount || doc?.loyalty_amount || 0);
 		const inclusive = getTaxInclusiveSetting();
 		let runningTotal = baseAmount;
 		let totalTax = 0;
 
 		const taxes = tmpl.taxes.map((row) => {
-			const rowRate = this.flt ? this.flt(row.rate || 0) : Number(row.rate || 0);
+				const rowRate = this.flt ? this.flt(row.rate || 0, moneyPrecision) : Number(row.rate || 0);
 			let taxAmount = 0;
 
 			if (row.charge_type === "Actual") {
-				taxAmount = this.flt ? this.flt(row.tax_amount || 0) : Number(row.tax_amount || 0);
-			} else {
-				taxAmount = this.flt ? this.flt((baseAmount * rowRate) / 100) : (baseAmount * rowRate) / 100;
-			}
+					taxAmount = this.flt
+						? this.flt(row.tax_amount || 0, moneyPrecision)
+						: Number(row.tax_amount || 0);
+				} else {
+					taxAmount = this.flt
+						? this.flt((baseAmount * rowRate) / 100, moneyPrecision)
+						: (baseAmount * rowRate) / 100;
+				}
 
 			if (!inclusive) {
 				runningTotal += taxAmount;
@@ -229,7 +237,7 @@ export default {
 			doc.total_taxes_and_charges = totalTax;
 		}
 
-		return this.flt ? this.flt(totalTax, this.currency_precision || 2) : totalTax;
+		return this.flt ? this.flt(totalTax, moneyPrecision) : totalTax;
 	},
 
 	// Create a new item object with default and calculated fields

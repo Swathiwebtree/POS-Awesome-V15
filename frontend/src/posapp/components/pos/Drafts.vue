@@ -38,9 +38,12 @@
 
 				<!-- Vehicle -->
 				<template v-slot:item.custom_vehicle_no="{ item }">
-					<span class="text-caption">{{
-						item.custom_vehicle_no !== "" ? item.custom_vehicle_no : "—"
-					}}</span>
+					<span class="text-caption">{{ item.custom_vehicle_no || "—" }}</span>
+				</template>
+
+				<!-- Model -->
+				<template v-slot:item.custom_vehicle_model="{ item }">
+					<span class="text-caption">{{ item.custom_vehicle_model || "—" }}</span>
 				</template>
 
 				<template v-slot:item.customer="{ item }">
@@ -229,8 +232,13 @@
 
 									<!-- Vehicle -->
 									<template v-slot:item.custom_vehicle_no="{ item }">
+										<span class="text-caption">{{ item.custom_vehicle_no || "—" }}</span>
+									</template>
+
+									<!-- Model -->
+									<template v-slot:item.custom_vehicle_model="{ item }">
 										<span class="text-caption">{{
-											item.custom_vehicle_no !== "" ? item.custom_vehicle_no : "—"
+											item.custom_vehicle_model || "—"
 										}}</span>
 									</template>
 
@@ -305,12 +313,13 @@ export default {
 		headers: [
 			{ title: __("Mobile"), value: "contact_mobile", align: "start", sortable: false, width: "130px" },
 			{
-				title: __("Vehicle"),
+				title: __("Vehicle No"),
 				value: "custom_vehicle_no",
 				align: "start",
 				sortable: false,
 				width: "130px",
 			},
+			{ title: __("Model"), value: "custom_vehicle_model", align: "start", sortable: false, width: "140px" },
 			{ title: __("Customer"), value: "customer", align: "start", sortable: true },
 			{ title: __("Date"), value: "posting_date", align: "start", sortable: true, width: "100px" },
 			{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
@@ -335,7 +344,8 @@ export default {
 		_customerTypeCache: {},
 		_customerNameCache: {},
 		_customerDisplayNameCache: {},
-	}),
+		_vehicleModelCache: {},
+		}),
 	computed: {
 		isDarkTheme() {
 			return this.$vuetify.theme.current.dark;
@@ -424,9 +434,9 @@ export default {
 					"custom_service_employee",
 					"custom_has_oil_item",
 					"custom_odometer_reading",
-					"custom_vehicle_no",
-					"contact_mobile",
-				],
+						"custom_vehicle_no",
+						"contact_mobile",
+					],
 				limit_page_length: 500,
 				order_by: "modified desc",
 			};
@@ -459,12 +469,14 @@ export default {
 					new Set(drafts.map((d) => d.customer).filter((v) => v && !this._customerTypeCache[v])),
 				);
 
-				if (customerIdsToResolve.length) {
-					await this._resolveCustomerTypes(customerIdsToResolve);
-				}
+					if (customerIdsToResolve.length) {
+						await this._resolveCustomerTypes(customerIdsToResolve);
+					}
 
-				// Mark is_corporate on drafts based on resolved customer type
-				drafts = drafts.map((d) => {
+					await this._resolveVehicleModels(drafts);
+
+					// Mark is_corporate on drafts based on resolved customer type
+					drafts = drafts.map((d) => {
 					const custType = this._customerTypeCache[d.customer];
 					d.is_corporate = custType === "Company";
 					d.customer_name =
@@ -489,11 +501,17 @@ export default {
 					) {
 						d.custom_service_employee = this._employeeNameCache[d.custom_service_employee];
 					}
-					delete d.custom_service_employee_name;
-					return d;
-				});
+						delete d.custom_service_employee_name;
+						return d;
+					});
 
-				this.dialog_data = this._sortByDateTime(drafts);
+					drafts = drafts.map((d) => {
+						d.custom_vehicle_model =
+							this._vehicleModelCache[d.custom_vehicle_no] || "";
+						return d;
+					});
+
+					this.dialog_data = this._sortByDateTime(drafts);
 			} catch (err) {
 				console.error("[Drafts] fetchDrafts error:", err);
 			} finally {
@@ -524,8 +542,8 @@ export default {
 			}
 		},
 
-		async _resolveCustomerTypes(customerIds = []) {
-			if (!customerIds || customerIds.length === 0) return;
+			async _resolveCustomerTypes(customerIds = []) {
+				if (!customerIds || customerIds.length === 0) return;
 			try {
 				const resp = await frappe.call({
 					method: "frappe.client.get_list",
@@ -549,9 +567,41 @@ export default {
 					this._customerDisplayNameCache[rec.name] = rec.customer_name || rec.name;
 				});
 			} catch (err) {
-				console.warn("[Drafts] Customer type lookup failed", err);
-			}
-		},
+					console.warn("[Drafts] Customer type lookup failed", err);
+				}
+			},
+
+		async _resolveVehicleModels(drafts = []) {
+				const vehicleNos = Array.from(
+					new Set(
+						(drafts || [])
+							.map((d) => (d.custom_vehicle_no || "").trim())
+							.filter((v) => v && !this._vehicleModelCache[v]),
+					),
+				);
+
+				if (!vehicleNos.length) return;
+
+				await Promise.all(
+					vehicleNos.map(async (vehicleNo) => {
+						try {
+							const resp = await frappe.call({
+								method: "posawesome.posawesome.api.get_customer_by_vehicle",
+								args: { vehicle_no: vehicleNo },
+							});
+							const model =
+								resp?.message?.vehicle?.model ||
+								resp?.message?.vehicle?.vehicle_model ||
+								resp?.message?.vehicle?.model_no ||
+								"";
+							this._vehicleModelCache[vehicleNo] = model;
+						} catch (err) {
+							console.warn("[Drafts] Vehicle lookup failed", vehicleNo, err);
+							this._vehicleModelCache[vehicleNo] = "";
+						}
+					}),
+				);
+			},
 
 		async mergeDraft(newDraft) {
 			if (!newDraft || !newDraft.name) return;
@@ -577,16 +627,23 @@ export default {
 			const custType = this._customerTypeCache[nd.customer];
 			nd.is_corporate = custType === "Company";
 			nd.customer_name = nd.customer_name || this._customerNameCache[nd.customer] || nd.customer || "";
-			nd.custom_display_name =
-				nd.custom_display_name ||
-				nd.title ||
-				nd.display_name ||
-				this._customerDisplayNameCache[nd.customer] ||
-				nd.customer_name ||
-				nd.customer ||
-				"";
+				nd.custom_display_name =
+					nd.custom_display_name ||
+					nd.title ||
+					nd.display_name ||
+					this._customerDisplayNameCache[nd.customer] ||
+					nd.customer_name ||
+					nd.customer ||
+					"";
 
-			this.dialog_data = this.dialog_data.filter((d) => d.name !== nd.name);
+				if (nd.custom_vehicle_no) {
+					if (!this._vehicleModelCache[nd.custom_vehicle_no]) {
+						await this._resolveVehicleModels([nd]);
+					}
+					nd.custom_vehicle_model = this._vehicleModelCache[nd.custom_vehicle_no] || "";
+				}
+
+				this.dialog_data = this.dialog_data.filter((d) => d.name !== nd.name);
 			this.dialog_data.unshift(nd);
 			this.dialog_data = this._sortByDateTime(this.dialog_data);
 		},
@@ -619,6 +676,10 @@ export default {
 				custom_vehicle_no:
 					typeof item.custom_vehicle_no !== "undefined" && item.custom_vehicle_no !== null
 						? String(item.custom_vehicle_no)
+						: "",
+				custom_vehicle_model:
+					typeof item.custom_vehicle_model !== "undefined" && item.custom_vehicle_model !== null
+						? String(item.custom_vehicle_model)
 						: "",
 				// Keep odometer as string if present (e.g. "12345"), empty string if not
 				custom_odometer_reading:
@@ -765,12 +826,14 @@ export default {
 					),
 				);
 
-				if (customerIdsToResolve.length) {
-					await this._resolveCustomerTypes(customerIdsToResolve);
-				}
+					if (customerIdsToResolve.length) {
+						await this._resolveCustomerTypes(customerIdsToResolve);
+					}
 
-				// Map employee names AND set is_corporate flag
-				const drafts = normalized.map((d) => {
+					await this._resolveVehicleModels(normalized);
+
+					// Map employee names AND set is_corporate flag
+					const drafts = normalized.map((d) => {
 					// Handle employee names
 					if (d.custom_service_employee_name) {
 						d.custom_service_employee = d.custom_service_employee_name;
@@ -787,17 +850,19 @@ export default {
 					d.is_corporate = custType === "Company";
 					d.customer_name =
 						d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
-					d.custom_display_name =
-						d.custom_display_name ||
-						d.title ||
-						d.display_name ||
-						this._customerDisplayNameCache[d.customer] ||
-						d.customer_name ||
-						d.customer ||
-						"";
+						d.custom_display_name =
+							d.custom_display_name ||
+							d.title ||
+							d.display_name ||
+							this._customerDisplayNameCache[d.customer] ||
+							d.customer_name ||
+							d.customer ||
+							"";
+						d.custom_vehicle_model =
+							this._vehicleModelCache[d.custom_vehicle_no] || "";
 
-					return d;
-				});
+						return d;
+					});
 
 				this.dialog_data = this._sortByDateTime(drafts);
 			} else {

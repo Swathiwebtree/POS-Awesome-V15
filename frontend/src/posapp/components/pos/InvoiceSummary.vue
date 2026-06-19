@@ -314,25 +314,20 @@
 												<p class="text-caption mb-0 text-grey-darken-1">
 													{{ __("Available Loyalty Points") }}
 												</p>
-												<p
-													:class="[
-														'text-h6 font-weight-bold mb-0',
-														Number(loyaltyPoints || 0) === 0
-															? 'text-purple'
-															: 'text-primary',
-													]"
-												>
-													{{ formatFloat(loyaltyPoints, 0) }} pts
-												</p>
-											</v-col>
-											<v-col cols="auto" class="text-end">
-												<p
-													class="text-h6 font-weight-bold text-purple mb-0 loyalty-currency-value"
-												>
-													{{ formatCurrency(loyaltyPoints * conversionFactor, 0) }}
-													{{ displayCurrency }}
-												</p>
-											</v-col>
+										<p
+											:class="[
+												'text-h6 font-weight-bold mb-0 text-purple',
+											]"
+										>
+											{{ formatFloat(loyaltyPoints, 0) }} pts
+										</p>
+									</v-col>
+									<v-col cols="auto" class="text-end">
+										<p class="text-h6 font-weight-bold text-purple mb-0 loyalty-currency-value">
+											{{ formatCurrency(loyaltyPoints * conversionFactor, 3) }}
+											{{ displayCurrency }}
+										</p>
+									</v-col>
 										</v-row>
 									</v-card-text>
 								</v-card>
@@ -753,7 +748,7 @@
 								<v-col cols="auto">
 									<p class="text-caption text-grey mb-1">{{ __("Value") }}</p>
 									<p class="text-subtitle-1 font-weight-bold mb-0">
-										{{ formatCurrency(loyaltyPoints * conversionFactor) }}
+										{{ formatCurrency(loyaltyPoints * conversionFactor, 3) }}
 									</p>
 								</v-col>
 							</v-row>
@@ -789,7 +784,7 @@
 								<v-col cols="6" class="text-right">
 									<p class="text-caption mb-0 text-grey">{{ __("Discount Value") }}</p>
 									<p class="text-subtitle-1 font-weight-bold mb-0 text-purple">
-										{{ formatCurrency(redemptionValue) }}
+										{{ formatCurrency(redemptionValue, 3) }}
 									</p>
 								</v-col>
 							</v-row>
@@ -1187,7 +1182,7 @@ export default {
 		},
 		redemptionValue() {
 			const points = parseFloat(this.pointsToRedeem) || 0;
-			return points * this.conversionFactor;
+			return Number((points * this.conversionFactor).toFixed(3));
 		},
 		isValidRedemption() {
 			const points = parseFloat(this.pointsToRedeem);
@@ -1744,7 +1739,7 @@ export default {
 
 				frappe.show_alert({
 					message: this.__(
-						`Loyalty discount staged: ${this.formatFloat(redeemedPoints, 2)} points = ${this.formatCurrency(newDiscountAmount)}. Points will be deducted after submit.`,
+						`Loyalty discount staged: ${this.formatFloat(redeemedPoints, 2)} points = ${this.formatCurrency(newDiscountAmount, 3)}. Points will be deducted after submit.`,
 					),
 					indicator: "green",
 					title: this.__("Redemption Staged"),

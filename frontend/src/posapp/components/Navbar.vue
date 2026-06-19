@@ -87,6 +87,23 @@
 			</v-card>
 		</v-dialog>
 
+		<v-dialog v-model="showPendingDraftsDialog" persistent max-width="480">
+			<v-card>
+				<v-card-title class="text-h6 text-error">
+					{{ __("Pending Job Orders") }}
+				</v-card-title>
+				<v-card-text>
+					{{ pendingDraftsMessage }}
+				</v-card-text>
+				<v-card-actions>
+					<v-spacer />
+					<v-btn color="primary" variant="flat" @click="showPendingDraftsDialog = false">
+						{{ __("OK") }}
+					</v-btn>
+				</v-card-actions>
+			</v-card>
+		</v-dialog>
+
 		<OfflineInvoicesDialog
 			v-model="showOfflineInvoices"
 			:pos-profile="posProfile"
@@ -227,6 +244,8 @@ export default {
 			freeze: false,
 			freezeTitle: "",
 			freezeMsg: "",
+			showPendingDraftsDialog: false,
+			pendingDraftCount: 0,
 			snack: false,
 			snackText: "",
 			snackColor: "success",
@@ -236,6 +255,12 @@ export default {
 	computed: {
 		appBarColor() {
 			return this.isDark ? this.$vuetify.theme.themes.dark.colors.surface : "white";
+		},
+		pendingDraftsMessage() {
+			return this.__(
+				"There are {0} pending job orders. Please save or clear them before closing the shift.",
+				[this.pendingDraftCount || 0],
+			);
 		},
 	},
 	mounted() {
@@ -350,13 +375,31 @@ export default {
 				return;
 			}
 
-			// immediately inform user we're preparing the dialog (no window.confirm)
-			this.showMessage({
-				color: "info",
-				title: this.__("Preparing closing dialog..."),
-			});
-
 			try {
+				const draftCountResp = await frappe.call({
+					method: "frappe.client.get_count",
+					args: {
+						doctype: "Sales Invoice",
+						filters: {
+							docstatus: 0,
+							company: this.posProfile?.company,
+							pos_profile: this.posProfile?.name,
+						},
+					},
+				});
+				const pendingDrafts = Number(draftCountResp?.message ?? draftCountResp?.count ?? 0) || 0;
+				this.pendingDraftCount = pendingDrafts;
+				if (pendingDrafts > 0) {
+					this.showPendingDraftsDialog = true;
+					return;
+				}
+
+				// immediately inform user we're preparing the dialog (no window.confirm)
+				this.showMessage({
+					color: "info",
+					title: this.__("Preparing closing dialog..."),
+				});
+
 				// Request the data required by the closing dialog
 				const resp = await frappe.call({
 					method: "posawesome.posawesome.api.shifts.get_closing_dialog_data",
@@ -371,11 +414,11 @@ export default {
 					}
 
 					// Also dispatch a DOM CustomEvent fallback so components that listen via DOM will receive it
-					try {
-						window.dispatchEvent(new CustomEvent("open_ClosingDialog", { detail: closingData }));
-					} catch (e) {
-						// ignore dispatch errors
-					}
+						try {
+							window.dispatchEvent(new CustomEvent("open_ClosingDialog", { detail: closingData }));
+						} catch {
+							// ignore dispatch errors
+						}
 
 					// If neither method is available, log an error to help debugging
 					if (!(this.eventBus && typeof this.eventBus.emit === "function")) {
@@ -478,6 +521,9 @@ export default {
 				this.drawer = false;
 				this.mini = true;
 			}, 250);
+		},
+		getPendingDraftCount() {
+			return Number(this.pendingDraftCount || 0);
 		},
 	},
 	emits: [
