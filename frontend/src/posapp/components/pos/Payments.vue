@@ -211,7 +211,12 @@
 												:label="frappe._('Net Total')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field"
-												:model-value="formatCurrency(getDiscountedNetTotal(invoice_doc), displayCurrency)"
+												:model-value="
+													formatCurrency(
+														getDiscountedNetTotal(invoice_doc),
+														displayCurrency,
+													)
+												"
 												readonly
 												:prefix="currencySymbol()"
 												persistent-placeholder
@@ -254,7 +259,9 @@
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field"
 												hide-details
-												:model-value="formatCurrency(invoice_doc.grand_total, displayCurrency)"
+												:model-value="
+													formatCurrency(invoice_doc.grand_total, displayCurrency)
+												"
 												readonly
 												:prefix="currencySymbol(invoice_doc.currency)"
 												persistent-placeholder
@@ -286,7 +293,9 @@
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field"
 												hide-details
-												:model-value="formatCurrency(invoice_doc.grand_total, displayCurrency)"
+												:model-value="
+													formatCurrency(invoice_doc.grand_total, displayCurrency)
+												"
 												readonly
 												:prefix="currencySymbol()"
 												persistent-placeholder
@@ -979,7 +988,10 @@ export default {
 			if (!this.invoice_doc) return 0;
 
 			const grandTotal = this.flt(this.invoice_doc.grand_total || 0, this.currency_precision);
-			const manualRoundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision);
+			const manualRoundOff = this.flt(
+				this.invoice_doc.rounding_adjustment || 0,
+				this.currency_precision,
+			);
 
 			if (manualRoundOff !== 0) {
 				return this.flt(grandTotal + manualRoundOff, this.currency_precision);
@@ -1494,7 +1506,11 @@ export default {
 		getDiscountedNetTotal(doc = this.invoice_doc) {
 			const itemTotal = this.flt(doc?.total || 0, this.currency_precision);
 			const preTaxDiscount = this.flt(
-				doc?.discount_amount || doc?.additional_discount || doc?.loyalty_discount_amount || doc?.loyalty_amount || 0,
+				doc?.discount_amount ||
+					doc?.additional_discount ||
+					doc?.loyalty_discount_amount ||
+					doc?.loyalty_amount ||
+					0,
 				this.currency_precision,
 			);
 			return this.flt(itemTotal - preTaxDiscount, this.currency_precision);
@@ -1513,7 +1529,7 @@ export default {
 					: this.flt(
 							(this.invoice_doc?.total ?? 0) - this.getPreTaxDiscountAmount(),
 							this.currency_precision,
-					  );
+						);
 			let totalTax = 0;
 
 			tmpl.taxes.forEach((row) => {
@@ -1538,7 +1554,10 @@ export default {
 			}
 
 			const itemBaseTotal = this.flt(this.invoice_doc?.total ?? 0, this.currency_precision);
-			const discountedItemTotal = this.flt(itemBaseTotal - this.getPreTaxDiscountAmount(), this.currency_precision);
+			const discountedItemTotal = this.flt(
+				itemBaseTotal - this.getPreTaxDiscountAmount(),
+				this.currency_precision,
+			);
 			const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
 
 			this.invoice_doc.items.forEach((item) => {
@@ -3005,112 +3024,112 @@ export default {
 		});
 
 		this.eventBus.on("send_invoice_doc_payment", (invoice_doc) => {
-				console.log("[Payment] send_invoice_doc_payment received, initializing...");
-				this.invoice_doc = invoice_doc;
-				this.items_signature = this.computeItemsSignature(this.invoice_doc?.items || []);
-				if (this.invoice_doc) {
-					const hasCarWashService = this.hasCarWashServiceForItems(this.invoice_doc.items || []);
-					this.invoice_doc.custom_has_carwash_service = hasCarWashService ? 1 : 0;
-					if (!hasCarWashService) {
-						this.invoice_doc.custom_service_employee = null;
-						this.invoice_doc.custom_service_employee_name = null;
-						this.invoice_doc.custom_service_employee_designation = null;
-						this.invoice_doc.custom_service_employee_department = null;
-					}
-					this.invoice_doc.loyalty_discount_amount =
-						this.invoice_doc.loyalty_discount_amount || this.invoice_doc.loyalty_amount || 0;
+			console.log("[Payment] send_invoice_doc_payment received, initializing...");
+			this.invoice_doc = invoice_doc;
+			this.items_signature = this.computeItemsSignature(this.invoice_doc?.items || []);
+			if (this.invoice_doc) {
+				const hasCarWashService = this.hasCarWashServiceForItems(this.invoice_doc.items || []);
+				this.invoice_doc.custom_has_carwash_service = hasCarWashService ? 1 : 0;
+				if (!hasCarWashService) {
+					this.invoice_doc.custom_service_employee = null;
+					this.invoice_doc.custom_service_employee_name = null;
+					this.invoice_doc.custom_service_employee_designation = null;
+					this.invoice_doc.custom_service_employee_department = null;
 				}
-				const hasItemTaxRates = this.invoice_doc?.items?.some((item) => item.item_tax_rate);
-				if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0) && hasItemTaxRates) {
-					this.invoice_doc.total_taxes_and_charges = this.calculateItemTax();
-				} else if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0)) {
-					this.invoice_doc.total_taxes_and_charges = this.calculateTemplateTaxTotal();
+				this.invoice_doc.loyalty_discount_amount =
+					this.invoice_doc.loyalty_discount_amount || this.invoice_doc.loyalty_amount || 0;
+			}
+			const hasItemTaxRates = this.invoice_doc?.items?.some((item) => item.item_tax_rate);
+			if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0) && hasItemTaxRates) {
+				this.invoice_doc.total_taxes_and_charges = this.calculateItemTax();
+			} else if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0)) {
+				this.invoice_doc.total_taxes_and_charges = this.calculateTemplateTaxTotal();
+			}
+			this.invoice_doc.net_total = this.getDiscountedNetTotal(this.invoice_doc);
+			this.invoice_doc.grand_total = this.flt(
+				this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
+				this.currency_precision,
+			);
+
+			if (this.invoice_doc && this.invoice_doc.posting_date) {
+				const posting_date = new Date(this.invoice_doc.posting_date);
+				const due_date = this.invoice_doc.due_date ? new Date(this.invoice_doc.due_date) : null;
+
+				if (!this.invoice_doc.due_date || due_date < posting_date) {
+					const newDueDate = new Date(posting_date);
+					newDueDate.setDate(newDueDate.getDate() + 30);
+					this.invoice_doc.due_date = this.formatDate(newDueDate);
+					console.log("[Payment] Initialized/Corrected due_date:", this.invoice_doc.due_date);
 				}
-				this.invoice_doc.net_total = this.getDiscountedNetTotal(this.invoice_doc);
-				this.invoice_doc.grand_total = this.flt(
-					this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
-					this.currency_precision,
-				);
+			}
 
-				if (this.invoice_doc && this.invoice_doc.posting_date) {
-					const posting_date = new Date(this.invoice_doc.posting_date);
-					const due_date = this.invoice_doc.due_date ? new Date(this.invoice_doc.due_date) : null;
+			if (!this.invoice_doc.payments) {
+				this.invoice_doc.payments = [];
+				console.log("[Payment] Created new payments array");
+			}
 
-					if (!this.invoice_doc.due_date || due_date < posting_date) {
-						const newDueDate = new Date(posting_date);
-						newDueDate.setDate(newDueDate.getDate() + 30);
-						this.invoice_doc.due_date = this.formatDate(newDueDate);
-						console.log("[Payment] Initialized/Corrected due_date:", this.invoice_doc.due_date);
-					}
-				}
+			if (this.invoice_doc.payments.length === 0) {
+				console.log("[Payment] Payments empty, loading from POS Profile");
 
-				if (!this.invoice_doc.payments) {
-					this.invoice_doc.payments = [];
-					console.log("[Payment] Created new payments array");
-				}
-
-				if (this.invoice_doc.payments.length === 0) {
-					console.log("[Payment] Payments empty, loading from POS Profile");
-
-					if (this.pos_profile && this.pos_profile.payments && this.pos_profile.payments.length > 0) {
-						this.invoice_doc.payments = this.pos_profile.payments.map((payment, index) => {
-							return {
-								name: "",
-								mode_of_payment: payment.mode_of_payment,
-								account: payment.default_account || "",
-								amount: null,
-								base_amount: null,
-								type: payment.type || "Cash",
-								idx: index + 1,
-								default: payment.default || 0,
-							};
-						});
-						console.log("[Payment] Loaded payment methods:", this.invoice_doc.payments);
-					} else {
-						console.warn("[Payment] POS Profile not available");
-						this.invoice_doc.payments = [
-							{
-								name: "",
-								mode_of_payment: "Cash",
-								account: "",
-								amount: null,
-								base_amount: null,
-								type: "Cash",
-								idx: 1,
-								default: 1,
-							},
-						];
-					}
-				}
-
-				console.log("[Payment] Payments initialized:", this.invoice_doc.payments);
-				this.tryOpenPaymentDialog();
-
-				const default_payment = this.invoice_doc.payments.find((payment) => payment.default === 1);
-				this.is_credit_sale = false;
-				this.is_write_off_change = false;
-
-				if (invoice_doc.is_return) {
-					this.is_return = true;
-					this.is_credit_return = false;
-					invoice_doc.payments.forEach((payment) => {
-						payment.amount = null;
-						payment.base_amount = null;
+				if (this.pos_profile && this.pos_profile.payments && this.pos_profile.payments.length > 0) {
+					this.invoice_doc.payments = this.pos_profile.payments.map((payment, index) => {
+						return {
+							name: "",
+							mode_of_payment: payment.mode_of_payment,
+							account: payment.default_account || "",
+							amount: null,
+							base_amount: null,
+							type: payment.type || "Cash",
+							idx: index + 1,
+							default: payment.default || 0,
+						};
 					});
+					console.log("[Payment] Loaded payment methods:", this.invoice_doc.payments);
 				} else {
-					this.is_credit_return = false;
+					console.warn("[Payment] POS Profile not available");
+					this.invoice_doc.payments = [
+						{
+							name: "",
+							mode_of_payment: "Cash",
+							account: "",
+							amount: null,
+							base_amount: null,
+							type: "Cash",
+							idx: 1,
+							default: 1,
+						},
+					];
 				}
+			}
 
-				this.loyalty_amount = 0;
-				this.redeemed_customer_credit = 0;
+			console.log("[Payment] Payments initialized:", this.invoice_doc.payments);
+			this.tryOpenPaymentDialog();
 
-				if (invoice_doc.customer) {
-					this.get_addresses();
-				}
+			const default_payment = this.invoice_doc.payments.find((payment) => payment.default === 1);
+			this.is_credit_sale = false;
+			this.is_write_off_change = false;
 
-				this.get_sales_person_names();
-				console.log("[Payment] Initialization complete");
-			});
+			if (invoice_doc.is_return) {
+				this.is_return = true;
+				this.is_credit_return = false;
+				invoice_doc.payments.forEach((payment) => {
+					payment.amount = null;
+					payment.base_amount = null;
+				});
+			} else {
+				this.is_credit_return = false;
+			}
+
+			this.loyalty_amount = 0;
+			this.redeemed_customer_credit = 0;
+
+			if (invoice_doc.customer) {
+				this.get_addresses();
+			}
+
+			this.get_sales_person_names();
+			console.log("[Payment] Initialization complete");
+		});
 
 		this.eventBus.on("show_payment", (data) => {
 			console.log("[Payment] show_payment event received with data:", data);

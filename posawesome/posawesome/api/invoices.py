@@ -344,7 +344,9 @@ def update_invoice(data):
     invoice_doc.set_missing_values()
 
     pre_tax_discount_amount = flt(invoice_doc.get("discount_amount") or 0)
-    loyalty_discount_amount = flt(invoice_doc.get("loyalty_amount") or invoice_doc.get("loyalty_discount_amount") or 0)
+    loyalty_discount_amount = flt(
+        invoice_doc.get("loyalty_amount") or invoice_doc.get("loyalty_discount_amount") or 0
+    )
     combined_discount_amount = flt(pre_tax_discount_amount + loyalty_discount_amount)
     invoice_doc.loyalty_discount_amount = loyalty_discount_amount
     if combined_discount_amount > 0:

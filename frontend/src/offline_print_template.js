@@ -49,9 +49,14 @@ function defaultOfflineHTML(invoice, terms = "") {
 		.join("");
 
 	const loyaltyDiscount = Number(
-		invoice.loyalty_discount_amount ?? invoice.loyalty_amount ?? invoice.additional_discount ?? invoice.discount_amount ?? 0,
+		invoice.loyalty_discount_amount ??
+			invoice.loyalty_amount ??
+			invoice.additional_discount ??
+			invoice.discount_amount ??
+			0,
 	);
-	const netTotal = invoice.net_total != null ? invoice.net_total : Number(invoice.total || 0) - loyaltyDiscount;
+	const netTotal =
+		invoice.net_total != null ? invoice.net_total : Number(invoice.total || 0) - loyaltyDiscount;
 	const discountRow = loyaltyDiscount
 		? `<tr>
 	      <td class="text-right" style="width:75%">Loyalty Discount</td>

@@ -146,12 +146,17 @@ export default {
 
 	calculate_item_tax_from_items() {
 		let taxTotal = 0;
-		const subtotal = this.flt ? this.flt(this.subtotal ?? this.Total ?? 0, this.currency_precision || 2) : Number(this.subtotal ?? this.Total ?? 0);
+		const subtotal = this.flt
+			? this.flt(this.subtotal ?? this.Total ?? 0, this.currency_precision || 2)
+			: Number(this.subtotal ?? this.Total ?? 0);
 		const invoiceDiscount = this.flt
 			? this.flt(this.discount_amount || this.additional_discount || 0, this.currency_precision || 2)
 			: Number(this.discount_amount || this.additional_discount || 0);
 		const loyaltyDiscount = this.flt
-			? this.flt(this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0, this.currency_precision || 2)
+			? this.flt(
+					this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0,
+					this.currency_precision || 2,
+				)
 			: Number(this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0);
 		const taxableSubtotal = subtotal - invoiceDiscount - loyaltyDiscount;
 		const taxableFactor = subtotal ? taxableSubtotal / subtotal : 1;

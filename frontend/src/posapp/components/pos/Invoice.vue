@@ -496,7 +496,8 @@ export default {
 				this.invoice_doc.redeem_loyalty_points = this.loyalty_redemption_points;
 				this.invoice_doc.loyalty_amount = this.loyalty_redemption_amount;
 				this.invoice_doc.loyalty_discount_amount = this.loyalty_redemption_amount;
-				this.invoice_doc.loyalty_program = this.customer_info?.loyalty_program || this.invoice_doc.loyalty_program || null;
+				this.invoice_doc.loyalty_program =
+					this.customer_info?.loyalty_program || this.invoice_doc.loyalty_program || null;
 			}
 		},
 
@@ -2236,9 +2237,7 @@ export default {
 			// Redeem values (safe defaults)
 			invoiceData.redeem_loyalty_points = Number(this.loyalty_redemption_points || 0);
 			invoiceData.loyalty_amount = Number(this.loyalty_redemption_amount || 0);
-			invoiceData.loyalty_discount_amount = Number(
-				this.invoice_doc?.loyalty_discount_amount || 0,
-			);
+			invoiceData.loyalty_discount_amount = Number(this.invoice_doc?.loyalty_discount_amount || 0);
 
 			// Defensive: ERPNext expects numbers
 			if (invoiceData.redeem_loyalty_points < 0) {
@@ -2524,8 +2523,8 @@ export default {
 			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
 			this.invoice_doc.currency =
 				this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
-				this.invoice_doc.net_total = this.net_total || 0;
-				this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
+			this.invoice_doc.net_total = this.net_total || 0;
+			this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
 			this.invoice_doc.additional_discount = this.additional_discount || 0;
 			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;

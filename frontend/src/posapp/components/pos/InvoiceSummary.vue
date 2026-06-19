@@ -69,14 +69,14 @@
 												:placeholder="__('Search by employee ID or name')"
 												prepend-inner-icon="mdi-magnify"
 												:loading="loadingEmployees"
-											@click.stop
-											@focus="employeeMenu = true"
-											@blur="handleEmployeeSearchBlur"
-											@keydown.stop
-											@keypress.stop
-											@keyup.stop
-											@input.stop
-											@update:model-value="handleEmployeeSearchInput"
+												@click.stop
+												@focus="employeeMenu = true"
+												@blur="handleEmployeeSearchBlur"
+												@keydown.stop
+												@keypress.stop
+												@keyup.stop
+												@input.stop
+												@update:model-value="handleEmployeeSearchInput"
 											/>
 											<div
 												v-if="employeeSearch && employeeSearch.length < 3"
@@ -89,7 +89,9 @@
 									<template v-slot:item="{ props, item }">
 										<v-list-item
 											v-bind="props"
-											:title="item.raw.display_label || buildEmployeeDisplayLabel(item.raw)"
+											:title="
+												item.raw.display_label || buildEmployeeDisplayLabel(item.raw)
+											"
 										>
 											<template v-slot:prepend>
 												<v-avatar size="32" color="primary" class="mr-2">
@@ -107,14 +109,21 @@
 									<template v-slot:selection="{ item }">
 										<div class="employee-selection">
 											<span class="employee-selection-name">
-												{{ selectedEmployeeDisplayLabel || buildEmployeeDisplayLabel(item.raw) }}
+												{{
+													selectedEmployeeDisplayLabel ||
+													buildEmployeeDisplayLabel(item.raw)
+												}}
 											</span>
 											<span
-												v-if="selectedEmployeeDetails?.employee_id || selectedEmployeeDetails?.name"
+												v-if="
+													selectedEmployeeDetails?.employee_id ||
+													selectedEmployeeDetails?.name
+												"
 												class="employee-selection-id"
 											>
 												({{
-													selectedEmployeeDetails?.employee_id || selectedEmployeeDetails?.name
+													selectedEmployeeDetails?.employee_id ||
+													selectedEmployeeDetails?.name
 												}})
 											</span>
 										</div>
@@ -308,14 +317,18 @@
 												<p
 													:class="[
 														'text-h6 font-weight-bold mb-0',
-														Number(loyaltyPoints || 0) === 0 ? 'text-purple' : 'text-primary',
+														Number(loyaltyPoints || 0) === 0
+															? 'text-purple'
+															: 'text-primary',
 													]"
 												>
 													{{ formatFloat(loyaltyPoints, 0) }} pts
 												</p>
 											</v-col>
 											<v-col cols="auto" class="text-end">
-												<p class="text-h6 font-weight-bold text-purple mb-0 loyalty-currency-value">
+												<p
+													class="text-h6 font-weight-bold text-purple mb-0 loyalty-currency-value"
+												>
 													{{ formatCurrency(loyaltyPoints * conversionFactor, 0) }}
 													{{ displayCurrency }}
 												</p>
@@ -1087,39 +1100,40 @@ export default {
 		"show-coupons",
 		"apply-frequent-card",
 	],
-		computed: {
-			finalTotal() {
-				const base = Number(this.subtotal || 0);
-				const roundOff = Number(this.manual_round_off || 0);
-				return Number((base + roundOff).toFixed(3));
-			},
+	computed: {
+		finalTotal() {
+			const base = Number(this.subtotal || 0);
+			const roundOff = Number(this.manual_round_off || 0);
+			return Number((base + roundOff).toFixed(3));
+		},
 
-			selectedEmployeeDisplayLabel() {
-				const employee = this.selectedEmployeeDetails || this.getSelectedEmployeeRecord(this.selectedEmployee);
-				return employee ? this.buildEmployeeDisplayLabel(employee) : "";
-			},
+		selectedEmployeeDisplayLabel() {
+			const employee =
+				this.selectedEmployeeDetails || this.getSelectedEmployeeRecord(this.selectedEmployee);
+			return employee ? this.buildEmployeeDisplayLabel(employee) : "";
+		},
 
-			filteredEmployees() {
-				const query = (this.employeeSearch || "").trim().toLowerCase();
-				if (!query || query.length < 3) {
-					return this.employees;
-				}
+		filteredEmployees() {
+			const query = (this.employeeSearch || "").trim().toLowerCase();
+			if (!query || query.length < 3) {
+				return this.employees;
+			}
 
-				return this.employees.filter((employee) => {
-					const employeeId = String(employee.employee_id || employee.name || "").toLowerCase();
-					const employeeName = String(employee.employee_name || "").toLowerCase();
-					const customEmployeeId = String(employee.custom_employee_id || "").toLowerCase();
-					const displayLabel = String(employee.display_label || "").toLowerCase();
-					return (
-						employeeId.includes(query) ||
-						employeeName.includes(query) ||
-						customEmployeeId.includes(query) ||
-						displayLabel.includes(query)
-					);
-				});
-			},
+			return this.employees.filter((employee) => {
+				const employeeId = String(employee.employee_id || employee.name || "").toLowerCase();
+				const employeeName = String(employee.employee_name || "").toLowerCase();
+				const customEmployeeId = String(employee.custom_employee_id || "").toLowerCase();
+				const displayLabel = String(employee.display_label || "").toLowerCase();
+				return (
+					employeeId.includes(query) ||
+					employeeName.includes(query) ||
+					customEmployeeId.includes(query) ||
+					displayLabel.includes(query)
+				);
+			});
+		},
 
-			itemGroupsList() {
+		itemGroupsList() {
 			const itemBasedGroups = Array.isArray(this.$parent?.items)
 				? this.$parent.items.map((item) => (item?.item_group || "").toString().trim()).filter(Boolean)
 				: [];
@@ -1833,7 +1847,9 @@ export default {
 			if (!employee) return "";
 			const employeeId = String(employee.employee_id || employee.name || "");
 			const employeeName = String(employee.employee_name || employee.display_name || employeeId || "");
-			return employeeId && employeeName ? `${employeeId} - ${employeeName}` : employeeName || employeeId;
+			return employeeId && employeeName
+				? `${employeeId} - ${employeeName}`
+				: employeeName || employeeId;
 		},
 
 		buildEmployeeSubtitle(employee) {
@@ -1885,7 +1901,9 @@ export default {
 			if (!employeeId) return null;
 			return (
 				this.selectedEmployeeDetails ||
-				this.employees.find((employee) => employee.employee_id === employeeId || employee.name === employeeId) ||
+				this.employees.find(
+					(employee) => employee.employee_id === employeeId || employee.name === employeeId,
+				) ||
 				null
 			);
 		},
@@ -1956,10 +1974,14 @@ export default {
 					const employee = this.normalizeEmployeeRecord(response.message);
 					if (employee) {
 						const existingIndex = this.employees.findIndex(
-							(item) => item.employee_id === employee.employee_id || item.name === employee.employee_id,
+							(item) =>
+								item.employee_id === employee.employee_id ||
+								item.name === employee.employee_id,
 						);
 						const cachedIndex = this.allEmployees.findIndex(
-							(item) => item.employee_id === employee.employee_id || item.name === employee.employee_id,
+							(item) =>
+								item.employee_id === employee.employee_id ||
+								item.name === employee.employee_id,
 						);
 						if (existingIndex !== -1) {
 							this.employees.splice(existingIndex, 1, employee);
