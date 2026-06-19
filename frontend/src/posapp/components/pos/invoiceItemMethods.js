@@ -200,18 +200,18 @@ export default {
 		let totalTax = 0;
 
 		const taxes = tmpl.taxes.map((row) => {
-				const rowRate = this.flt ? this.flt(row.rate || 0, moneyPrecision) : Number(row.rate || 0);
+			const rowRate = this.flt ? this.flt(row.rate || 0, moneyPrecision) : Number(row.rate || 0);
 			let taxAmount = 0;
 
 			if (row.charge_type === "Actual") {
-					taxAmount = this.flt
-						? this.flt(row.tax_amount || 0, moneyPrecision)
-						: Number(row.tax_amount || 0);
-				} else {
-					taxAmount = this.flt
-						? this.flt((baseAmount * rowRate) / 100, moneyPrecision)
-						: (baseAmount * rowRate) / 100;
-				}
+				taxAmount = this.flt
+					? this.flt(row.tax_amount || 0, moneyPrecision)
+					: Number(row.tax_amount || 0);
+			} else {
+				taxAmount = this.flt
+					? this.flt((baseAmount * rowRate) / 100, moneyPrecision)
+					: (baseAmount * rowRate) / 100;
+			}
 
 			if (!inclusive) {
 				runningTotal += taxAmount;

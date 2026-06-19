@@ -352,8 +352,8 @@ export default {
 			showBackNavigationDialog: false,
 			_backNavigationGuardInstalled: false,
 			_allowBrowserBackNavigation: false,
-			};
-		},
+		};
+	},
 
 	components: {
 		ItemsSelector,
@@ -879,14 +879,14 @@ export default {
 			});
 		});
 
-			this._handleDraftsVisibility = () => {
-				if (!document.hidden && this.shouldAutoRefreshDrafts()) {
-					this.refreshDrafts();
-				}
-			};
-			document.addEventListener("visibilitychange", this._handleDraftsVisibility);
-			this.registerBackNavigationGuard();
-		},
+		this._handleDraftsVisibility = () => {
+			if (!document.hidden && this.shouldAutoRefreshDrafts()) {
+				this.refreshDrafts();
+			}
+		};
+		document.addEventListener("visibilitychange", this._handleDraftsVisibility);
+		this.registerBackNavigationGuard();
+	},
 
 	beforeUnmount() {
 		this.stopDraftsAutoRefresh();

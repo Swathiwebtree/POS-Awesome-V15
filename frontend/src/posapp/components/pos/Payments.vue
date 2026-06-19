@@ -1494,22 +1494,30 @@ export default {
 
 		getPreTaxDiscountAmount() {
 			const invoiceDiscount = Number(
-				formatUtils.fromArabicNumerals(
-					String(this.invoice_doc?.discount_amount || this.invoice_doc?.additional_discount || 0),
-				).replace(/,/g, ""),
+				formatUtils
+					.fromArabicNumerals(
+						String(
+							this.invoice_doc?.discount_amount || this.invoice_doc?.additional_discount || 0,
+						),
+					)
+					.replace(/,/g, ""),
 			);
 			const loyaltyDiscount = Number(
-				formatUtils.fromArabicNumerals(
-					String(
-						this.loyalty_amount ||
-							this.invoice_doc?.loyalty_amount ||
-							this.invoice_doc?.loyalty_discount_amount ||
-							0,
-					),
-				).replace(/,/g, ""),
+				formatUtils
+					.fromArabicNumerals(
+						String(
+							this.loyalty_amount ||
+								this.invoice_doc?.loyalty_amount ||
+								this.invoice_doc?.loyalty_discount_amount ||
+								0,
+						),
+					)
+					.replace(/,/g, ""),
 			);
-			return (Number.isFinite(invoiceDiscount) ? invoiceDiscount : 0) +
-				(Number.isFinite(loyaltyDiscount) ? loyaltyDiscount : 0);
+			return (
+				(Number.isFinite(invoiceDiscount) ? invoiceDiscount : 0) +
+				(Number.isFinite(loyaltyDiscount) ? loyaltyDiscount : 0)
+			);
 		},
 
 		getDiscountedNetTotal(doc = this.invoice_doc) {
@@ -1518,15 +1526,17 @@ export default {
 				formatUtils.fromArabicNumerals(String(doc?.total || 0)).replace(/,/g, ""),
 			);
 			const preTaxDiscount = Number(
-				formatUtils.fromArabicNumerals(
-					String(
-						doc?.discount_amount ||
-							doc?.additional_discount ||
-							doc?.loyalty_discount_amount ||
-							doc?.loyalty_amount ||
-							0,
-					),
-				).replace(/,/g, ""),
+				formatUtils
+					.fromArabicNumerals(
+						String(
+							doc?.discount_amount ||
+								doc?.additional_discount ||
+								doc?.loyalty_discount_amount ||
+								doc?.loyalty_amount ||
+								0,
+						),
+					)
+					.replace(/,/g, ""),
 			);
 			const safeItemTotal = Number.isFinite(itemTotal) ? itemTotal : 0;
 			const safeDiscount = Number.isFinite(preTaxDiscount) ? preTaxDiscount : 0;
@@ -1544,13 +1554,17 @@ export default {
 			const baseAmount =
 				this.invoice_doc?.net_total != null
 					? Number(
-							formatUtils.fromArabicNumerals(String(this.invoice_doc.net_total)).replace(/,/g, ""),
-					  )
+							formatUtils
+								.fromArabicNumerals(String(this.invoice_doc.net_total))
+								.replace(/,/g, ""),
+						)
 					: Number(
-							formatUtils.fromArabicNumerals(
-								String((this.invoice_doc?.total ?? 0) - this.getPreTaxDiscountAmount()),
-							).replace(/,/g, ""),
-					  );
+							formatUtils
+								.fromArabicNumerals(
+									String((this.invoice_doc?.total ?? 0) - this.getPreTaxDiscountAmount()),
+								)
+								.replace(/,/g, ""),
+						);
 			let totalTax = 0;
 
 			tmpl.taxes.forEach((row) => {
@@ -1581,8 +1595,10 @@ export default {
 			const discountedItemTotal =
 				this.invoice_doc?.net_total != null
 					? Number(
-							formatUtils.fromArabicNumerals(String(this.invoice_doc.net_total)).replace(/,/g, ""),
-					  )
+							formatUtils
+								.fromArabicNumerals(String(this.invoice_doc.net_total))
+								.replace(/,/g, ""),
+						)
 					: itemBaseTotal - this.getPreTaxDiscountAmount();
 			const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
 

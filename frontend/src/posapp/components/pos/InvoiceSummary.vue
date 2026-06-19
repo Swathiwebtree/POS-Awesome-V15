@@ -314,20 +314,18 @@
 												<p class="text-caption mb-0 text-grey-darken-1">
 													{{ __("Available Loyalty Points") }}
 												</p>
-										<p
-											:class="[
-												'text-h6 font-weight-bold mb-0 text-purple',
-											]"
-										>
-											{{ formatFloat(loyaltyPoints, 0) }} pts
-										</p>
-									</v-col>
-									<v-col cols="auto" class="text-end">
-										<p class="text-h6 font-weight-bold text-purple mb-0 loyalty-currency-value">
-											{{ formatCurrency(loyaltyPoints * conversionFactor, 3) }}
-											{{ displayCurrency }}
-										</p>
-									</v-col>
+												<p :class="['text-h6 font-weight-bold mb-0 text-purple']">
+													{{ formatFloat(loyaltyPoints, 0) }} pts
+												</p>
+											</v-col>
+											<v-col cols="auto" class="text-end">
+												<p
+													class="text-h6 font-weight-bold text-purple mb-0 loyalty-currency-value"
+												>
+													{{ formatCurrency(loyaltyPoints * conversionFactor, 3) }}
+													{{ displayCurrency }}
+												</p>
+											</v-col>
 										</v-row>
 									</v-card-text>
 								</v-card>

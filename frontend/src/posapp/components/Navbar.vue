@@ -414,11 +414,11 @@ export default {
 					}
 
 					// Also dispatch a DOM CustomEvent fallback so components that listen via DOM will receive it
-						try {
-							window.dispatchEvent(new CustomEvent("open_ClosingDialog", { detail: closingData }));
-						} catch {
-							// ignore dispatch errors
-						}
+					try {
+						window.dispatchEvent(new CustomEvent("open_ClosingDialog", { detail: closingData }));
+					} catch {
+						// ignore dispatch errors
+					}
 
 					// If neither method is available, log an error to help debugging
 					if (!(this.eventBus && typeof this.eventBus.emit === "function")) {

@@ -2537,9 +2537,7 @@ export default {
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
 			this.invoice_doc.additional_discount = this.additional_discount || 0;
 			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
-			this.invoice_doc.loyalty_discount_amount = Number(
-				this.invoice_doc.loyalty_discount_amount || 0,
-			);
+			this.invoice_doc.loyalty_discount_amount = Number(this.invoice_doc.loyalty_discount_amount || 0);
 			if (
 				(this.invoice_doc.discount_amount > 0 ||
 					this.invoice_doc.additional_discount > 0 ||
