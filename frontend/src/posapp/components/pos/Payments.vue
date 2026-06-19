@@ -211,12 +211,7 @@
 												:label="frappe._('Net Total')"
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field"
-												:model-value="
-													formatCurrency(
-														invoice_doc.rounded_total ?? invoice_doc.grand_total,
-														displayCurrency,
-													)
-												"
+												:model-value="formatCurrency(getDiscountedNetTotal(invoice_doc), displayCurrency)"
 												readonly
 												:prefix="currencySymbol()"
 												persistent-placeholder
@@ -259,12 +254,7 @@
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field"
 												hide-details
-												:model-value="
-													formatCurrency(
-														invoice_doc.rounded_total || invoice_doc.grand_total,
-														displayCurrency,
-													)
-												"
+												:model-value="formatCurrency(invoice_doc.grand_total, displayCurrency)"
 												readonly
 												:prefix="currencySymbol(invoice_doc.currency)"
 												persistent-placeholder
@@ -296,12 +286,7 @@
 												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
 												class="dark-field sleek-field"
 												hide-details
-												:model-value="
-													formatCurrency(
-														invoice_doc.rounded_total || invoice_doc.grand_total,
-														displayCurrency,
-													)
-												"
+												:model-value="formatCurrency(invoice_doc.grand_total, displayCurrency)"
 												readonly
 												:prefix="currencySymbol()"
 												persistent-placeholder
@@ -990,18 +975,27 @@ export default {
 			return this.flt(total, this.currency_precision);
 		},
 
-		diff_payment() {
+		payable_total() {
 			if (!this.invoice_doc) return 0;
 
-			let invoice_total;
-			if (
-				this.pos_profile.posa_allow_multi_currency &&
-				this.invoice_doc.currency !== this.pos_profile.currency
-			) {
-				invoice_total = this.flt(this.invoice_doc.grand_total, this.currency_precision);
-			} else {
-				invoice_total = this.flt(this.getEffectiveInvoiceTotal(), this.currency_precision);
+			const grandTotal = this.flt(this.invoice_doc.grand_total || 0, this.currency_precision);
+			const manualRoundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision);
+
+			if (manualRoundOff !== 0) {
+				return this.flt(grandTotal + manualRoundOff, this.currency_precision);
 			}
+
+			const roundedTotal = Number(this.invoice_doc.rounded_total);
+			if (!Number.isNaN(roundedTotal) && Math.abs(roundedTotal - grandTotal) > 0.000001) {
+				return this.flt(roundedTotal, this.currency_precision);
+			}
+
+			return grandTotal;
+		},
+
+		diff_payment() {
+			if (!this.invoice_doc) return 0;
+			const invoice_total = this.payable_total;
 
 			let diff = this.flt(invoice_total - this.total_payments, this.currency_precision);
 
@@ -1013,15 +1007,7 @@ export default {
 		},
 
 		credit_change() {
-			let invoice_total;
-			if (
-				this.pos_profile.posa_allow_multi_currency &&
-				this.invoice_doc.currency !== this.pos_profile.currency
-			) {
-				invoice_total = this.flt(this.invoice_doc.grand_total, this.currency_precision);
-			} else {
-				invoice_total = this.flt(this.getEffectiveInvoiceTotal(), this.currency_precision);
-			}
+			const invoice_total = this.payable_total;
 
 			let change = this.flt(this.total_payments - invoice_total, this.currency_precision);
 
@@ -1122,7 +1108,15 @@ export default {
 			const points = this.flt(value / this.customer_info.conversion_factor, this.currency_precision);
 
 			this.invoice_doc.loyalty_amount = this.flt(value, this.currency_precision);
+			this.invoice_doc.loyalty_discount_amount = this.flt(value, this.currency_precision);
 			this.invoice_doc.redeem_loyalty_points = points;
+			this.invoice_doc.net_total = this.getDiscountedNetTotal(this.invoice_doc);
+			this.invoice_doc.total_taxes_and_charges =
+				this.calculateItemTax() || this.calculateTemplateTaxTotal() || 0;
+			this.invoice_doc.grand_total = this.flt(
+				this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
+				this.currency_precision,
+			);
 		},
 		redeemed_customer_credit(newVal) {
 			if (newVal > this.available_customer_credit) {
@@ -1290,10 +1284,7 @@ export default {
 				return true;
 			}
 			const enteredAmount = this.parsePaymentAmountInput(value);
-			const minimumAmount = this.flt(
-				this.invoice_doc?.rounded_total || this.invoice_doc?.grand_total || 0,
-				this.currency_precision,
-			);
+			const minimumAmount = this.payable_total;
 			return enteredAmount >= minimumAmount || "Cash payment cannot be less than invoice total";
 		},
 
@@ -1485,6 +1476,30 @@ export default {
 			console.log("[Payment] Payment data reset complete");
 		},
 
+		getPreTaxDiscountAmount() {
+			const invoiceDiscount = this.flt(
+				this.invoice_doc?.discount_amount || this.invoice_doc?.additional_discount || 0,
+				this.currency_precision,
+			);
+			const loyaltyDiscount = this.flt(
+				this.loyalty_amount ||
+					this.invoice_doc?.loyalty_amount ||
+					this.invoice_doc?.loyalty_discount_amount ||
+					0,
+				this.currency_precision,
+			);
+			return this.flt(invoiceDiscount + loyaltyDiscount, this.currency_precision);
+		},
+
+		getDiscountedNetTotal(doc = this.invoice_doc) {
+			const itemTotal = this.flt(doc?.total || 0, this.currency_precision);
+			const preTaxDiscount = this.flt(
+				doc?.discount_amount || doc?.additional_discount || doc?.loyalty_discount_amount || doc?.loyalty_amount || 0,
+				this.currency_precision,
+			);
+			return this.flt(itemTotal - preTaxDiscount, this.currency_precision);
+		},
+
 		calculateTemplateTaxTotal() {
 			const templateName = this.pos_profile?.taxes_and_charges;
 			if (!templateName) return 0;
@@ -1492,13 +1507,13 @@ export default {
 			const tmpl = getTaxTemplate(templateName);
 			if (!tmpl || !Array.isArray(tmpl.taxes) || !tmpl.taxes.length) return 0;
 
-			const baseAmount = this.flt(
-				this.invoice_doc?.net_total ??
-					this.invoice_doc?.total ??
-					this.getEffectiveInvoiceTotal() ??
-					0,
-				this.currency_precision,
-			);
+			const baseAmount =
+				this.invoice_doc?.net_total != null
+					? this.flt(this.invoice_doc.net_total, this.currency_precision)
+					: this.flt(
+							(this.invoice_doc?.total ?? 0) - this.getPreTaxDiscountAmount(),
+							this.currency_precision,
+					  );
 			let totalTax = 0;
 
 			tmpl.taxes.forEach((row) => {
@@ -1522,6 +1537,10 @@ export default {
 				return 0;
 			}
 
+			const itemBaseTotal = this.flt(this.invoice_doc?.total ?? 0, this.currency_precision);
+			const discountedItemTotal = this.flt(itemBaseTotal - this.getPreTaxDiscountAmount(), this.currency_precision);
+			const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
+
 			this.invoice_doc.items.forEach((item) => {
 				if (!item.item_tax_rate) return;
 
@@ -1535,7 +1554,7 @@ export default {
 				//  POS Awesome uses net_amount as taxable value
 				const rate = item.net_rate ?? item.rate ?? 0;
 				const amount = item.net_amount ?? item.amount ?? rate * item.qty ?? 0;
-				const taxableAmount = this.flt(amount);
+				const taxableAmount = this.flt(amount * taxableFactor);
 
 				Object.values(taxMap).forEach((rate) => {
 					taxTotal += (taxableAmount * rate) / 100;
@@ -2931,24 +2950,7 @@ export default {
 		},
 		getEffectiveInvoiceTotal() {
 			if (!this.invoice_doc) return 0;
-
-			if (
-				this.invoice_doc.rounded_total !== undefined &&
-				this.invoice_doc.rounded_total !== null &&
-				!Number.isNaN(Number(this.invoice_doc.rounded_total))
-			) {
-				return Number(this.invoice_doc.rounded_total);
-			}
-
-			if (
-				this.verifiedGrandTotal !== undefined &&
-				this.verifiedGrandTotal !== null &&
-				!Number.isNaN(Number(this.verifiedGrandTotal))
-			) {
-				return Number(this.verifiedGrandTotal);
-			}
-
-			return Number(this.invoice_doc.grand_total || 0);
+			return this.payable_total;
 		},
 		// Get change amount for display
 		get_change_amount() {
@@ -3003,106 +3005,112 @@ export default {
 		});
 
 		this.eventBus.on("send_invoice_doc_payment", (invoice_doc) => {
-			console.log("[Payment] send_invoice_doc_payment received, initializing...");
-			this.invoice_doc = invoice_doc;
-			this.items_signature = this.computeItemsSignature(this.invoice_doc?.items || []);
-			if (this.invoice_doc) {
-				const hasCarWashService = this.hasCarWashServiceForItems(this.invoice_doc.items || []);
-				this.invoice_doc.custom_has_carwash_service = hasCarWashService ? 1 : 0;
-				if (!hasCarWashService) {
-					this.invoice_doc.custom_service_employee = null;
-					this.invoice_doc.custom_service_employee_name = null;
-					this.invoice_doc.custom_service_employee_designation = null;
-					this.invoice_doc.custom_service_employee_department = null;
+				console.log("[Payment] send_invoice_doc_payment received, initializing...");
+				this.invoice_doc = invoice_doc;
+				this.items_signature = this.computeItemsSignature(this.invoice_doc?.items || []);
+				if (this.invoice_doc) {
+					const hasCarWashService = this.hasCarWashServiceForItems(this.invoice_doc.items || []);
+					this.invoice_doc.custom_has_carwash_service = hasCarWashService ? 1 : 0;
+					if (!hasCarWashService) {
+						this.invoice_doc.custom_service_employee = null;
+						this.invoice_doc.custom_service_employee_name = null;
+						this.invoice_doc.custom_service_employee_designation = null;
+						this.invoice_doc.custom_service_employee_department = null;
+					}
+					this.invoice_doc.loyalty_discount_amount =
+						this.invoice_doc.loyalty_discount_amount || this.invoice_doc.loyalty_amount || 0;
 				}
-			}
-			const hasItemTaxRates = this.invoice_doc?.items?.some((item) => item.item_tax_rate);
-			if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0) && hasItemTaxRates) {
-				this.invoice_doc.total_taxes_and_charges = this.calculateItemTax();
-			} else if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0)) {
-				this.invoice_doc.total_taxes_and_charges = this.calculateTemplateTaxTotal();
-			}
-
-			if (this.invoice_doc && this.invoice_doc.posting_date) {
-				const posting_date = new Date(this.invoice_doc.posting_date);
-				const due_date = this.invoice_doc.due_date ? new Date(this.invoice_doc.due_date) : null;
-
-				if (!this.invoice_doc.due_date || due_date < posting_date) {
-					const newDueDate = new Date(posting_date);
-					newDueDate.setDate(newDueDate.getDate() + 30);
-					this.invoice_doc.due_date = this.formatDate(newDueDate);
-					console.log("[Payment] Initialized/Corrected due_date:", this.invoice_doc.due_date);
+				const hasItemTaxRates = this.invoice_doc?.items?.some((item) => item.item_tax_rate);
+				if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0) && hasItemTaxRates) {
+					this.invoice_doc.total_taxes_and_charges = this.calculateItemTax();
+				} else if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0)) {
+					this.invoice_doc.total_taxes_and_charges = this.calculateTemplateTaxTotal();
 				}
-			}
+				this.invoice_doc.net_total = this.getDiscountedNetTotal(this.invoice_doc);
+				this.invoice_doc.grand_total = this.flt(
+					this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
+					this.currency_precision,
+				);
 
-			if (!this.invoice_doc.payments) {
-				this.invoice_doc.payments = [];
-				console.log("[Payment] Created new payments array");
-			}
+				if (this.invoice_doc && this.invoice_doc.posting_date) {
+					const posting_date = new Date(this.invoice_doc.posting_date);
+					const due_date = this.invoice_doc.due_date ? new Date(this.invoice_doc.due_date) : null;
 
-			if (this.invoice_doc.payments.length === 0) {
-				console.log("[Payment] Payments empty, loading from POS Profile");
+					if (!this.invoice_doc.due_date || due_date < posting_date) {
+						const newDueDate = new Date(posting_date);
+						newDueDate.setDate(newDueDate.getDate() + 30);
+						this.invoice_doc.due_date = this.formatDate(newDueDate);
+						console.log("[Payment] Initialized/Corrected due_date:", this.invoice_doc.due_date);
+					}
+				}
 
-				if (this.pos_profile && this.pos_profile.payments && this.pos_profile.payments.length > 0) {
-					// Loop through all payment methods
-					this.invoice_doc.payments = this.pos_profile.payments.map((payment, index) => {
-						return {
-							name: "",
-							mode_of_payment: payment.mode_of_payment,
-							account: payment.default_account || "",
-							amount: null,
-							base_amount: null,
-							type: payment.type || "Cash",
-							idx: index + 1,
-							default: payment.default || 0,
-						};
+				if (!this.invoice_doc.payments) {
+					this.invoice_doc.payments = [];
+					console.log("[Payment] Created new payments array");
+				}
+
+				if (this.invoice_doc.payments.length === 0) {
+					console.log("[Payment] Payments empty, loading from POS Profile");
+
+					if (this.pos_profile && this.pos_profile.payments && this.pos_profile.payments.length > 0) {
+						this.invoice_doc.payments = this.pos_profile.payments.map((payment, index) => {
+							return {
+								name: "",
+								mode_of_payment: payment.mode_of_payment,
+								account: payment.default_account || "",
+								amount: null,
+								base_amount: null,
+								type: payment.type || "Cash",
+								idx: index + 1,
+								default: payment.default || 0,
+							};
+						});
+						console.log("[Payment] Loaded payment methods:", this.invoice_doc.payments);
+					} else {
+						console.warn("[Payment] POS Profile not available");
+						this.invoice_doc.payments = [
+							{
+								name: "",
+								mode_of_payment: "Cash",
+								account: "",
+								amount: null,
+								base_amount: null,
+								type: "Cash",
+								idx: 1,
+								default: 1,
+							},
+						];
+					}
+				}
+
+				console.log("[Payment] Payments initialized:", this.invoice_doc.payments);
+				this.tryOpenPaymentDialog();
+
+				const default_payment = this.invoice_doc.payments.find((payment) => payment.default === 1);
+				this.is_credit_sale = false;
+				this.is_write_off_change = false;
+
+				if (invoice_doc.is_return) {
+					this.is_return = true;
+					this.is_credit_return = false;
+					invoice_doc.payments.forEach((payment) => {
+						payment.amount = null;
+						payment.base_amount = null;
 					});
-					console.log("[Payment] Loaded payment methods:", this.invoice_doc.payments);
 				} else {
-					console.warn("[Payment] POS Profile not available");
-					this.invoice_doc.payments = [
-						{
-							name: "",
-							mode_of_payment: "Cash",
-							account: "",
-							amount: null,
-							base_amount: null,
-							type: "Cash",
-							idx: 1,
-							default: 1,
-						},
-					];
+					this.is_credit_return = false;
 				}
-			}
 
-			console.log("[Payment] Payments initialized:", this.invoice_doc.payments);
-			this.tryOpenPaymentDialog();
+				this.loyalty_amount = 0;
+				this.redeemed_customer_credit = 0;
 
-			const default_payment = this.invoice_doc.payments.find((payment) => payment.default === 1);
-			this.is_credit_sale = false;
-			this.is_write_off_change = false;
+				if (invoice_doc.customer) {
+					this.get_addresses();
+				}
 
-			if (invoice_doc.is_return) {
-				this.is_return = true;
-				this.is_credit_return = false;
-				invoice_doc.payments.forEach((payment) => {
-					payment.amount = null;
-					payment.base_amount = null;
-				});
-			} else {
-				this.is_credit_return = false;
-			}
-
-			this.loyalty_amount = 0;
-			this.redeemed_customer_credit = 0;
-
-			if (invoice_doc.customer) {
-				this.get_addresses();
-			}
-
-			this.get_sales_person_names();
-			console.log("[Payment] Initialization complete");
-		});
+				this.get_sales_person_names();
+				console.log("[Payment] Initialization complete");
+			});
 
 		this.eventBus.on("show_payment", (data) => {
 			console.log("[Payment] show_payment event received with data:", data);
@@ -3137,6 +3145,12 @@ export default {
 			const hasItemTaxRates = invoiceData?.items?.some((item) => item.item_tax_rate);
 			if (!this.flt(invoiceData?.total_taxes_and_charges || 0) && hasItemTaxRates) {
 				let taxTotal = 0;
+				const itemBaseTotal = this.flt(invoiceData?.total || 0, this.currency_precision);
+				const discountedItemTotal = this.flt(
+					itemBaseTotal - this.getPreTaxDiscountAmount(),
+					this.currency_precision,
+				);
+				const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
 				invoiceData.items.forEach((item) => {
 					if (!item.item_tax_rate) return;
 					let taxMap = {};
@@ -3147,7 +3161,7 @@ export default {
 					}
 					const rate = item.net_rate ?? item.rate ?? 0;
 					const amount = item.net_amount ?? item.amount ?? rate * item.qty ?? 0;
-					const taxableAmount = this.flt(amount);
+					const taxableAmount = this.flt(amount * taxableFactor);
 					Object.values(taxMap).forEach((rate) => {
 						taxTotal += (taxableAmount * rate) / 100;
 					});
@@ -3156,6 +3170,11 @@ export default {
 			} else if (!this.flt(invoiceData?.total_taxes_and_charges || 0)) {
 				invoiceData.total_taxes_and_charges = this.calculateTemplateTaxTotal();
 			}
+			invoiceData.net_total = this.getDiscountedNetTotal(invoiceData);
+			invoiceData.grand_total = this.flt(
+				invoiceData.net_total + (invoiceData.total_taxes_and_charges || 0),
+				this.currency_precision,
+			);
 
 			// Ensure payments array exists
 			if (!invoiceData.payments) {

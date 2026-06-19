@@ -343,6 +343,15 @@ def update_invoice(data):
     # Fetch default values from POS Profile
     invoice_doc.set_missing_values()
 
+    pre_tax_discount_amount = flt(invoice_doc.get("discount_amount") or 0)
+    loyalty_discount_amount = flt(invoice_doc.get("loyalty_amount") or invoice_doc.get("loyalty_discount_amount") or 0)
+    combined_discount_amount = flt(pre_tax_discount_amount + loyalty_discount_amount)
+    invoice_doc.loyalty_discount_amount = loyalty_discount_amount
+    if combined_discount_amount > 0:
+        invoice_doc.discount_amount = combined_discount_amount
+        if not invoice_doc.get("apply_discount_on"):
+            invoice_doc.apply_discount_on = "Net Total"
+
     # ===== CRITICAL: TAX CALCULATION =====
     pos_profile_name = invoice_doc.get("pos_profile")
 
@@ -408,6 +417,10 @@ def update_invoice(data):
 
     # ===== ALWAYS RECALCULATE TOTALS AFTER TAX INJECTION =====
     invoice_doc.calculate_taxes_and_totals()
+
+    # Restore the original invoice discount while preserving the loyalty discount separately.
+    invoice_doc.discount_amount = pre_tax_discount_amount
+    invoice_doc.loyalty_discount_amount = loyalty_discount_amount
 
     # Preserve manual round-off from POS when provided; otherwise use normal ERPNext flow.
     if incoming_rounding_adjustment:
@@ -532,6 +545,7 @@ def update_invoice(data):
     response["rounding_adjustment"] = flt(invoice_doc.rounding_adjustment)
     response["total"] = flt(invoice_doc.total)
     response["net_total"] = flt(invoice_doc.net_total)
+    response["loyalty_discount_amount"] = flt(invoice_doc.loyalty_discount_amount)
     response["base_grand_total"] = flt(invoice_doc.base_grand_total)
     response["base_net_total"] = flt(invoice_doc.base_net_total)
 

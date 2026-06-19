@@ -446,6 +446,9 @@ export default {
 			show_column_selector: false, // Column selector dialog visibility
 			invoice_instance_id: null,
 			maxDiscountInfo: null,
+			loyalty_redemption_points: 0,
+			loyalty_redemption_amount: 0,
+			loyalty_redemption_customer: "",
 		};
 	},
 
@@ -482,6 +485,31 @@ export default {
 
 		handleItemGroupUpdate(newGroup) {
 			this.item_group = newGroup;
+		},
+
+		setLoyaltyRedemption(payload = {}) {
+			this.loyalty_redemption_points = Number(payload.points || 0);
+			this.loyalty_redemption_amount = Number(payload.amount || 0);
+			this.loyalty_redemption_customer = payload.customer || this.customer || "";
+
+			if (this.invoice_doc) {
+				this.invoice_doc.redeem_loyalty_points = this.loyalty_redemption_points;
+				this.invoice_doc.loyalty_amount = this.loyalty_redemption_amount;
+				this.invoice_doc.loyalty_discount_amount = this.loyalty_redemption_amount;
+				this.invoice_doc.loyalty_program = this.customer_info?.loyalty_program || this.invoice_doc.loyalty_program || null;
+			}
+		},
+
+		clearLoyaltyRedemption() {
+			this.loyalty_redemption_points = 0;
+			this.loyalty_redemption_amount = 0;
+			this.loyalty_redemption_customer = "";
+
+			if (this.invoice_doc) {
+				this.invoice_doc.redeem_loyalty_points = 0;
+				this.invoice_doc.loyalty_amount = 0;
+				this.invoice_doc.loyalty_discount_amount = 0;
+			}
 		},
 
 		async applyVehicleDiscountsToAllItems() {
@@ -1171,7 +1199,12 @@ export default {
 				this.invoice_doc.discount_amount = this.discount_amount;
 				this.invoice_doc.additional_discount = this.additional_discount;
 				this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
-				this.invoice_doc.net_total = this.subtotal;
+				this.invoice_doc.net_total = this.net_total;
+				this.total_tax =
+					this.calculate_item_tax_from_items() ||
+					this.apply_tax_template_totals(this.invoice_doc) ||
+					0;
+				this.invoice_doc.total_taxes_and_charges = this.total_tax;
 				this.invoice_doc.grand_total = this.grand_total;
 				this.invoice_doc.rounded_total = this.rounded_total;
 			}
@@ -1972,7 +2005,8 @@ export default {
 			this.invoice_doc.currency = this.selected_currency || this.pos_profile?.currency || "USD";
 
 			// SYNC TOTALS (defensive)
-			this.invoice_doc.net_total = (this.invoice_doc.items || []).reduce((sum, line) => {
+			this.invoice_doc.net_total = this.flt(this.net_total || 0, this.currency_precision);
+			this.invoice_doc.total = (this.invoice_doc.items || []).reduce((sum, line) => {
 				const q = Number(line.qty);
 				const r = Number(line.rate);
 				const safeQ = Number.isFinite(q) && q > 0 ? q : 0;
@@ -1990,6 +2024,9 @@ export default {
 			this.invoice_doc.additional_discount = this.flt(this.additional_discount || 0);
 			this.invoice_doc.additional_discount_percentage = this.flt(
 				this.additional_discount_percentage || 0,
+			);
+			this.invoice_doc.loyalty_discount_amount = this.flt(
+				this.invoice_doc.loyalty_discount_amount || 0,
 			);
 
 			if (!this.invoice_doc.total_taxes_and_charges) {
@@ -2197,8 +2234,11 @@ export default {
 			}
 
 			// Redeem values (safe defaults)
-			invoiceData.redeem_loyalty_points = Number(this.pointsToRedeem || 0);
-			invoiceData.loyalty_amount = Number(this.redemptionValue || 0);
+			invoiceData.redeem_loyalty_points = Number(this.loyalty_redemption_points || 0);
+			invoiceData.loyalty_amount = Number(this.loyalty_redemption_amount || 0);
+			invoiceData.loyalty_discount_amount = Number(
+				this.invoice_doc?.loyalty_discount_amount || 0,
+			);
 
 			// Defensive: ERPNext expects numbers
 			if (invoiceData.redeem_loyalty_points < 0) {
@@ -2484,21 +2524,22 @@ export default {
 			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
 			this.invoice_doc.currency =
 				this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
-			this.invoice_doc.net_total = this.subtotal || 0;
-			this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
+				this.invoice_doc.net_total = this.net_total || 0;
+				this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
 			this.invoice_doc.additional_discount = this.additional_discount || 0;
 			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
+			this.invoice_doc.loyalty_discount_amount = this.invoice_doc.loyalty_discount_amount || 0;
 			if (
 				(this.invoice_doc.discount_amount > 0 ||
 					this.invoice_doc.additional_discount > 0 ||
 					this.invoice_doc.additional_discount_percentage > 0) &&
 				!this.invoice_doc.apply_discount_on
 			) {
-				this.invoice_doc.apply_discount_on = "Grand Total";
+				this.invoice_doc.apply_discount_on = "Net Total";
 			}
 
-			this.invoice_doc.grand_total = this.grand_total || this.subtotal || 0;
+			this.invoice_doc.grand_total = this.grand_total || this.net_total || this.subtotal || 0;
 			this.invoice_doc.rounded_total = this.rounded_total || this.invoice_doc.grand_total;
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
@@ -2509,8 +2550,8 @@ export default {
 				this.invoice_doc.loyalty_program = this.customer_info.loyalty_program;
 			}
 
-			this.invoice_doc.redeem_loyalty_points = Number(this.pointsToRedeem || 0);
-			this.invoice_doc.loyalty_amount = Number(this.redemptionValue || 0);
+			this.invoice_doc.redeem_loyalty_points = Number(this.loyalty_redemption_points || 0);
+			this.invoice_doc.loyalty_amount = Number(this.loyalty_redemption_amount || 0);
 
 			// ===== NEW: ADD ODOMETER, MOBILE, VEHICLE FIELDS =====
 			// Employee fields
@@ -2861,6 +2902,7 @@ export default {
 			this.additional_discount_percentage = 0;
 			this.discount_amount = 0;
 			this.total_tax = 0;
+			this.clearLoyaltyRedemption();
 			this.subtotal = 0;
 			this.grand_total = 0;
 			this.rounded_total = 0;
@@ -3336,6 +3378,8 @@ export default {
 			this.posa_coupons = data;
 			this.handelOffers();
 		});
+		this.eventBus.on("set_loyalty_redemption", this.setLoyaltyRedemption);
+		this.eventBus.on("clear_loyalty_redemption", this.clearLoyaltyRedemption);
 		this.eventBus.on("set_all_items", (data) => {
 			this.allItems = data;
 			this.items.forEach((item) => {
@@ -3432,6 +3476,8 @@ export default {
 		this.eventBus.off("update_odometer_data");
 		this.eventBus.off("update_customer_details");
 		this.eventBus.off("update_manual_round_off");
+		this.eventBus.off("set_loyalty_redemption", this.setLoyaltyRedemption);
+		this.eventBus.off("clear_loyalty_redemption", this.clearLoyaltyRedemption);
 
 		this.eventBus.off("get_items_by_group");
 		this.eventBus.off("apply_group_discount");
@@ -3548,7 +3594,7 @@ export default {
 
 				this.$nextTick(() => {
 					if (this.invoice_doc) {
-						this.invoice_doc.net_total = this.subtotal;
+						this.invoice_doc.net_total = this.net_total;
 						this.invoice_doc.grand_total = this.grand_total;
 						this.invoice_doc.rounded_total = this.rounded_total;
 						this.invoice_doc.total_qty = this.total_qty;
@@ -3613,13 +3659,19 @@ export default {
 
 		subtotal(newVal) {
 			if (this.invoice_doc) {
-				this.invoice_doc.net_total = newVal;
+				this.invoice_doc.net_total = this.net_total;
 			}
 		},
 
 		discount_amount(newVal) {
 			if (this.invoice_doc) {
 				this.invoice_doc.discount_amount = newVal;
+				this.invoice_doc.net_total = this.net_total;
+				this.total_tax =
+					this.calculate_item_tax_from_items() ||
+					this.apply_tax_template_totals(this.invoice_doc) ||
+					0;
+				this.invoice_doc.total_taxes_and_charges = this.total_tax;
 			}
 		},
 

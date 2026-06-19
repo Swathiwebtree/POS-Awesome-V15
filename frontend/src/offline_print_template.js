@@ -42,17 +42,21 @@ function defaultOfflineHTML(invoice, terms = "") {
 	const taxesRows = (invoice.taxes || [])
 		.map(
 			(row) => `<tr>
-      <td class="text-right" style="width:70%">${row.description}@${row.rate}%</td>
-      <td class="text-right">${row.tax_amount}</td>
-    </tr>`,
+	      <td class="text-right" style="width:70%">${row.description}@${row.rate}%</td>
+	      <td class="text-right">${row.tax_amount}</td>
+	    </tr>`,
 		)
 		.join("");
 
-	const discountRow = invoice.discount_amount
+	const loyaltyDiscount = Number(
+		invoice.loyalty_discount_amount ?? invoice.loyalty_amount ?? invoice.additional_discount ?? invoice.discount_amount ?? 0,
+	);
+	const netTotal = invoice.net_total != null ? invoice.net_total : Number(invoice.total || 0) - loyaltyDiscount;
+	const discountRow = loyaltyDiscount
 		? `<tr>
-      <td class="text-right" style="width:75%">Discount</td>
-      <td class="text-right">${invoice.discount_amount}</td>
-    </tr>`
+	      <td class="text-right" style="width:75%">Loyalty Discount</td>
+	      <td class="text-right">${loyaltyDiscount}</td>
+	    </tr>`
 		: "";
 
 	const changeRow = invoice.change_amount
@@ -92,12 +96,13 @@ function defaultOfflineHTML(invoice, terms = "") {
       </thead>
       <tbody>${itemsRows}</tbody>
     </table>
-    <table cellpadding="0" cellspacing="0" style="width:100%">
-      <tbody>
-        <tr><td class="text-right" style="width:70%"><b>Total</b></td><td class="text-right">${invoice.total}</td></tr>
-        ${taxesRows}
-        ${discountRow}
-        <tr><td class="text-right" style="width:70%"><b>Grand Total</b></td><td class="text-right">${invoice.grand_total}</td></tr>
+	    <table cellpadding="0" cellspacing="0" style="width:100%">
+	      <tbody>
+	        <tr><td class="text-right" style="width:70%"><b>Total</b></td><td class="text-right">${invoice.total}</td></tr>
+	        ${discountRow}
+	        <tr><td class="text-right" style="width:70%"><b>Net Total</b></td><td class="text-right">${netTotal}</td></tr>
+	        ${taxesRows}
+	        <tr><td class="text-right" style="width:70%"><b>Grand Total</b></td><td class="text-right">${invoice.grand_total}</td></tr>
         <tr><td class="text-right" style="width:75%"><b>Paid Amount</b></td><td class="text-right">${invoice.paid_amount}</td></tr>
         ${changeRow}
       </tbody>

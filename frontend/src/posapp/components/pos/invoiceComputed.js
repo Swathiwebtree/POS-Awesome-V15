@@ -41,7 +41,7 @@ export default {
 		return result;
 	},
 
-	// Calculate net total (subtotal + delivery - additional discount)
+	// Calculate net total (subtotal + delivery - pre-tax discounts)
 	net_total() {
 		let total = this.subtotal;
 
@@ -49,9 +49,12 @@ export default {
 		const delivery_charges = this.flt(this.delivery_charges_rate);
 		total += delivery_charges;
 
-		// Subtract additional discount
-		const additional_discount = this.flt(this.additional_discount);
-		total -= additional_discount;
+		// Subtract invoice and loyalty discounts before tax
+		const invoice_discount = this.flt(this.discount_amount || this.additional_discount || 0);
+		const loyalty_discount = this.flt(
+			this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0,
+		);
+		total -= invoice_discount + loyalty_discount;
 
 		const result = this.flt(total, this.currency_precision);
 		console.log("[invoiceComputed] net_total:", result);
@@ -60,25 +63,20 @@ export default {
 
 	// Calculate grand total (net_total + taxes - discount_amount)
 	grand_total() {
-		const subtotal = this.flt(this.subtotal || 0);
+		const net_total = this.flt(this.net_total || 0);
 		let fallbackTax = this.calculate_item_tax_from_items ? this.calculate_item_tax_from_items() : 0;
 		if (!fallbackTax && this.apply_tax_template_totals) {
 			fallbackTax = this.apply_tax_template_totals({
-				net_total: subtotal,
-				total: subtotal,
+				net_total,
+				total: this.subtotal,
 			});
 		}
 		const tax = this.flt(this.total_tax || fallbackTax || 0);
-		const discount = this.flt(this.discount_amount || 0);
-		const delivery = this.flt(this.delivery_charges_rate || 0);
-
-		const total = this.flt(subtotal + tax - discount + delivery);
+		const total = this.flt(net_total + tax, this.currency_precision);
 
 		console.log("[invoiceComputed] grand_total:", {
-			subtotal,
+			net_total,
 			tax,
-			discount,
-			delivery,
 			result: total,
 		});
 

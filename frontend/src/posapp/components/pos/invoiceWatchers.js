@@ -46,7 +46,7 @@ export default {
 					let taxTotal = this.calculate_item_tax_from_items();
 					if (!taxTotal && this.apply_tax_template_totals) {
 						taxTotal = this.apply_tax_template_totals({
-							net_total: this.subtotal || this.Total || 0,
+							net_total: this.net_total || this.subtotal || this.Total || 0,
 							total: this.subtotal || this.Total || 0,
 						});
 					}

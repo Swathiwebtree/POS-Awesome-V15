@@ -38,24 +38,59 @@
 									ref="serviceEmployeeAutocomplete"
 									v-model="selectedEmployee"
 									v-model:menu="employeeMenu"
-									v-model:search="employeeSearch"
-									:items="employees"
+									:items="filteredEmployees"
 									:loading="loadingEmployees"
 									:label="__('Select Service Employee')"
-									item-title="employee_name"
-									item-value="name"
+									item-title="display_label"
+									item-value="employee_id"
 									prepend-inner-icon="mdi-account-hard-hat"
 									variant="solo"
 									density="compact"
 									color="primary"
 									clearable
 									class="summary-field employee-summary-field"
-									:custom-filter="employeeFilter"
-									:menu-props="{ maxHeight: 320, closeOnContentClick: true }"
+									:no-filter="true"
+									:menu-props="{ maxHeight: 360, closeOnContentClick: false }"
 									@update:model-value="handleEmployeeChange"
+									@update:menu="handleEmployeeMenuToggle"
+									@click:clear="handleEmployeeClear"
 								>
+									<template v-slot:prepend-item>
+										<div class="px-3 pt-3 pb-2" @mousedown.stop @click.stop>
+											<v-text-field
+												ref="employeeSearchInput"
+												v-model="employeeSearch"
+												autocomplete="off"
+												variant="outlined"
+												density="compact"
+												hide-details
+												clearable
+												class="employee-search-input"
+												:placeholder="__('Search by employee ID or name')"
+												prepend-inner-icon="mdi-magnify"
+												:loading="loadingEmployees"
+											@click.stop
+											@focus="employeeMenu = true"
+											@blur="handleEmployeeSearchBlur"
+											@keydown.stop
+											@keypress.stop
+											@keyup.stop
+											@input.stop
+											@update:model-value="handleEmployeeSearchInput"
+											/>
+											<div
+												v-if="employeeSearch && employeeSearch.length < 3"
+												class="text-caption mt-1 employee-search-helper"
+											>
+												{{ __("Type at least 3 characters to search employees") }}
+											</div>
+										</div>
+									</template>
 									<template v-slot:item="{ props, item }">
-										<v-list-item v-bind="props" :title="item.raw.employee_name">
+										<v-list-item
+											v-bind="props"
+											:title="item.raw.display_label || buildEmployeeDisplayLabel(item.raw)"
+										>
 											<template v-slot:prepend>
 												<v-avatar size="32" color="primary" class="mr-2">
 													<v-img v-if="item.raw.image" :src="item.raw.image" />
@@ -64,30 +99,37 @@
 											</template>
 											<template v-slot:subtitle>
 												<span class="text-caption">
-													<template v-if="showOdometerField">
-														<span v-if="item.raw.designation">{{
-															item.raw.designation
-														}}</span>
-													</template>
-													<template v-else>
-														{{ item.raw.name }}
-														<span v-if="item.raw.designation">
-															- {{ item.raw.designation }}</span
-														>
-													</template>
+													{{ buildEmployeeSubtitle(item.raw) }}
 												</span>
 											</template>
 										</v-list-item>
 									</template>
 									<template v-slot:selection="{ item }">
 										<div class="employee-selection">
-											<span class="employee-selection-name">{{
-												item.raw.employee_name || item.raw.name
-											}}</span>
-											<span v-if="!showOdometerField" class="employee-selection-id"
-												>({{ item.raw.name }})</span
+											<span class="employee-selection-name">
+												{{ selectedEmployeeDisplayLabel || buildEmployeeDisplayLabel(item.raw) }}
+											</span>
+											<span
+												v-if="selectedEmployeeDetails?.employee_id || selectedEmployeeDetails?.name"
+												class="employee-selection-id"
 											>
+												({{
+													selectedEmployeeDetails?.employee_id || selectedEmployeeDetails?.name
+												}})
+											</span>
 										</div>
+									</template>
+									<template v-slot:no-data>
+										<v-list-item v-if="employeeSearch && employeeSearch.length < 3">
+											<v-list-item-title class="text-caption">
+												{{ __("Type at least 3 characters to search employees") }}
+											</v-list-item-title>
+										</v-list-item>
+										<v-list-item v-else>
+											<v-list-item-title class="text-caption">
+												{{ __("No employees found") }}
+											</v-list-item-title>
+										</v-list-item>
 									</template>
 								</v-autocomplete>
 							</v-col>
@@ -263,13 +305,19 @@
 												<p class="text-caption mb-0 text-grey-darken-1">
 													{{ __("Available Loyalty Points") }}
 												</p>
-												<p class="text-h6 font-weight-bold mb-0 text-purple">
+												<p
+													:class="[
+														'text-h6 font-weight-bold mb-0',
+														Number(loyaltyPoints || 0) === 0 ? 'text-purple' : 'text-primary',
+													]"
+												>
 													{{ formatFloat(loyaltyPoints, 0) }} pts
 												</p>
 											</v-col>
-											<v-col cols="auto">
-												<p class="text-caption text-grey">
-													≈ {{ formatCurrency(loyaltyPoints * conversionFactor) }}
+											<v-col cols="auto" class="text-end">
+												<p class="text-h6 font-weight-bold text-purple mb-0 loyalty-currency-value">
+													{{ formatCurrency(loyaltyPoints * conversionFactor, 0) }}
+													{{ displayCurrency }}
 												</p>
 											</v-col>
 										</v-row>
@@ -992,11 +1040,15 @@ export default {
 			frequentCardsLoading: false,
 
 			employees: [],
+			allEmployees: [],
 			selectedEmployee: null,
+			selectedEmployeeDetails: null,
 			employeeMenu: false,
 			employeeSearch: "",
 			employeeFieldKey: 0,
 			loadingEmployees: false,
+			employeeSearchDebounce: null,
+			employeeSearchRequestId: 0,
 			showEmployeeSelection: false,
 			employeeLoadLockUntil: 0,
 			employeeSelectionEpoch: 0,
@@ -1035,14 +1087,39 @@ export default {
 		"show-coupons",
 		"apply-frequent-card",
 	],
-	computed: {
-		finalTotal() {
-			const base = Number(this.subtotal || 0);
-			const roundOff = Number(this.manual_round_off || 0);
-			return Number((base + roundOff).toFixed(3));
-		},
+		computed: {
+			finalTotal() {
+				const base = Number(this.subtotal || 0);
+				const roundOff = Number(this.manual_round_off || 0);
+				return Number((base + roundOff).toFixed(3));
+			},
 
-		itemGroupsList() {
+			selectedEmployeeDisplayLabel() {
+				const employee = this.selectedEmployeeDetails || this.getSelectedEmployeeRecord(this.selectedEmployee);
+				return employee ? this.buildEmployeeDisplayLabel(employee) : "";
+			},
+
+			filteredEmployees() {
+				const query = (this.employeeSearch || "").trim().toLowerCase();
+				if (!query || query.length < 3) {
+					return this.employees;
+				}
+
+				return this.employees.filter((employee) => {
+					const employeeId = String(employee.employee_id || employee.name || "").toLowerCase();
+					const employeeName = String(employee.employee_name || "").toLowerCase();
+					const customEmployeeId = String(employee.custom_employee_id || "").toLowerCase();
+					const displayLabel = String(employee.display_label || "").toLowerCase();
+					return (
+						employeeId.includes(query) ||
+						employeeName.includes(query) ||
+						customEmployeeId.includes(query) ||
+						displayLabel.includes(query)
+					);
+				});
+			},
+
+			itemGroupsList() {
 			const itemBasedGroups = Array.isArray(this.$parent?.items)
 				? this.$parent.items.map((item) => (item?.item_group || "").toString().trim()).filter(Boolean)
 				: [];
@@ -1446,7 +1523,16 @@ export default {
 		resetEmployeeSelectionState({ hideSelector = true } = {}) {
 			this.employeeSelectionEpoch += 1;
 			this.employeeLoadLockUntil = 0;
+			this.employeeSearchRequestId += 1;
 			this.selectedEmployee = null;
+			this.selectedEmployeeDetails = null;
+			this.employeeSearch = "";
+			if (this.employeeSearchDebounce) {
+				clearTimeout(this.employeeSearchDebounce);
+				this.employeeSearchDebounce = null;
+			}
+			this.setEmployeeRecords([]);
+			this.allEmployees = [];
 			if (hideSelector) {
 				this.showEmployeeSelection = false;
 			}
@@ -1629,44 +1715,30 @@ export default {
 
 			this.redeemLoading = true;
 			try {
-				const response = await frappe.call({
-					method: "posawesome.posawesome.api.customers.update_loyalty_points",
-					args: {
-						customer_name: this.selectedCustomerId,
-						company_name: this.pos_profile.company,
-						points_amount: this.pointsToRedeem,
-						entry_type: "Redeem",
-					},
+				const redeemedPoints = Number(this.pointsToRedeem || 0);
+				const newDiscountAmount = Number(this.redemptionValue || 0);
+				const currentDiscount = parseFloat(this.additional_discount || 0);
+				const updatedDiscount = currentDiscount + newDiscountAmount;
+
+				this.$emit("update:additional_discount", updatedDiscount);
+				this.eventBus.emit("set_loyalty_redemption", {
+					points: redeemedPoints,
+					amount: newDiscountAmount,
+					customer: this.selectedCustomerId,
+				});
+				this.apply_additional_discount();
+
+				frappe.show_alert({
+					message: this.__(
+						`Loyalty discount staged: ${this.formatFloat(redeemedPoints, 2)} points = ${this.formatCurrency(newDiscountAmount)}. Points will be deducted after submit.`,
+					),
+					indicator: "green",
+					title: this.__("Redemption Staged"),
 				});
 
-				const result = response?.message;
-
-				if (result?.status === "success") {
-					const newDiscountAmount = this.redemptionValue;
-					let currentDiscount = parseFloat(this.additional_discount || 0);
-					let updatedDiscount = currentDiscount + newDiscountAmount;
-
-					this.$emit("update:additional_discount", updatedDiscount);
-					this.apply_additional_discount();
-
-					frappe.show_alert({
-						message: this.__(
-							`Successfully redeemed ${this.formatFloat(this.pointsToRedeem, 2)} points for a discount of ${this.formatCurrency(newDiscountAmount)}`,
-						),
-						indicator: "green",
-						title: this.__("Redemption Successful"),
-					});
-
-					await this.fetchLoyaltyPoints();
-					this.pointsToRedeem = 0;
-					this.showLoyaltyDialog = false;
-				} else {
-					frappe.show_alert({
-						message: result?.message || this.__("Redemption failed. Please try again."),
-						indicator: "red",
-						title: this.__("Redemption Failed"),
-					});
-				}
+				await this.fetchLoyaltyPoints();
+				this.pointsToRedeem = 0;
+				this.showLoyaltyDialog = false;
 			} catch (err) {
 				console.error("Redemption failed:", err);
 				frappe.show_alert({
@@ -1757,6 +1829,189 @@ export default {
 			return date.toLocaleDateString();
 		},
 
+		buildEmployeeDisplayLabel(employee) {
+			if (!employee) return "";
+			const employeeId = String(employee.employee_id || employee.name || "");
+			const employeeName = String(employee.employee_name || employee.display_name || employeeId || "");
+			return employeeId && employeeName ? `${employeeId} - ${employeeName}` : employeeName || employeeId;
+		},
+
+		buildEmployeeSubtitle(employee) {
+			if (!employee) return "";
+			const details = [];
+			if (employee.designation) {
+				details.push(employee.designation);
+			}
+			if (employee.department) {
+				details.push(employee.department);
+			}
+			return details.join(" · ");
+		},
+
+		normalizeEmployeeRecord(employee) {
+			if (!employee) return null;
+			const employeeId = String(employee.employee_id || employee.name || "");
+			const employeeName = String(employee.employee_name || employee.display_name || employeeId || "");
+			return {
+				...employee,
+				employee_id: employeeId,
+				employee_name: employeeName,
+				display_label: employee.display_label || this.buildEmployeeDisplayLabel(employee),
+				name: employee.name || employeeId,
+			};
+		},
+
+		setEmployeeRecords(employees = [], { cacheAll = false } = {}) {
+			const normalizedEmployees = employees
+				.map((employee) => this.normalizeEmployeeRecord(employee))
+				.filter(Boolean);
+
+			this.employees = normalizedEmployees;
+			if (cacheAll) {
+				this.allEmployees = normalizedEmployees;
+			}
+		},
+
+		setAllEmployeeRecords(employees = []) {
+			const normalizedEmployees = employees
+				.map((employee) => this.normalizeEmployeeRecord(employee))
+				.filter(Boolean);
+
+			this.allEmployees = normalizedEmployees;
+			this.employees = normalizedEmployees;
+		},
+
+		getSelectedEmployeeRecord(employeeId) {
+			if (!employeeId) return null;
+			return (
+				this.selectedEmployeeDetails ||
+				this.employees.find((employee) => employee.employee_id === employeeId || employee.name === employeeId) ||
+				null
+			);
+		},
+
+		async fetchEmployees(searchTerm = "") {
+			if (!this.pos_profile?.company) {
+				console.warn("[InvoiceSummary] No company in POS profile");
+				return [];
+			}
+
+			const query = (searchTerm || "").trim();
+			const shouldSearch = query.length >= 3;
+			const requestId = ++this.employeeSearchRequestId;
+
+			this.loadingEmployees = true;
+			try {
+				const response = await frappe.call({
+					method: "posawesome.posawesome.api.employees.get_active_employees",
+					args: {
+						company: this.pos_profile.company,
+						search_term: shouldSearch ? query : null,
+					},
+				});
+
+				if (requestId !== this.employeeSearchRequestId) {
+					return this.employees;
+				}
+
+				const employees = Array.isArray(response?.message) ? response.message : [];
+				if (shouldSearch) {
+					this.setEmployeeRecords(employees);
+				} else {
+					this.setAllEmployeeRecords(employees);
+				}
+				return this.employees;
+			} catch (error) {
+				if (requestId !== this.employeeSearchRequestId) {
+					return this.employees;
+				}
+				console.error("[InvoiceSummary] Failed to fetch employees:", error);
+				frappe.show_alert({
+					message: this.__("Failed to load employees. Please try again."),
+					indicator: "red",
+				});
+				this.setEmployeeRecords([]);
+				return [];
+			} finally {
+				if (requestId === this.employeeSearchRequestId) {
+					this.loadingEmployees = false;
+				}
+			}
+		},
+
+		async fetchEmployeeById(employeeId) {
+			if (!employeeId) return null;
+
+			const existing = this.getSelectedEmployeeRecord(employeeId);
+			if (existing && existing.employee_name) {
+				return existing;
+			}
+
+			try {
+				const response = await frappe.call({
+					method: "posawesome.posawesome.api.employees.get_employee_details",
+					args: { employee_id: employeeId },
+				});
+				if (response?.message) {
+					const employee = this.normalizeEmployeeRecord(response.message);
+					if (employee) {
+						const existingIndex = this.employees.findIndex(
+							(item) => item.employee_id === employee.employee_id || item.name === employee.employee_id,
+						);
+						const cachedIndex = this.allEmployees.findIndex(
+							(item) => item.employee_id === employee.employee_id || item.name === employee.employee_id,
+						);
+						if (existingIndex !== -1) {
+							this.employees.splice(existingIndex, 1, employee);
+						} else {
+							this.employees.unshift(employee);
+						}
+						if (cachedIndex !== -1) {
+							this.allEmployees.splice(cachedIndex, 1, employee);
+						} else {
+							this.allEmployees.unshift(employee);
+						}
+						return employee;
+					}
+				}
+			} catch (error) {
+				console.warn("[InvoiceSummary] Failed to fetch employee details:", error);
+			}
+
+			return null;
+		},
+
+		handleEmployeeSearchInput(value) {
+			const query = (value || "").trim();
+			if (this.employeeSearchDebounce) {
+				clearTimeout(this.employeeSearchDebounce);
+				this.employeeSearchDebounce = null;
+			}
+
+			if (query.length < 3) {
+				if (this.allEmployees.length) {
+					this.setEmployeeRecords(this.allEmployees);
+				} else {
+					this.fetchEmployees("");
+				}
+				return;
+			}
+
+			this.employeeSearchDebounce = setTimeout(() => {
+				this.fetchEmployees(query);
+			}, 300);
+		},
+
+		handleEmployeeSearchBlur() {
+			window.setTimeout(() => {
+				const autocomplete = this.$refs.serviceEmployeeAutocomplete;
+				const rootElement = autocomplete?.$el;
+				if (!rootElement || !rootElement.contains(document.activeElement)) {
+					this.closeEmployeeDropdown();
+				}
+			}, 0);
+		},
+
 		employeeFilter(value, query, item) {
 			if (!query) return true;
 
@@ -1777,43 +2032,12 @@ export default {
 			);
 		},
 
-		async fetchEmployees() {
-			if (!this.pos_profile?.company) {
-				console.warn("[InvoiceSummary] No company in POS profile");
-				return;
-			}
-
-			this.loadingEmployees = true;
-			try {
-				const response = await frappe.call({
-					method: "posawesome.posawesome.api.employees.get_active_employees",
-					args: {
-						company: this.pos_profile.company,
-					},
-				});
-
-				if (response?.message) {
-					this.employees = response.message;
-				} else {
-					console.warn("[InvoiceSummary] No employees returned from API");
-					this.employees = [];
-				}
-			} catch (error) {
-				console.error("[InvoiceSummary] Failed to fetch employees:", error);
-				frappe.show_alert({
-					message: this.__("Failed to load employees. Please try again."),
-					indicator: "red",
-				});
-				this.employees = [];
-			} finally {
-				this.loadingEmployees = false;
-			}
-		},
-
-		handleEmployeeChange(employeeId) {
+		async handleEmployeeChange(employeeId) {
 			if (!employeeId) {
 				// Employee cleared
 				this.selectedEmployee = null;
+				this.selectedEmployeeDetails = null;
+				this.employeeSearch = "";
 				this.closeEmployeeDropdown();
 				this.eventBus.emit("employee_selected", {
 					employee_id: null,
@@ -1822,17 +2046,36 @@ export default {
 				return;
 			}
 
-			// Find selected employee details
-			const employee = this.employees.find((e) => e.name === employeeId);
+			let employee = this.getSelectedEmployeeRecord(employeeId);
+			if (!employee) {
+				employee = await this.fetchEmployeeById(employeeId);
+			}
 
 			if (!employee) {
 				console.warn("[InvoiceSummary] Selected employee not found in list:", employeeId);
+				this.selectedEmployee = employeeId;
+				this.selectedEmployeeDetails = {
+					employee_id: employeeId,
+					employee_name: employeeId,
+					display_label: this.buildEmployeeDisplayLabel({
+						employee_id: employeeId,
+						employee_name: employeeId,
+					}),
+				};
+				this.eventBus.emit("employee_selected", {
+					employee_id: employeeId,
+					employee_name: employeeId,
+				});
+				this.closeEmployeeDropdown();
 				return;
 			}
 
+			this.selectedEmployee = employee.employee_id;
+			this.selectedEmployeeDetails = employee;
+
 			// Emit event to parent component to attach employee to invoice
 			this.eventBus.emit("employee_selected", {
-				employee_id: employee.name,
+				employee_id: employee.employee_id,
 				employee_name: employee.employee_name,
 				designation: employee.designation,
 				department: employee.department,
@@ -1847,6 +2090,36 @@ export default {
 			});
 		},
 
+		handleEmployeeClear() {
+			this.selectedEmployee = null;
+			this.selectedEmployeeDetails = null;
+			this.employeeSearch = "";
+			this.closeEmployeeDropdown();
+			this.eventBus.emit("employee_selected", {
+				employee_id: null,
+				employee_name: null,
+			});
+		},
+
+		handleEmployeeMenuToggle(isOpen) {
+			this.employeeMenu = isOpen;
+			if (isOpen && !this.employees.length && !this.loadingEmployees) {
+				this.fetchEmployees(this.employeeSearch);
+			}
+			if (isOpen && this.selectedEmployee && !this.selectedEmployeeDetails) {
+				this.fetchEmployeeById(this.selectedEmployee);
+			}
+			if (isOpen) {
+				this.$nextTick(() => {
+					const searchInput = this.$refs.employeeSearchInput;
+					const inputElement = searchInput?.$el?.querySelector("input") || searchInput?.$el;
+					if (inputElement && typeof inputElement.focus === "function") {
+						inputElement.focus();
+					}
+				});
+			}
+		},
+
 		checkIfCarWashService() {
 			// Emit event to parent to check items
 			this.eventBus.emit("check_items_for_service", {
@@ -1858,13 +2131,10 @@ export default {
 					this.showEmployeeSelection = hasCarWashService;
 
 					// Fetch employees if needed and not already loaded
-					if (hasCarWashService && this.employees.length === 0) {
-						this.fetchEmployees();
-					}
-
 					// Clear selection if no longer needed
 					if (!hasCarWashService && this.selectedEmployee) {
 						this.selectedEmployee = null;
+						this.selectedEmployeeDetails = null;
 						this.handleEmployeeChange(null);
 					}
 				},
@@ -1887,64 +2157,47 @@ export default {
 			this.activateEmployeeLoadLock();
 
 			// if we already have employees loaded, set selection directly
+			let resolvedEmployee = null;
 			if (empNameProvided) {
-				// if server gave friendly name, create/ensure employees array entry to show chip
-				// (we keep a minimal object, fetchEmployees will refresh full list eventually)
-				const exists = this.employees.find((e) => e.name === empId);
-				if (!exists) {
-					this.employees.unshift({
-						name: empId,
-						employee_name: empNameProvided,
-					});
-				}
-				if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
-				this.selectedEmployee = empId;
-				this.closeEmployeeDropdown();
-				return;
-			}
-
-			// No friendly name provided — ensure list loaded then set selection
-			if (this.employees.length === 0) {
-				await this.fetchEmployees();
-				if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
-			}
-
-			// if still not found, try to fetch the single employee explicitly
-			let found = this.employees.find((e) => e.name === empId);
-			if (!found) {
-				try {
-					const resp = await frappe.call({
-						method: "frappe.client.get",
-						args: { doctype: "Employee", name: empId },
-					});
-					if (resp && resp.message) {
-						this.employees.unshift(resp.message);
-						found = resp.message;
-					}
-				} catch (err) {
-					console.warn("[InvoiceSummary] Employee single fetch failed", err);
-				}
-				if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
-			}
-
-			if (found) {
-				if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
-				this.selectedEmployee = found.name;
-				this.closeEmployeeDropdown();
-				// show toast
-				frappe.show_alert({
-					message: this.__(`Service employee set to: ${found.employee_name || found.name}`),
-					indicator: "green",
+				resolvedEmployee = this.normalizeEmployeeRecord({
+					employee_id: empId,
+					employee_name: empNameProvided,
 				});
 			} else {
-				// fallback: set id anyway so value exists and user can see placeholder
-				if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
-				this.selectedEmployee = empId;
-				this.closeEmployeeDropdown();
+				resolvedEmployee = await this.fetchEmployeeById(empId);
 			}
+
+			if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
+
+			if (!resolvedEmployee) {
+				resolvedEmployee = {
+					employee_id: empId,
+					employee_name: empNameProvided || empId,
+					display_label: this.buildEmployeeDisplayLabel({
+						employee_id: empId,
+						employee_name: empNameProvided || empId,
+					}),
+				};
+			}
+
+			const employeeExistsInCache = this.allEmployees.some(
+				(item) => item.employee_id === empId || item.name === empId,
+			);
+			if (empNameProvided && !employeeExistsInCache) {
+				this.employees.unshift(resolvedEmployee);
+				this.allEmployees.unshift(resolvedEmployee);
+			}
+
+			this.selectedEmployee = resolvedEmployee.employee_id;
+			this.selectedEmployeeDetails = resolvedEmployee;
+			this.closeEmployeeDropdown();
 		},
 		closeEmployeeDropdown() {
 			this.employeeSearch = "";
+			if (this.employeeSearchDebounce) {
+				clearTimeout(this.employeeSearchDebounce);
+				this.employeeSearchDebounce = null;
+			}
 			this.employeeMenu = false;
 			this.$nextTick(() => {
 				const autocomplete = this.$refs.serviceEmployeeAutocomplete;
@@ -2153,10 +2406,6 @@ export default {
 			}
 
 			this.showEmployeeSelection = shouldShow;
-
-			if (shouldShow && this.employees.length === 0) {
-				this.fetchEmployees();
-			}
 		});
 
 		// Listen for clear employee selection event
@@ -2181,6 +2430,10 @@ export default {
 		});
 	},
 	beforeUnmount() {
+		if (this.employeeSearchDebounce) {
+			clearTimeout(this.employeeSearchDebounce);
+			this.employeeSearchDebounce = null;
+		}
 		this.eventBus.off("item_added_to_invoice", this.checkAutoApplyCard);
 		this.eventBus.off("show_employee_selection");
 		this.eventBus.off("clear_employee_selection");
@@ -2348,6 +2601,10 @@ export default {
 	font-size: 0.9rem !important;
 }
 
+.loyalty-currency-value {
+	white-space: nowrap;
+}
+
 .pay-btn:hover {
 	background: linear-gradient(135deg, #45a049, #3d8b40) !important;
 	transform: translateY(-2px);
@@ -2418,6 +2675,39 @@ export default {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.employee-search-helper {
+	color: #6b7280;
+	line-height: 1.2;
+}
+
+:deep(.employee-search-input .v-field) {
+	min-height: 36px !important;
+}
+
+:deep(.employee-search-input .v-field__input) {
+	min-height: 36px !important;
+	padding-top: 6px !important;
+	padding-bottom: 6px !important;
+	font-size: 0.9rem !important;
+}
+
+:deep(.employee-search-input .v-field__prepend-inner) {
+	padding-inline-start: 8px !important;
+}
+
+:deep(.employee-search-input .v-field__append-inner) {
+	padding-inline-end: 8px !important;
+}
+
+:deep(.employee-search-input .v-icon) {
+	font-size: 1rem !important;
+}
+
+:deep(.v-theme--dark) .employee-search-helper,
+:deep([data-theme="dark"]) .employee-search-helper {
+	color: #cbd5e1;
 }
 
 :deep(.summary-field .v-field__input) .employee-selection-name,

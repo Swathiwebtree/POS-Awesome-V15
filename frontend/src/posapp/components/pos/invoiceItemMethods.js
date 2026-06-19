@@ -146,6 +146,15 @@ export default {
 
 	calculate_item_tax_from_items() {
 		let taxTotal = 0;
+		const subtotal = this.flt ? this.flt(this.subtotal ?? this.Total ?? 0, this.currency_precision || 2) : Number(this.subtotal ?? this.Total ?? 0);
+		const invoiceDiscount = this.flt
+			? this.flt(this.discount_amount || this.additional_discount || 0, this.currency_precision || 2)
+			: Number(this.discount_amount || this.additional_discount || 0);
+		const loyaltyDiscount = this.flt
+			? this.flt(this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0, this.currency_precision || 2)
+			: Number(this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0);
+		const taxableSubtotal = subtotal - invoiceDiscount - loyaltyDiscount;
+		const taxableFactor = subtotal ? taxableSubtotal / subtotal : 1;
 		(this.items || []).forEach((item) => {
 			if (!item || !item.item_tax_rate) return;
 			let taxMap = {};
@@ -156,7 +165,7 @@ export default {
 			}
 			const rate = item.net_rate ?? item.rate ?? 0;
 			const amount = item.net_amount ?? item.amount ?? rate * item.qty ?? 0;
-			const taxableAmount = this.flt ? this.flt(amount) : amount;
+			const taxableAmount = this.flt ? this.flt(amount * taxableFactor) : amount * taxableFactor;
 			Object.values(taxMap).forEach((taxRate) => {
 				taxTotal += (taxableAmount * taxRate) / 100;
 			});
