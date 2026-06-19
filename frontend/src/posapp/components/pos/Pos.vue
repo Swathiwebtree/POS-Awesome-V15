@@ -258,26 +258,6 @@
 				</div>
 			</div>
 
-			<v-dialog v-model="showBackNavigationDialog" persistent max-width="480">
-				<v-card>
-					<v-card-title class="text-h6 text-error">
-						{{ __("Unsaved Job Order") }}
-					</v-card-title>
-					<v-card-text>
-						{{ __("Job order is not saved. Please save it before going back.") }}
-					</v-card-text>
-					<v-card-actions>
-						<v-spacer />
-						<v-btn variant="text" @click="cancelBackNavigation">
-							{{ __("Stay") }}
-						</v-btn>
-						<v-btn color="primary" variant="flat" @click="confirmBackNavigation">
-							{{ __("Go Back") }}
-						</v-btn>
-					</v-card-actions>
-				</v-card>
-			</v-dialog>
-
 			<Payments></Payments>
 			<!-- dialogs omitted -->
 		</div>
@@ -349,11 +329,8 @@ export default {
 			search: "",
 			search_backup: "",
 			search_from_scanner: false,
-			showBackNavigationDialog: false,
-			_backNavigationGuardInstalled: false,
-			_allowBrowserBackNavigation: false,
-		};
-	},
+			};
+		},
 
 	components: {
 		ItemsSelector,
@@ -491,48 +468,6 @@ export default {
 				document.body.style.paddingTop = "";
 				document.documentElement.style.overflow = "";
 			}
-		},
-
-		hasUnsavedJobOrder() {
-			const invoice = this.$refs.invoiceComponent;
-			if (!invoice || typeof invoice.hasUnsavedJobOrder !== "function") {
-				return false;
-			}
-			return invoice.hasUnsavedJobOrder();
-		},
-
-		registerBackNavigationGuard() {
-			if (typeof window === "undefined" || this._backNavigationGuardInstalled) return;
-
-			this._backNavigationGuardInstalled = true;
-			window.history.pushState({ posaPosGuard: true }, "", window.location.href);
-			window.addEventListener("popstate", this.handleBrowserBackNavigation);
-		},
-
-		handleBrowserBackNavigation() {
-			if (this._allowBrowserBackNavigation) return;
-
-			if (this.hasUnsavedJobOrder()) {
-				window.history.pushState({ posaPosGuard: true }, "", window.location.href);
-				this.showBackNavigationDialog = true;
-				return;
-			}
-
-			this._allowBrowserBackNavigation = true;
-			this.showBackNavigationDialog = false;
-			window.removeEventListener("popstate", this.handleBrowserBackNavigation);
-			window.history.back();
-		},
-
-		cancelBackNavigation() {
-			this.showBackNavigationDialog = false;
-		},
-
-		confirmBackNavigation() {
-			this.showBackNavigationDialog = false;
-			this._allowBrowserBackNavigation = true;
-			window.removeEventListener("popstate", this.handleBrowserBackNavigation);
-			window.history.go(-2);
 		},
 
 		// Footer buttons -> open panels like before
@@ -879,14 +814,13 @@ export default {
 			});
 		});
 
-		this._handleDraftsVisibility = () => {
-			if (!document.hidden && this.shouldAutoRefreshDrafts()) {
-				this.refreshDrafts();
-			}
-		};
-		document.addEventListener("visibilitychange", this._handleDraftsVisibility);
-		this.registerBackNavigationGuard();
-	},
+			this._handleDraftsVisibility = () => {
+				if (!document.hidden && this.shouldAutoRefreshDrafts()) {
+					this.refreshDrafts();
+				}
+			};
+			document.addEventListener("visibilitychange", this._handleDraftsVisibility);
+		},
 
 	beforeUnmount() {
 		this.stopDraftsAutoRefresh();
@@ -905,10 +839,6 @@ export default {
 		this.eventBus.off("update_offers_counters");
 		this.eventBus.off("update_coupons_counters");
 		this.eventBus.off("barcode_scanned");
-
-		if (typeof window !== "undefined") {
-			window.removeEventListener("popstate", this.handleBrowserBackNavigation);
-		}
 
 		if (this.isFullscreen) {
 			document.body.style.overflow = "";
