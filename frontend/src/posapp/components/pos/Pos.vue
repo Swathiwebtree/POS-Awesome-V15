@@ -329,8 +329,8 @@ export default {
 			search: "",
 			search_backup: "",
 			search_from_scanner: false,
-			};
-		},
+		};
+	},
 
 	components: {
 		ItemsSelector,
@@ -814,13 +814,13 @@ export default {
 			});
 		});
 
-			this._handleDraftsVisibility = () => {
-				if (!document.hidden && this.shouldAutoRefreshDrafts()) {
-					this.refreshDrafts();
-				}
-			};
-			document.addEventListener("visibilitychange", this._handleDraftsVisibility);
-		},
+		this._handleDraftsVisibility = () => {
+			if (!document.hidden && this.shouldAutoRefreshDrafts()) {
+				this.refreshDrafts();
+			}
+		};
+		document.addEventListener("visibilitychange", this._handleDraftsVisibility);
+	},
 
 	beforeUnmount() {
 		this.stopDraftsAutoRefresh();
