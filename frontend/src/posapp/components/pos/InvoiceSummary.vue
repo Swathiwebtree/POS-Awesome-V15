@@ -117,7 +117,10 @@
 											<span v-else class="employee-selection-placeholder">
 												{{ __("Select Service Employee") }}
 											</span>
-											<span v-if="selectedEmployeeDetails" class="employee-selection-id">
+											<span
+												v-if="selectedEmployeeDetails"
+												class="employee-selection-id"
+											>
 												({{
 													selectedEmployeeDetails.custom_employee_id ||
 													selectedEmployeeDetails.employee_id ||
@@ -320,7 +323,12 @@
 												<p
 													class="text-h6 font-weight-bold text-purple mb-0 loyalty-currency-value"
 												>
-													{{ formatCurrency(loyaltyPoints * conversionFactor, moneyPrecision) }}
+													{{
+														formatCurrency(
+															loyaltyPoints * conversionFactor,
+															moneyPrecision,
+														)
+													}}
 													{{ displayCurrency }}
 												</p>
 											</v-col>
@@ -1117,7 +1125,9 @@ export default {
 					employee.employee_id || employee.name,
 				).toLowerCase();
 				const employeeName = this.normalizeEmployeeValue(employee.employee_name).toLowerCase();
-				const customEmployeeId = this.normalizeEmployeeValue(employee.custom_employee_id).toLowerCase();
+				const customEmployeeId = this.normalizeEmployeeValue(
+					employee.custom_employee_id,
+				).toLowerCase();
 				const displayLabel = this.normalizeEmployeeValue(employee.display_label).toLowerCase();
 				return (
 					employeeId.includes(query) ||
@@ -1849,26 +1859,26 @@ export default {
 			}
 		},
 
-			normalizeEmployeeValue(value) {
-				if (value === null || typeof value === "undefined") return "";
-				if (typeof value === "object") {
-					return String(
-						value.employee_id ||
-							value.custom_employee_id ||
-							value.name ||
-							value.employee_name ||
-							value.display_label ||
-							"",
-					).trim();
-				}
-				return String(value).trim();
-			},
+		normalizeEmployeeValue(value) {
+			if (value === null || typeof value === "undefined") return "";
+			if (typeof value === "object") {
+				return String(
+					value.employee_id ||
+						value.custom_employee_id ||
+						value.name ||
+						value.employee_name ||
+						value.display_label ||
+						"",
+				).trim();
+			}
+			return String(value).trim();
+		},
 
-			formatDate(dateStr) {
-				if (!dateStr) return "";
-				const date = new Date(dateStr);
-				return date.toLocaleDateString();
-			},
+		formatDate(dateStr) {
+			if (!dateStr) return "";
+			const date = new Date(dateStr);
+			return date.toLocaleDateString();
+		},
 
 		buildEmployeeDisplayLabel(employee) {
 			if (!employee) return "";
