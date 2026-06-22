@@ -55,7 +55,8 @@ export default {
 		const loyalty_discount = Number(
 			this.invoice_doc?.loyalty_discount_amount ?? this.invoice_doc?.loyalty_amount ?? 0,
 		);
-		total -= (Number.isFinite(invoice_discount) ? invoice_discount : 0) +
+		total -=
+			(Number.isFinite(invoice_discount) ? invoice_discount : 0) +
 			(Number.isFinite(loyalty_discount) ? loyalty_discount : 0);
 
 		const result = this.flt(total, moneyPrecision);

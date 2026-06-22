@@ -1919,21 +1919,29 @@ export default {
 				});
 				const currentSelectedVehicleName = this.selectedVehicle;
 				const currentSelectedVehicleNo = this.vehicle_no;
-				const requestedVehicleNo = String(vehicleNo || "").trim().toLowerCase();
+				const requestedVehicleNo = String(vehicleNo || "")
+					.trim()
+					.toLowerCase();
 				const selectedVehicle = currentSelectedVehicleName
 					? this.vehicles.find((v) => v.name === currentSelectedVehicleName)
 					: null;
 				const selectedVehicleByNo = currentSelectedVehicleNo
 					? this.vehicles.find(
 							(v) =>
-								String(v.vehicle_no || "").trim().toLowerCase() ===
-								String(currentSelectedVehicleNo || "").trim().toLowerCase(),
+								String(v.vehicle_no || "")
+									.trim()
+									.toLowerCase() ===
+								String(currentSelectedVehicleNo || "")
+									.trim()
+									.toLowerCase(),
 						)
 					: null;
 				const requestedVehicle = requestedVehicleNo
 					? this.vehicles.find(
 							(v) =>
-								String(v.vehicle_no || "").trim().toLowerCase() === requestedVehicleNo,
+								String(v.vehicle_no || "")
+									.trim()
+									.toLowerCase() === requestedVehicleNo,
 						)
 					: null;
 

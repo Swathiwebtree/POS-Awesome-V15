@@ -38,7 +38,8 @@ export default {
 			this.handelOffers();
 			if (this.calculate_item_tax_from_items || this.apply_tax_template_totals) {
 				let taxTotal = 0;
-				const hasItemTaxRates = Array.isArray(this.items) && this.items.some((item) => item?.item_tax_rate);
+				const hasItemTaxRates =
+					Array.isArray(this.items) && this.items.some((item) => item?.item_tax_rate);
 				if (hasItemTaxRates && this.calculate_item_tax_from_items) {
 					taxTotal = this.calculate_item_tax_from_items();
 				} else if (this.apply_tax_template_totals) {
