@@ -1,6 +1,6 @@
 <template>
 	<div class="cache-usage-section mx-1">
-		<v-tooltip location="bottom">
+		<v-tooltip location="bottom" content-class="cache-usage-tooltip">
 			<template v-slot:activator="{ props }">
 				<div v-bind="props" class="cache-meter-container" @click="refreshCacheUsage">
 					<v-progress-circular
@@ -63,7 +63,14 @@
 					<v-icon size="14" color="info" class="mr-1">mdi-database-clock</v-icon>
 					{{ __("The app stores data locally for offline use. This is called cache.") }}
 				</div>
-				<div class="cache-tooltip-action mt-2">
+				<div
+					class="cache-tooltip-action mt-2"
+					role="button"
+					tabindex="0"
+					@pointerdown.stop.prevent="refreshCacheUsage"
+					@keydown.enter.stop.prevent="refreshCacheUsage"
+					@keydown.space.stop.prevent="refreshCacheUsage"
+				>
 					<v-icon size="14" class="mr-1">mdi-refresh</v-icon>
 					{{ __("Click to refresh") }}
 				</div>
@@ -256,5 +263,9 @@ export default {
 :deep([data-theme="dark"]) .cache-tooltip-action,
 :deep(.v-theme--dark) .cache-tooltip-action {
 	color: #fff !important;
+}
+
+:deep(.cache-usage-tooltip) {
+	pointer-events: auto !important;
 }
 </style>

@@ -1286,6 +1286,7 @@ export default {
 
 			const invoice = this.prepareForPayment();
 			if (invoice && invoice.items && invoice.items.length > 0) {
+				this.eventBus.emit("current_invoice_data", invoice);
 				this.eventBus.emit("send_invoice_doc_payment", invoice);
 				this.eventBus.emit("show_payment", "true");
 			} else {

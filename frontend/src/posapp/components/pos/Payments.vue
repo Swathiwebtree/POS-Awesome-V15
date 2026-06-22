@@ -1508,6 +1508,52 @@ export default {
 			console.log("[Payment] Payment data reset complete");
 		},
 
+		isCorporateCustomer(source = this.customer) {
+			const customer = source && typeof source === "object" ? source : {};
+			return !!(
+				customer.is_corporate ||
+				customer.is_company ||
+				customer.customer_type === "Company" ||
+				customer.customer_type === "Corporate" ||
+				customer.customer_group === "Commercial" ||
+				customer.customer_group === "Comercial"
+			);
+		},
+
+		async syncCorporateCustomerState(source = this.customer) {
+			if (this.isCorporateCustomer(source)) {
+				this.selected_customer_is_corporate = true;
+				return true;
+			}
+
+			const customerName =
+				(typeof source === "string" && source) ||
+				source?.customer ||
+				source?.customer_name ||
+				source?.name ||
+				this.customer ||
+				this.invoice_doc?.customer;
+
+			if (!customerName) {
+				this.selected_customer_is_corporate = false;
+				return false;
+			}
+
+			try {
+				const r = await frappe.call({
+					method: "posawesome.posawesome.api.customers.get_customer_info",
+					args: { customer: customerName },
+				});
+				const msg = r?.message || {};
+				this.selected_customer_is_corporate = this.isCorporateCustomer(msg);
+				return this.selected_customer_is_corporate;
+			} catch (err) {
+				console.warn("[Payment] could not fetch customer info:", err);
+				this.selected_customer_is_corporate = false;
+				return false;
+			}
+		},
+
 		getPreTaxDiscountAmount() {
 			const invoiceDiscount = Number(
 				formatUtils
@@ -3083,13 +3129,14 @@ export default {
 
 		// Listen for explicit customer detail updates
 		this.eventBus.on("update_customer_details", (payload) => {
-			this.selected_customer_is_corporate = !!(payload && (payload.is_corporate || payload.is_company));
+			this.syncCorporateCustomerState(payload);
 		});
 
-		this.eventBus.on("send_invoice_doc_payment", (invoice_doc) => {
+		this.eventBus.on("send_invoice_doc_payment", async (invoice_doc) => {
 			console.log("[Payment] send_invoice_doc_payment received, initializing...");
 			this.invoice_doc = invoice_doc;
 			this.items_signature = this.computeItemsSignature(this.invoice_doc?.items || []);
+			await this.syncCorporateCustomerState(this.invoice_doc);
 			if (this.invoice_doc) {
 				const hasCarWashService = this.hasCarWashServiceForItems(this.invoice_doc.items || []);
 				this.invoice_doc.custom_has_carwash_service = hasCarWashService ? 1 : 0;
@@ -3207,7 +3254,7 @@ export default {
 			}
 		});
 
-		this.eventBus.on("current_invoice_data", (invoiceData) => {
+		this.eventBus.on("current_invoice_data", async (invoiceData) => {
 			console.log("[Payment] current_invoice_data received");
 
 			const sourceId = invoiceData && invoiceData._posa_invoice_instance_id;
@@ -3371,64 +3418,29 @@ export default {
 			this.grand_total = invoiceData.grand_total || 0;
 			this.rounded_total = invoiceData.rounded_total || invoiceData.grand_total || 0;
 			this.customer = invoiceData.customer || "";
+			await this.syncCorporateCustomerState(invoiceData);
 
-			this.selected_customer_is_corporate = !!(
-				invoiceData.is_corporate ||
-				invoiceData.is_company ||
-				invoiceData.customer_type === "Company" ||
-				invoiceData.customer_type === "Corporate" ||
-				invoiceData.customer_group === "Comercial"
-			);
-
-			if (!this.selected_customer_is_corporate && invoiceData.customer) {
-				frappe
-					.call({
-						method: "posawesome.posawesome.api.customers.get_customer_info",
-						args: { customer: invoiceData.customer },
-					})
-					.then((r) => {
-						if (r && r.message) {
-							const msg = r.message;
-							this.selected_customer_is_corporate = !!(
-								msg.is_corporate ||
-								msg.is_company ||
-								msg.customer_type === "Company" ||
-								msg.customer_type === "Corporate" ||
-								msg.customer_group === "Comercial"
-							);
-
-							if (
-								this.selected_customer_is_corporate &&
-								Array.isArray(this.invoice_doc.payments)
-							) {
-								if (
-									!this.invoice_doc.payments.some(
-										(p) =>
-											(p.type || "").toLowerCase() === "credit" ||
-											(p.mode_of_payment || "").toLowerCase() === "credit",
-									)
-								) {
-									this.invoice_doc.payments.push({
-										name: "",
-										mode_of_payment: "Credit",
-										account: "",
-										amount: null,
-										base_amount: null,
-										type: "Credit",
-										idx: this.invoice_doc.payments.length + 1,
-										default: 0,
-									});
-									this.$forceUpdate && this.$forceUpdate();
-									console.log(
-										"[Payment] Added Credit payment after fetching customer info",
-									);
-								}
-							}
-						}
-					})
-					.catch((err) => {
-						console.warn("[Payment] could not fetch customer info:", err);
+			if (this.selected_customer_is_corporate && Array.isArray(this.invoice_doc.payments)) {
+				if (
+					!this.invoice_doc.payments.some(
+						(p) =>
+							(p.type || "").toLowerCase() === "credit" ||
+							(p.mode_of_payment || "").toLowerCase() === "credit",
+					)
+				) {
+					this.invoice_doc.payments.push({
+						name: "",
+						mode_of_payment: "Credit",
+						account: "",
+						amount: null,
+						base_amount: null,
+						type: "Credit",
+						idx: this.invoice_doc.payments.length + 1,
+						default: 0,
 					});
+					this.$forceUpdate && this.$forceUpdate();
+					console.log("[Payment] Added Credit payment after customer sync");
+				}
 			}
 
 			const item = invoiceData.items?.[0] || {};
@@ -3504,18 +3516,7 @@ export default {
 			}
 
 			this.customer = customer;
-
-			if (customer && typeof customer === "object") {
-				this.selected_customer_is_corporate = !!(
-					customer.is_corporate ||
-					customer.is_company ||
-					customer.customer_type === "Company" ||
-					customer.customer_type === "Corporate" ||
-					customer.customer_group === "Commercial"
-				);
-			} else {
-				this.selected_customer_is_corporate = false;
-			}
+			this.syncCorporateCustomerState(customer);
 
 			console.log(
 				"[Payment] update_customer set selected_customer_is_corporate:",

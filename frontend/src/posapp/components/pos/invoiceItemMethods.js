@@ -148,9 +148,9 @@ export default {
 		let taxTotal = 0;
 		const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
 		const subtotal = Number(this.subtotal ?? this.Total ?? 0);
-		const invoiceDiscount = Number(this.discount_amount || this.additional_discount || 0);
+		const invoiceDiscount = Number(this.discount_amount ?? this.additional_discount ?? 0);
 		const loyaltyDiscount = Number(
-			this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0,
+			this.invoice_doc?.loyalty_discount_amount ?? this.invoice_doc?.loyalty_amount ?? 0,
 		);
 		const taxableSubtotal =
 			this.invoice_doc?.net_total != null
@@ -193,8 +193,8 @@ export default {
 			doc?.net_total != null
 				? Number(doc.net_total || 0)
 				: Number(doc?.total ?? this.subtotal ?? this.Total ?? 0) -
-					Number(this.discount_amount || this.additional_discount || 0) -
-					Number(doc?.loyalty_discount_amount || doc?.loyalty_amount || 0);
+					Number(this.discount_amount ?? this.additional_discount ?? 0) -
+					Number(doc?.loyalty_discount_amount ?? doc?.loyalty_amount ?? 0);
 		const inclusive = getTaxInclusiveSetting();
 		let runningTotal = baseAmount;
 		let totalTax = 0;

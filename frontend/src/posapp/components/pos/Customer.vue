@@ -15,6 +15,8 @@
 				item-value="name"
 				:label="__('Vehicle No')"
 				v-model="selectedVehicle"
+				:no-filter="true"
+				:custom-filter="vehicleFilter"
 				hide-details
 				@update:menu="onVehicleMenuToggle"
 				@update:search="onVehicleSearch"
@@ -504,13 +506,7 @@ export default {
 			return this.customers;
 		},
 		vehicleItems() {
-			// During active vehicle typing, always show explicit search results.
-			// This avoids fallback to the full customer list for large vehicle sets.
-			if (this.vehicleSearchTerm && this.vehicleSearchTerm.length >= 2) {
-				return this.vehicleSearchResults;
-			}
-
-			// Default: show vehicles list (all vehicles when no customer; customer vehicles when selected).
+			// Always show the full customer vehicle list in the dropdown.
 			if (this.vehicles.length) return this.vehicles;
 
 			return [];
@@ -534,6 +530,9 @@ export default {
 			return String(val)
 				.replace(/[^A-Za-z0-9-]/g, "")
 				.slice(0, 8);
+		},
+		vehicleFilter() {
+			return true;
 		},
 		async loadAllVehicles() {
 			this.loadingVehicles = true;
@@ -774,6 +773,9 @@ export default {
 					this.internalCustomer = selected;
 					this.customer = selected;
 					this.eventBus.emit("update_customer", this.customer);
+					if (!(this.jobOrderCustomer && this.jobOrderVehicleNo)) {
+						this.fetchVehiclesForCustomer(this.customer);
+					}
 				} else if (this.customer) {
 					this.internalCustomer = this.customer;
 				}
@@ -898,7 +900,6 @@ export default {
 				if (!(this.jobOrderCustomer && this.jobOrderVehicleNo)) {
 					this.fetchVehiclesForCustomer(val);
 				}
-				this.selectedVehicle = null;
 			}
 
 			if (!val) {
@@ -991,7 +992,6 @@ export default {
 				this.eventBus.emit("update_customer", matched.name);
 				this.fetchAndEmitCustomerDetails(matched.name);
 				this.fetchVehiclesForCustomer(matched.name);
-				this.selectedVehicle = null;
 				this.isMenuOpen = false;
 				event.target.blur();
 			}
@@ -1862,18 +1862,12 @@ export default {
 			this.loadingVehicles = true;
 			try {
 				let fetchedVehicles = [];
-				if (!vehicleNo) {
-					this.vehicle_no = "";
-				}
 
 				// 1. Offline lookup
 				try {
 					await checkDbHealth();
 					if (!db.isOpen()) await db.open();
 					let localQuery = db.table("vehicles").where("customer").equals(customerName);
-					if (vehicleNo) {
-						localQuery = localQuery.and((v) => v.vehicle_no === vehicleNo);
-					}
 					const local = await localQuery.toArray();
 					if (local && local.length) {
 						fetchedVehicles = local.map((r) => ({
@@ -1896,7 +1890,7 @@ export default {
 					console.log("[Vehicle] server call", { customerName, vehicleNo });
 					const res = await frappe.call({
 						method: "posawesome.posawesome.api.vehicles.get_vehicles_by_customer",
-						args: { customer_name: customerName, vehicle_no: vehicleNo },
+						args: { customer_name: customerName },
 					});
 					const serverVehicles = res?.message || [];
 
@@ -1923,22 +1917,46 @@ export default {
 					vehicleNo,
 					count: fetchedVehicles.length,
 				});
-				if (!vehicleNo) {
-					this.selectedVehicle = null;
-					this.vehicle_no = "";
-					this.vehicleSearchTerm = "";
-					this.vehicleSearchResults = [];
-				}
+				const currentSelectedVehicleName = this.selectedVehicle;
+				const currentSelectedVehicleNo = this.vehicle_no;
+				const requestedVehicleNo = String(vehicleNo || "").trim().toLowerCase();
+				const selectedVehicle = currentSelectedVehicleName
+					? this.vehicles.find((v) => v.name === currentSelectedVehicleName)
+					: null;
+				const selectedVehicleByNo = currentSelectedVehicleNo
+					? this.vehicles.find(
+							(v) =>
+								String(v.vehicle_no || "").trim().toLowerCase() ===
+								String(currentSelectedVehicleNo || "").trim().toLowerCase(),
+						)
+					: null;
+				const requestedVehicle = requestedVehicleNo
+					? this.vehicles.find(
+							(v) =>
+								String(v.vehicle_no || "").trim().toLowerCase() === requestedVehicleNo,
+						)
+					: null;
 
-				if (this.vehicles.length === 1) {
+				if (requestedVehicle || selectedVehicle || selectedVehicleByNo) {
+					const nextVehicle = requestedVehicle || selectedVehicle || selectedVehicleByNo;
+					this.selectedVehicle = nextVehicle.name;
+					this.vehicle_no = nextVehicle.vehicle_no || currentSelectedVehicleNo || "";
+					this.eventBus.emit("vehicle_selected", nextVehicle.name);
+				} else if (this.vehicles.length === 1) {
 					this.selectedVehicle = this.vehicles[0].name;
-					this.eventBus.emit("vehicle_selected", this.selectedVehicle);
 					this.vehicle_no = this.vehicles[0].vehicle_no;
+					this.eventBus.emit("vehicle_selected", this.selectedVehicle);
 
 					this.eventBus.emit("apply_vehicle_discount", {
 						customer: customerName,
 						vehicle_no: this.vehicles[0].vehicle_no,
 					});
+				} else if (!vehicleNo) {
+					this.selectedVehicle = null;
+					this.vehicle_no = "";
+					this.vehicleSearchTerm = "";
+					this.vehicleSearchResults = [];
+					this.eventBus.emit("vehicle_selected", null);
 				} else {
 					this.eventBus.emit("vehicle_selected", null);
 				}
@@ -1993,7 +2011,7 @@ export default {
 					this.fetchAndEmitCustomerDetails(vehicle.customer);
 
 					// load vehicles ONLY ONCE after auto-customer set
-					this.fetchVehiclesForCustomer(vehicle.customer);
+					this.fetchVehiclesForCustomer(vehicle.customer, vehicle.vehicle_no);
 				}
 			} else {
 				if (vehicle.customer && vehicle.customer !== this.customer) {
@@ -2239,7 +2257,6 @@ export default {
 					if (!(this.jobOrderCustomer && this.jobOrderVehicleNo)) {
 						await this.fetchVehiclesForCustomer(matched.name);
 					}
-					this.selectedVehicle = null;
 				}
 			}
 		}, 300);

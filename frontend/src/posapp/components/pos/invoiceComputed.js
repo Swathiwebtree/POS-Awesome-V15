@@ -51,11 +51,12 @@ export default {
 		total += delivery_charges;
 
 		// Subtract invoice and loyalty discounts before tax
-		const invoice_discount = Number(this.discount_amount || this.additional_discount || 0);
+		const invoice_discount = Number(this.discount_amount ?? this.additional_discount ?? 0);
 		const loyalty_discount = Number(
-			this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0,
+			this.invoice_doc?.loyalty_discount_amount ?? this.invoice_doc?.loyalty_amount ?? 0,
 		);
-		total -= invoice_discount + loyalty_discount;
+		total -= (Number.isFinite(invoice_discount) ? invoice_discount : 0) +
+			(Number.isFinite(loyalty_discount) ? loyalty_discount : 0);
 
 		const result = this.flt(total, moneyPrecision);
 		console.log("[invoiceComputed] net_total:", result);

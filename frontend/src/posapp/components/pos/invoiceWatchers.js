@@ -36,26 +36,20 @@ export default {
 		handler() {
 			if (this.isApplyingOffer) return;
 			this.handelOffers();
-			if (this.calculate_item_tax_from_items) {
-				const hasBackendTaxTotal =
-					this.invoice_doc &&
-					this.invoice_doc.total_taxes_and_charges !== undefined &&
-					this.invoice_doc.total_taxes_and_charges !== null &&
-					this.invoice_doc.total_taxes_and_charges !== "";
-				if (!hasBackendTaxTotal) {
-					let taxTotal = this.calculate_item_tax_from_items();
-					if (!taxTotal && this.apply_tax_template_totals) {
-						taxTotal = this.apply_tax_template_totals({
-							net_total: this.net_total || this.subtotal || this.Total || 0,
-							total: this.subtotal || this.Total || 0,
-						});
-					}
-					this.total_tax = taxTotal;
-					if (this.invoice_doc) {
-						this.invoice_doc.total_taxes_and_charges = taxTotal;
-					}
-				} else {
-					this.total_tax = this.invoice_doc.total_taxes_and_charges;
+			if (this.calculate_item_tax_from_items || this.apply_tax_template_totals) {
+				let taxTotal = 0;
+				const hasItemTaxRates = Array.isArray(this.items) && this.items.some((item) => item?.item_tax_rate);
+				if (hasItemTaxRates && this.calculate_item_tax_from_items) {
+					taxTotal = this.calculate_item_tax_from_items();
+				} else if (this.apply_tax_template_totals) {
+					taxTotal = this.apply_tax_template_totals({
+						net_total: this.net_total || this.subtotal || this.Total || 0,
+						total: this.subtotal || this.Total || 0,
+					});
+				}
+				this.total_tax = taxTotal;
+				if (this.invoice_doc) {
+					this.invoice_doc.total_taxes_and_charges = taxTotal;
 				}
 			}
 			this.$forceUpdate();

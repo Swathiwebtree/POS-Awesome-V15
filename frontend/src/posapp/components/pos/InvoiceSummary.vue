@@ -2401,22 +2401,7 @@ export default {
 
 			this.paymentLoading = true;
 			try {
-				console.log("[InvoiceSummary] Emitting get_current_invoice_from_component ONCE");
-				this.eventBus.emit("get_current_invoice_from_component");
-
-				await new Promise((resolve) => {
-					const handler = (data) => {
-						this.eventBus.off("current_invoice_data", handler);
-						resolve();
-					};
-					this.eventBus.on("current_invoice_data", handler);
-					setTimeout(() => {
-						this.eventBus.off("current_invoice_data", handler);
-						resolve();
-					}, 2000);
-				});
-
-				this.eventBus.emit("show_payment", "true");
+				this.eventBus.emit("show_payment_modal");
 			} catch (error) {
 				console.error("[InvoiceSummary] Error:", error);
 				frappe.show_alert({
