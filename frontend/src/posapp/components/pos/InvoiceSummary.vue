@@ -108,22 +108,20 @@
 									</template>
 									<template v-slot:selection="{ item }">
 										<div class="employee-selection">
-											<span class="employee-selection-name">
-												{{
-													selectedEmployeeDisplayLabel ||
-													buildEmployeeDisplayLabel(item.raw)
-												}}
-											</span>
 											<span
-												v-if="
-													selectedEmployeeDetails?.employee_id ||
-													selectedEmployeeDetails?.name
-												"
-												class="employee-selection-id"
+												v-if="selectedEmployeeDisplayLabel"
+												class="employee-selection-name"
 											>
+												{{ selectedEmployeeDisplayLabel }}
+											</span>
+											<span v-else class="employee-selection-placeholder">
+												{{ __("Select Service Employee") }}
+											</span>
+											<span v-if="selectedEmployeeDetails" class="employee-selection-id">
 												({{
-													selectedEmployeeDetails?.employee_id ||
-													selectedEmployeeDetails?.name
+													selectedEmployeeDetails.custom_employee_id ||
+													selectedEmployeeDetails.employee_id ||
+													selectedEmployeeDetails.name
 												}})
 											</span>
 										</div>
@@ -322,7 +320,7 @@
 												<p
 													class="text-h6 font-weight-bold text-purple mb-0 loyalty-currency-value"
 												>
-													{{ formatCurrency(loyaltyPoints * conversionFactor, 3) }}
+													{{ formatCurrency(loyaltyPoints * conversionFactor, moneyPrecision) }}
 													{{ displayCurrency }}
 												</p>
 											</v-col>
@@ -746,7 +744,7 @@
 								<v-col cols="auto">
 									<p class="text-caption text-grey mb-1">{{ __("Value") }}</p>
 									<p class="text-subtitle-1 font-weight-bold mb-0">
-										{{ formatCurrency(loyaltyPoints * conversionFactor, 3) }}
+										{{ formatCurrency(loyaltyPoints * conversionFactor, moneyPrecision) }}
 									</p>
 								</v-col>
 							</v-row>
@@ -782,7 +780,7 @@
 								<v-col cols="6" class="text-right">
 									<p class="text-caption mb-0 text-grey">{{ __("Discount Value") }}</p>
 									<p class="text-subtitle-1 font-weight-bold mb-0 text-purple">
-										{{ formatCurrency(redemptionValue, 3) }}
+										{{ formatCurrency(redemptionValue, moneyPrecision) }}
 									</p>
 								</v-col>
 							</v-row>
@@ -1112,11 +1110,15 @@ export default {
 				return this.employees;
 			}
 
-			return this.employees.filter((employee) => {
-				const employeeId = String(employee.employee_id || employee.name || "").toLowerCase();
-				const employeeName = String(employee.employee_name || "").toLowerCase();
-				const customEmployeeId = String(employee.custom_employee_id || "").toLowerCase();
-				const displayLabel = String(employee.display_label || "").toLowerCase();
+			const sourceEmployees = this.allEmployees.length ? this.allEmployees : this.employees;
+
+			return sourceEmployees.filter((employee) => {
+				const employeeId = this.normalizeEmployeeValue(
+					employee.employee_id || employee.name,
+				).toLowerCase();
+				const employeeName = this.normalizeEmployeeValue(employee.employee_name).toLowerCase();
+				const customEmployeeId = this.normalizeEmployeeValue(employee.custom_employee_id).toLowerCase();
+				const displayLabel = this.normalizeEmployeeValue(employee.display_label).toLowerCase();
 				return (
 					employeeId.includes(query) ||
 					employeeName.includes(query) ||
@@ -1172,6 +1174,23 @@ export default {
 		decimalPrecision() {
 			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
 		},
+		moneyPrecision() {
+			const candidates = [
+				this.pos_profile?.posa_decimal_precision,
+				typeof frappe !== "undefined" && frappe?.defaults?.get_default
+					? frappe.defaults.get_default("currency_precision")
+					: null,
+			];
+
+			for (const candidate of candidates) {
+				const precision = Number(candidate);
+				if (Number.isFinite(precision)) {
+					return precision;
+				}
+			}
+
+			return 2;
+		},
 		__() {
 			return window.__ || ((str) => str);
 		},
@@ -1180,7 +1199,7 @@ export default {
 		},
 		redemptionValue() {
 			const points = parseFloat(this.pointsToRedeem) || 0;
-			return Number((points * this.conversionFactor).toFixed(3));
+			return Number((points * this.conversionFactor).toFixed(this.moneyPrecision));
 		},
 		isValidRedemption() {
 			const points = parseFloat(this.pointsToRedeem);
@@ -1737,7 +1756,7 @@ export default {
 
 				frappe.show_alert({
 					message: this.__(
-						`Loyalty discount staged: ${this.formatFloat(redeemedPoints, 2)} points = ${this.formatCurrency(newDiscountAmount, 3)}. Points will be deducted after submit.`,
+						`Loyalty discount staged: ${this.formatFloat(redeemedPoints, 2)} points = ${this.formatCurrency(newDiscountAmount, this.moneyPrecision)}. Points will be deducted after submit.`,
 					),
 					indicator: "green",
 					title: this.__("Redemption Staged"),
@@ -1830,16 +1849,35 @@ export default {
 			}
 		},
 
-		formatDate(dateStr) {
-			if (!dateStr) return "";
-			const date = new Date(dateStr);
-			return date.toLocaleDateString();
-		},
+			normalizeEmployeeValue(value) {
+				if (value === null || typeof value === "undefined") return "";
+				if (typeof value === "object") {
+					return String(
+						value.employee_id ||
+							value.custom_employee_id ||
+							value.name ||
+							value.employee_name ||
+							value.display_label ||
+							"",
+					).trim();
+				}
+				return String(value).trim();
+			},
+
+			formatDate(dateStr) {
+				if (!dateStr) return "";
+				const date = new Date(dateStr);
+				return date.toLocaleDateString();
+			},
 
 		buildEmployeeDisplayLabel(employee) {
 			if (!employee) return "";
-			const employeeId = String(employee.employee_id || employee.name || "");
-			const employeeName = String(employee.employee_name || employee.display_name || employeeId || "");
+			const employeeId = this.normalizeEmployeeValue(
+				employee.custom_employee_id || employee.employee_id || employee.name,
+			);
+			const employeeName = this.normalizeEmployeeValue(
+				employee.employee_name || employee.display_name || employee.full_name,
+			);
 			return employeeId && employeeName
 				? `${employeeId} - ${employeeName}`
 				: employeeName || employeeId;
@@ -1859,14 +1897,30 @@ export default {
 
 		normalizeEmployeeRecord(employee) {
 			if (!employee) return null;
-			const employeeId = String(employee.employee_id || employee.name || "");
-			const employeeName = String(employee.employee_name || employee.display_name || employeeId || "");
+			const employeeId = this.normalizeEmployeeValue(employee.employee_id || employee.name);
+			const customEmployeeId = this.normalizeEmployeeValue(employee.custom_employee_id);
+			const employeeName = this.normalizeEmployeeValue(
+				employee.employee_name ||
+					employee.display_name ||
+					employee.full_name ||
+					employeeId ||
+					customEmployeeId,
+			);
+			const displayLabel =
+				typeof employee.display_label === "string" && employee.display_label.trim()
+					? employee.display_label.trim()
+					: this.buildEmployeeDisplayLabel({
+							employee_id: employeeId,
+							custom_employee_id: customEmployeeId,
+							employee_name: employeeName,
+						});
 			return {
 				...employee,
 				employee_id: employeeId,
+				custom_employee_id: customEmployeeId,
 				employee_name: employeeName,
-				display_label: employee.display_label || this.buildEmployeeDisplayLabel(employee),
-				name: employee.name || employeeId,
+				display_label: displayLabel,
+				name: this.normalizeEmployeeValue(employee.name || employeeId || customEmployeeId),
 			};
 		},
 
@@ -1891,11 +1945,15 @@ export default {
 		},
 
 		getSelectedEmployeeRecord(employeeId) {
-			if (!employeeId) return null;
+			const normalizedEmployeeId = this.normalizeEmployeeValue(employeeId);
+			if (!normalizedEmployeeId) return null;
 			return (
 				this.selectedEmployeeDetails ||
 				this.employees.find(
-					(employee) => employee.employee_id === employeeId || employee.name === employeeId,
+					(employee) =>
+						employee.employee_id === normalizedEmployeeId ||
+						employee.custom_employee_id === normalizedEmployeeId ||
+						employee.name === normalizedEmployeeId,
 				) ||
 				null
 			);
@@ -1951,9 +2009,10 @@ export default {
 		},
 
 		async fetchEmployeeById(employeeId) {
-			if (!employeeId) return null;
+			const normalizedEmployeeId = this.normalizeEmployeeValue(employeeId);
+			if (!normalizedEmployeeId) return null;
 
-			const existing = this.getSelectedEmployeeRecord(employeeId);
+			const existing = this.getSelectedEmployeeRecord(normalizedEmployeeId);
 			if (existing && existing.employee_name) {
 				return existing;
 			}
@@ -1961,7 +2020,7 @@ export default {
 			try {
 				const response = await frappe.call({
 					method: "posawesome.posawesome.api.employees.get_employee_details",
-					args: { employee_id: employeeId },
+					args: { employee_id: normalizedEmployeeId },
 				});
 				if (response?.message) {
 					const employee = this.normalizeEmployeeRecord(response.message);
@@ -1969,11 +2028,13 @@ export default {
 						const existingIndex = this.employees.findIndex(
 							(item) =>
 								item.employee_id === employee.employee_id ||
+								item.custom_employee_id === employee.custom_employee_id ||
 								item.name === employee.employee_id,
 						);
 						const cachedIndex = this.allEmployees.findIndex(
 							(item) =>
 								item.employee_id === employee.employee_id ||
+								item.custom_employee_id === employee.custom_employee_id ||
 								item.name === employee.employee_id,
 						);
 						if (existingIndex !== -1) {
@@ -2031,9 +2092,12 @@ export default {
 			if (!query) return true;
 
 			const searchTerm = query.toLowerCase();
-			const employeeName = (item.raw.employee_name || "").toLowerCase();
-			const employeeCode = (item.raw.name || "").toLowerCase();
-			const designation = (item.raw.designation || "").toLowerCase();
+			const employeeName = this.normalizeEmployeeValue(item.raw.employee_name).toLowerCase();
+			const employeeCode = this.normalizeEmployeeValue(
+				item.raw.custom_employee_id || item.raw.employee_id || item.raw.name,
+			).toLowerCase();
+			const designation = this.normalizeEmployeeValue(item.raw.designation).toLowerCase();
+			const displayLabel = this.normalizeEmployeeValue(item.raw.display_label).toLowerCase();
 
 			// Extract just the number from employee code (e.g., "HR-EMP-00001" -> "00001" or "1")
 			const codeNumber = employeeCode.replace(/[^0-9]/g, "");
@@ -2043,12 +2107,14 @@ export default {
 				employeeName.includes(searchTerm) ||
 				employeeCode.includes(searchTerm) ||
 				designation.includes(searchTerm) ||
+				displayLabel.includes(searchTerm) ||
 				(queryNumber && codeNumber.includes(queryNumber))
 			);
 		},
 
 		async handleEmployeeChange(employeeId) {
-			if (!employeeId) {
+			const normalizedEmployeeId = this.normalizeEmployeeValue(employeeId);
+			if (!normalizedEmployeeId) {
 				// Employee cleared
 				this.selectedEmployee = null;
 				this.selectedEmployeeDetails = null;
@@ -2061,25 +2127,27 @@ export default {
 				return;
 			}
 
-			let employee = this.getSelectedEmployeeRecord(employeeId);
+			let employee = this.getSelectedEmployeeRecord(normalizedEmployeeId);
 			if (!employee) {
-				employee = await this.fetchEmployeeById(employeeId);
+				employee = await this.fetchEmployeeById(normalizedEmployeeId);
 			}
 
 			if (!employee) {
-				console.warn("[InvoiceSummary] Selected employee not found in list:", employeeId);
-				this.selectedEmployee = employeeId;
+				console.warn("[InvoiceSummary] Selected employee not found in list:", normalizedEmployeeId);
+				this.selectedEmployee = normalizedEmployeeId;
 				this.selectedEmployeeDetails = {
-					employee_id: employeeId,
-					employee_name: employeeId,
+					employee_id: normalizedEmployeeId,
+					custom_employee_id: normalizedEmployeeId,
+					employee_name: normalizedEmployeeId,
 					display_label: this.buildEmployeeDisplayLabel({
-						employee_id: employeeId,
-						employee_name: employeeId,
+						employee_id: normalizedEmployeeId,
+						custom_employee_id: normalizedEmployeeId,
+						employee_name: normalizedEmployeeId,
 					}),
 				};
 				this.eventBus.emit("employee_selected", {
-					employee_id: employeeId,
-					employee_name: employeeId,
+					employee_id: normalizedEmployeeId,
+					employee_name: normalizedEmployeeId,
 				});
 				this.closeEmployeeDropdown();
 				return;
@@ -2091,6 +2159,7 @@ export default {
 			// Emit event to parent component to attach employee to invoice
 			this.eventBus.emit("employee_selected", {
 				employee_id: employee.employee_id,
+				custom_employee_id: employee.custom_employee_id,
 				employee_name: employee.employee_name,
 				designation: employee.designation,
 				department: employee.department,
@@ -2159,13 +2228,28 @@ export default {
 		async handleExternalEmployeeSelected(payload) {
 			// payload may be { employee_id, employee_name } or just employee_id (string)
 			if (!payload) {
-				this.resetEmployeeSelectionState();
+				// Clear only the selected value. The field should remain visible
+				// while car wash service is still active.
+				this.selectedEmployee = null;
+				this.selectedEmployeeDetails = null;
+				this.employeeSearch = "";
+				this.closeEmployeeDropdown();
 				return;
 			}
 
 			const syncEpoch = this.startEmployeeSelectionSync();
-			const empId = payload.employee_id || payload;
-			const empNameProvided = payload.employee_name || null;
+			const empId = this.normalizeEmployeeValue(payload.employee_id || payload);
+			const empNameProvided = this.normalizeEmployeeValue(payload.employee_name);
+			const customEmployeeId = this.normalizeEmployeeValue(payload.custom_employee_id);
+			const lookupEmployeeId = empId || customEmployeeId;
+
+			if (!lookupEmployeeId && !empNameProvided) {
+				this.selectedEmployee = null;
+				this.selectedEmployeeDetails = null;
+				this.employeeSearch = "";
+				this.closeEmployeeDropdown();
+				return;
+			}
 
 			// show selector
 			this.showEmployeeSelection = true;
@@ -2175,35 +2259,41 @@ export default {
 			let resolvedEmployee = null;
 			if (empNameProvided) {
 				resolvedEmployee = this.normalizeEmployeeRecord({
-					employee_id: empId,
+					employee_id: lookupEmployeeId,
+					custom_employee_id: customEmployeeId,
 					employee_name: empNameProvided,
 				});
 			} else {
-				resolvedEmployee = await this.fetchEmployeeById(empId);
+				resolvedEmployee = await this.fetchEmployeeById(lookupEmployeeId);
 			}
 
 			if (!this.isCurrentEmployeeSelectionSync(syncEpoch)) return;
 
 			if (!resolvedEmployee) {
 				resolvedEmployee = {
-					employee_id: empId,
-					employee_name: empNameProvided || empId,
+					employee_id: lookupEmployeeId,
+					custom_employee_id: customEmployeeId,
+					employee_name: empNameProvided || lookupEmployeeId,
 					display_label: this.buildEmployeeDisplayLabel({
-						employee_id: empId,
-						employee_name: empNameProvided || empId,
+						employee_id: lookupEmployeeId,
+						custom_employee_id: customEmployeeId,
+						employee_name: empNameProvided || lookupEmployeeId,
 					}),
 				};
 			}
 
 			const employeeExistsInCache = this.allEmployees.some(
-				(item) => item.employee_id === empId || item.name === empId,
+				(item) =>
+					item.employee_id === lookupEmployeeId ||
+					item.custom_employee_id === lookupEmployeeId ||
+					item.name === lookupEmployeeId,
 			);
 			if (empNameProvided && !employeeExistsInCache) {
 				this.employees.unshift(resolvedEmployee);
 				this.allEmployees.unshift(resolvedEmployee);
 			}
 
-			this.selectedEmployee = resolvedEmployee.employee_id;
+			this.selectedEmployee = resolvedEmployee.employee_id || lookupEmployeeId;
 			this.selectedEmployeeDetails = resolvedEmployee;
 			this.closeEmployeeDropdown();
 		},
@@ -2675,6 +2765,16 @@ export default {
 .employee-selection-name {
 	color: #0f9fb3;
 	font-weight: 600;
+	min-width: 0;
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.employee-selection-placeholder {
+	color: #9ca3af;
+	font-weight: 500;
 	min-width: 0;
 	flex: 1 1 auto;
 	overflow: hidden;

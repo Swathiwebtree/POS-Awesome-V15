@@ -1203,8 +1203,8 @@ export default {
 				discountAmount = this.flt(this.additional_discount);
 			}
 
-			// Update discount_amount (this triggers grand_total recalculation)
-			this.discount_amount = Math.round(discountAmount);
+			// Update discount_amount without dropping configured decimals.
+			this.discount_amount = this.flt(discountAmount, this.currency_precision);
 
 			// Sync to invoice_doc
 			if (this.invoice_doc) {
@@ -1756,10 +1756,10 @@ export default {
 			this.apply_additional_discount && this.apply_additional_discount();
 		},
 
-		formatCurrency(value, precision = null) {
+		formatCurrency(value, _precision = null) {
 			// Force integer formatting for pricing
 			const val = parseFloat(value) || 0;
-			return Math.round(val).toString();
+			return Math.round(this.flt(val, _precision ?? this.currency_precision)).toString();
 		},
 		flt(value, precision = null) {
 			// Enhanced float handling for small numbers

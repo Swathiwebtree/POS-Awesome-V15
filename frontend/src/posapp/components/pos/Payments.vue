@@ -914,7 +914,23 @@ export default {
 	},
 	computed: {
 		currency_precision() {
-			return Number(this.pos_profile?.posa_decimal_precision ?? 2);
+			const candidates = [
+				this.invoice_doc?.currency_precision,
+				this.invoice_doc?.company_currency_precision,
+				this.pos_profile?.posa_decimal_precision,
+				typeof frappe !== "undefined" && frappe?.defaults?.get_default
+					? frappe.defaults.get_default("currency_precision")
+					: null,
+			];
+
+			for (const candidate of candidates) {
+				const precision = Number(candidate);
+				if (Number.isFinite(precision)) {
+					return precision;
+				}
+			}
+
+			return 2;
 		},
 
 		computedTaxAndCharges() {
@@ -1104,7 +1120,7 @@ export default {
 		},
 		loyalty_amount(value) {
 			if (!this.invoice_doc || !this.customer_info) return;
-			const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
+			const moneyPrecision = this.currency_precision;
 			const loyaltyAmount = Number(
 				formatUtils.fromArabicNumerals(String(value || 0)).replace(/,/g, ""),
 			);
@@ -1123,8 +1139,8 @@ export default {
 
 			const points = Math.round(loyaltyAmount / this.customer_info.conversion_factor);
 
-			this.invoice_doc.loyalty_amount = loyaltyAmount;
-			this.invoice_doc.loyalty_discount_amount = loyaltyAmount;
+			this.invoice_doc.loyalty_amount = this.flt(loyaltyAmount, moneyPrecision);
+			this.invoice_doc.loyalty_discount_amount = this.flt(loyaltyAmount, moneyPrecision);
 			this.invoice_doc.redeem_loyalty_points = points;
 			this.invoice_doc.net_total = this.getDiscountedNetTotal(this.invoice_doc);
 			this.invoice_doc.total_taxes_and_charges =
@@ -1521,7 +1537,7 @@ export default {
 		},
 
 		getDiscountedNetTotal(doc = this.invoice_doc) {
-			const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
+			const moneyPrecision = this.currency_precision;
 			const itemTotal = Number(
 				formatUtils.fromArabicNumerals(String(doc?.total || 0)).replace(/,/g, ""),
 			);
@@ -1549,7 +1565,7 @@ export default {
 
 			const tmpl = getTaxTemplate(templateName);
 			if (!tmpl || !Array.isArray(tmpl.taxes) || !tmpl.taxes.length) return 0;
-			const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
+			const moneyPrecision = this.currency_precision;
 
 			const baseAmount =
 				this.invoice_doc?.net_total != null
@@ -1571,9 +1587,9 @@ export default {
 				const rate = Number(row.rate || 0);
 				let taxAmount = 0;
 				if (row.charge_type === "Actual") {
-					taxAmount = this.flt(row.tax_amount || 0, moneyPrecision);
+					taxAmount = Number(row.tax_amount || 0);
 				} else {
-					taxAmount = this.flt((baseAmount * rate) / 100, moneyPrecision);
+					taxAmount = (baseAmount * rate) / 100;
 				}
 				totalTax += taxAmount;
 			});
@@ -1588,7 +1604,7 @@ export default {
 				return 0;
 			}
 
-			const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
+			const moneyPrecision = this.currency_precision;
 			const itemBaseTotal = Number(
 				formatUtils.fromArabicNumerals(String(this.invoice_doc?.total ?? 0)).replace(/,/g, ""),
 			);
@@ -1614,8 +1630,9 @@ export default {
 
 				//  POS Awesome uses net_amount as taxable value
 				const rate = item.net_rate ?? item.rate ?? 0;
-				const amount = item.net_amount ?? item.amount ?? rate * item.qty ?? 0;
-				const taxableAmount = this.flt(amount * taxableFactor, moneyPrecision);
+				const quantity = Number(item.qty || 0);
+				const amount = item.net_amount ?? item.amount ?? rate * quantity;
+				const taxableAmount = amount * taxableFactor;
 
 				Object.values(taxMap).forEach((rate) => {
 					taxTotal += (taxableAmount * rate) / 100;
@@ -3210,11 +3227,10 @@ export default {
 			const hasItemTaxRates = invoiceData?.items?.some((item) => item.item_tax_rate);
 			if (!this.flt(invoiceData?.total_taxes_and_charges || 0) && hasItemTaxRates) {
 				let taxTotal = 0;
-				const itemBaseTotal = this.flt(invoiceData?.total || 0, this.currency_precision);
-				const discountedItemTotal = this.flt(
-					itemBaseTotal - this.getPreTaxDiscountAmount(),
-					this.currency_precision,
+				const itemBaseTotal = Number(
+					formatUtils.fromArabicNumerals(String(invoiceData?.total || 0)).replace(/,/g, ""),
 				);
+				const discountedItemTotal = itemBaseTotal - this.getPreTaxDiscountAmount();
 				const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
 				invoiceData.items.forEach((item) => {
 					if (!item.item_tax_rate) return;
@@ -3225,8 +3241,9 @@ export default {
 						return;
 					}
 					const rate = item.net_rate ?? item.rate ?? 0;
-					const amount = item.net_amount ?? item.amount ?? rate * item.qty ?? 0;
-					const taxableAmount = this.flt(amount * taxableFactor);
+					const quantity = Number(item.qty || 0);
+					const amount = item.net_amount ?? item.amount ?? rate * quantity;
+					const taxableAmount = amount * taxableFactor;
 					Object.values(taxMap).forEach((rate) => {
 						taxTotal += (taxableAmount * rate) / 100;
 					});
