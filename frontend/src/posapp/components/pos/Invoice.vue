@@ -876,7 +876,7 @@ export default {
 			const roundedTotal =
 				roundOff !== 0
 					? this.flt(grandTotal + roundOff, precision)
-					: this.flt(this.rounded_total || grandTotal, precision);
+					: grandTotal;
 
 			this.invoice_doc.net_total = this.flt(this.net_total || 0, precision);
 			this.invoice_doc.total = this.flt(this.Total || 0, precision);
@@ -1293,7 +1293,7 @@ export default {
 			this.get_invoice_doc();
 			this.recalculateTotals();
 
-			const invoice = this.prepareForPayment();
+			const invoice = JSON.parse(JSON.stringify(this.prepareForPayment()));
 			if (invoice && invoice.items && invoice.items.length > 0) {
 				this.eventBus.emit("current_invoice_data", invoice);
 				this.eventBus.emit("send_invoice_doc_payment", invoice);
@@ -1767,9 +1767,13 @@ export default {
 		},
 
 		formatCurrency(value, _precision = null) {
-			// Force integer formatting for pricing
-			const val = parseFloat(value) || 0;
-			return Math.round(this.flt(val, _precision ?? this.currency_precision)).toString();
+			const val = Number(value) || 0;
+			let precision = _precision ?? this.currency_precision;
+			precision = Number.isFinite(Number(precision)) ? Math.max(Number(precision), 0) : 0;
+			return this.flt(val, precision).toLocaleString(undefined, {
+				minimumFractionDigits: precision,
+				maximumFractionDigits: precision,
+			});
 		},
 		flt(value, precision = null) {
 			// Enhanced float handling for small numbers
@@ -2067,7 +2071,7 @@ export default {
 			const effectiveRoundedTotal =
 				manualRoundOff !== 0
 					? this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision)
-					: this.flt(this.rounded_total ?? effectiveGrandTotal, this.currency_precision);
+					: effectiveGrandTotal;
 
 			// Always sync computed totals so payment and backend receive the correct round-off fields
 			this.invoice_doc.grand_total = effectiveGrandTotal;
@@ -2129,7 +2133,7 @@ export default {
 			const effectiveRoundedTotal =
 				manualRoundOff !== 0
 					? this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision)
-					: this.flt(this.rounded_total ?? effectiveGrandTotal, this.currency_precision);
+					: effectiveGrandTotal;
 
 			const invoiceData = {
 				// Basic info
@@ -2205,7 +2209,25 @@ export default {
 			const effectiveRoundedTotal =
 				manualRoundOff !== 0
 					? this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision)
-					: this.flt(this.rounded_total ?? effectiveGrandTotal, this.currency_precision);
+					: effectiveGrandTotal;
+
+			console.log("[prepareForPayment] Totals snapshot:", {
+				item_total: this.flt(this.Total || 0, this.currency_precision),
+				additional_discount: this.flt(this.additional_discount || 0, this.currency_precision),
+				discount_amount: this.flt(this.discount_amount || 0, this.currency_precision),
+				loyalty_discount_amount: this.flt(
+					this.invoice_doc?.loyalty_discount_amount || 0,
+					this.currency_precision,
+				),
+				loyalty_amount: this.flt(this.loyalty_redemption_amount || 0, this.currency_precision),
+				net_total: this.flt(this.net_total || 0, this.currency_precision),
+				tax_total: this.flt(
+					this.invoice_doc?.total_taxes_and_charges || this.total_tax || 0,
+					this.currency_precision,
+				),
+				grand_total: effectiveGrandTotal,
+				rounded_total: effectiveRoundedTotal,
+			});
 
 			invoiceData.total = this.Total;
 			invoiceData.net_total = this.net_total;
@@ -2327,19 +2349,8 @@ export default {
 
 		// Add new rounding function
 		roundAmount(amount) {
-			// Respect POS Profile setting to disable rounding
-			if (this.pos_profile.disable_rounded_total) {
-				// Use configured precision without applying rounding
-				return this.flt(amount, this.currency_precision);
-			}
-			// If multi-currency is enabled and selected currency is different from base currency
-			const baseCurrency = this.price_list_currency || this.pos_profile.currency;
-			if (this.pos_profile.posa_allow_multi_currency && this.selected_currency !== baseCurrency) {
-				// For multi-currency, just keep 2 decimal places without rounding to nearest integer
-				return this.flt(amount, 2);
-			}
-			// For base currency or when multi-currency is disabled, round to nearest integer
-			return Math.round(amount);
+			// Keep the configured currency precision instead of forcing whole-number rounding.
+			return this.flt(amount, this.currency_precision);
 		},
 
 		// Increase quantity of an item (handles return logic)
@@ -2557,8 +2568,11 @@ export default {
 				this.invoice_doc.apply_discount_on = "Net Total";
 			}
 
-			this.invoice_doc.grand_total = this.grand_total || this.net_total || this.subtotal || 0;
-			this.invoice_doc.rounded_total = this.rounded_total || this.invoice_doc.grand_total;
+			const grandTotal = this.flt(this.grand_total || this.net_total || this.subtotal || 0);
+			const roundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision);
+			this.invoice_doc.grand_total = grandTotal;
+			this.invoice_doc.rounded_total =
+				roundOff !== 0 ? this.flt(grandTotal + roundOff, this.currency_precision) : grandTotal;
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
 			this.invoice_doc.pos_profile = this.pos_profile && this.pos_profile.name;
@@ -3671,7 +3685,10 @@ export default {
 		grand_total(newVal) {
 			if (this.invoice_doc) {
 				this.invoice_doc.grand_total = newVal;
-				this.invoice_doc.rounded_total = this.rounded_total;
+				this.invoice_doc.rounded_total =
+					this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision) !== 0
+						? this.rounded_total
+						: newVal;
 			}
 		},
 

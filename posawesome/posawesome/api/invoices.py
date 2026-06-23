@@ -260,7 +260,6 @@ def validate_return_items(original_invoice_name, return_items, doctype="Sales In
 def update_invoice(data):
     data = json.loads(data)
     incoming_rounding_adjustment = flt(data.get("rounding_adjustment") or 0)
-    incoming_rounded_total = data.get("rounded_total")
 
     pos_profile = data.get("pos_profile")
     doctype = "Sales Invoice"
@@ -343,16 +342,26 @@ def update_invoice(data):
     # Fetch default values from POS Profile
     invoice_doc.set_missing_values()
 
-    pre_tax_discount_amount = flt(invoice_doc.get("discount_amount") or 0)
+    pre_tax_discount_amount = flt(invoice_doc.get("discount_amount") or invoice_doc.get("additional_discount") or 0)
     loyalty_discount_amount = flt(
-        invoice_doc.get("loyalty_amount") or invoice_doc.get("loyalty_discount_amount") or 0
+        invoice_doc.get("loyalty_discount_amount") or invoice_doc.get("loyalty_amount") or 0
     )
-    combined_discount_amount = flt(pre_tax_discount_amount + loyalty_discount_amount)
+    additional_discount_amount = flt(invoice_doc.get("additional_discount") or 0)
+
+    mirrored_loyalty_discount = (
+        pre_tax_discount_amount > 0
+        and additional_discount_amount > 0
+        and abs(pre_tax_discount_amount - additional_discount_amount) <= 0.000001
+        and abs(pre_tax_discount_amount - loyalty_discount_amount) <= 0.000001
+    )
+
+    if mirrored_loyalty_discount:
+        pre_tax_discount_amount = 0
+
+    invoice_doc.discount_amount = pre_tax_discount_amount
     invoice_doc.loyalty_discount_amount = loyalty_discount_amount
-    if combined_discount_amount > 0:
-        invoice_doc.discount_amount = combined_discount_amount
-        if not invoice_doc.get("apply_discount_on"):
-            invoice_doc.apply_discount_on = "Net Total"
+    if pre_tax_discount_amount > 0 and not invoice_doc.get("apply_discount_on"):
+        invoice_doc.apply_discount_on = "Net Total"
 
     # ===== CRITICAL: TAX CALCULATION =====
     pos_profile_name = invoice_doc.get("pos_profile")
@@ -432,12 +441,14 @@ def update_invoice(data):
             invoice_doc.base_grand_total
             + (incoming_rounding_adjustment * flt(invoice_doc.conversion_rate or 1))
         )
-    elif incoming_rounded_total is not None:
-        invoice_doc.rounded_total = flt(incoming_rounded_total)
-        invoice_doc.rounding_adjustment = flt(invoice_doc.rounded_total - invoice_doc.grand_total)
     elif not invoice_doc.rounded_total:
         invoice_doc.rounded_total = invoice_doc.grand_total
-        invoice_doc.rounding_adjustment = flt(invoice_doc.rounded_total - invoice_doc.grand_total)
+        invoice_doc.rounding_adjustment = 0
+        invoice_doc.base_rounded_total = flt(invoice_doc.base_grand_total)
+    else:
+        invoice_doc.rounded_total = flt(invoice_doc.grand_total)
+        invoice_doc.rounding_adjustment = 0
+        invoice_doc.base_rounded_total = flt(invoice_doc.base_grand_total)
 
     # Ensure base tax total is set
     invoice_doc.base_total_taxes_and_charges = invoice_doc.total_taxes_and_charges

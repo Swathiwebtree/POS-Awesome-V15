@@ -934,18 +934,14 @@ export default {
 		},
 
 		computedTaxAndCharges() {
-			let total = this.flt(this.invoice_doc?.total_taxes_and_charges || 0, this.currency_precision);
-			if (!total) {
-				total = this.calculateTemplateTaxTotal();
-			}
-			return total;
+			return this.calculateInvoiceTaxTotal(this.invoice_doc);
 		},
 
 		// Get the correct total for payment calculations
 		totalInvoiceAmount() {
 			if (!this.invoice_doc) return 0;
 
-			return this.flt(this.getEffectiveInvoiceTotal(), this.currency_precision);
+			return this.flt(this.payable_total, this.currency_precision);
 		},
 		// Verify tax calculation
 		taxBreakdown() {
@@ -1011,11 +1007,6 @@ export default {
 
 			if (manualRoundOff !== 0) {
 				return this.flt(grandTotal + manualRoundOff, this.currency_precision);
-			}
-
-			const roundedTotal = Number(this.invoice_doc.rounded_total);
-			if (!Number.isNaN(roundedTotal) && Math.abs(roundedTotal - grandTotal) > 0.000001) {
-				return this.flt(roundedTotal, this.currency_precision);
 			}
 
 			return grandTotal;
@@ -1142,11 +1133,14 @@ export default {
 			this.invoice_doc.loyalty_amount = this.flt(loyaltyAmount, moneyPrecision);
 			this.invoice_doc.loyalty_discount_amount = this.flt(loyaltyAmount, moneyPrecision);
 			this.invoice_doc.redeem_loyalty_points = points;
-			this.invoice_doc.net_total = this.getDiscountedNetTotal(this.invoice_doc);
-			this.invoice_doc.total_taxes_and_charges =
-				this.calculateItemTax() || this.calculateTemplateTaxTotal() || 0;
+			const netTotal = this.getDiscountedNetTotal(this.invoice_doc);
+			this.invoice_doc.net_total = netTotal;
+			this.invoice_doc.total_taxes_and_charges = this.calculateInvoiceTaxTotal(
+				this.invoice_doc,
+				netTotal,
+			);
 			this.invoice_doc.grand_total = this.flt(
-				this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
+				netTotal + (this.invoice_doc.total_taxes_and_charges || 0),
 				moneyPrecision,
 			);
 		},
@@ -1554,32 +1548,49 @@ export default {
 			}
 		},
 
-		getPreTaxDiscountAmount() {
-			const invoiceDiscount = Number(
+		getPreTaxDiscountAmount(doc = this.invoice_doc) {
+			const invoiceDiscountRaw = Number(
 				formatUtils
 					.fromArabicNumerals(
 						String(
-							this.invoice_doc?.discount_amount || this.invoice_doc?.additional_discount || 0,
+							doc?.discount_amount || doc?.additional_discount || 0,
 						),
 					)
 					.replace(/,/g, ""),
 			);
+			const additionalDiscountRaw = Number(doc?.additional_discount || 0);
+			const loyaltyDiscountRaw = Number(
+				formatUtils
+					.fromArabicNumerals(String(doc?.loyalty_discount_amount || doc?.loyalty_amount || 0))
+					.replace(/,/g, ""),
+			);
+			if (
+				Number.isFinite(invoiceDiscountRaw) &&
+				Number.isFinite(additionalDiscountRaw) &&
+				Number.isFinite(loyaltyDiscountRaw) &&
+				invoiceDiscountRaw > 0 &&
+				additionalDiscountRaw > 0 &&
+				Math.abs(invoiceDiscountRaw - additionalDiscountRaw) <= 1 / 10 ** this.currency_precision &&
+				Math.abs(invoiceDiscountRaw - loyaltyDiscountRaw) <= 1 / 10 ** this.currency_precision
+			) {
+				return 0;
+			}
+			return Number.isFinite(invoiceDiscountRaw) ? invoiceDiscountRaw : 0;
+		},
+
+		getLoyaltyDiscountAmount(doc = this.invoice_doc) {
 			const loyaltyDiscount = Number(
 				formatUtils
 					.fromArabicNumerals(
 						String(
 							this.loyalty_amount ||
-								this.invoice_doc?.loyalty_amount ||
-								this.invoice_doc?.loyalty_discount_amount ||
+								doc?.loyalty_discount_amount ||
 								0,
 						),
 					)
 					.replace(/,/g, ""),
 			);
-			return (
-				(Number.isFinite(invoiceDiscount) ? invoiceDiscount : 0) +
-				(Number.isFinite(loyaltyDiscount) ? loyaltyDiscount : 0)
-			);
+			return Number.isFinite(loyaltyDiscount) ? loyaltyDiscount : 0;
 		},
 
 		getDiscountedNetTotal(doc = this.invoice_doc) {
@@ -1587,25 +1598,15 @@ export default {
 			const itemTotal = Number(
 				formatUtils.fromArabicNumerals(String(doc?.total || 0)).replace(/,/g, ""),
 			);
-			const preTaxDiscount = Number(
-				formatUtils
-					.fromArabicNumerals(
-						String(
-							doc?.discount_amount ||
-								doc?.additional_discount ||
-								doc?.loyalty_discount_amount ||
-								doc?.loyalty_amount ||
-								0,
-						),
-					)
-					.replace(/,/g, ""),
-			);
+			const preTaxDiscount = this.getPreTaxDiscountAmount(doc);
+			const loyaltyDiscount = this.getLoyaltyDiscountAmount(doc);
 			const safeItemTotal = Number.isFinite(itemTotal) ? itemTotal : 0;
 			const safeDiscount = Number.isFinite(preTaxDiscount) ? preTaxDiscount : 0;
-			return this.flt(safeItemTotal - safeDiscount, moneyPrecision);
+			const safeLoyalty = Number.isFinite(loyaltyDiscount) ? loyaltyDiscount : 0;
+			return this.flt(safeItemTotal - safeDiscount - safeLoyalty, moneyPrecision);
 		},
 
-		calculateTemplateTaxTotal() {
+		calculateTemplateTaxTotal(doc = this.invoice_doc, baseAmount = null) {
 			const templateName = this.pos_profile?.taxes_and_charges;
 			if (!templateName) return 0;
 
@@ -1613,20 +1614,22 @@ export default {
 			if (!tmpl || !Array.isArray(tmpl.taxes) || !tmpl.taxes.length) return 0;
 			const moneyPrecision = this.currency_precision;
 
-			const baseAmount =
-				this.invoice_doc?.net_total != null
-					? Number(
-							formatUtils
-								.fromArabicNumerals(String(this.invoice_doc.net_total))
-								.replace(/,/g, ""),
-						)
-					: Number(
-							formatUtils
-								.fromArabicNumerals(
-									String((this.invoice_doc?.total ?? 0) - this.getPreTaxDiscountAmount()),
-								)
-								.replace(/,/g, ""),
-						);
+			const resolvedBaseAmount =
+				baseAmount != null
+					? Number(baseAmount)
+					: doc?.net_total != null
+						? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
+						: Number(
+								formatUtils
+									.fromArabicNumerals(
+										String(
+											(doc?.total ?? 0) -
+												this.getPreTaxDiscountAmount(doc) -
+												this.getLoyaltyDiscountAmount(doc),
+										),
+									)
+									.replace(/,/g, ""),
+							);
 			let totalTax = 0;
 
 			tmpl.taxes.forEach((row) => {
@@ -1635,7 +1638,7 @@ export default {
 				if (row.charge_type === "Actual") {
 					taxAmount = Number(row.tax_amount || 0);
 				} else {
-					taxAmount = (baseAmount * rate) / 100;
+					taxAmount = (resolvedBaseAmount * rate) / 100;
 				}
 				totalTax += taxAmount;
 			});
@@ -1643,28 +1646,26 @@ export default {
 			return this.flt(totalTax, moneyPrecision);
 		},
 
-		calculateItemTax() {
+		calculateItemTax(doc = this.invoice_doc, baseAmount = null) {
 			let taxTotal = 0;
 
-			if (!this.invoice_doc || !this.invoice_doc.items) {
+			if (!doc || !doc.items) {
 				return 0;
 			}
 
 			const moneyPrecision = this.currency_precision;
 			const itemBaseTotal = Number(
-				formatUtils.fromArabicNumerals(String(this.invoice_doc?.total ?? 0)).replace(/,/g, ""),
+				formatUtils.fromArabicNumerals(String(doc?.total ?? 0)).replace(/,/g, ""),
 			);
 			const discountedItemTotal =
-				this.invoice_doc?.net_total != null
-					? Number(
-							formatUtils
-								.fromArabicNumerals(String(this.invoice_doc.net_total))
-								.replace(/,/g, ""),
-						)
-					: itemBaseTotal - this.getPreTaxDiscountAmount();
+				baseAmount != null
+					? Number(baseAmount)
+					: doc?.net_total != null
+						? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
+						: itemBaseTotal - this.getPreTaxDiscountAmount(doc) - this.getLoyaltyDiscountAmount(doc);
 			const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
 
-			this.invoice_doc.items.forEach((item) => {
+			doc.items.forEach((item) => {
 				if (!item.item_tax_rate) return;
 
 				let taxMap = {};
@@ -1686,6 +1687,15 @@ export default {
 			});
 
 			return this.flt(taxTotal, moneyPrecision);
+		},
+
+		calculateInvoiceTaxTotal(doc = this.invoice_doc, baseAmount = null) {
+			if (!doc) return 0;
+			const hasItemTaxRates = Array.isArray(doc.items) && doc.items.some((item) => item?.item_tax_rate);
+			if (hasItemTaxRates) {
+				return this.calculateItemTax(doc, baseAmount);
+			}
+			return this.calculateTemplateTaxTotal(doc, baseAmount);
 		},
 
 		// Verify invoice totals before submission
@@ -1799,7 +1809,29 @@ export default {
 
 					if (!r.message) return;
 
-					this.invoice_doc = r.message;
+					const preservedTotals = this.invoice_doc
+						? {
+								net_total: this.invoice_doc.net_total,
+								total_taxes_and_charges: this.invoice_doc.total_taxes_and_charges,
+								grand_total: this.invoice_doc.grand_total,
+								rounded_total: this.invoice_doc.rounded_total,
+								rounding_adjustment: this.invoice_doc.rounding_adjustment,
+								total_amount: this.invoice_doc.total_amount,
+								outstanding_amount: this.invoice_doc.outstanding_amount,
+								paid_amount: this.invoice_doc.paid_amount,
+								change_amount: this.invoice_doc.change_amount,
+								to_be_paid: this.invoice_doc.to_be_paid,
+								base_net_total: this.invoice_doc.base_net_total,
+								base_total_taxes_and_charges: this.invoice_doc.base_total_taxes_and_charges,
+								base_grand_total: this.invoice_doc.base_grand_total,
+								base_rounded_total: this.invoice_doc.base_rounded_total,
+						  }
+						: {};
+
+					this.invoice_doc = {
+						...r.message,
+						...preservedTotals,
+					};
 
 					console.log("[Payment] Synced invoice before opening", {
 						net: r.message.net_total,
@@ -3149,15 +3181,14 @@ export default {
 				this.invoice_doc.loyalty_discount_amount =
 					this.invoice_doc.loyalty_discount_amount || this.invoice_doc.loyalty_amount || 0;
 			}
-			const hasItemTaxRates = this.invoice_doc?.items?.some((item) => item.item_tax_rate);
-			if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0) && hasItemTaxRates) {
-				this.invoice_doc.total_taxes_and_charges = this.calculateItemTax();
-			} else if (!this.flt(this.invoice_doc?.total_taxes_and_charges || 0)) {
-				this.invoice_doc.total_taxes_and_charges = this.calculateTemplateTaxTotal();
-			}
-			this.invoice_doc.net_total = this.getDiscountedNetTotal(this.invoice_doc);
+			const netTotal = this.getDiscountedNetTotal(this.invoice_doc);
+			this.invoice_doc.net_total = netTotal;
+			this.invoice_doc.total_taxes_and_charges = this.calculateInvoiceTaxTotal(
+				this.invoice_doc,
+				netTotal,
+			);
 			this.invoice_doc.grand_total = this.flt(
-				this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
+				netTotal + (this.invoice_doc.total_taxes_and_charges || 0),
 				this.currency_precision,
 			);
 
@@ -3274,38 +3305,16 @@ export default {
 				this._active_invoice_instance_id = sourceId;
 			}
 
-			const shouldOverwriteInvoice = !this.showDialog;
-			const hasItemTaxRates = invoiceData?.items?.some((item) => item.item_tax_rate);
-			if (!this.flt(invoiceData?.total_taxes_and_charges || 0) && hasItemTaxRates) {
-				let taxTotal = 0;
-				const itemBaseTotal = Number(
-					formatUtils.fromArabicNumerals(String(invoiceData?.total || 0)).replace(/,/g, ""),
-				);
-				const discountedItemTotal = itemBaseTotal - this.getPreTaxDiscountAmount();
-				const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
-				invoiceData.items.forEach((item) => {
-					if (!item.item_tax_rate) return;
-					let taxMap = {};
-					try {
-						taxMap = JSON.parse(item.item_tax_rate);
-					} catch (e) {
-						return;
-					}
-					const rate = item.net_rate ?? item.rate ?? 0;
-					const quantity = Number(item.qty || 0);
-					const amount = item.net_amount ?? item.amount ?? rate * quantity;
-					const taxableAmount = amount * taxableFactor;
-					Object.values(taxMap).forEach((rate) => {
-						taxTotal += (taxableAmount * rate) / 100;
-					});
-				});
-				invoiceData.total_taxes_and_charges = this.flt(taxTotal, this.currency_precision);
-			} else if (!this.flt(invoiceData?.total_taxes_and_charges || 0)) {
-				invoiceData.total_taxes_and_charges = this.calculateTemplateTaxTotal();
+			if (this.showDialog) {
+				console.log("[Payment] Ignoring invoice refresh while payment dialog is open");
+				return;
 			}
-			invoiceData.net_total = this.getDiscountedNetTotal(invoiceData);
+
+			const netTotal = this.getDiscountedNetTotal(invoiceData);
+			invoiceData.net_total = netTotal;
+			invoiceData.total_taxes_and_charges = this.calculateInvoiceTaxTotal(invoiceData, netTotal);
 			invoiceData.grand_total = this.flt(
-				invoiceData.net_total + (invoiceData.total_taxes_and_charges || 0),
+				netTotal + (invoiceData.total_taxes_and_charges || 0),
 				this.currency_precision,
 			);
 
@@ -3389,21 +3398,13 @@ export default {
 				}
 			}
 
-			if (shouldOverwriteInvoice) {
+			if (!this.showDialog) {
 				this.invoice_doc = invoiceData;
 			} else if (this.invoice_doc) {
-				// Keep totals in sync even when dialog is already open
-				this.invoice_doc.grand_total = invoiceData.grand_total || 0;
-				if (invoiceData.rounded_total !== undefined && invoiceData.rounded_total !== null) {
-					this.invoice_doc.rounded_total = invoiceData.rounded_total;
-				} else {
-					this.invoice_doc.rounded_total = null;
-				}
+				// After the payment popup is open, keep the existing computed snapshot.
+				// Only replace the item list if the source is changing; do not overwrite totals.
 				if (invoiceData.items) {
 					this.invoice_doc.items = invoiceData.items;
-				}
-				if (invoiceData.total_taxes_and_charges !== undefined) {
-					this.invoice_doc.total_taxes_and_charges = invoiceData.total_taxes_and_charges;
 				}
 			}
 
@@ -3419,8 +3420,15 @@ export default {
 					this.resetPaymentAmounts();
 				}
 			}
-			this.grand_total = invoiceData.grand_total || 0;
-			this.rounded_total = invoiceData.rounded_total || invoiceData.grand_total || 0;
+			this.grand_total = this.flt(invoiceData.grand_total || 0, this.currency_precision);
+			this.rounded_total =
+				invoiceData.rounding_adjustment && this.flt(invoiceData.rounding_adjustment, this.currency_precision) !== 0
+					? this.flt(
+							this.grand_total +
+								this.flt(invoiceData.rounding_adjustment || 0, this.currency_precision),
+							this.currency_precision,
+					  )
+					: this.grand_total;
 			this.customer = invoiceData.customer || "";
 			await this.syncCorporateCustomerState(invoiceData);
 
@@ -3460,7 +3468,7 @@ export default {
 			});
 
 			// Set payment amount
-			this.payment_amount = invoiceData.rounded_total || invoiceData.grand_total || 0;
+			this.payment_amount = this.payable_total;
 			console.log("[Payment] Payment amount set to:", this.payment_amount);
 
 			// Force UI update

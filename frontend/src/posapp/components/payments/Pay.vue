@@ -680,6 +680,7 @@ export default {
 						vm.customer_info = { ...cached };
 						vm.set_mpesa_search_params();
 						vm.eventBus.emit("set_customer_info_to_edit", vm.customer_info);
+						vm.set_payment_methods();
 						return;
 					}
 					const queued = (getOfflineCustomers() || [])
@@ -689,6 +690,7 @@ export default {
 						vm.customer_info = { ...queued, name: queued.customer_name };
 						vm.set_mpesa_search_params();
 						vm.eventBus.emit("set_customer_info_to_edit", vm.customer_info);
+						vm.set_payment_methods();
 					}
 				} catch (error) {
 					console.error("Failed to fetch cached customer", error);
@@ -710,6 +712,7 @@ export default {
 					};
 					vm.set_mpesa_search_params();
 					vm.eventBus.emit("set_customer_info_to_edit", vm.customer_info);
+					vm.set_payment_methods();
 				}
 			} catch (error) {
 				console.error("Failed to fetch customer details", error);
@@ -820,15 +823,44 @@ export default {
 		},
 		set_payment_methods() {
 			// get payment methods from pos profile
-			if (!this.pos_profile.posa_allow_make_new_payments) return;
+			if (!this.pos_profile.posa_allow_make_new_payments) {
+				this.payment_methods = [];
+				return;
+			}
+
+			const existingAmounts = new Map(
+				(this.payment_methods || []).map((payment) => [payment.mode_of_payment, payment.amount]),
+			);
+
 			this.payment_methods = [];
-			this.pos_profile.payments.forEach((method) => {
+			(this.pos_profile.payments || []).forEach((method) => {
+				if (!this.should_show_payment_method(method)) return;
+
 				this.payment_methods.push({
 					mode_of_payment: method.mode_of_payment,
-					amount: 0,
+					amount: existingAmounts.get(method.mode_of_payment) ?? 0,
 					row_id: method.name,
 				});
 			});
+		},
+		should_show_payment_method(method) {
+			const mode = String(method?.mode_of_payment || "").trim().toLowerCase();
+			if (!mode) return false;
+			if (mode === "on account" || mode === "on-account") {
+				return this.is_company_customer();
+			}
+			return true;
+		},
+		is_company_customer(customer = this.customer_info) {
+			if (!customer) return false;
+			return !!(
+				customer.is_company ||
+				customer.is_corporate ||
+				customer.customer_type === "Company" ||
+				customer.customer_type === "Corporate" ||
+				customer.customer_group === "Commercial" ||
+				customer.customer_group === "Comercial"
+			);
 		},
 		clear_all(with_customer_info = true) {
 			this.customer_name = "";

@@ -51,10 +51,22 @@ export default {
 		total += delivery_charges;
 
 		// Subtract invoice and loyalty discounts before tax
-		const invoice_discount = Number(this.discount_amount ?? this.additional_discount ?? 0);
-		const loyalty_discount = Number(
+		const invoice_discount_raw = Number(this.discount_amount ?? this.additional_discount ?? 0);
+		const additional_discount_raw = Number(this.additional_discount ?? 0);
+		const loyalty_discount_raw = Number(
 			this.invoice_doc?.loyalty_discount_amount ?? this.invoice_doc?.loyalty_amount ?? 0,
 		);
+		const invoice_discount =
+			Number.isFinite(invoice_discount_raw) &&
+			Number.isFinite(additional_discount_raw) &&
+			Number.isFinite(loyalty_discount_raw) &&
+			invoice_discount_raw > 0 &&
+			additional_discount_raw > 0 &&
+			Math.abs(invoice_discount_raw - additional_discount_raw) <= 1 / 10 ** moneyPrecision &&
+			Math.abs(invoice_discount_raw - loyalty_discount_raw) <= 1 / 10 ** moneyPrecision
+				? 0
+				: invoice_discount_raw;
+		const loyalty_discount = loyalty_discount_raw;
 		total -=
 			(Number.isFinite(invoice_discount) ? invoice_discount : 0) +
 			(Number.isFinite(loyalty_discount) ? loyalty_discount : 0);
@@ -96,7 +108,7 @@ export default {
 			return manuallyRounded;
 		}
 
-		const rounded = this.roundAmount(this.grand_total);
+		const rounded = this.flt(this.grand_total || 0, this.currency_precision);
 		console.log("[invoiceComputed] rounded_total:", rounded);
 		return rounded;
 	},
