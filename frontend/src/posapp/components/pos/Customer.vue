@@ -15,12 +15,14 @@
 				item-value="name"
 				:label="__('Vehicle No')"
 				v-model="selectedVehicle"
+				v-model:search="vehicleSearchText"
 				:no-filter="true"
 				:custom-filter="vehicleFilter"
 				hide-details
 				@update:menu="onVehicleMenuToggle"
 				@update:search="onVehicleSearch"
 				@update:modelValue="onVehicleSelect"
+				@keydown.enter="handleVehicleEnter"
 				:menu-props="{ maxWidth: '80vw' }"
 			>
 				<template #selection="{ item }">
@@ -461,6 +463,7 @@ export default {
 		vehicles: [],
 		selectedVehicle: null,
 		vehicle_no: "",
+		vehicleSearchText: "",
 		loadingVehicles: false,
 		selected_customer_is_corporate: false,
 
@@ -542,9 +545,10 @@ export default {
 					args: { limit: 500 },
 				});
 
-				this.vehicles = res.message || [];
+				this.vehicles = this._dedupeVehicleRows(res.message || []);
 				this.selectedVehicle = null;
 				this.vehicle_no = "";
+				this.vehicleSearchText = "";
 
 				console.log("[Vehicle] Loaded all vehicles:", this.vehicles.length);
 			} catch (err) {
@@ -598,6 +602,39 @@ export default {
 				is_corporate: isCorporate,
 				is_company: r.is_company || isCorporate,
 			};
+		},
+		_normalizeVehicleRow(r) {
+			if (!r) return r;
+			return {
+				...r,
+				name: String(r.name || "").trim(),
+				vehicle_no: String(r.vehicle_no || "").trim(),
+				customer: String(r.customer || "").trim(),
+				customer_name: String(r.customer_name || r.customer || "").trim(),
+				custom_display_name: String(
+					r.custom_display_name || r.customer_name || r.customer || "",
+				).trim(),
+				mobile_no: r.mobile_no || "",
+			};
+		},
+		_dedupeVehicleRows(rows = []) {
+			const seen = new Set();
+			return (rows || [])
+				.map((r) => this._normalizeVehicleRow(r))
+				.filter((r) => {
+					if (!r) return false;
+					const key = `${String(r.name || "").toLowerCase()}::${String(
+						r.vehicle_no || "",
+					).toLowerCase()}`;
+					if (!key.trim() || seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
+		},
+		clearVehicleSearchText() {
+			this.vehicleSearchText = "";
+			this.vehicleSearchTerm = "";
+			this.vehicleSearchResults = [];
 		},
 
 		_upsertCustomerInList(customerId, customerDisplayName = "", extra = {}) {
@@ -691,6 +728,40 @@ export default {
 			}
 
 			return input;
+		},
+		_findCustomerMatchFromInput(val) {
+			const input = String(val || "").trim().toLowerCase();
+			if (!input) return null;
+
+			const candidates = this.customers || [];
+
+			const exactMatch = candidates.find((c) => {
+				if (!c) return false;
+				return [c.name, c.customer_name, c.custom_display_name, c.mobile_no].some((field) =>
+					String(field || "").trim().toLowerCase() === input,
+				);
+			});
+			if (exactMatch) return exactMatch;
+
+			const partialMatches = candidates.filter((c) => {
+				if (!c) return false;
+				return [c.custom_display_name, c.customer_name, c.name, c.mobile_no].some((field) =>
+					String(field || "").trim().toLowerCase().includes(input),
+				);
+			});
+
+			if (partialMatches.length === 1) {
+				return partialMatches[0];
+			}
+
+			if (!partialMatches.length) {
+				return null;
+			}
+
+			return (
+				partialMatches.find((c) => String(c.name || "").trim().toLowerCase().startsWith(input)) ||
+				partialMatches[0]
+			);
 		},
 		cancelPendingCustomerSearch() {
 			if (this.searchDebounce && this.searchDebounce.cancel) {
@@ -975,25 +1046,21 @@ export default {
 		},
 
 		handleEnter(event) {
-			const inputText = event.target.value?.toLowerCase() || "";
-			const matched = this.customers.find((cust) => {
-				return (
-					cust.custom_display_name?.toLowerCase().includes(inputText) ||
-					cust.customer_name?.toLowerCase().includes(inputText) ||
-					cust.name?.toLowerCase().includes(inputText) ||
-					cust.mobile_no?.toLowerCase().includes(inputText)
-				);
-			});
+			event?.preventDefault?.();
+			event?.stopPropagation?.();
+
+			const inputText = event?.target?.value || this.searchTerm || this.internalCustomer || "";
+			const matched = this._findCustomerMatchFromInput(inputText);
 
 			if (matched) {
 				this.tempSelectedCustomer = matched.name;
-				this.internalCustomer = matched.name;
-				this.customer = matched.name;
+				this.applyProgrammaticCustomerSelection(matched.name, matched);
 				this.eventBus.emit("update_customer", matched.name);
 				this.fetchAndEmitCustomerDetails(matched.name);
 				this.fetchVehiclesForCustomer(matched.name);
+				this.selectedVehicle = null;
 				this.isMenuOpen = false;
-				event.target.blur();
+				event?.target?.blur?.();
 			}
 		},
 
@@ -1911,7 +1978,7 @@ export default {
 					}
 				}
 
-				this.vehicles = fetchedVehicles;
+				this.vehicles = this._dedupeVehicleRows(fetchedVehicles);
 				console.log("[Vehicle] fetch complete", {
 					customerName,
 					vehicleNo,
@@ -1949,10 +2016,12 @@ export default {
 					const nextVehicle = requestedVehicle || selectedVehicle || selectedVehicleByNo;
 					this.selectedVehicle = nextVehicle.name;
 					this.vehicle_no = nextVehicle.vehicle_no || currentSelectedVehicleNo || "";
+					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", nextVehicle.name);
 				} else if (this.vehicles.length === 1) {
 					this.selectedVehicle = this.vehicles[0].name;
 					this.vehicle_no = this.vehicles[0].vehicle_no;
+					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", this.selectedVehicle);
 
 					this.eventBus.emit("apply_vehicle_discount", {
@@ -1981,8 +2050,7 @@ export default {
 			if (!val) {
 				this.selectedVehicle = null;
 				this.vehicle_no = "";
-				this.vehicleSearchTerm = "";
-				this.vehicleSearchResults = [];
+				this.clearVehicleSearchText();
 
 				this.eventBus.emit("vehicle_selected", null);
 				this.eventBus.emit("clear_vehicle_discounts");
@@ -1992,10 +2060,9 @@ export default {
 			const vehicle = (this.vehicleItems || []).find((v) => v.name === val);
 			if (!vehicle) return;
 
+			this.clearVehicleSearchText();
 			this.selectedVehicle = val;
 			this.vehicle_no = vehicle.vehicle_no || "";
-			this.vehicleSearchTerm = "";
-			this.vehicleSearchResults = [];
 			this._upsertCustomerInList(
 				vehicle.customer,
 				vehicle.custom_display_name || vehicle.customer_name || vehicle.customer,
@@ -2041,6 +2108,20 @@ export default {
 			this.$nextTick(() => {
 				this.$refs.vehicleDropdown?.blur?.();
 			});
+		},
+
+		async handleVehicleEnter(event) {
+			event?.preventDefault?.();
+			event?.stopPropagation?.();
+
+			const typedVehicleNo = this.sanitizeVehicleNo(event?.target?.value || this.vehicle_no || "");
+			if (typedVehicleNo) {
+				this.vehicle_no = typedVehicleNo;
+			}
+
+			this.clearVehicleSearchText();
+			await this.onVehicleNoEnter();
+			event?.target?.blur?.();
 		},
 	},
 
@@ -2143,6 +2224,7 @@ export default {
 				// Set customer state
 				this.customer = customerName;
 				this.internalCustomer = customerName;
+				this.vehicleSearchText = "";
 
 				// Emit update_customer so Invoice.vue stays in sync
 				this.eventBus.emit("update_customer", customerName);
@@ -2198,11 +2280,15 @@ export default {
 								payload.custom_display_name || payload.customer_name || customerName,
 							mobile_no: payload.contact_mobile || "",
 						};
-						this.vehicles = [matchedVehicle, ...(this.vehicles || [])];
+						this.vehicles = this._dedupeVehicleRows([
+							matchedVehicle,
+							...(this.vehicles || []),
+						]);
 					}
 
 					this.selectedVehicle = matchedVehicle.name;
 					this.vehicle_no = matchedVehicle.vehicle_no || requestedVehicleNo;
+					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", matchedVehicle.name);
 					this.pendingDraftVehicleNo = null;
 				}
@@ -2248,14 +2334,7 @@ export default {
 
 			// FETCH VEHICLES DIRECTLY WHEN CUSTOMER SEARCH CHANGES
 			if (this.searchTerm && this.searchTerm.length >= 2) {
-				const matched = this.customers.find((cust) => {
-					return (
-						cust.custom_display_name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-						cust.customer_name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-						cust.name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-						cust.mobile_no?.toLowerCase().includes(this.searchTerm.toLowerCase())
-					);
-				});
+				const matched = this._findCustomerMatchFromInput(this.searchTerm);
 
 				if (matched) {
 					this.customer = matched.name;
@@ -2395,14 +2474,15 @@ export default {
 						const refreshed = (this.vehicles || []).find(
 							(v) => (v.vehicle_no || "").trim() === (vehicle.vehicle_no || "").trim(),
 						);
-						if (refreshed) {
-							this.selectedVehicle = refreshed.name;
-							this.vehicle_no = refreshed.vehicle_no;
-							this.eventBus.emit("vehicle_selected", refreshed.name);
-						}
-					} else {
-						const jobVehicleNo =
-							this.jobOrderCustomer === normalized.name ? this.jobOrderVehicleNo : null;
+					if (refreshed) {
+						this.selectedVehicle = refreshed.name;
+						this.vehicle_no = refreshed.vehicle_no;
+						this.vehicleSearchText = "";
+						this.eventBus.emit("vehicle_selected", refreshed.name);
+					}
+				} else {
+					const jobVehicleNo =
+						this.jobOrderCustomer === normalized.name ? this.jobOrderVehicleNo : null;
 						await this.fetchVehiclesForCustomer(normalized.name, jobVehicleNo);
 					}
 				});
@@ -2438,10 +2518,12 @@ export default {
 						if (refreshed) {
 							this.selectedVehicle = refreshed.name;
 							this.vehicle_no = refreshed.vehicle_no;
+							this.vehicleSearchText = "";
 							this.eventBus.emit("vehicle_selected", refreshed.name);
 						} else {
 							this.selectedVehicle = vehicle.name;
 							this.vehicle_no = vehicle.vehicle_no;
+							this.vehicleSearchText = "";
 							this.eventBus.emit("vehicle_selected", vehicle.name);
 						}
 					}
@@ -2449,6 +2531,7 @@ export default {
 
 				this.eventBus.on("set_vehicle", (vehicle_name) => {
 					this.selectedVehicle = vehicle_name;
+					this.vehicleSearchText = "";
 					this.onVehicleSelect(vehicle_name);
 				});
 
@@ -2478,11 +2561,15 @@ export default {
 								this.customer,
 							mobile_no: "",
 						};
-						this.vehicles = [matchedVehicle, ...(this.vehicles || [])];
+						this.vehicles = this._dedupeVehicleRows([
+							matchedVehicle,
+							...(this.vehicles || []),
+						]);
 					}
 
 					this.selectedVehicle = matchedVehicle.name;
 					this.vehicle_no = matchedVehicle.vehicle_no || normalized;
+					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", matchedVehicle.name);
 				});
 

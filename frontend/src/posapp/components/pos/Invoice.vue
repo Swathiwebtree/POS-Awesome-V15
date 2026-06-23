@@ -371,7 +371,7 @@ export default {
 			pos_profile: "",
 			pos_opening_shift: "",
 			stock_settings: "",
-			invoice_doc: "",
+			invoice_doc: null,
 			return_doc: "",
 			customer: "",
 			customer_info: "",
@@ -861,6 +861,14 @@ export default {
 		},
 
 		recalculateTotals() {
+			if (!this.invoice_doc || typeof this.invoice_doc !== "object") {
+				this.invoice_doc = {
+					doctype: "Sales Invoice",
+					items: [],
+					payments: [],
+				};
+			}
+
 			const precision = this.currency_precision;
 
 			const roundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, precision);
@@ -1282,6 +1290,7 @@ export default {
 		},
 
 		show_payment() {
+			this.get_invoice_doc();
 			this.recalculateTotals();
 
 			const invoice = this.prepareForPayment();

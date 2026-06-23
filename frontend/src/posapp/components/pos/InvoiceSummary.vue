@@ -1195,11 +1195,11 @@ export default {
 			for (const candidate of candidates) {
 				const precision = Number(candidate);
 				if (Number.isFinite(precision)) {
-					return precision;
+					return Math.max(precision, 3);
 				}
 			}
 
-			return 2;
+			return 3;
 		},
 		__() {
 			return window.__ || ((str) => str);

@@ -3216,7 +3216,11 @@ export default {
 			this.tryOpenPaymentDialog();
 
 			const default_payment = this.invoice_doc.payments.find((payment) => payment.default === 1);
-			this.is_credit_sale = false;
+			this.is_credit_sale = !!(
+				this.selected_customer_is_corporate &&
+				this.pos_profile?.posa_allow_credit_sale &&
+				!invoice_doc.is_return
+			);
 			this.is_write_off_change = false;
 
 			if (invoice_doc.is_return) {

@@ -484,7 +484,9 @@ export default {
 			this.$emit("logout");
 		},
 		refreshCacheUsage() {
-			this.$emit("refresh-cache-usage");
+			// The meter click is treated as a full cache reset action.
+			// Keep the usage-meter refresh event separate for the actual meter readout.
+			this.clearCache();
 		},
 		updateAfterDelete() {
 			this.$emit("update-after-delete");
