@@ -1000,15 +1000,6 @@ export default {
 			if (!this.invoice_doc) return 0;
 
 			const grandTotal = this.flt(this.invoice_doc.grand_total || 0, this.currency_precision);
-			const manualRoundOff = this.flt(
-				this.invoice_doc.rounding_adjustment || 0,
-				this.currency_precision,
-			);
-
-			if (manualRoundOff !== 0) {
-				return this.flt(grandTotal + manualRoundOff, this.currency_precision);
-			}
-
 			return grandTotal;
 		},
 
@@ -1590,10 +1581,14 @@ export default {
 			);
 			const preTaxDiscount = this.getPreTaxDiscountAmount(doc);
 			const loyaltyDiscount = this.getLoyaltyDiscountAmount(doc);
+			const manualRoundOff = Number(doc?.rounding_adjustment || 0);
 			const safeItemTotal = Number.isFinite(itemTotal) ? itemTotal : 0;
 			const safeDiscount = Number.isFinite(preTaxDiscount) ? preTaxDiscount : 0;
 			const safeLoyalty = Number.isFinite(loyaltyDiscount) ? loyaltyDiscount : 0;
-			return this.flt(safeItemTotal - safeDiscount - safeLoyalty, moneyPrecision);
+			return this.flt(
+				safeItemTotal - safeDiscount - safeLoyalty + (Number.isFinite(manualRoundOff) ? manualRoundOff : 0),
+				moneyPrecision,
+			);
 		},
 
 		calculateTemplateTaxTotal(doc = this.invoice_doc, baseAmount = null) {
@@ -1607,15 +1602,18 @@ export default {
 			const resolvedBaseAmount =
 				baseAmount != null
 					? Number(baseAmount)
-					: doc?.net_total != null
-						? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
+					: this.getDiscountedNetTotal(doc) != null
+						? Number(this.getDiscountedNetTotal(doc))
+						: doc?.net_total != null
+							? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
 						: Number(
 								formatUtils
 									.fromArabicNumerals(
 										String(
 											(doc?.total ?? 0) -
 												this.getPreTaxDiscountAmount(doc) -
-												this.getLoyaltyDiscountAmount(doc),
+												this.getLoyaltyDiscountAmount(doc) +
+												Number(doc?.rounding_adjustment || 0),
 										),
 									)
 									.replace(/,/g, ""),
@@ -1650,11 +1648,14 @@ export default {
 			const discountedItemTotal =
 				baseAmount != null
 					? Number(baseAmount)
-					: doc?.net_total != null
-						? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
-						: itemBaseTotal -
-							this.getPreTaxDiscountAmount(doc) -
-							this.getLoyaltyDiscountAmount(doc);
+					: this.getDiscountedNetTotal(doc) != null
+						? Number(this.getDiscountedNetTotal(doc))
+						: doc?.net_total != null
+							? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
+							: itemBaseTotal -
+								this.getPreTaxDiscountAmount(doc) -
+								this.getLoyaltyDiscountAmount(doc) +
+								Number(doc?.rounding_adjustment || 0);
 			const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
 
 			doc.items.forEach((item) => {
@@ -3413,15 +3414,7 @@ export default {
 				}
 			}
 			this.grand_total = this.flt(invoiceData.grand_total || 0, this.currency_precision);
-			this.rounded_total =
-				invoiceData.rounding_adjustment &&
-				this.flt(invoiceData.rounding_adjustment, this.currency_precision) !== 0
-					? this.flt(
-							this.grand_total +
-								this.flt(invoiceData.rounding_adjustment || 0, this.currency_precision),
-							this.currency_precision,
-						)
-					: this.grand_total;
+			this.rounded_total = this.grand_total;
 			this.customer = invoiceData.customer || "";
 			await this.syncCorporateCustomerState(invoiceData);
 

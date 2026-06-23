@@ -435,25 +435,32 @@ def update_invoice(data):
     invoice_doc.discount_amount = pre_tax_discount_amount
     invoice_doc.loyalty_discount_amount = loyalty_discount_amount
 
-    # Preserve manual round-off from POS when provided; otherwise use normal ERPNext flow.
-    if incoming_rounding_adjustment:
-        invoice_doc.rounding_adjustment = incoming_rounding_adjustment
-        invoice_doc.rounded_total = flt(invoice_doc.grand_total + incoming_rounding_adjustment)
-        invoice_doc.base_rounded_total = flt(
-            invoice_doc.base_grand_total
-            + (incoming_rounding_adjustment * flt(invoice_doc.conversion_rate or 1))
-        )
-    elif not invoice_doc.rounded_total:
-        invoice_doc.rounded_total = invoice_doc.grand_total
-        invoice_doc.rounding_adjustment = 0
-        invoice_doc.base_rounded_total = flt(invoice_doc.base_grand_total)
-    else:
-        invoice_doc.rounded_total = flt(invoice_doc.grand_total)
-        invoice_doc.rounding_adjustment = 0
-        invoice_doc.base_rounded_total = flt(invoice_doc.base_grand_total)
+    # Apply manual round-off before VAT is finalized.
+    taxable_net_total = flt(invoice_doc.net_total + incoming_rounding_adjustment)
+    invoice_doc.rounding_adjustment = incoming_rounding_adjustment
+    invoice_doc.net_total = taxable_net_total
 
-    # Ensure base tax total is set
-    invoice_doc.base_total_taxes_and_charges = invoice_doc.total_taxes_and_charges
+    running_total = taxable_net_total
+    total_tax = 0
+    for tax in invoice_doc.get("taxes", []):
+        if tax.charge_type == "Actual":
+            tax_amount = flt(tax.tax_amount or 0)
+        else:
+            tax_amount = flt((taxable_net_total * flt(tax.rate or 0)) / 100)
+        tax.tax_amount = tax_amount
+        running_total += tax_amount
+        tax.total = flt(running_total)
+        total_tax += tax_amount
+
+    invoice_doc.total_taxes_and_charges = flt(total_tax)
+    invoice_doc.base_net_total = flt(taxable_net_total * flt(invoice_doc.conversion_rate or 1))
+    invoice_doc.base_total_taxes_and_charges = flt(
+        invoice_doc.total_taxes_and_charges * flt(invoice_doc.conversion_rate or 1)
+    )
+    invoice_doc.grand_total = flt(taxable_net_total + total_tax)
+    invoice_doc.rounded_total = flt(invoice_doc.grand_total)
+    invoice_doc.base_grand_total = flt(invoice_doc.grand_total * flt(invoice_doc.conversion_rate or 1))
+    invoice_doc.base_rounded_total = flt(invoice_doc.base_grand_total)
 
     # Log tax calculation for debugging
     new_tax = sum(flt(t.tax_amount) for t in invoice_doc.get("taxes", []))

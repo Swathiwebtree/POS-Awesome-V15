@@ -71,6 +71,11 @@ export default {
 			(Number.isFinite(invoice_discount) ? invoice_discount : 0) +
 			(Number.isFinite(loyalty_discount) ? loyalty_discount : 0);
 
+		const manualRoundOff = Number(this.invoice_doc?.rounding_adjustment || 0);
+		if (Number.isFinite(manualRoundOff)) {
+			total += manualRoundOff;
+		}
+
 		const result = this.flt(total, moneyPrecision);
 		console.log("[invoiceComputed] net_total:", result);
 		return result;
@@ -80,14 +85,21 @@ export default {
 	grand_total() {
 		const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
 		const net_total = this.flt(this.net_total || 0, moneyPrecision);
-		let fallbackTax = this.calculate_item_tax_from_items ? this.calculate_item_tax_from_items() : 0;
-		if (!fallbackTax && this.apply_tax_template_totals) {
-			fallbackTax = this.apply_tax_template_totals({
+		let tax = 0;
+		if (this.calculate_item_tax_from_items) {
+			tax = this.calculate_item_tax_from_items();
+		}
+		if (!tax && this.apply_tax_template_totals) {
+			tax = this.apply_tax_template_totals({
 				net_total,
 				total: this.subtotal,
+				rounding_adjustment: this.invoice_doc?.rounding_adjustment || 0,
 			});
 		}
-		const tax = this.flt(this.total_tax || fallbackTax || 0, moneyPrecision);
+		if (!tax) {
+			tax = this.total_tax || 0;
+		}
+		tax = this.flt(tax, moneyPrecision);
 		const total = this.flt(net_total + tax, moneyPrecision);
 
 		console.log("[invoiceComputed] grand_total:", {
@@ -101,13 +113,6 @@ export default {
 
 	// Calculate rounded total
 	rounded_total() {
-		const manualRoundOff = this.flt(this.invoice_doc?.rounding_adjustment || 0, this.currency_precision);
-		if (manualRoundOff !== 0) {
-			const manuallyRounded = this.flt(this.grand_total + manualRoundOff, this.currency_precision);
-			console.log("[invoiceComputed] rounded_total (manual):", manuallyRounded);
-			return manuallyRounded;
-		}
-
 		const rounded = this.flt(this.grand_total || 0, this.currency_precision);
 		console.log("[invoiceComputed] rounded_total:", rounded);
 		return rounded;

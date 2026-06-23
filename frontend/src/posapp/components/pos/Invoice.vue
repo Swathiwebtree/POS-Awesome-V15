@@ -873,7 +873,7 @@ export default {
 
 			const roundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, precision);
 			const grandTotal = this.flt(this.grand_total || 0, precision);
-			const roundedTotal = roundOff !== 0 ? this.flt(grandTotal + roundOff, precision) : grandTotal;
+			const roundedTotal = grandTotal;
 
 			this.invoice_doc.net_total = this.flt(this.net_total || 0, precision);
 			this.invoice_doc.total = this.flt(this.Total || 0, precision);
@@ -2050,25 +2050,20 @@ export default {
 			);
 			this.invoice_doc.loyalty_discount_amount = Number(this.invoice_doc.loyalty_discount_amount || 0);
 
-			if (!this.invoice_doc.total_taxes_and_charges) {
-				this.invoice_doc.total_taxes_and_charges =
-					this.calculate_item_tax_from_items() ||
-					this.apply_tax_template_totals(this.invoice_doc) ||
-					0;
-			}
-
 			const manualRoundOff = this.flt(
 				this.invoice_doc.rounding_adjustment || 0,
 				this.currency_precision,
 			);
+			this.invoice_doc.net_total = this.flt(this.net_total || 0, this.currency_precision);
+			this.invoice_doc.total_taxes_and_charges =
+				this.calculate_item_tax_from_items() ||
+				this.apply_tax_template_totals(this.invoice_doc) ||
+				0;
 			const effectiveGrandTotal = this.flt(
-				this.grand_total || this.subtotal || 0,
+				this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
 				this.currency_precision,
 			);
-			const effectiveRoundedTotal =
-				manualRoundOff !== 0
-					? this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision)
-					: effectiveGrandTotal;
+			const effectiveRoundedTotal = effectiveGrandTotal;
 
 			// Always sync computed totals so payment and backend receive the correct round-off fields
 			this.invoice_doc.grand_total = effectiveGrandTotal;
@@ -2127,10 +2122,7 @@ export default {
 				this.currency_precision,
 			);
 			const effectiveGrandTotal = this.flt(this.grand_total || 0, this.currency_precision);
-			const effectiveRoundedTotal =
-				manualRoundOff !== 0
-					? this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision)
-					: effectiveGrandTotal;
+			const effectiveRoundedTotal = effectiveGrandTotal;
 
 			const invoiceData = {
 				// Basic info
@@ -2172,7 +2164,9 @@ export default {
 			};
 
 			invoiceData.total_taxes_and_charges =
-				this.invoice_doc?.total_taxes_and_charges || this.total_tax || 0;
+				this.calculate_item_tax_from_items() ||
+				this.apply_tax_template_totals(this.invoice_doc) ||
+				0;
 
 			return invoiceData;
 		},
@@ -2202,11 +2196,15 @@ export default {
 				this.invoice_doc?.rounding_adjustment || 0,
 				this.currency_precision,
 			);
-			const effectiveGrandTotal = this.flt(this.grand_total || 0, this.currency_precision);
-			const effectiveRoundedTotal =
-				manualRoundOff !== 0
-					? this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision)
-					: effectiveGrandTotal;
+			const effectiveTaxTotal =
+				this.calculate_item_tax_from_items() ||
+				this.apply_tax_template_totals(this.invoice_doc) ||
+				0;
+			const effectiveGrandTotal = this.flt(
+				this.net_total + effectiveTaxTotal,
+				this.currency_precision,
+			);
+			const effectiveRoundedTotal = effectiveGrandTotal;
 
 			console.log("[prepareForPayment] Totals snapshot:", {
 				item_total: this.flt(this.Total || 0, this.currency_precision),
@@ -2228,8 +2226,7 @@ export default {
 
 			invoiceData.total = this.Total;
 			invoiceData.net_total = this.net_total;
-			invoiceData.total_taxes_and_charges =
-				this.invoice_doc?.total_taxes_and_charges || this.total_tax || 0;
+			invoiceData.total_taxes_and_charges = effectiveTaxTotal;
 			invoiceData.grand_total = effectiveGrandTotal;
 			invoiceData.rounded_total = effectiveRoundedTotal;
 			invoiceData.rounding_adjustment = manualRoundOff;
@@ -2550,8 +2547,11 @@ export default {
 			this.invoice_doc.posting_date = this.posting_date || frappe.datetime.nowdate();
 			this.invoice_doc.currency =
 				this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
-			this.invoice_doc.net_total = this.net_total || 0;
-			this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
+			this.invoice_doc.net_total = this.flt(this.net_total || 0, this.currency_precision);
+			this.invoice_doc.total_taxes_and_charges =
+				this.calculate_item_tax_from_items() ||
+				this.apply_tax_template_totals(this.invoice_doc) ||
+				0;
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
 			this.invoice_doc.additional_discount = this.additional_discount || 0;
 			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
@@ -2565,11 +2565,12 @@ export default {
 				this.invoice_doc.apply_discount_on = "Net Total";
 			}
 
-			const grandTotal = this.flt(this.grand_total || this.net_total || this.subtotal || 0);
-			const roundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision);
+			const grandTotal = this.flt(
+				this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
+				this.currency_precision,
+			);
 			this.invoice_doc.grand_total = grandTotal;
-			this.invoice_doc.rounded_total =
-				roundOff !== 0 ? this.flt(grandTotal + roundOff, this.currency_precision) : grandTotal;
+			this.invoice_doc.rounded_total = grandTotal;
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
 			this.invoice_doc.pos_profile = this.pos_profile && this.pos_profile.name;
@@ -3682,10 +3683,7 @@ export default {
 		grand_total(newVal) {
 			if (this.invoice_doc) {
 				this.invoice_doc.grand_total = newVal;
-				this.invoice_doc.rounded_total =
-					this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision) !== 0
-						? this.rounded_total
-						: newVal;
+				this.invoice_doc.rounded_total = newVal;
 			}
 		},
 

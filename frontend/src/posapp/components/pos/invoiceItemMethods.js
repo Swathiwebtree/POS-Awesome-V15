@@ -152,10 +152,11 @@ export default {
 		const loyaltyDiscount = Number(
 			this.invoice_doc?.loyalty_discount_amount ?? this.invoice_doc?.loyalty_amount ?? 0,
 		);
+		const manualRoundOff = Number(this.invoice_doc?.rounding_adjustment || 0);
 		const taxableSubtotal =
-			this.invoice_doc?.net_total != null
-				? Number(this.invoice_doc.net_total || 0)
-				: subtotal - invoiceDiscount - loyaltyDiscount;
+			this.net_total != null
+				? Number(this.net_total || 0)
+				: subtotal - invoiceDiscount - loyaltyDiscount + (Number.isFinite(manualRoundOff) ? manualRoundOff : 0);
 		const taxableFactor = subtotal ? taxableSubtotal / subtotal : 1;
 		(this.items || []).forEach((item) => {
 			if (!item || !item.item_tax_rate) return;
@@ -190,11 +191,14 @@ export default {
 
 		const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
 		const baseAmount =
-			doc?.net_total != null
-				? Number(doc.net_total || 0)
-				: Number(doc?.total ?? this.subtotal ?? this.Total ?? 0) -
-					Number(this.discount_amount ?? this.additional_discount ?? 0) -
-					Number(doc?.loyalty_discount_amount ?? doc?.loyalty_amount ?? 0);
+			this.net_total != null
+				? Number(this.net_total || 0)
+				: doc?.net_total != null
+					? Number(doc.net_total || 0)
+					: Number(doc?.total ?? this.subtotal ?? this.Total ?? 0) -
+						Number(this.discount_amount ?? this.additional_discount ?? 0) -
+						Number(doc?.loyalty_discount_amount ?? doc?.loyalty_amount ?? 0) +
+						Number(doc?.rounding_adjustment || 0);
 		const inclusive = getTaxInclusiveSetting();
 		let runningTotal = baseAmount;
 		let totalTax = 0;
