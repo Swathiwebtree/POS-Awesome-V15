@@ -1586,7 +1586,10 @@ export default {
 			const safeDiscount = Number.isFinite(preTaxDiscount) ? preTaxDiscount : 0;
 			const safeLoyalty = Number.isFinite(loyaltyDiscount) ? loyaltyDiscount : 0;
 			return this.flt(
-				safeItemTotal - safeDiscount - safeLoyalty + (Number.isFinite(manualRoundOff) ? manualRoundOff : 0),
+				safeItemTotal -
+					safeDiscount -
+					safeLoyalty +
+					(Number.isFinite(manualRoundOff) ? manualRoundOff : 0),
 				moneyPrecision,
 			);
 		},
@@ -1606,18 +1609,18 @@ export default {
 						? Number(this.getDiscountedNetTotal(doc))
 						: doc?.net_total != null
 							? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
-						: Number(
-								formatUtils
-									.fromArabicNumerals(
-										String(
-											(doc?.total ?? 0) -
-												this.getPreTaxDiscountAmount(doc) -
-												this.getLoyaltyDiscountAmount(doc) +
-												Number(doc?.rounding_adjustment || 0),
-										),
-									)
-									.replace(/,/g, ""),
-							);
+							: Number(
+									formatUtils
+										.fromArabicNumerals(
+											String(
+												(doc?.total ?? 0) -
+													this.getPreTaxDiscountAmount(doc) -
+													this.getLoyaltyDiscountAmount(doc) +
+													Number(doc?.rounding_adjustment || 0),
+											),
+										)
+										.replace(/,/g, ""),
+								);
 			let totalTax = 0;
 
 			tmpl.taxes.forEach((row) => {

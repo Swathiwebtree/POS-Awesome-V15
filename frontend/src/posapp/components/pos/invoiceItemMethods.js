@@ -156,7 +156,10 @@ export default {
 		const taxableSubtotal =
 			this.net_total != null
 				? Number(this.net_total || 0)
-				: subtotal - invoiceDiscount - loyaltyDiscount + (Number.isFinite(manualRoundOff) ? manualRoundOff : 0);
+				: subtotal -
+					invoiceDiscount -
+					loyaltyDiscount +
+					(Number.isFinite(manualRoundOff) ? manualRoundOff : 0);
 		const taxableFactor = subtotal ? taxableSubtotal / subtotal : 1;
 		(this.items || []).forEach((item) => {
 			if (!item || !item.item_tax_rate) return;

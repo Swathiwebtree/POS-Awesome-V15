@@ -2056,9 +2056,7 @@ export default {
 			);
 			this.invoice_doc.net_total = this.flt(this.net_total || 0, this.currency_precision);
 			this.invoice_doc.total_taxes_and_charges =
-				this.calculate_item_tax_from_items() ||
-				this.apply_tax_template_totals(this.invoice_doc) ||
-				0;
+				this.calculate_item_tax_from_items() || this.apply_tax_template_totals(this.invoice_doc) || 0;
 			const effectiveGrandTotal = this.flt(
 				this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
 				this.currency_precision,
@@ -2164,9 +2162,7 @@ export default {
 			};
 
 			invoiceData.total_taxes_and_charges =
-				this.calculate_item_tax_from_items() ||
-				this.apply_tax_template_totals(this.invoice_doc) ||
-				0;
+				this.calculate_item_tax_from_items() || this.apply_tax_template_totals(this.invoice_doc) || 0;
 
 			return invoiceData;
 		},
@@ -2197,13 +2193,8 @@ export default {
 				this.currency_precision,
 			);
 			const effectiveTaxTotal =
-				this.calculate_item_tax_from_items() ||
-				this.apply_tax_template_totals(this.invoice_doc) ||
-				0;
-			const effectiveGrandTotal = this.flt(
-				this.net_total + effectiveTaxTotal,
-				this.currency_precision,
-			);
+				this.calculate_item_tax_from_items() || this.apply_tax_template_totals(this.invoice_doc) || 0;
+			const effectiveGrandTotal = this.flt(this.net_total + effectiveTaxTotal, this.currency_precision);
 			const effectiveRoundedTotal = effectiveGrandTotal;
 
 			console.log("[prepareForPayment] Totals snapshot:", {
@@ -2549,9 +2540,7 @@ export default {
 				this.selected_currency || (this.pos_profile && this.pos_profile.currency) || "INR";
 			this.invoice_doc.net_total = this.flt(this.net_total || 0, this.currency_precision);
 			this.invoice_doc.total_taxes_and_charges =
-				this.calculate_item_tax_from_items() ||
-				this.apply_tax_template_totals(this.invoice_doc) ||
-				0;
+				this.calculate_item_tax_from_items() || this.apply_tax_template_totals(this.invoice_doc) || 0;
 			this.invoice_doc.discount_amount = this.discount_amount || 0;
 			this.invoice_doc.additional_discount = this.additional_discount || 0;
 			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
