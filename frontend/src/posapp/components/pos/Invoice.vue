@@ -873,10 +873,7 @@ export default {
 
 			const roundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, precision);
 			const grandTotal = this.flt(this.grand_total || 0, precision);
-			const roundedTotal =
-				roundOff !== 0
-					? this.flt(grandTotal + roundOff, precision)
-					: grandTotal;
+			const roundedTotal = roundOff !== 0 ? this.flt(grandTotal + roundOff, precision) : grandTotal;
 
 			this.invoice_doc.net_total = this.flt(this.net_total || 0, precision);
 			this.invoice_doc.total = this.flt(this.Total || 0, precision);

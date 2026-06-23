@@ -1551,11 +1551,7 @@ export default {
 		getPreTaxDiscountAmount(doc = this.invoice_doc) {
 			const invoiceDiscountRaw = Number(
 				formatUtils
-					.fromArabicNumerals(
-						String(
-							doc?.discount_amount || doc?.additional_discount || 0,
-						),
-					)
+					.fromArabicNumerals(String(doc?.discount_amount || doc?.additional_discount || 0))
 					.replace(/,/g, ""),
 			);
 			const additionalDiscountRaw = Number(doc?.additional_discount || 0);
@@ -1581,13 +1577,7 @@ export default {
 		getLoyaltyDiscountAmount(doc = this.invoice_doc) {
 			const loyaltyDiscount = Number(
 				formatUtils
-					.fromArabicNumerals(
-						String(
-							this.loyalty_amount ||
-								doc?.loyalty_discount_amount ||
-								0,
-						),
-					)
+					.fromArabicNumerals(String(this.loyalty_amount || doc?.loyalty_discount_amount || 0))
 					.replace(/,/g, ""),
 			);
 			return Number.isFinite(loyaltyDiscount) ? loyaltyDiscount : 0;
@@ -1662,7 +1652,9 @@ export default {
 					? Number(baseAmount)
 					: doc?.net_total != null
 						? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
-						: itemBaseTotal - this.getPreTaxDiscountAmount(doc) - this.getLoyaltyDiscountAmount(doc);
+						: itemBaseTotal -
+							this.getPreTaxDiscountAmount(doc) -
+							this.getLoyaltyDiscountAmount(doc);
 			const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
 
 			doc.items.forEach((item) => {
@@ -1825,7 +1817,7 @@ export default {
 								base_total_taxes_and_charges: this.invoice_doc.base_total_taxes_and_charges,
 								base_grand_total: this.invoice_doc.base_grand_total,
 								base_rounded_total: this.invoice_doc.base_rounded_total,
-						  }
+							}
 						: {};
 
 					this.invoice_doc = {
@@ -3422,12 +3414,13 @@ export default {
 			}
 			this.grand_total = this.flt(invoiceData.grand_total || 0, this.currency_precision);
 			this.rounded_total =
-				invoiceData.rounding_adjustment && this.flt(invoiceData.rounding_adjustment, this.currency_precision) !== 0
+				invoiceData.rounding_adjustment &&
+				this.flt(invoiceData.rounding_adjustment, this.currency_precision) !== 0
 					? this.flt(
 							this.grand_total +
 								this.flt(invoiceData.rounding_adjustment || 0, this.currency_precision),
 							this.currency_precision,
-					  )
+						)
 					: this.grand_total;
 			this.customer = invoiceData.customer || "";
 			await this.syncCorporateCustomerState(invoiceData);

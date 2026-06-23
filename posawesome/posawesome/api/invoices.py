@@ -342,7 +342,9 @@ def update_invoice(data):
     # Fetch default values from POS Profile
     invoice_doc.set_missing_values()
 
-    pre_tax_discount_amount = flt(invoice_doc.get("discount_amount") or invoice_doc.get("additional_discount") or 0)
+    pre_tax_discount_amount = flt(
+        invoice_doc.get("discount_amount") or invoice_doc.get("additional_discount") or 0
+    )
     loyalty_discount_amount = flt(
         invoice_doc.get("loyalty_discount_amount") or invoice_doc.get("loyalty_amount") or 0
     )

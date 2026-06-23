@@ -844,7 +844,9 @@ export default {
 			});
 		},
 		should_show_payment_method(method) {
-			const mode = String(method?.mode_of_payment || "").trim().toLowerCase();
+			const mode = String(method?.mode_of_payment || "")
+				.trim()
+				.toLowerCase();
 			if (!mode) return false;
 			if (mode === "on account" || mode === "on-account") {
 				return this.is_company_customer();
