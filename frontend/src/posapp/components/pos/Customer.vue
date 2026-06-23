@@ -730,15 +730,20 @@ export default {
 			return input;
 		},
 		_findCustomerMatchFromInput(val) {
-			const input = String(val || "").trim().toLowerCase();
+			const input = String(val || "")
+				.trim()
+				.toLowerCase();
 			if (!input) return null;
 
 			const candidates = this.customers || [];
 
 			const exactMatch = candidates.find((c) => {
 				if (!c) return false;
-				return [c.name, c.customer_name, c.custom_display_name, c.mobile_no].some((field) =>
-					String(field || "").trim().toLowerCase() === input,
+				return [c.name, c.customer_name, c.custom_display_name, c.mobile_no].some(
+					(field) =>
+						String(field || "")
+							.trim()
+							.toLowerCase() === input,
 				);
 			});
 			if (exactMatch) return exactMatch;
@@ -746,7 +751,10 @@ export default {
 			const partialMatches = candidates.filter((c) => {
 				if (!c) return false;
 				return [c.custom_display_name, c.customer_name, c.name, c.mobile_no].some((field) =>
-					String(field || "").trim().toLowerCase().includes(input),
+					String(field || "")
+						.trim()
+						.toLowerCase()
+						.includes(input),
 				);
 			});
 
@@ -759,8 +767,12 @@ export default {
 			}
 
 			return (
-				partialMatches.find((c) => String(c.name || "").trim().toLowerCase().startsWith(input)) ||
-				partialMatches[0]
+				partialMatches.find((c) =>
+					String(c.name || "")
+						.trim()
+						.toLowerCase()
+						.startsWith(input),
+				) || partialMatches[0]
 			);
 		},
 		cancelPendingCustomerSearch() {
@@ -2280,10 +2292,7 @@ export default {
 								payload.custom_display_name || payload.customer_name || customerName,
 							mobile_no: payload.contact_mobile || "",
 						};
-						this.vehicles = this._dedupeVehicleRows([
-							matchedVehicle,
-							...(this.vehicles || []),
-						]);
+						this.vehicles = this._dedupeVehicleRows([matchedVehicle, ...(this.vehicles || [])]);
 					}
 
 					this.selectedVehicle = matchedVehicle.name;
@@ -2474,15 +2483,15 @@ export default {
 						const refreshed = (this.vehicles || []).find(
 							(v) => (v.vehicle_no || "").trim() === (vehicle.vehicle_no || "").trim(),
 						);
-					if (refreshed) {
-						this.selectedVehicle = refreshed.name;
-						this.vehicle_no = refreshed.vehicle_no;
-						this.vehicleSearchText = "";
-						this.eventBus.emit("vehicle_selected", refreshed.name);
-					}
-				} else {
-					const jobVehicleNo =
-						this.jobOrderCustomer === normalized.name ? this.jobOrderVehicleNo : null;
+						if (refreshed) {
+							this.selectedVehicle = refreshed.name;
+							this.vehicle_no = refreshed.vehicle_no;
+							this.vehicleSearchText = "";
+							this.eventBus.emit("vehicle_selected", refreshed.name);
+						}
+					} else {
+						const jobVehicleNo =
+							this.jobOrderCustomer === normalized.name ? this.jobOrderVehicleNo : null;
 						await this.fetchVehiclesForCustomer(normalized.name, jobVehicleNo);
 					}
 				});
@@ -2561,10 +2570,7 @@ export default {
 								this.customer,
 							mobile_no: "",
 						};
-						this.vehicles = this._dedupeVehicleRows([
-							matchedVehicle,
-							...(this.vehicles || []),
-						]);
+						this.vehicles = this._dedupeVehicleRows([matchedVehicle, ...(this.vehicles || [])]);
 					}
 
 					this.selectedVehicle = matchedVehicle.name;
