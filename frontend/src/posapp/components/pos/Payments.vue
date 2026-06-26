@@ -973,10 +973,7 @@ export default {
 			}
 			if (Array.isArray(this.invoice_doc.taxes) && this.invoice_doc.taxes.length > 0) {
 				return this.flt(
-					this.invoice_doc.taxes.reduce(
-						(sum, tax) => sum + (Number(tax?.tax_amount) || 0),
-						0,
-					),
+					this.invoice_doc.taxes.reduce((sum, tax) => sum + (Number(tax?.tax_amount) || 0), 0),
 					this.currency_precision,
 				);
 			}
@@ -1049,8 +1046,7 @@ export default {
 					? this.invoice_doc.to_be_paid
 					: this.invoice_doc.rounded_total != null
 						? this.invoice_doc.rounded_total
-						: (this.invoice_doc.grand_total || 0) +
-							(this.invoice_doc.rounding_adjustment || 0);
+						: (this.invoice_doc.grand_total || 0) + (this.invoice_doc.rounding_adjustment || 0);
 			return this.flt(roundedTotal, this.currency_precision);
 		},
 
@@ -1612,7 +1608,9 @@ export default {
 
 		isCorporateCustomer(source = this.customer) {
 			const customer = source && typeof source === "object" ? source : {};
-			const customerType = String(customer.customer_type || "").trim().toLowerCase();
+			const customerType = String(customer.customer_type || "")
+				.trim()
+				.toLowerCase();
 			return !!(
 				customer.is_corporate ||
 				customer.is_company ||
@@ -1622,7 +1620,9 @@ export default {
 		},
 
 		isOnAccountPaymentMethod(method) {
-			const mode = String(method?.mode_of_payment || "").trim().toLowerCase();
+			const mode = String(method?.mode_of_payment || "")
+				.trim()
+				.toLowerCase();
 			return mode === "on account" || mode === "on-account";
 		},
 
@@ -1760,7 +1760,10 @@ export default {
 			doc.rounded_total = this.flt(roundedTotal, moneyPrecision);
 			doc.to_be_paid = this.flt(roundedTotal, moneyPrecision);
 			doc.base_net_total = this.flt(doc.net_total * exchangeRate, moneyPrecision);
-			doc.base_total_taxes_and_charges = this.flt(doc.total_taxes_and_charges * exchangeRate, moneyPrecision);
+			doc.base_total_taxes_and_charges = this.flt(
+				doc.total_taxes_and_charges * exchangeRate,
+				moneyPrecision,
+			);
 			doc.base_grand_total = this.flt(doc.grand_total * exchangeRate, moneyPrecision);
 			doc.base_rounded_total = this.flt(doc.rounded_total * exchangeRate, moneyPrecision);
 
@@ -1807,7 +1810,9 @@ export default {
 								loyalty_program: msg.loyalty_program,
 							},
 						});
-						msg.conversion_factor = Number(redemptionFactorResponse?.message ?? msg.conversion_factor ?? 0);
+						msg.conversion_factor = Number(
+							redemptionFactorResponse?.message ?? msg.conversion_factor ?? 0,
+						);
 					} catch (factorErr) {
 						console.warn("[Payment] failed to fetch loyalty redemption factor:", factorErr);
 					}
@@ -1887,17 +1892,17 @@ export default {
 						? Number(this.getDiscountedNetTotal(doc))
 						: doc?.net_total != null
 							? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
-						: Number(
-								formatUtils
-									.fromArabicNumerals(
-										String(
-											(doc?.total ?? 0) -
-												this.getPreTaxDiscountAmount(doc) -
-												this.getLoyaltyDiscountAmount(doc),
-										),
-									)
-									.replace(/,/g, ""),
-							);
+							: Number(
+									formatUtils
+										.fromArabicNumerals(
+											String(
+												(doc?.total ?? 0) -
+													this.getPreTaxDiscountAmount(doc) -
+													this.getLoyaltyDiscountAmount(doc),
+											),
+										)
+										.replace(/,/g, ""),
+								);
 			let totalTax = 0;
 
 			tmpl.taxes.forEach((row) => {
@@ -1932,7 +1937,7 @@ export default {
 						? Number(this.getDiscountedNetTotal(doc))
 						: doc?.net_total != null
 							? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
-						: itemBaseTotal -
+							: itemBaseTotal -
 								this.getPreTaxDiscountAmount(doc) -
 								this.getLoyaltyDiscountAmount(doc);
 			const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
@@ -2445,7 +2450,10 @@ export default {
 			this.invoice_doc.redeem_loyalty_points = Math.round(
 				Number(this.invoice_doc.redeem_loyalty_points || 0),
 			);
-			this.invoice_doc.total_amount = this.flt(this.invoice_doc.grand_total || 0, this.currency_precision);
+			this.invoice_doc.total_amount = this.flt(
+				this.invoice_doc.grand_total || 0,
+				this.currency_precision,
+			);
 			this.invoice_doc.to_be_paid = this.flt(this.payable_total || 0, this.currency_precision);
 			this.invoice_doc.rounded_total = this.invoice_doc.to_be_paid;
 			this.invoice_doc.rounding_adjustment = this.flt(
@@ -3629,7 +3637,10 @@ export default {
 				}
 			}
 			this.grand_total = this.flt(invoiceData.grand_total || 0, this.currency_precision);
-			this.rounded_total = this.flt(invoiceData.rounded_total || this.grand_total, this.currency_precision);
+			this.rounded_total = this.flt(
+				invoiceData.rounded_total || this.grand_total,
+				this.currency_precision,
+			);
 			this.invoice_doc.total_amount = this.flt(this.grand_total, this.currency_precision);
 			this.invoice_doc.to_be_paid = this.flt(this.rounded_total, this.currency_precision);
 			this.customer = invoiceData.customer || "";

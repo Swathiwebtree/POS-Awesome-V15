@@ -2019,7 +2019,7 @@ export default {
 								String(currentSelectedVehicleNo || "")
 									.trim()
 									.toLowerCase(),
-					)
+						)
 					: null;
 				const requestedVehicle = requestedVehicleNo
 					? this.vehicles.find(

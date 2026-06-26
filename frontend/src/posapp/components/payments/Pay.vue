@@ -855,7 +855,9 @@ export default {
 		},
 		is_company_customer(customer = this.customer_info) {
 			if (!customer) return false;
-			const customerType = String(customer.customer_type || "").trim().toLowerCase();
+			const customerType = String(customer.customer_type || "")
+				.trim()
+				.toLowerCase();
 			return !!(
 				customer.is_company ||
 				customer.is_corporate ||
@@ -1236,18 +1238,18 @@ export default {
 		this.eventBus.on("server-online", this.syncPendingPayments);
 	},
 
-		mounted: function () {
-			this.$nextTick(function () {
-				this.check_opening_entry();
-				this.eventBus.on("update_customer", async (customer_name) => {
-					this.clear_all(true);
-					this.customer_name = customer_name;
-					await this.fetch_customer_details();
-					this.set_payment_methods();
-					this.get_outstanding_invoices();
-					this.get_unallocated_payments();
-					this.get_draft_mpesa_payments_register();
-				});
+	mounted: function () {
+		this.$nextTick(function () {
+			this.check_opening_entry();
+			this.eventBus.on("update_customer", async (customer_name) => {
+				this.clear_all(true);
+				this.customer_name = customer_name;
+				await this.fetch_customer_details();
+				this.set_payment_methods();
+				this.get_outstanding_invoices();
+				this.get_unallocated_payments();
+				this.get_draft_mpesa_payments_register();
+			});
 			this.eventBus.on("fetch_customer_details", () => {
 				this.fetch_customer_details();
 			});

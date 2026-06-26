@@ -121,7 +121,8 @@ export default {
 				continue;
 			}
 
-			const taxTemplateName = item.item_tax_template || (await this.fetch_item_tax_template(item.item_code));
+			const taxTemplateName =
+				item.item_tax_template || (await this.fetch_item_tax_template(item.item_code));
 			if (!taxTemplateName) {
 				continue;
 			}
@@ -143,7 +144,9 @@ export default {
 		}
 
 		const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
-		const netTotal = this.flt ? this.flt(this.net_total || 0, moneyPrecision) : Number(this.net_total || 0);
+		const netTotal = this.flt
+			? this.flt(this.net_total || 0, moneyPrecision)
+			: Number(this.net_total || 0);
 		const hasItemTaxRates = Array.isArray(this.items) && this.items.some((item) => item?.item_tax_rate);
 		const hasSavedTaxRows = Array.isArray(this.invoice_doc.taxes) && this.invoice_doc.taxes.length > 0;
 
@@ -153,10 +156,7 @@ export default {
 		} else if (hasSavedTaxRows) {
 			taxTotal = this.flt
 				? this.flt(
-						this.invoice_doc.taxes.reduce(
-							(sum, tax) => sum + (Number(tax?.tax_amount) || 0),
-							0,
-						),
+						this.invoice_doc.taxes.reduce((sum, tax) => sum + (Number(tax?.tax_amount) || 0), 0),
 						moneyPrecision,
 					)
 				: this.invoice_doc.taxes.reduce((sum, tax) => sum + (Number(tax?.tax_amount) || 0), 0);

@@ -1226,7 +1226,8 @@ export default {
 				this.invoice_doc.total_taxes_and_charges = this.total_tax;
 				this.invoice_doc.grand_total = this.grand_total;
 				this.invoice_doc.rounded_total = this.flt(
-					this.grand_total + this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision),
+					this.grand_total +
+						this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision),
 					this.currency_precision,
 				);
 				this.invoice_doc.total_amount = this.invoice_doc.grand_total;
@@ -2068,7 +2069,10 @@ export default {
 				this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
 				this.currency_precision,
 			);
-			const effectiveRoundedTotal = this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision);
+			const effectiveRoundedTotal = this.flt(
+				effectiveGrandTotal + manualRoundOff,
+				this.currency_precision,
+			);
 
 			// Always sync computed totals so payment and backend receive the correct round-off fields
 			this.invoice_doc.grand_total = effectiveGrandTotal;
@@ -2129,7 +2133,10 @@ export default {
 				this.currency_precision,
 			);
 			const effectiveGrandTotal = this.flt(this.grand_total || 0, this.currency_precision);
-			const effectiveRoundedTotal = this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision);
+			const effectiveRoundedTotal = this.flt(
+				effectiveGrandTotal + manualRoundOff,
+				this.currency_precision,
+			);
 
 			const invoiceData = {
 				// Basic info
@@ -2204,14 +2211,12 @@ export default {
 				this.currency_precision,
 			);
 			const effectiveTaxTotal =
-				this.calculate_item_tax_from_items() ||
-				this.apply_tax_template_totals(this.invoice_doc) ||
-				0;
-			const effectiveGrandTotal = this.flt(
-				this.net_total + effectiveTaxTotal,
+				this.calculate_item_tax_from_items() || this.apply_tax_template_totals(this.invoice_doc) || 0;
+			const effectiveGrandTotal = this.flt(this.net_total + effectiveTaxTotal, this.currency_precision);
+			const effectiveRoundedTotal = this.flt(
+				effectiveGrandTotal + manualRoundOff,
 				this.currency_precision,
 			);
-			const effectiveRoundedTotal = this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision);
 
 			console.log("[prepareForPayment] Totals snapshot:", {
 				item_total: this.flt(this.Total || 0, this.currency_precision),

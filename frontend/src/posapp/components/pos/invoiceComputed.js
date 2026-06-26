@@ -108,7 +108,10 @@ export default {
 	// Calculate rounded total
 	rounded_total() {
 		const roundOff = Number(this.invoice_doc?.rounding_adjustment || 0);
-		const rounded = this.flt((this.grand_total || 0) + (Number.isFinite(roundOff) ? roundOff : 0), this.currency_precision);
+		const rounded = this.flt(
+			(this.grand_total || 0) + (Number.isFinite(roundOff) ? roundOff : 0),
+			this.currency_precision,
+		);
 		console.log("[invoiceComputed] rounded_total:", rounded);
 		return rounded;
 	},
