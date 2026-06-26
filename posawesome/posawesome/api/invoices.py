@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import json
+from typing import Any
 
 import frappe
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
@@ -22,6 +23,7 @@ from frappe.utils import (
     strip_html_tags,
 )
 from frappe.utils.background_jobs import enqueue
+from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry as erpnext_get_payment_entry
 
 from posawesome.posawesome.api.payments import (
     redeeming_customer_credit,
@@ -185,6 +187,203 @@ def _auto_set_return_batches(invoice_doc):
                 d.batch_no = batch_list[0].get("batch_no")
             elif not allow_free:
                 frappe.throw(_("No batches available in {0} for {1}.").format(d.warehouse, d.item_code))
+
+
+def _clean_invoice_payments_before_submit(invoice_doc):
+    """Normalize invoice payment rows right before submit.
+
+    Keeps only positive payment rows for paid POS invoices and clears payments
+    entirely for credit/on-account invoices.
+    """
+    positive_payments = []
+    for payment in invoice_doc.get("payments") or []:
+        payment.amount = flt(payment.amount)
+        payment.base_amount = flt(payment.base_amount or 0)
+        if payment.amount > 0:
+            positive_payments.append(payment)
+
+    paid_amount = flt(sum(flt(payment.amount) for payment in positive_payments))
+    rounded_total = flt(invoice_doc.rounded_total or invoice_doc.grand_total or 0)
+
+    if paid_amount <= 0:
+        invoice_doc.set("payments", [])
+        invoice_doc.is_pos = 0
+        invoice_doc.paid_amount = 0
+        invoice_doc.base_paid_amount = 0
+        invoice_doc.outstanding_amount = rounded_total
+    else:
+        invoice_doc.set("payments", positive_payments)
+        try:
+            invoice_doc.set_account_for_mode_of_payment()
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "POS Payment Account Mapping Warning")
+        invoice_doc.set_paid_amount()
+        invoice_doc.is_pos = 1
+        invoice_doc.paid_amount = paid_amount
+        invoice_doc.base_paid_amount = flt(paid_amount * flt(invoice_doc.conversion_rate or 1))
+        invoice_doc.outstanding_amount = flt(rounded_total - paid_amount)
+
+    return invoice_doc
+
+
+def _is_credit_sale_or_on_account_payment(payment) -> bool:
+    mode_of_payment = cstr(payment.get("mode_of_payment") or "").strip().lower()
+    return mode_of_payment in {"credit sale", "on account", "on-account", "onaccount"} or cint(
+        payment.get("is_credit_sale")
+    )
+
+
+def _get_actual_paid_amount(invoice_doc):
+    paid_amount = 0
+    for payment in invoice_doc.get("payments") or []:
+        amount = flt(payment.get("amount"))
+        if amount <= 0:
+            continue
+        if _is_credit_sale_or_on_account_payment(payment):
+            continue
+        paid_amount += amount
+    return flt(paid_amount)
+
+
+def _log_submit_debug(invoice_doc, label="submit_invoice"):
+    """Write accounting state to Frappe error log for submit debugging."""
+    try:
+        frappe.log_error(
+            message=frappe.as_json(invoice_doc.as_dict(), indent=2),
+            title=f"[{label}] invoice_doc.as_dict {invoice_doc.doctype} {invoice_doc.name}",
+        )
+    except Exception:
+        frappe.log_error(
+            message=frappe.get_traceback(),
+            title=f"[{label}] invoice_doc.as_dict failed {invoice_doc.doctype} {invoice_doc.name}",
+        )
+
+    try:
+        frappe.log_error(
+            message=frappe.as_json(invoice_doc.get("payments") or [], indent=2),
+            title=f"[{label}] invoice_doc.payments {invoice_doc.doctype} {invoice_doc.name}",
+        )
+    except Exception:
+        frappe.log_error(
+            message=frappe.get_traceback(),
+            title=f"[{label}] invoice_doc.payments failed {invoice_doc.doctype} {invoice_doc.name}",
+        )
+
+    try:
+        frappe.log_error(
+            message=frappe.as_json(invoice_doc.get("taxes") or [], indent=2),
+            title=f"[{label}] invoice_doc.taxes {invoice_doc.doctype} {invoice_doc.name}",
+        )
+    except Exception:
+        frappe.log_error(
+            message=frappe.get_traceback(),
+            title=f"[{label}] invoice_doc.taxes failed {invoice_doc.doctype} {invoice_doc.name}",
+        )
+
+    try:
+        gl_entries = invoice_doc.get_gl_entries()
+        frappe.log_error(
+            message=frappe.as_json(gl_entries or [], indent=2),
+            title=f"[{label}] invoice_doc.get_gl_entries {invoice_doc.doctype} {invoice_doc.name}",
+        )
+    except Exception:
+        frappe.log_error(
+            message=frappe.get_traceback(),
+            title=f"[{label}] invoice_doc.get_gl_entries failed {invoice_doc.doctype} {invoice_doc.name}",
+        )
+
+
+def _submit_payment_entries_for_invoice(invoice_doc):
+    """Create Payment Entry rows for paid POS invoices after Sales Invoice submit."""
+    if cint(invoice_doc.get("is_return")):
+        return []
+
+    valid_payments = [
+        payment
+        for payment in (invoice_doc.get("payments") or [])
+        if flt(payment.get("amount")) > 0 and not _is_credit_sale_or_on_account_payment(payment)
+    ]
+    frappe.logger().info(
+        frappe.as_json(
+            {
+                "payment_entry_creation.invoice": invoice_doc.name,
+                "payment_entry_creation.is_pos": invoice_doc.get("is_pos"),
+                "payment_entry_creation.valid_payments": [payment.as_dict() for payment in valid_payments],
+            }
+        )
+    )
+    paid_amount = flt(sum(flt(payment.get("amount")) for payment in valid_payments))
+    if paid_amount <= 0:
+        return []
+
+    payment_entry = erpnext_get_payment_entry("Sales Invoice", invoice_doc.name)
+    payment_entry.flags.ignore_permissions = True
+    frappe.flags.ignore_account_permission = True
+    payment_entry.mode_of_payment = valid_payments[0].get("mode_of_payment")
+    payment_entry.reference_no = payment_entry.reference_no or invoice_doc.name
+    payment_entry.reference_date = payment_entry.reference_date or invoice_doc.get("posting_date")
+
+    payment_amount = flt(paid_amount)
+    payment_entry.paid_amount = payment_amount
+    payment_entry.received_amount = payment_amount
+    if payment_entry.get("references"):
+        payment_entry.references[0].allocated_amount = payment_amount
+
+    payment_entry.setup_party_account_field()
+    payment_entry.set_missing_values()
+    payment_entry.set_amounts()
+    payment_entry.save()
+    payment_entry.submit()
+
+    invoice_doc.reload()
+    frappe.logger().info(
+        frappe.as_json(
+            {
+                    "payment_entry.name": payment_entry.name,
+                    "payment_entry.mode_of_payment": payment_entry.mode_of_payment,
+                    "payment_entry.reference_no": payment_entry.reference_no,
+                    "payment_entry.reference_date": payment_entry.reference_date,
+                    "invoice_doc.outstanding_amount after payment_entry submission": invoice_doc.get(
+                        "outstanding_amount"
+                    ),
+                "invoice_doc.status after payment_entry submission": invoice_doc.get("status"),
+            }
+        )
+    )
+    if flt(invoice_doc.get("outstanding_amount")) != 0 or invoice_doc.get("status") != "Paid":
+        frappe.log_error(
+            title=f"POS Payment Entry did not fully settle invoice {invoice_doc.name}",
+            message=frappe.as_json(
+                {
+                    "paid_amount": paid_amount,
+                    "rounded_total": invoice_doc.get("rounded_total"),
+                    "grand_total": invoice_doc.get("grand_total"),
+                    "invoice_doc.outstanding_amount": invoice_doc.get("outstanding_amount"),
+                    "invoice_doc.status": invoice_doc.get("status"),
+                    "payment_entry.name": payment_entry.name,
+                    "payment_entry.docstatus": payment_entry.docstatus,
+                    "payment_entry.paid_amount": payment_entry.paid_amount,
+                    "payment_entry.received_amount": payment_entry.received_amount,
+                    "payment_entry.references": payment_entry.get("references"),
+                    "valid_payments": [payment.as_dict() for payment in valid_payments],
+                }
+            ),
+        )
+        frappe.throw(_("Invoice payment was submitted but the Sales Invoice is still not fully paid."))
+
+    frappe.logger().info(
+        frappe.as_json(
+            {
+                "payment_entry.name": payment_entry.name,
+                "payment_entry.docstatus": payment_entry.docstatus,
+                "payment_entry.references": payment_entry.get("references"),
+                "invoice_doc.outstanding_amount after reload": invoice_doc.get("outstanding_amount"),
+                "invoice_doc.status after reload": invoice_doc.get("status"),
+            }
+        )
+    )
+
+    return [payment_entry.name]
 
 
 @frappe.whitelist()
@@ -402,9 +601,35 @@ def update_invoice(data):
 
                 if not has_item_tax:
                     invoice_doc.set("taxes", [])
+                else:
+                    unique_taxes = []
+                    seen_tax_keys = set()
+                    for tax in invoice_doc.get("taxes", []):
+                        tax_key = (
+                            cstr(tax.get("account_head")),
+                            cstr(tax.get("charge_type")),
+                            flt(tax.get("rate") or 0),
+                        )
+                        if tax_key in seen_tax_keys:
+                            continue
+                        seen_tax_keys.add(tax_key)
+                        unique_taxes.append(tax)
+                    invoice_doc.set("taxes", unique_taxes)
+
+                existing_tax_keys = {
+                    (
+                        cstr(existing.get("account_head")),
+                        cstr(existing.get("charge_type")),
+                        flt(existing.get("rate") or 0),
+                    )
+                    for existing in invoice_doc.get("taxes", [])
+                }
 
                 # Inject tax rows from template
                 for tax in tax_template.taxes:
+                    tax_key = (cstr(tax.account_head), cstr(tax.charge_type), flt(tax.rate or 0))
+                    if tax_key in existing_tax_keys:
+                        continue
                     invoice_doc.append(
                         "taxes",
                         {
@@ -417,6 +642,7 @@ def update_invoice(data):
                             "included_in_print_rate": (0 if tax.charge_type == "Actual" else int(inclusive)),
                         },
                     )
+                    existing_tax_keys.add(tax_key)
 
                 frappe.logger().info(
                     f"[update_invoice] Injected {len(tax_template.taxes)} tax rows for invoice {invoice_doc.name or 'new'}"
@@ -435,10 +661,12 @@ def update_invoice(data):
     invoice_doc.discount_amount = pre_tax_discount_amount
     invoice_doc.loyalty_discount_amount = loyalty_discount_amount
 
-    # Apply manual round-off before VAT is finalized.
-    taxable_net_total = flt(invoice_doc.net_total + incoming_rounding_adjustment)
+    # Keep the tax base unchanged; the round-off only affects the final payable amount.
+    taxable_net_total = flt(invoice_doc.net_total)
     invoice_doc.rounding_adjustment = incoming_rounding_adjustment
-    invoice_doc.net_total = taxable_net_total
+    invoice_doc.base_rounding_adjustment = flt(
+        incoming_rounding_adjustment * flt(invoice_doc.conversion_rate or 1)
+    )
 
     running_total = taxable_net_total
     total_tax = 0
@@ -458,9 +686,11 @@ def update_invoice(data):
         invoice_doc.total_taxes_and_charges * flt(invoice_doc.conversion_rate or 1)
     )
     invoice_doc.grand_total = flt(taxable_net_total + total_tax)
-    invoice_doc.rounded_total = flt(invoice_doc.grand_total)
+    invoice_doc.rounded_total = flt(invoice_doc.grand_total + incoming_rounding_adjustment)
+    invoice_doc.total_amount = flt(invoice_doc.grand_total)
+    invoice_doc.to_be_paid = flt(invoice_doc.rounded_total)
     invoice_doc.base_grand_total = flt(invoice_doc.grand_total * flt(invoice_doc.conversion_rate or 1))
-    invoice_doc.base_rounded_total = flt(invoice_doc.base_grand_total)
+    invoice_doc.base_rounded_total = flt(invoice_doc.base_grand_total + invoice_doc.base_rounding_adjustment)
 
     # Log tax calculation for debugging
     new_tax = sum(flt(t.tax_amount) for t in invoice_doc.get("taxes", []))
@@ -565,6 +795,9 @@ def update_invoice(data):
     response["grand_total"] = flt(invoice_doc.grand_total)
     response["rounded_total"] = flt(invoice_doc.rounded_total)
     response["rounding_adjustment"] = flt(invoice_doc.rounding_adjustment)
+    response["base_rounding_adjustment"] = flt(invoice_doc.base_rounding_adjustment)
+    response["total_amount"] = flt(invoice_doc.grand_total)
+    response["to_be_paid"] = flt(invoice_doc.rounded_total)
     response["total"] = flt(invoice_doc.total)
     response["net_total"] = flt(invoice_doc.net_total)
     response["loyalty_discount_amount"] = flt(invoice_doc.loyalty_discount_amount)
@@ -615,28 +848,6 @@ def submit_invoice(invoice, data):
     data = json.loads(data)
     invoice = json.loads(invoice)
 
-    paymentsPayload = invoice.get("payments")
-    actual_payment_method = None
-    payment_account = None
-
-    # frappe.throw(f"Debug: Payments Payload: {paymentsPayload}")  # Debug line to inspect payments payload
-
-    # Find the payment method that was actually used (has amount > 0)
-
-    # Fix: Ensure payments array is never empty
-    if not invoice.get("payments") or len(invoice.get("payments", [])) == 0:
-        default_cash_account = frappe.get_value("Company", invoice.get("company"), "default_cash_account")
-        if default_cash_account:
-            invoice["payments"] = [
-                {
-                    "mode_of_payment": "Cash",
-                    "account": default_cash_account,
-                    "amount": 0,
-                    "base_amount": 0,
-                    "type": "Cash",
-                }
-            ]
-
     pos_profile = invoice.get("pos_profile")
     doctype = "Sales Invoice"
     if pos_profile and frappe.db.get_value(
@@ -677,8 +888,6 @@ def submit_invoice(invoice, data):
     items.append(grand_total)
     invoice_doc.remarks = "\n".join(items)
 
-    invoice_doc = frappe.get_doc("Sales Invoice", invoice_name)
-
     total_cash = 0
     if data.get("redeemed_customer_credit"):
         total_cash = invoice_doc.total - float(data.get("redeemed_customer_credit"))
@@ -687,23 +896,6 @@ def submit_invoice(invoice, data):
     if data.get("redeemed_customer_credit"):
         for row in data.get("customer_credit_dict"):
             if row["type"] == "Advance" and row["credit_to_redeem"]:
-                advance = frappe.get_doc("Payment Entry", row["credit_origin"])
-
-                advance_payment = {
-                    "reference_type": "Payment Entry",
-                    "reference_name": advance.name,
-                    "remarks": advance.remarks,
-                    "advance_amount": advance.unallocated_amount,
-                    "allocated_amount": row["credit_to_redeem"],
-                }
-
-                advance_row = invoice_doc.append("advances", {})
-                advance_row.update(advance_payment)
-                child_dt = (
-                    "POS Invoice Advance" if invoice_doc.doctype == "POS Invoice" else "Sales Invoice Advance"
-                )
-                ensure_child_doctype(invoice_doc, "advances", child_dt)
-                invoice_doc.is_pos = 0
                 is_payment_entry = 1
 
     payments = invoice_doc.payments
@@ -753,13 +945,130 @@ def submit_invoice(invoice, data):
     )
     frappe.db.commit()
 
+    frappe.logger().info(
+        frappe.as_json(
+            {
+                "invoice_doc.payments before reload": [payment.as_dict() for payment in (invoice_doc.get("payments") or [])]
+            }
+        )
+    )
+
     # Reload to get fresh document
     invoice_doc = frappe.get_doc(invoice_doc.doctype, invoice_doc.name)
+    frappe.logger().info(
+        frappe.as_json(
+            {
+                "invoice_doc.payments after reload": [payment.as_dict() for payment in (invoice_doc.get("payments") or [])]
+            }
+        )
+    )
+    invoice_doc.update(invoice)
     invoice_doc.flags.ignore_permissions = True
     frappe.flags.ignore_account_permission = True
 
+    company_currency = frappe.get_cached_value("Company", invoice_doc.company, "default_currency")
+
+    frappe.logger().info(
+        "[submit_invoice debug] accounting fields for {name}: "
+        "is_pos={is_pos}, debit_to={debit_to}, grand_total={grand_total}, rounded_total={rounded_total}, "
+        "base_grand_total={base_grand_total}, base_rounded_total={base_rounded_total}, "
+        "rounding_adjustment={rounding_adjustment}, base_rounding_adjustment={base_rounding_adjustment}, "
+        "paid_amount={paid_amount}, base_paid_amount={base_paid_amount}, "
+        "outstanding_amount={outstanding_amount}, "
+        "conversion_rate={conversion_rate}, currency={currency}, company_currency={company_currency}"
+        .format(
+            name=invoice_doc.name,
+            is_pos=invoice_doc.get("is_pos"),
+            debit_to=invoice_doc.get("debit_to"),
+            grand_total=invoice_doc.get("grand_total"),
+            rounded_total=invoice_doc.get("rounded_total"),
+            base_grand_total=invoice_doc.get("base_grand_total"),
+            base_rounded_total=invoice_doc.get("base_rounded_total"),
+            rounding_adjustment=invoice_doc.get("rounding_adjustment"),
+            base_rounding_adjustment=invoice_doc.get("base_rounding_adjustment"),
+            paid_amount=invoice_doc.get("paid_amount"),
+            base_paid_amount=invoice_doc.get("base_paid_amount"),
+            outstanding_amount=invoice_doc.get("outstanding_amount"),
+            conversion_rate=invoice_doc.get("conversion_rate"),
+            currency=invoice_doc.get("currency"),
+            company_currency=company_currency,
+        )
+    )
+
+    for idx, payment in enumerate(invoice_doc.get("payments") or [], start=1):
+        frappe.logger().info(
+            "[submit_invoice debug] payment row {idx} for {name}: "
+            "mode_of_payment={mode_of_payment}, account={account}, amount={amount}, "
+            "base_amount={base_amount}, default={default}"
+            .format(
+                idx=idx,
+                name=invoice_doc.name,
+                mode_of_payment=payment.get("mode_of_payment"),
+                account=payment.get("account"),
+                amount=payment.get("amount"),
+                base_amount=payment.get("base_amount"),
+                default=payment.get("default"),
+            )
+        )
+
+    for idx, tax in enumerate(invoice_doc.get("taxes") or [], start=1):
+        frappe.logger().info(
+            "[submit_invoice debug] tax row {idx} for {name}: "
+            "account_head={account_head}, charge_type={charge_type}, rate={rate}, "
+            "tax_amount={tax_amount}, base_tax_amount={base_tax_amount}, total={total}"
+            .format(
+                idx=idx,
+                name=invoice_doc.name,
+                account_head=tax.get("account_head"),
+                charge_type=tax.get("charge_type"),
+                rate=tax.get("rate"),
+                tax_amount=tax.get("tax_amount"),
+                base_tax_amount=tax.get("base_tax_amount"),
+                total=tax.get("total"),
+            )
+        )
+
+    try:
+        gl_entries = invoice_doc.get_gl_entries()
+        for idx, gle in enumerate(gl_entries or [], start=1):
+            frappe.logger().info(
+                "[submit_invoice debug] gl row {idx} for {name}: "
+                "account={account}, party_type={party_type}, party={party}, debit={debit}, credit={credit}, "
+                "debit_in_account_currency={debit_in_account_currency}, "
+                "credit_in_account_currency={credit_in_account_currency}, against={against}"
+                .format(
+                    idx=idx,
+                    name=invoice_doc.name,
+                    account=gle.get("account"),
+                    party_type=gle.get("party_type"),
+                    party=gle.get("party"),
+                    debit=gle.get("debit"),
+                    credit=gle.get("credit"),
+                    debit_in_account_currency=gle.get("debit_in_account_currency"),
+                    credit_in_account_currency=gle.get("credit_in_account_currency"),
+                    against=gle.get("against"),
+                )
+            )
+    except Exception:
+        frappe.log_error(
+            message=frappe.get_traceback(),
+            title=f"POS submit debug GL map failed for {invoice_doc.doctype} {invoice_doc.name}",
+        )
+
     # Set the POS-specific flags to skip validation
     invoice_doc.flags.posa_skip_due_date_validation = True
+
+    invoice_doc = _clean_invoice_payments_before_submit(invoice_doc)
+    frappe.logger().info(
+        frappe.as_json(
+            {
+                "invoice_doc.payments before submit": [payment.as_dict() for payment in (invoice_doc.get("payments") or [])]
+            }
+        )
+    )
+
+    payments = invoice_doc.payments
+
     try:
         current_open = get_current_user_open_shift(frappe.session.user)
         if current_open:
@@ -804,6 +1113,9 @@ def submit_invoice(invoice, data):
     except Exception as e:
         frappe.log_error(str(e), "POS Shift Ensure Error")
 
+    invoice_doc = _clean_invoice_payments_before_submit(invoice_doc)
+    invoice_doc.save()
+
     # ============================================================
 
     if frappe.get_value(
@@ -839,84 +1151,50 @@ def submit_invoice(invoice, data):
     else:
 
         try:
-            invoice_doc.submit()
-            outstanding_remaining = flt(
-                frappe.db.get_value(invoice_doc.doctype, invoice_doc.name, "outstanding_amount") or 0
+            _log_submit_debug(invoice_doc, label="submit_invoice.before_submit")
+            frappe.log_error(
+                title="POS Submit Invoice State Before Submit",
+                message=frappe.as_json(
+                    {
+                        "name": invoice_doc.get("name"),
+                        "is_pos": invoice_doc.get("is_pos"),
+                        "debit_to": invoice_doc.get("debit_to"),
+                        "grand_total": invoice_doc.get("grand_total"),
+                        "rounded_total": invoice_doc.get("rounded_total"),
+                        "base_grand_total": invoice_doc.get("base_grand_total"),
+                        "base_rounded_total": invoice_doc.get("base_rounded_total"),
+                        "rounding_adjustment": invoice_doc.get("rounding_adjustment"),
+                        "base_rounding_adjustment": invoice_doc.get("base_rounding_adjustment"),
+                        "paid_amount": invoice_doc.get("paid_amount"),
+                        "base_paid_amount": invoice_doc.get("base_paid_amount"),
+                        "outstanding_amount": invoice_doc.get("outstanding_amount"),
+                        "payments": [p.as_dict() for p in invoice_doc.payments],
+                        "taxes": [t.as_dict() for t in invoice_doc.taxes],
+                    }
+                ),
             )
-            for payment in paymentsPayload:
-                if payment.get("amount", 0) > 0:
-                    actual_payment_method = payment.get("mode_of_payment")
-                    payment_account = payment.get("account")
-                    payment_amount = flt(payment.get("amount", 0))
-
-                    if not payment_account and actual_payment_method:
-                        # payment_account = get_bank_cash_account(actual_payment_method, invoice_doc.company)
-                        if isinstance(payment_account, dict):
-                            payment_account = payment_account.get("account")
-
-                    # Final fallback to cash account
-                    if not payment_account:
-                        payment_account = frappe.get_value(
-                            "Company", invoice_doc.company, "default_cash_account"
-                        )
-                        if not actual_payment_method:
-                            actual_payment_method = "Cash"
-
-                    # Create payment entry with ACTUAL payment method
-                    advance_payment_entry = frappe.get_doc(
-                        {
-                            "doctype": "Payment Entry",
-                            "payment_type": "Receive",
-                            "mode_of_payment": actual_payment_method,
-                            "party_type": "Customer",
-                            "party": invoice_doc.get("customer"),
-                            "company": invoice_doc.get("company"),
-                            # Required account fields
-                            "paid_from": invoice_doc.get("debit_to"),  # Customer's receivable account
-                            "paid_to": payment_account,  # Your cash/bank account
-                            "paid_from_account_currency": frappe.get_cached_value(
-                                "Account", invoice_doc.get("debit_to"), "account_currency"
-                            ),
-                            "paid_to_account_currency": frappe.get_cached_value(
-                                "Account", payment_account, "account_currency"
-                            ),
-                            # Amount fields
-                            "paid_amount": payment_amount,
-                            "received_amount": payment_amount,
-                            "source_exchange_rate": 1,  # Adjust if multi-currency
-                            "target_exchange_rate": 1,
-                            # Reference fields
-                            "reference_no": invoice_doc.name,
-                            "reference_date": invoice_doc.posting_date,
-                            "posting_date": invoice_doc.posting_date,  # Important!
-                        }
-                    )
-
-                    frappe.logger().info(
-                        f"Creating Payment Entry for credit change: {actual_payment_method}, Amount: {invoice_doc.get('rounded_total')}"
-                    )
-
-                    advance_payment_entry.flags.ignore_permissions = True
-                    frappe.flags.ignore_account_permission = True
-
-                    # Never allocate more than the invoice outstanding amount.
-                    allocated_amount = min(payment_amount, max(outstanding_remaining, 0))
-                    if allocated_amount > 0:
-                        advance_payment_entry.append(
-                            "references",
-                            {
-                                "reference_doctype": "Sales Invoice",
-                                "reference_name": invoice_doc.name,
-                                "allocated_amount": allocated_amount,
-                            },
-                        )
-                        outstanding_remaining = flt(
-                            outstanding_remaining - allocated_amount,
-                            invoice_doc.precision("outstanding_amount"),
-                        )
-
-                    advance_payment_entry.insert()
-                    advance_payment_entry.submit()
+            try:
+                gl_entries = invoice_doc.get_gl_entries()
+                frappe.log_error(
+                    title="POS Submit GL Map Before Submit",
+                    message=frappe.as_json([g.as_dict() for g in gl_entries]),
+                )
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), "POS Submit GL Map Debug Failed")
+            invoice_doc.submit()
+            frappe.log_error(
+    title="POS Debtors Debug",
+    message=frappe.as_json({
+        "customer": invoice_doc.customer,
+        "debit_to": invoice_doc.debit_to,
+        "grand_total": invoice_doc.grand_total,
+        "rounded_total": invoice_doc.rounded_total,
+        "paid_amount": invoice_doc.paid_amount,
+        "outstanding_amount": invoice_doc.outstanding_amount,
+        "is_pos": invoice_doc.is_pos
+    })
+)
+            invoice_doc.reload()
 
         except frappe.ValidationError as e:
             error_msg = str(e)
@@ -932,10 +1210,30 @@ def submit_invoice(invoice, data):
                 )
                 frappe.db.commit()
                 invoice_doc = frappe.get_doc(invoice_doc.doctype, invoice_doc.name)
+            elif "already been fully paid" in error_msg and invoice_doc.docstatus == 0:
+                frappe.logger().warning(
+                    f"Clearing draft advance allocation before retrying submit for {invoice_doc.doctype} {invoice_doc.name}: {error_msg}"
+                )
+                invoice_doc.set("advances", [])
+                invoice_doc.flags.ignore_permissions = True
+                frappe.flags.ignore_account_permission = True
+                invoice_doc.save()
+                invoice_doc.reload()
+                invoice_doc.submit()
+                invoice_doc.reload()
+                if invoice_doc.docstatus == 1:
+                    invoice_doc.reload()
             else:
                 raise
+        except Exception:
+            frappe.log_error(
+                message=frappe.get_traceback(),
+                title=f"POS submit failed for {invoice_doc.doctype} {invoice_doc.name}",
+            )
+            raise
 
-        redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
+        if invoice_doc.docstatus == 1 and flt(data.get("redeemed_customer_credit") or 0) > 0:
+          redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
 
     # ============================================================
     # FREQUENT CARDS INTEGRATION - Process after invoice is submitted
@@ -1026,7 +1324,8 @@ def submit_invoice(invoice, data):
                 "Frequent Cards General Error",
             )
 
-    return {"name": invoice_doc.name, "status": invoice_doc.docstatus}
+    invoice_doc.reload()
+    return {"name": invoice_doc.name, "docstatus": invoice_doc.docstatus, "status": invoice_doc.status}
 
 
 def submit_in_background_job(kwargs):
@@ -1054,8 +1353,11 @@ def submit_in_background_job(kwargs):
     invoice_doc.remarks = "\n".join(items)
     invoice_doc.save()
 
+    _log_submit_debug(invoice_doc, label="submit_in_background_job.before_submit")
     invoice_doc.submit()
-    redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
+    invoice_doc.reload()
+    if flt((data or {}).get("redeemed_customer_credit") or 0) > 0:
+      redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
 
     # ============================================================
     # FREQUENT CARDS INTEGRATION - Background Job

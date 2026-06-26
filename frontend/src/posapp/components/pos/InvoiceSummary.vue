@@ -228,23 +228,7 @@
 								:prefix="currencySymbol(displayCurrency)"
 							/>
 
-							<!-- Manual Round Off + Frequent Cards (side by side) -->
-							<v-col cols="6">
-								<v-text-field
-									v-model="manual_round_off"
-									:label="__('Manual Round Off')"
-									prepend-inner-icon="mdi-plus-minus"
-									variant="solo"
-									density="compact"
-									color="info"
-									class="summary-field manual-round-off-field"
-									type="text"
-									inputmode="decimal"
-									:prefix="currencySymbol(displayCurrency)"
-									@change="onManualRoundOffChange"
-								/>
-							</v-col>
-							<v-col cols="6">
+							<v-col cols="12">
 								<v-btn
 									block
 									color="orange"
@@ -266,6 +250,7 @@
 									</v-chip>
 								</v-btn>
 							</v-col>
+							<v-col cols="6"></v-col>
 						</v-row>
 					</v-col>
 
@@ -1102,7 +1087,7 @@ export default {
 	computed: {
 		finalTotal() {
 			const base = Number(this.subtotal || 0);
-			const roundOff = Number(this.manual_round_off || 0);
+			const roundOff = Number(this.invoice_doc?.rounding_adjustment ?? this.manual_round_off ?? 0);
 			return Number((base + roundOff).toFixed(3));
 		},
 
@@ -1660,6 +1645,22 @@ export default {
 					this.loyaltyPoints = response.message.loyalty_points || 0;
 					this.customerName = response.message.customer_name || "";
 					this.conversionFactor = response.message.conversion_factor || 0;
+					if (response.message.loyalty_program) {
+						try {
+							const redemptionFactorResponse = await frappe.call({
+								method: "erpnext.accounts.doctype.loyalty_program.loyalty_program.get_redeemption_factor",
+								args: {
+									customer: customerId,
+									loyalty_program: response.message.loyalty_program,
+								},
+							});
+							this.conversionFactor = Number(
+								redemptionFactorResponse?.message ?? this.conversionFactor ?? 0,
+							);
+						} catch (factorErr) {
+							console.warn("Failed to fetch loyalty redemption factor:", factorErr);
+						}
+					}
 					this.pointsToRedeem = 0;
 				}
 			} catch (err) {
@@ -2395,6 +2396,14 @@ export default {
 				frappe.show_alert({
 					message: this.__("Please select a customer first"),
 					indicator: "warning",
+				});
+				return;
+			}
+
+			if (this.showEmployeeSelection && !this.selectedEmployee) {
+				frappe.show_alert({
+					message: this.__("Please select the service employee."),
+					indicator: "red",
 				});
 				return;
 			}

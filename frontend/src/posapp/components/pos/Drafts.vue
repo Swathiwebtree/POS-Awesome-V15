@@ -761,6 +761,7 @@ export default {
 						custom_vehicle_no: invoice.custom_vehicle_no || "",
 						custom_odometer_reading: normalizedOdometer,
 						custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
+						allow_vehicle_fallback: false,
 					});
 
 					// Keep InvoiceSummary/Invoice state aligned even when draft is loaded from Drafts panel

@@ -71,11 +71,6 @@ export default {
 			(Number.isFinite(invoice_discount) ? invoice_discount : 0) +
 			(Number.isFinite(loyalty_discount) ? loyalty_discount : 0);
 
-		const manualRoundOff = Number(this.invoice_doc?.rounding_adjustment || 0);
-		if (Number.isFinite(manualRoundOff)) {
-			total += manualRoundOff;
-		}
-
 		const result = this.flt(total, moneyPrecision);
 		console.log("[invoiceComputed] net_total:", result);
 		return result;
@@ -93,7 +88,6 @@ export default {
 			tax = this.apply_tax_template_totals({
 				net_total,
 				total: this.subtotal,
-				rounding_adjustment: this.invoice_doc?.rounding_adjustment || 0,
 			});
 		}
 		if (!tax) {
@@ -113,7 +107,8 @@ export default {
 
 	// Calculate rounded total
 	rounded_total() {
-		const rounded = this.flt(this.grand_total || 0, this.currency_precision);
+		const roundOff = Number(this.invoice_doc?.rounding_adjustment || 0);
+		const rounded = this.flt((this.grand_total || 0) + (Number.isFinite(roundOff) ? roundOff : 0), this.currency_precision);
 		console.log("[invoiceComputed] rounded_total:", rounded);
 		return rounded;
 	},

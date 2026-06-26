@@ -95,6 +95,95 @@ export default {
 		}
 	},
 
+	async refresh_item_tax_rates(items = this.items, force = false) {
+		if (!Array.isArray(items) || !items.length) {
+			return false;
+		}
+
+		let updated = false;
+
+		for (const item of items) {
+			if (!item || !item.item_code) {
+				continue;
+			}
+
+			let hasValidTaxRate = false;
+			if (item.item_tax_rate) {
+				try {
+					const parsed = JSON.parse(item.item_tax_rate);
+					hasValidTaxRate = !!parsed && Object.keys(parsed).length > 0;
+				} catch {
+					hasValidTaxRate = false;
+				}
+			}
+
+			if (hasValidTaxRate && !force) {
+				continue;
+			}
+
+			const taxTemplateName = item.item_tax_template || (await this.fetch_item_tax_template(item.item_code));
+			if (!taxTemplateName) {
+				continue;
+			}
+
+			await this.apply_item_tax_template(item, taxTemplateName);
+			updated = true;
+		}
+
+		if (updated && typeof this.$forceUpdate === "function") {
+			this.$forceUpdate();
+		}
+
+		return updated;
+	},
+
+	recalculate_loaded_invoice_totals() {
+		if (!this.invoice_doc) {
+			return;
+		}
+
+		const moneyPrecision = Math.max(Number(this.currency_precision) || 0, 3);
+		const netTotal = this.flt ? this.flt(this.net_total || 0, moneyPrecision) : Number(this.net_total || 0);
+		const hasItemTaxRates = Array.isArray(this.items) && this.items.some((item) => item?.item_tax_rate);
+		const hasSavedTaxRows = Array.isArray(this.invoice_doc.taxes) && this.invoice_doc.taxes.length > 0;
+
+		let taxTotal = 0;
+		if (hasItemTaxRates) {
+			taxTotal = this.calculate_item_tax_from_items();
+		} else if (hasSavedTaxRows) {
+			taxTotal = this.flt
+				? this.flt(
+						this.invoice_doc.taxes.reduce(
+							(sum, tax) => sum + (Number(tax?.tax_amount) || 0),
+							0,
+						),
+						moneyPrecision,
+					)
+				: this.invoice_doc.taxes.reduce((sum, tax) => sum + (Number(tax?.tax_amount) || 0), 0);
+		} else {
+			taxTotal = this.apply_tax_template_totals(this.invoice_doc, netTotal);
+		}
+
+		const grandTotal = this.flt ? this.flt(netTotal + taxTotal, moneyPrecision) : netTotal + taxTotal;
+		const roundedTotal =
+			typeof this.roundAmount === "function"
+				? this.roundAmount(grandTotal)
+				: this.flt
+					? this.flt(grandTotal, this.currency_precision)
+					: grandTotal;
+		const exchangeRate = this.exchange_rate || 1;
+
+		this.total_tax = taxTotal;
+		this.invoice_doc.net_total = netTotal;
+		this.invoice_doc.total_taxes_and_charges = taxTotal;
+		this.invoice_doc.grand_total = grandTotal;
+		this.invoice_doc.rounded_total = roundedTotal;
+		this.invoice_doc.base_net_total = netTotal * exchangeRate;
+		this.invoice_doc.base_total_taxes_and_charges = taxTotal * exchangeRate;
+		this.invoice_doc.base_grand_total = grandTotal * exchangeRate;
+		this.invoice_doc.base_rounded_total = roundedTotal * exchangeRate;
+	},
+
 	async add_item(item) {
 		try {
 			if (isServiceItem(item)) {
@@ -152,14 +241,10 @@ export default {
 		const loyaltyDiscount = Number(
 			this.invoice_doc?.loyalty_discount_amount ?? this.invoice_doc?.loyalty_amount ?? 0,
 		);
-		const manualRoundOff = Number(this.invoice_doc?.rounding_adjustment || 0);
 		const taxableSubtotal =
 			this.net_total != null
 				? Number(this.net_total || 0)
-				: subtotal -
-					invoiceDiscount -
-					loyaltyDiscount +
-					(Number.isFinite(manualRoundOff) ? manualRoundOff : 0);
+				: subtotal - invoiceDiscount - loyaltyDiscount;
 		const taxableFactor = subtotal ? taxableSubtotal / subtotal : 1;
 		(this.items || []).forEach((item) => {
 			if (!item || !item.item_tax_rate) return;
@@ -200,8 +285,7 @@ export default {
 					? Number(doc.net_total || 0)
 					: Number(doc?.total ?? this.subtotal ?? this.Total ?? 0) -
 						Number(this.discount_amount ?? this.additional_discount ?? 0) -
-						Number(doc?.loyalty_discount_amount ?? doc?.loyalty_amount ?? 0) +
-						Number(doc?.rounding_adjustment || 0);
+						Number(doc?.loyalty_discount_amount ?? doc?.loyalty_amount ?? 0);
 		const inclusive = getTaxInclusiveSetting();
 		let runningTotal = baseAmount;
 		let totalTax = 0;
@@ -388,7 +472,6 @@ export default {
 			customer: data.customer,
 			items_count: data.items ? data.items.length : 0,
 		});
-
 		const resolvedContactMobile = String(
 			data.contact_mobile || data.mobile_no || data.customer_mobile || "",
 		).trim();
@@ -484,9 +567,12 @@ export default {
 
 		this.customer = data.customer || data.customer_name || "";
 		this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
-		this.discount_amount = data.discount_amount;
-		this.additional_discount_percentage = data.additional_discount_percentage;
-		this.additional_discount = data.discount_amount;
+		this.discount_amount = data.discount_amount ?? data.additional_discount ?? 0;
+		this.additional_discount = data.additional_discount ?? 0;
+		this.additional_discount_percentage = data.additional_discount_percentage ?? 0;
+		this.invoice_doc.discount_amount = this.discount_amount;
+		this.invoice_doc.additional_discount = this.additional_discount;
+		this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
 
 		if (this.items.length > 0) {
 			this.items.forEach((item) => {
@@ -513,24 +599,16 @@ export default {
 			Object.prototype.hasOwnProperty.call(data, "contact_mobile") ||
 			Object.prototype.hasOwnProperty.call(data, "mobile_no") ||
 			Object.prototype.hasOwnProperty.call(data, "customer_mobile");
-		const hasVehicleField =
-			Object.prototype.hasOwnProperty.call(data, "custom_vehicle_no") ||
-			Object.prototype.hasOwnProperty.call(data, "vehicle_no") ||
-			Object.prototype.hasOwnProperty.call(data, "vehicle_number") ||
-			Object.prototype.hasOwnProperty.call(data, "custom_vehicle_number");
-
 		const finalContactMobile =
 			resolvedContactMobile || (!hasContactField ? this.contact_mobile || "" : "");
-		const finalVehicleNo = resolvedVehicleNo || (!hasVehicleField ? this.custom_vehicle_no || "" : "");
+		const finalVehicleNo = resolvedVehicleNo;
 
 		this.custom_has_oil_item = !!data.custom_has_oil_item;
 		this.custom_odometer_reading = data.custom_odometer_reading || null;
 		if (resolvedContactMobile || hasContactField) {
 			this.contact_mobile = finalContactMobile;
 		}
-		if (resolvedVehicleNo || hasVehicleField) {
-			this.custom_vehicle_no = finalVehicleNo;
-		}
+		this.custom_vehicle_no = finalVehicleNo;
 
 		console.log("Odometer/vehicle data loaded:", {
 			custom_has_oil_item: this.custom_has_oil_item,
@@ -587,7 +665,7 @@ export default {
 			// by other event handlers (e.g. Customer -> update_customer_details).
 			const emitContactMobile =
 				typeof resolvedContactMobile !== "undefined" ? resolvedContactMobile : this.contact_mobile;
-			const emitVehicleNo = resolvedVehicleNo || this.custom_vehicle_no || "";
+			const emitVehicleNo = finalVehicleNo;
 
 			console.log("[Invoice] 🚀 EMITTING with values:", {
 				customer: this.customer,
@@ -611,6 +689,7 @@ export default {
 				customer: customerToLoad,
 				contact_mobile: emitContactMobile,
 				custom_vehicle_no: emitVehicleNo,
+				allow_vehicle_fallback: false,
 			});
 		}
 
@@ -638,9 +717,38 @@ export default {
 		}
 
 		this.invoice_doc.total_taxes_and_charges = this.total_tax || 0;
+		if (Object.prototype.hasOwnProperty.call(data, "distributed_discount_amount")) {
+			this.invoice_doc.distributed_discount_amount = data.distributed_discount_amount;
+		}
+		if (Object.prototype.hasOwnProperty.call(data, "loyalty_discount_amount")) {
+			this.invoice_doc.loyalty_discount_amount = data.loyalty_discount_amount;
+		}
+		if (Object.prototype.hasOwnProperty.call(data, "loyalty_amount")) {
+			this.invoice_doc.loyalty_amount = data.loyalty_amount;
+		}
+		if (Object.prototype.hasOwnProperty.call(data, "net_total")) {
+			this.invoice_doc.net_total = data.net_total;
+		}
+		if (Object.prototype.hasOwnProperty.call(data, "grand_total")) {
+			this.invoice_doc.grand_total = data.grand_total;
+		}
+		if (Object.prototype.hasOwnProperty.call(data, "rounded_total")) {
+			this.invoice_doc.rounded_total = data.rounded_total;
+		}
+		if (Object.prototype.hasOwnProperty.call(data, "base_net_total")) {
+			this.invoice_doc.base_net_total = data.base_net_total;
+		}
+		if (Object.prototype.hasOwnProperty.call(data, "base_total_taxes_and_charges")) {
+			this.invoice_doc.base_total_taxes_and_charges = data.base_total_taxes_and_charges;
+		}
+		if (Object.prototype.hasOwnProperty.call(data, "base_grand_total")) {
+			this.invoice_doc.base_grand_total = data.base_grand_total;
+		}
+		if (Object.prototype.hasOwnProperty.call(data, "base_rounded_total")) {
+			this.invoice_doc.base_rounded_total = data.base_rounded_total;
+		}
 
 		this.$nextTick(() => {
-			this.apply_additional_discount();
 			this.$forceUpdate();
 		});
 	},

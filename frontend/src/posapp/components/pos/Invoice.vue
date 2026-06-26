@@ -873,13 +873,15 @@ export default {
 
 			const roundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, precision);
 			const grandTotal = this.flt(this.grand_total || 0, precision);
-			const roundedTotal = grandTotal;
+			const roundedTotal = this.flt(grandTotal + roundOff, precision);
 
 			this.invoice_doc.net_total = this.flt(this.net_total || 0, precision);
 			this.invoice_doc.total = this.flt(this.Total || 0, precision);
 			this.invoice_doc.grand_total = grandTotal;
 			this.invoice_doc.rounded_total = roundedTotal;
 			this.invoice_doc.rounding_adjustment = roundOff;
+			this.invoice_doc.total_amount = grandTotal;
+			this.invoice_doc.to_be_paid = roundedTotal;
 		},
 
 		initializeItemsHeaders() {
@@ -1223,7 +1225,12 @@ export default {
 					0;
 				this.invoice_doc.total_taxes_and_charges = this.total_tax;
 				this.invoice_doc.grand_total = this.grand_total;
-				this.invoice_doc.rounded_total = this.rounded_total;
+				this.invoice_doc.rounded_total = this.flt(
+					this.grand_total + this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision),
+					this.currency_precision,
+				);
+				this.invoice_doc.total_amount = this.invoice_doc.grand_total;
+				this.invoice_doc.to_be_paid = this.invoice_doc.rounded_total;
 			}
 
 			// Force UI update to reflect changes
@@ -2061,12 +2068,14 @@ export default {
 				this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
 				this.currency_precision,
 			);
-			const effectiveRoundedTotal = effectiveGrandTotal;
+			const effectiveRoundedTotal = this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision);
 
 			// Always sync computed totals so payment and backend receive the correct round-off fields
 			this.invoice_doc.grand_total = effectiveGrandTotal;
 			this.invoice_doc.rounded_total = effectiveRoundedTotal;
 			this.invoice_doc.rounding_adjustment = manualRoundOff;
+			this.invoice_doc.total_amount = effectiveGrandTotal;
+			this.invoice_doc.to_be_paid = effectiveRoundedTotal;
 
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
@@ -2120,7 +2129,7 @@ export default {
 				this.currency_precision,
 			);
 			const effectiveGrandTotal = this.flt(this.grand_total || 0, this.currency_precision);
-			const effectiveRoundedTotal = effectiveGrandTotal;
+			const effectiveRoundedTotal = this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision);
 
 			const invoiceData = {
 				// Basic info
@@ -2139,6 +2148,8 @@ export default {
 				grand_total: effectiveGrandTotal,
 				rounded_total: effectiveRoundedTotal,
 				rounding_adjustment: manualRoundOff,
+				total_amount: effectiveGrandTotal,
+				to_be_paid: effectiveRoundedTotal,
 
 				// Additional discounts
 				additional_discount: this.additional_discount || 0,
@@ -2193,9 +2204,14 @@ export default {
 				this.currency_precision,
 			);
 			const effectiveTaxTotal =
-				this.calculate_item_tax_from_items() || this.apply_tax_template_totals(this.invoice_doc) || 0;
-			const effectiveGrandTotal = this.flt(this.net_total + effectiveTaxTotal, this.currency_precision);
-			const effectiveRoundedTotal = effectiveGrandTotal;
+				this.calculate_item_tax_from_items() ||
+				this.apply_tax_template_totals(this.invoice_doc) ||
+				0;
+			const effectiveGrandTotal = this.flt(
+				this.net_total + effectiveTaxTotal,
+				this.currency_precision,
+			);
+			const effectiveRoundedTotal = this.flt(effectiveGrandTotal + manualRoundOff, this.currency_precision);
 
 			console.log("[prepareForPayment] Totals snapshot:", {
 				item_total: this.flt(this.Total || 0, this.currency_precision),
@@ -2221,6 +2237,8 @@ export default {
 			invoiceData.grand_total = effectiveGrandTotal;
 			invoiceData.rounded_total = effectiveRoundedTotal;
 			invoiceData.rounding_adjustment = manualRoundOff;
+			invoiceData.total_amount = effectiveGrandTotal;
+			invoiceData.to_be_paid = effectiveRoundedTotal;
 			invoiceData._posa_invoice_instance_id = this.invoice_instance_id;
 
 			console.log("[prepareForPayment] Setting invoice totals:", {
@@ -2558,8 +2576,11 @@ export default {
 				this.invoice_doc.net_total + (this.invoice_doc.total_taxes_and_charges || 0),
 				this.currency_precision,
 			);
+			const roundOff = this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision);
 			this.invoice_doc.grand_total = grandTotal;
-			this.invoice_doc.rounded_total = grandTotal;
+			this.invoice_doc.rounded_total = this.flt(grandTotal + roundOff, this.currency_precision);
+			this.invoice_doc.total_amount = this.invoice_doc.grand_total;
+			this.invoice_doc.to_be_paid = this.invoice_doc.rounded_total;
 			this.invoice_doc.conversion_rate = this.conversion_rate || 1;
 			this.invoice_doc.plc_conversion_rate = this.exchange_rate || 1;
 			this.invoice_doc.pos_profile = this.pos_profile && this.pos_profile.name;
@@ -3363,11 +3384,19 @@ export default {
 		// });
 
 		this.eventBus.on("update_customer", (customer) => {
+			const customerChanged = this.customer !== customer;
 			this.customer = customer;
 
 			// Sync to invoice_doc
 			if (this.invoice_doc) {
 				this.invoice_doc.customer = customer;
+				if (customerChanged) {
+					this.invoice_doc.custom_vehicle_no = "";
+				}
+			}
+
+			if (customerChanged) {
+				this.custom_vehicle_no = "";
 			}
 
 			// Trigger any necessary updates
@@ -3615,7 +3644,13 @@ export default {
 					if (this.invoice_doc) {
 						this.invoice_doc.net_total = this.net_total;
 						this.invoice_doc.grand_total = this.grand_total;
-						this.invoice_doc.rounded_total = this.rounded_total;
+						this.invoice_doc.rounded_total = this.flt(
+							this.grand_total +
+								this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision),
+							this.currency_precision,
+						);
+						this.invoice_doc.total_amount = this.invoice_doc.grand_total;
+						this.invoice_doc.to_be_paid = this.invoice_doc.rounded_total;
 						this.invoice_doc.total_qty = this.total_qty;
 
 						this.invoice_doc.custom_odometer_reading =
@@ -3672,7 +3707,12 @@ export default {
 		grand_total(newVal) {
 			if (this.invoice_doc) {
 				this.invoice_doc.grand_total = newVal;
-				this.invoice_doc.rounded_total = newVal;
+				this.invoice_doc.rounded_total = this.flt(
+					newVal + this.flt(this.invoice_doc.rounding_adjustment || 0, this.currency_precision),
+					this.currency_precision,
+				);
+				this.invoice_doc.total_amount = newVal;
+				this.invoice_doc.to_be_paid = this.invoice_doc.rounded_total;
 			}
 		},
 

@@ -879,7 +879,7 @@ export default {
 			}
 
 			try {
-				const { preferVehicleNo = null, allowVehicleFallback = true } = opts;
+				const { preferVehicleNo = null } = opts;
 				let customerNameString = customerName;
 
 				if (typeof customerName === "object" && customerName !== null) {
@@ -900,19 +900,10 @@ export default {
 
 				if (response && response.message) {
 					const customerData = response.message;
+					this.customer_info = customerData || {};
 
 					const mobile = customerData.mobile_no || "";
-					let vehicleNo = "";
-					if (allowVehicleFallback) {
-						if (customerData.vehicle_no) {
-							vehicleNo = customerData.vehicle_no;
-						} else if (customerData.vehicles && customerData.vehicles.length > 0) {
-							vehicleNo = customerData.vehicles[0].vehicle_no;
-						}
-					}
-					if (preferVehicleNo) {
-						vehicleNo = preferVehicleNo;
-					}
+					const vehicleNo = preferVehicleNo ? String(preferVehicleNo).trim() : "";
 
 					const isCorporate = !!(customerData.is_corporate || customerData.is_company);
 					this.selected_customer_is_corporate = isCorporate;
@@ -928,7 +919,7 @@ export default {
 							mobile_no: mobile,
 							email_id: customerData.email_id || "",
 							tax_id: customerData.tax_id || "",
-							vehicle_no: customerData.vehicle_no || vehicleNo || "",
+							vehicle_no: vehicleNo || "",
 							is_corporate: isCorporate,
 						},
 					);
@@ -976,6 +967,18 @@ export default {
 			this.tempSelectedCustomer = val;
 
 			if (!this.isMenuOpen && val) {
+				if (val !== this.customer) {
+					this.selectedVehicle = null;
+					this.vehicle_no = "";
+					this.vehicleSearchText = "";
+					this.eventBus.emit("vehicle_selected", null);
+					this.eventBus.emit("clear_vehicle_discounts");
+					this.eventBus.emit("update_customer_details", {
+						contact_mobile: "",
+						custom_vehicle_no: "",
+						is_corporate: !!this.selected_customer_is_corporate,
+					});
+				}
 				this.customer = val;
 				this.internalCustomer = val;
 				this.eventBus.emit("update_customer", val);
@@ -1010,15 +1013,14 @@ export default {
 				this.jobOrderLockUntil = 0;
 				this.eventBus.emit("update_customer", null);
 				this.eventBus.emit("vehicle_selected", null);
-				this.selected_customer_is_corporate = false;
-
-				// EMIT EMPTY CUSTOMER DETAILS
 				this.eventBus.emit("update_customer_details", {
 					contact_mobile: "",
 					custom_vehicle_no: "",
 					is_corporate: false,
 				});
+				this.selected_customer_is_corporate = false;
 
+				// EMIT EMPTY CUSTOMER DETAILS
 				this.eventBus.emit("clear_vehicle_discounts");
 			}
 		},
@@ -1865,10 +1867,14 @@ export default {
 		},
 
 		// --- Vehicle Methods ---
-		async fetchVehiclesForCustomer(customerName, vehicleNo = null) {
+		async fetchVehiclesForCustomer(customerName, vehicleNo = null, options = {}) {
+			const allowDefaultSelection = options.allowDefaultSelection !== false;
+			const preserveExistingSelection = options.preserveExistingSelection !== false;
 			console.log("[Vehicle] fetchVehiclesForCustomer", {
 				customerName,
 				vehicleNo,
+				allowDefaultSelection,
+				preserveExistingSelection,
 				jobOrderCustomer: this.jobOrderCustomer,
 				jobOrderVehicleNo: this.jobOrderVehicleNo,
 				jobOrderLoading: this.jobOrderLoading,
@@ -2013,7 +2019,7 @@ export default {
 								String(currentSelectedVehicleNo || "")
 									.trim()
 									.toLowerCase(),
-						)
+					)
 					: null;
 				const requestedVehicle = requestedVehicleNo
 					? this.vehicles.find(
@@ -2023,31 +2029,59 @@ export default {
 									.toLowerCase() === requestedVehicleNo,
 						)
 					: null;
+				const selectedVehicleMatchesCustomer =
+					!!selectedVehicle &&
+					String(selectedVehicle.customer || "").trim() === String(customerName || "").trim();
+				const selectedVehicleByNoMatchesCustomer =
+					!!selectedVehicleByNo &&
+					String(selectedVehicleByNo.customer || "").trim() === String(customerName || "").trim();
 
-				if (requestedVehicle || selectedVehicle || selectedVehicleByNo) {
-					const nextVehicle = requestedVehicle || selectedVehicle || selectedVehicleByNo;
+				const nextVehicle =
+					requestedVehicle ||
+					(preserveExistingSelection && selectedVehicleMatchesCustomer ? selectedVehicle : null) ||
+					(preserveExistingSelection && selectedVehicleByNoMatchesCustomer
+						? selectedVehicleByNo
+						: null);
+
+				if (nextVehicle) {
 					this.selectedVehicle = nextVehicle.name;
-					this.vehicle_no = nextVehicle.vehicle_no || currentSelectedVehicleNo || "";
+					this.vehicle_no = nextVehicle.vehicle_no || "";
 					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", nextVehicle.name);
-				} else if (this.vehicles.length === 1) {
+					this.eventBus.emit("update_customer_details", {
+						contact_mobile: this.customer_info?.mobile_no || "",
+						custom_vehicle_no: this.vehicle_no || "",
+						is_corporate: !!this.selected_customer_is_corporate,
+					});
+				} else if (allowDefaultSelection && this.vehicles.length === 1 && !currentSelectedVehicleNo) {
 					this.selectedVehicle = this.vehicles[0].name;
 					this.vehicle_no = this.vehicles[0].vehicle_no;
 					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", this.selectedVehicle);
+					this.eventBus.emit("update_customer_details", {
+						contact_mobile: this.customer_info?.mobile_no || "",
+						custom_vehicle_no: this.vehicle_no || "",
+						is_corporate: !!this.selected_customer_is_corporate,
+					});
 
 					this.eventBus.emit("apply_vehicle_discount", {
 						customer: customerName,
 						vehicle_no: this.vehicles[0].vehicle_no,
 					});
-				} else if (!vehicleNo) {
+				} else if (!vehicleNo || this.vehicles.length === 0) {
 					this.selectedVehicle = null;
 					this.vehicle_no = "";
+					this.vehicleSearchText = "";
 					this.vehicleSearchTerm = "";
 					this.vehicleSearchResults = [];
 					this.eventBus.emit("vehicle_selected", null);
+					this.eventBus.emit("clear_vehicle_discounts");
 				} else {
+					this.selectedVehicle = null;
+					this.vehicle_no = "";
+					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", null);
+					this.eventBus.emit("clear_vehicle_discounts");
 				}
 			} catch (err) {
 				console.error("Failed to fetch vehicles:", err);
@@ -2088,6 +2122,11 @@ export default {
 			);
 
 			this.eventBus.emit("vehicle_selected", vehicle.name);
+			this.eventBus.emit("update_customer_details", {
+				contact_mobile: this.customer_info?.mobile_no || "",
+				custom_vehicle_no: vehicle.vehicle_no || "",
+				is_corporate: !!this.selected_customer_is_corporate,
+			});
 
 			if (!this.customer) {
 				if (vehicle.customer) {
@@ -2201,12 +2240,23 @@ export default {
 						this.pendingDraftVehicleNo ||
 						"",
 				).trim();
+				const hasExplicitVehicleField =
+					Object.prototype.hasOwnProperty.call(payload, "custom_vehicle_no") ||
+					Object.prototype.hasOwnProperty.call(payload, "vehicle_no") ||
+					Object.prototype.hasOwnProperty.call(payload, "vehicle_number") ||
+					Object.prototype.hasOwnProperty.call(payload, "custom_vehicle_number");
 				const jobVehicleNo = requestedVehicleNo || null;
 				const hasVehiclePayload = !!requestedVehicleNo;
 				const hasMobilePayload = !!String(payload.contact_mobile || "").trim();
 				const sameCustomer = this.jobOrderCustomer === customerName || this.customer === customerName;
 
-				if (!hasVehiclePayload && !hasMobilePayload && sameCustomer && this.jobOrderVehicleNo) {
+				if (
+					!hasVehiclePayload &&
+					!hasMobilePayload &&
+					sameCustomer &&
+					this.jobOrderVehicleNo &&
+					!hasExplicitVehicleField
+				) {
 					console.log("[Customer] load_invoice_customer skipped: empty payload for same customer", {
 						customerName,
 						jobOrderVehicleNo: this.jobOrderVehicleNo,
@@ -2259,9 +2309,14 @@ export default {
 				}
 
 				// Load customer details (mobile, corporate flag, etc.)
+				const allowVehicleFallback =
+					typeof payload.allow_vehicle_fallback === "boolean"
+						? payload.allow_vehicle_fallback
+						: !jobVehicleNo && !hasExplicitVehicleField;
+
 				await this.fetchAndEmitCustomerDetails(customerName, {
 					preferVehicleNo: jobVehicleNo || "",
-					allowVehicleFallback: !jobVehicleNo,
+					allowVehicleFallback,
 				});
 
 				// Load vehicles
@@ -2269,7 +2324,10 @@ export default {
 					customerName,
 					jobVehicleNo,
 				});
-				await this.fetchVehiclesForCustomer(customerName, jobVehicleNo);
+				await this.fetchVehiclesForCustomer(customerName, jobVehicleNo, {
+					allowDefaultSelection: allowVehicleFallback,
+					preserveExistingSelection: allowVehicleFallback,
+				});
 				this.jobOrderLoading = false;
 
 				// Auto-select vehicle if present in draft
@@ -2300,6 +2358,12 @@ export default {
 					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", matchedVehicle.name);
 					this.pendingDraftVehicleNo = null;
+				} else if (hasExplicitVehicleField) {
+					this.selectedVehicle = null;
+					this.vehicle_no = "";
+					this.vehicleSearchText = "";
+					this.pendingDraftVehicleNo = null;
+					this.eventBus.emit("vehicle_selected", null);
 				}
 
 				// Force Vue to re-render the autocomplete with the loaded customer
@@ -2422,6 +2486,19 @@ export default {
 						this.jobOrderVehicleNo = null;
 						this.jobOrderLoading = false;
 						this.jobOrderLockUntil = 0;
+					}
+					if (customerName !== this.customer) {
+						this.selectedVehicle = null;
+						this.vehicle_no = "";
+						this.vehicleSearchText = "";
+						this.eventBus.emit("vehicle_selected", null);
+						this.eventBus.emit("clear_vehicle_discounts");
+					}
+					// During draft hydration, Invoice.vue/Customer.vue will explicitly decide
+					// whether a vehicle should be restored. Do not auto-fetch here or the
+					// previous vehicle can be preserved by fetchVehiclesForCustomer().
+					if (this._loadInvoiceCustomerInProgress) {
+						return;
 					}
 					if (this.jobOrderCustomer === customerName && this.jobOrderVehicleNo) {
 						return;

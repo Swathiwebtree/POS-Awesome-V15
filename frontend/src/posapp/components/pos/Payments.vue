@@ -233,7 +233,10 @@
 												class="dark-field sleek-field"
 												hide-details
 												:model-value="
-													formatCurrency(computedTaxAndCharges, displayCurrency)
+													formatCurrency(
+														invoice_doc.total_taxes_and_charges || 0,
+														displayCurrency,
+													)
 												"
 												readonly
 												:prefix="currencySymbol()"
@@ -268,7 +271,34 @@
 											/>
 										</v-col>
 
-										<v-col cols="6" class="mb-4" v-if="invoice_doc.rounded_total">
+										<v-col cols="6" class="mb-3">
+											<v-text-field
+												density="compact"
+												variant="solo"
+												color="primary"
+												:label="frappe._('Manual Round Off / Rounding Adjustment')"
+												:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+												class="dark-field sleek-field"
+												hide-details
+												:model-value="getRoundingAdjustmentDisplayValue()"
+												@update:model-value="onRoundingAdjustmentInput"
+												@focus="handleRoundingAdjustmentFocus"
+												@blur="handleRoundingAdjustmentBlur"
+												:prefix="currencySymbol(invoice_doc.currency)"
+												type="text"
+												inputmode="decimal"
+												persistent-placeholder
+											/>
+										</v-col>
+
+										<v-col
+											cols="6"
+											class="mb-4"
+											v-if="
+												invoice_doc.rounded_total !== null &&
+												invoice_doc.rounded_total !== undefined
+											"
+										>
 											<v-text-field
 												density="compact"
 												variant="solo"
@@ -910,6 +940,8 @@ export default {
 			pending_print_args: null,
 			payment_input_values: {},
 			active_payment_input: null,
+			rounding_adjustment_input: "",
+			active_rounding_adjustment_input: false,
 		};
 	},
 	computed: {
@@ -934,7 +966,21 @@ export default {
 		},
 
 		computedTaxAndCharges() {
-			return this.calculateInvoiceTaxTotal(this.invoice_doc);
+			if (!this.invoice_doc) return 0;
+			const savedTaxTotal = Number(this.invoice_doc.total_taxes_and_charges || 0);
+			if (savedTaxTotal) {
+				return this.flt(savedTaxTotal, this.currency_precision);
+			}
+			if (Array.isArray(this.invoice_doc.taxes) && this.invoice_doc.taxes.length > 0) {
+				return this.flt(
+					this.invoice_doc.taxes.reduce(
+						(sum, tax) => sum + (Number(tax?.tax_amount) || 0),
+						0,
+					),
+					this.currency_precision,
+				);
+			}
+			return 0;
 		},
 
 		// Get the correct total for payment calculations
@@ -998,9 +1044,14 @@ export default {
 
 		payable_total() {
 			if (!this.invoice_doc) return 0;
-
-			const grandTotal = this.flt(this.invoice_doc.grand_total || 0, this.currency_precision);
-			return grandTotal;
+			const roundedTotal =
+				this.invoice_doc.to_be_paid != null
+					? this.invoice_doc.to_be_paid
+					: this.invoice_doc.rounded_total != null
+						? this.invoice_doc.rounded_total
+						: (this.invoice_doc.grand_total || 0) +
+							(this.invoice_doc.rounding_adjustment || 0);
+			return this.flt(roundedTotal, this.currency_precision);
 		},
 
 		diff_payment() {
@@ -1365,6 +1416,66 @@ export default {
 			this.active_payment_input = null;
 		},
 
+		getRoundingAdjustmentDisplayValue() {
+			if (!this.invoice_doc) return "";
+			if (this.active_rounding_adjustment_input) {
+				return this.rounding_adjustment_input ?? "";
+			}
+			const value = this.invoice_doc.rounding_adjustment;
+			if (value === null || value === undefined || value === "") {
+				return "";
+			}
+			return this.flt(value, this.currency_precision).toFixed(this.currency_precision);
+		},
+
+		applyRoundingAdjustment(value) {
+			if (!this.invoice_doc) return;
+
+			const moneyPrecision = this.currency_precision;
+			const roundOff = this.flt(value || 0, moneyPrecision);
+			const grandTotal = this.flt(this.invoice_doc.grand_total || 0, moneyPrecision);
+			const roundedTotal = this.flt(grandTotal + roundOff, moneyPrecision);
+
+			this.invoice_doc.rounding_adjustment = roundOff;
+			this.invoice_doc.rounded_total = roundedTotal;
+			this.invoice_doc.total_amount = grandTotal;
+			this.invoice_doc.to_be_paid = roundedTotal;
+
+			this.grand_total = grandTotal;
+			this.rounded_total = roundedTotal;
+		},
+
+		onRoundingAdjustmentInput(value) {
+			this.active_rounding_adjustment_input = true;
+			this.rounding_adjustment_input = value ?? "";
+
+			if (value === "" || value === null || value === undefined) {
+				this.applyRoundingAdjustment(0);
+				return;
+			}
+
+			this.applyRoundingAdjustment(this.parsePaymentAmountInput(value));
+		},
+
+		handleRoundingAdjustmentFocus() {
+			this.active_rounding_adjustment_input = true;
+			this.rounding_adjustment_input = String(this.invoice_doc?.rounding_adjustment ?? "");
+		},
+
+		handleRoundingAdjustmentBlur(event) {
+			if (!this.invoice_doc) return;
+
+			const raw = event?.target?.value ?? this.rounding_adjustment_input;
+			const parsed =
+				raw === "" || raw === null || raw === undefined ? 0 : this.parsePaymentAmountInput(raw);
+
+			this.applyRoundingAdjustment(parsed);
+			this.rounding_adjustment_input = this.flt(parsed, this.currency_precision).toFixed(
+				this.currency_precision,
+			);
+			this.active_rounding_adjustment_input = false;
+		},
+
 		tryOpenPaymentDialog() {
 			if (!this.pending_show_payment) {
 				return;
@@ -1373,12 +1484,14 @@ export default {
 				return;
 			}
 
+			this.refreshPaymentMethodsForCustomer(this.customer_info, this.invoice_doc);
+
 			const hasServiceItem = this.hasCarWashServiceForItems(this.invoice_doc.items || []);
 			const hasEmployee = !!this.invoice_doc?.custom_service_employee;
 
 			if (hasServiceItem && !hasEmployee) {
 				frappe.show_alert({
-					message: __("Please select a service employee before proceeding to payment."),
+					message: __("Please select the service employee."),
 					indicator: "red",
 				});
 				frappe.utils.play_sound("error");
@@ -1434,6 +1547,8 @@ export default {
 			this.redeem_customer_credit = false;
 			this.payment_input_values = {};
 			this.active_payment_input = null;
+			this.rounding_adjustment_input = "";
+			this.active_rounding_adjustment_input = false;
 
 			// Force UI update
 			this.$nextTick(() => {
@@ -1482,6 +1597,8 @@ export default {
 			this.addresses = [];
 			this.payment_input_values = {};
 			this.active_payment_input = null;
+			this.rounding_adjustment_input = "";
+			this.active_rounding_adjustment_input = false;
 
 			// Reset UI states
 			this.loading = false;
@@ -1495,22 +1612,171 @@ export default {
 
 		isCorporateCustomer(source = this.customer) {
 			const customer = source && typeof source === "object" ? source : {};
+			const customerType = String(customer.customer_type || "").trim().toLowerCase();
 			return !!(
 				customer.is_corporate ||
 				customer.is_company ||
-				customer.customer_type === "Company" ||
-				customer.customer_type === "Corporate" ||
-				customer.customer_group === "Commercial" ||
-				customer.customer_group === "Comercial"
+				customerType === "company" ||
+				customerType === "corporate"
 			);
 		},
 
-		async syncCorporateCustomerState(source = this.customer) {
-			if (this.isCorporateCustomer(source)) {
-				this.selected_customer_is_corporate = true;
+		isOnAccountPaymentMethod(method) {
+			const mode = String(method?.mode_of_payment || "").trim().toLowerCase();
+			return mode === "on account" || mode === "on-account";
+		},
+
+		filterPaymentMethodsForCustomer(methods = [], customer = this.customer_info) {
+			return (methods || []).filter((method) => {
+				if (this.isOnAccountPaymentMethod(method)) {
+					return this.isCorporateCustomer(customer);
+				}
 				return true;
+			});
+		},
+
+		buildPaymentMethodsFromPosProfile(customer = this.customer_info) {
+			const methods = Array.isArray(this.pos_profile?.payments) ? this.pos_profile.payments : [];
+			return this.filterPaymentMethodsForCustomer(methods, customer).map((payment, index) => {
+				return {
+					name: "",
+					mode_of_payment: payment.mode_of_payment,
+					account: payment.custom_account || payment.default_account || "",
+					amount: null,
+					base_amount: null,
+					type: payment.type || "Cash",
+					idx: index + 1,
+					default: payment.default || 0,
+				};
+			});
+		},
+
+		refreshPaymentMethodsForCustomer(customer = this.customer_info, invoiceDoc = this.invoice_doc) {
+			if (!invoiceDoc) return [];
+
+			const currentAmounts = new Map(
+				(invoiceDoc.payments || []).map((payment) => [payment.mode_of_payment, payment.amount]),
+			);
+			const filtered = this.buildPaymentMethodsFromPosProfile(customer);
+			invoiceDoc.payments = filtered.map((payment) => ({
+				...payment,
+				amount: currentAmounts.get(payment.mode_of_payment) ?? null,
+			}));
+			return invoiceDoc.payments;
+		},
+
+		buildTaxRowsFromPosProfile(doc = this.invoice_doc, baseAmount = null) {
+			const templateName = this.pos_profile?.taxes_and_charges;
+			if (!templateName) return [];
+
+			const tmpl = getTaxTemplate(templateName);
+			if (!tmpl || !Array.isArray(tmpl.taxes) || !tmpl.taxes.length) {
+				return [];
 			}
 
+			const netTotal =
+				baseAmount != null
+					? Number(baseAmount)
+					: doc?.net_total != null
+						? Number(doc.net_total)
+						: this.getDiscountedNetTotal(doc);
+			let runningTotal = Number.isFinite(netTotal) ? Number(netTotal) : 0;
+			const rows = [];
+
+			tmpl.taxes.forEach((row) => {
+				const rate = Number(row.rate || 0);
+				let taxAmount = 0;
+				if (row.charge_type === "Actual") {
+					taxAmount = Number(row.tax_amount || 0);
+				} else {
+					taxAmount = (runningTotal * rate) / 100;
+				}
+
+				runningTotal += taxAmount;
+				rows.push({
+					account_head: row.account_head,
+					charge_type: row.charge_type || "On Net Total",
+					description: row.description,
+					rate,
+					included_in_print_rate: row.included_in_print_rate || 0,
+					tax_amount: this.flt(taxAmount, this.currency_precision),
+					total: this.flt(runningTotal, this.currency_precision),
+				});
+			});
+
+			return rows;
+		},
+
+		applyLoadedInvoiceTotals(doc = this.invoice_doc) {
+			if (!doc) return null;
+
+			const moneyPrecision = this.currency_precision;
+			const hasSavedTaxes = Array.isArray(doc.taxes) && doc.taxes.length > 0;
+			const toNumber = (value) => {
+				const parsed = Number(formatUtils.fromArabicNumerals(String(value ?? 0)).replace(/,/g, ""));
+				return Number.isFinite(parsed) ? parsed : 0;
+			};
+
+			const netTotal =
+				doc.net_total != null ? toNumber(doc.net_total) : this.getDiscountedNetTotal(doc);
+			let taxRows = hasSavedTaxes ? doc.taxes : [];
+			let taxTotal = 0;
+
+			if (hasSavedTaxes) {
+				taxTotal =
+					doc.total_taxes_and_charges != null
+						? toNumber(doc.total_taxes_and_charges)
+						: doc.taxes.reduce((sum, tax) => sum + toNumber(tax?.tax_amount), 0);
+				if (!taxTotal && doc.taxes.length > 0) {
+					taxTotal = doc.taxes.reduce((sum, tax) => sum + toNumber(tax?.tax_amount), 0);
+				}
+			} else {
+				taxRows = this.buildTaxRowsFromPosProfile(doc, netTotal);
+				if (taxRows.length) {
+					doc.taxes = taxRows;
+				}
+				taxTotal = this.calculateInvoiceTaxTotal(doc, netTotal);
+				if (!taxTotal && taxRows.length) {
+					taxTotal = taxRows.reduce((sum, tax) => sum + toNumber(tax?.tax_amount), 0);
+				}
+			}
+
+			const grandTotal =
+				doc.grand_total != null
+					? toNumber(doc.grand_total)
+					: this.flt(netTotal + taxTotal, moneyPrecision);
+			const roundOff = toNumber(doc.rounding_adjustment || 0);
+			const roundedTotal =
+				doc.rounded_total != null
+					? toNumber(doc.rounded_total)
+					: this.flt(grandTotal + roundOff, moneyPrecision);
+			const exchangeRate = Number(doc.conversion_rate || this.exchange_rate || 1);
+
+			doc.net_total = this.flt(netTotal, moneyPrecision);
+			doc.total_taxes_and_charges = this.flt(taxTotal, moneyPrecision);
+			doc.grand_total = this.flt(grandTotal, moneyPrecision);
+			doc.total_amount = this.flt(grandTotal, moneyPrecision);
+			doc.rounding_adjustment = this.flt(roundOff, moneyPrecision);
+			doc.rounded_total = this.flt(roundedTotal, moneyPrecision);
+			doc.to_be_paid = this.flt(roundedTotal, moneyPrecision);
+			doc.base_net_total = this.flt(doc.net_total * exchangeRate, moneyPrecision);
+			doc.base_total_taxes_and_charges = this.flt(doc.total_taxes_and_charges * exchangeRate, moneyPrecision);
+			doc.base_grand_total = this.flt(doc.grand_total * exchangeRate, moneyPrecision);
+			doc.base_rounded_total = this.flt(doc.rounded_total * exchangeRate, moneyPrecision);
+
+			this.total_tax = doc.total_taxes_and_charges;
+			this.grand_total = doc.grand_total;
+			this.rounded_total = doc.rounded_total;
+
+			return {
+				net_total: doc.net_total,
+				total_taxes_and_charges: doc.total_taxes_and_charges,
+				grand_total: doc.grand_total,
+				rounded_total: doc.rounded_total,
+			};
+		},
+
+		async syncCorporateCustomerState(source = this.customer) {
 			const customerName =
 				(typeof source === "string" && source) ||
 				source?.customer ||
@@ -1521,6 +1787,8 @@ export default {
 
 			if (!customerName) {
 				this.selected_customer_is_corporate = false;
+				this.customer_info = "";
+				this.refreshPaymentMethodsForCustomer(this.customer_info, this.invoice_doc);
 				return false;
 			}
 
@@ -1530,11 +1798,28 @@ export default {
 					args: { customer: customerName },
 				});
 				const msg = r?.message || {};
+				if (msg.loyalty_program) {
+					try {
+						const redemptionFactorResponse = await frappe.call({
+							method: "erpnext.accounts.doctype.loyalty_program.loyalty_program.get_redeemption_factor",
+							args: {
+								customer: customerName,
+								loyalty_program: msg.loyalty_program,
+							},
+						});
+						msg.conversion_factor = Number(redemptionFactorResponse?.message ?? msg.conversion_factor ?? 0);
+					} catch (factorErr) {
+						console.warn("[Payment] failed to fetch loyalty redemption factor:", factorErr);
+					}
+				}
+				this.customer_info = msg;
 				this.selected_customer_is_corporate = this.isCorporateCustomer(msg);
+				this.refreshPaymentMethodsForCustomer(msg, this.invoice_doc);
 				return this.selected_customer_is_corporate;
 			} catch (err) {
 				console.warn("[Payment] could not fetch customer info:", err);
 				this.selected_customer_is_corporate = false;
+				this.refreshPaymentMethodsForCustomer(this.customer_info, this.invoice_doc);
 				return false;
 			}
 		},
@@ -1581,17 +1866,10 @@ export default {
 			);
 			const preTaxDiscount = this.getPreTaxDiscountAmount(doc);
 			const loyaltyDiscount = this.getLoyaltyDiscountAmount(doc);
-			const manualRoundOff = Number(doc?.rounding_adjustment || 0);
 			const safeItemTotal = Number.isFinite(itemTotal) ? itemTotal : 0;
 			const safeDiscount = Number.isFinite(preTaxDiscount) ? preTaxDiscount : 0;
 			const safeLoyalty = Number.isFinite(loyaltyDiscount) ? loyaltyDiscount : 0;
-			return this.flt(
-				safeItemTotal -
-					safeDiscount -
-					safeLoyalty +
-					(Number.isFinite(manualRoundOff) ? manualRoundOff : 0),
-				moneyPrecision,
-			);
+			return this.flt(safeItemTotal - safeDiscount - safeLoyalty, moneyPrecision);
 		},
 
 		calculateTemplateTaxTotal(doc = this.invoice_doc, baseAmount = null) {
@@ -1609,18 +1887,17 @@ export default {
 						? Number(this.getDiscountedNetTotal(doc))
 						: doc?.net_total != null
 							? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
-							: Number(
-									formatUtils
-										.fromArabicNumerals(
-											String(
-												(doc?.total ?? 0) -
-													this.getPreTaxDiscountAmount(doc) -
-													this.getLoyaltyDiscountAmount(doc) +
-													Number(doc?.rounding_adjustment || 0),
-											),
-										)
-										.replace(/,/g, ""),
-								);
+						: Number(
+								formatUtils
+									.fromArabicNumerals(
+										String(
+											(doc?.total ?? 0) -
+												this.getPreTaxDiscountAmount(doc) -
+												this.getLoyaltyDiscountAmount(doc),
+										),
+									)
+									.replace(/,/g, ""),
+							);
 			let totalTax = 0;
 
 			tmpl.taxes.forEach((row) => {
@@ -1655,10 +1932,9 @@ export default {
 						? Number(this.getDiscountedNetTotal(doc))
 						: doc?.net_total != null
 							? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
-							: itemBaseTotal -
+						: itemBaseTotal -
 								this.getPreTaxDiscountAmount(doc) -
-								this.getLoyaltyDiscountAmount(doc) +
-								Number(doc?.rounding_adjustment || 0);
+								this.getLoyaltyDiscountAmount(doc);
 			const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
 
 			doc.items.forEach((item) => {
@@ -1805,29 +2081,16 @@ export default {
 
 					if (!r.message) return;
 
-					const preservedTotals = this.invoice_doc
-						? {
-								net_total: this.invoice_doc.net_total,
-								total_taxes_and_charges: this.invoice_doc.total_taxes_and_charges,
-								grand_total: this.invoice_doc.grand_total,
-								rounded_total: this.invoice_doc.rounded_total,
-								rounding_adjustment: this.invoice_doc.rounding_adjustment,
-								total_amount: this.invoice_doc.total_amount,
-								outstanding_amount: this.invoice_doc.outstanding_amount,
-								paid_amount: this.invoice_doc.paid_amount,
-								change_amount: this.invoice_doc.change_amount,
-								to_be_paid: this.invoice_doc.to_be_paid,
-								base_net_total: this.invoice_doc.base_net_total,
-								base_total_taxes_and_charges: this.invoice_doc.base_total_taxes_and_charges,
-								base_grand_total: this.invoice_doc.base_grand_total,
-								base_rounded_total: this.invoice_doc.base_rounded_total,
-							}
-						: {};
-
 					this.invoice_doc = {
 						...r.message,
-						...preservedTotals,
 					};
+
+					this.applyRoundingAdjustment(this.invoice_doc.rounding_adjustment || 0);
+					this.rounding_adjustment_input = this.flt(
+						this.invoice_doc.rounding_adjustment || 0,
+						this.currency_precision,
+					).toFixed(this.currency_precision);
+					this.active_rounding_adjustment_input = false;
 
 					console.log("[Payment] Synced invoice before opening", {
 						net: r.message.net_total,
@@ -2182,6 +2445,13 @@ export default {
 			this.invoice_doc.redeem_loyalty_points = Math.round(
 				Number(this.invoice_doc.redeem_loyalty_points || 0),
 			);
+			this.invoice_doc.total_amount = this.flt(this.invoice_doc.grand_total || 0, this.currency_precision);
+			this.invoice_doc.to_be_paid = this.flt(this.payable_total || 0, this.currency_precision);
+			this.invoice_doc.rounded_total = this.invoice_doc.to_be_paid;
+			this.invoice_doc.rounding_adjustment = this.flt(
+				this.invoice_doc.rounded_total - this.invoice_doc.grand_total,
+				this.currency_precision,
+			);
 
 			// Safety
 			if (this.invoice_doc.loyalty_amount < 0) this.invoice_doc.loyalty_amount = 0;
@@ -2196,6 +2466,10 @@ export default {
 				is_cashback: this.is_cashback,
 				due_date: this.invoice_doc.due_date,
 				is_credit_sale: this.is_credit_sale,
+				rounding_adjustment: this.invoice_doc.rounding_adjustment,
+				rounded_total: this.invoice_doc.rounded_total,
+				total_amount: this.invoice_doc.total_amount,
+				to_be_paid: this.invoice_doc.to_be_paid,
 			};
 
 			const vm = this;
@@ -3156,8 +3430,8 @@ export default {
 		this.selected_customer_is_corporate = false;
 
 		// Listen for explicit customer detail updates
-		this.eventBus.on("update_customer_details", (payload) => {
-			this.syncCorporateCustomerState(payload);
+		this.eventBus.on("update_customer_details", async (payload) => {
+			await this.syncCorporateCustomerState(payload);
 		});
 
 		this.eventBus.on("send_invoice_doc_payment", async (invoice_doc) => {
@@ -3177,16 +3451,13 @@ export default {
 				this.invoice_doc.loyalty_discount_amount =
 					this.invoice_doc.loyalty_discount_amount || this.invoice_doc.loyalty_amount || 0;
 			}
-			const netTotal = this.getDiscountedNetTotal(this.invoice_doc);
-			this.invoice_doc.net_total = netTotal;
-			this.invoice_doc.total_taxes_and_charges = this.calculateInvoiceTaxTotal(
-				this.invoice_doc,
-				netTotal,
-			);
-			this.invoice_doc.grand_total = this.flt(
-				netTotal + (this.invoice_doc.total_taxes_and_charges || 0),
-				this.currency_precision,
-			);
+			this.applyLoadedInvoiceTotals(this.invoice_doc);
+			console.log("[Payment][DraftLoad] invoice snapshot", {
+				net_total: this.invoice_doc?.net_total,
+				total_taxes_and_charges: this.invoice_doc?.total_taxes_and_charges,
+				grand_total: this.invoice_doc?.grand_total,
+				taxes: this.invoice_doc?.taxes,
+			});
 
 			if (this.invoice_doc && this.invoice_doc.posting_date) {
 				const posting_date = new Date(this.invoice_doc.posting_date);
@@ -3209,18 +3480,7 @@ export default {
 				console.log("[Payment] Payments empty, loading from POS Profile");
 
 				if (this.pos_profile && this.pos_profile.payments && this.pos_profile.payments.length > 0) {
-					this.invoice_doc.payments = this.pos_profile.payments.map((payment, index) => {
-						return {
-							name: "",
-							mode_of_payment: payment.mode_of_payment,
-							account: payment.default_account || "",
-							amount: null,
-							base_amount: null,
-							type: payment.type || "Cash",
-							idx: index + 1,
-							default: payment.default || 0,
-						};
-					});
+					this.invoice_doc.payments = this.buildPaymentMethodsFromPosProfile(this.customer_info);
 					console.log("[Payment] Loaded payment methods:", this.invoice_doc.payments);
 				} else {
 					console.warn("[Payment] POS Profile not available");
@@ -3239,6 +3499,7 @@ export default {
 				}
 			}
 
+			this.refreshPaymentMethodsForCustomer(this.customer_info, this.invoice_doc);
 			console.log("[Payment] Payments initialized:", this.invoice_doc.payments);
 			this.tryOpenPaymentDialog();
 
@@ -3306,13 +3567,13 @@ export default {
 				return;
 			}
 
-			const netTotal = this.getDiscountedNetTotal(invoiceData);
-			invoiceData.net_total = netTotal;
-			invoiceData.total_taxes_and_charges = this.calculateInvoiceTaxTotal(invoiceData, netTotal);
-			invoiceData.grand_total = this.flt(
-				netTotal + (invoiceData.total_taxes_and_charges || 0),
-				this.currency_precision,
-			);
+			this.applyLoadedInvoiceTotals(invoiceData);
+			console.log("[Payment][DraftLoad] invoice snapshot", {
+				net_total: invoiceData?.net_total,
+				total_taxes_and_charges: invoiceData?.total_taxes_and_charges,
+				grand_total: invoiceData?.grand_total,
+				taxes: invoiceData?.taxes,
+			});
 
 			// Ensure payments array exists
 			if (!invoiceData.payments) {
@@ -3323,58 +3584,7 @@ export default {
 				console.log("[Payment] Loading payment methods from POS Profile");
 
 				if (this.pos_profile && this.pos_profile.payments && this.pos_profile.payments.length > 0) {
-					invoiceData.payments = this.pos_profile.payments.map((payment, index) => {
-						return {
-							name: "",
-							mode_of_payment: payment.mode_of_payment,
-							account: payment.custom_account || payment.default_account || "",
-							amount: null,
-							base_amount: null,
-							type: payment.type || "Cash",
-							idx: index + 1,
-							default: payment.default || 0,
-						};
-					});
-
-					const isCorporateFromInvoice = !!(
-						invoiceData.is_corporate ||
-						invoiceData.is_company ||
-						invoiceData.customer_type === "Company" ||
-						invoiceData.customer_type === "Corporate" ||
-						invoiceData.customer_group === "Commercial"
-					);
-					const isCorporateFromComponent = !!(
-						this.selected_customer_is_corporate ||
-						(this.customer &&
-							(this.customer.is_corporate ||
-								this.customer.is_company ||
-								this.customer.customer_type === "Company" ||
-								this.customer.customer_type === "Corporate" ||
-								this.customer.customer_group === "Comercial"))
-					);
-
-					// Add Credit method if not present and customer is corporate
-					if (
-						!invoiceData.payments.some(
-							(p) =>
-								(p.type || "").toLowerCase() === "credit" ||
-								(p.mode_of_payment || "").toLowerCase() === "credit",
-						)
-					) {
-						if (isCorporateFromInvoice || isCorporateFromComponent) {
-							invoiceData.payments.push({
-								name: "",
-								mode_of_payment: "Credit",
-								account: "",
-								amount: null,
-								base_amount: null,
-								type: "Credit",
-								idx: invoiceData.payments.length + 1,
-								default: 0,
-							});
-						}
-					}
-
+					invoiceData.payments = this.buildPaymentMethodsFromPosProfile(invoiceData);
 					console.log("[Payment] Loaded payment methods:", invoiceData.payments);
 				} else {
 					// Fallback if POS Profile is not loaded yet
@@ -3393,6 +3603,8 @@ export default {
 					];
 				}
 			}
+
+			this.refreshPaymentMethodsForCustomer(invoiceData, invoiceData);
 
 			if (!this.showDialog) {
 				this.invoice_doc = invoiceData;
@@ -3417,32 +3629,11 @@ export default {
 				}
 			}
 			this.grand_total = this.flt(invoiceData.grand_total || 0, this.currency_precision);
-			this.rounded_total = this.grand_total;
+			this.rounded_total = this.flt(invoiceData.rounded_total || this.grand_total, this.currency_precision);
+			this.invoice_doc.total_amount = this.flt(this.grand_total, this.currency_precision);
+			this.invoice_doc.to_be_paid = this.flt(this.rounded_total, this.currency_precision);
 			this.customer = invoiceData.customer || "";
 			await this.syncCorporateCustomerState(invoiceData);
-
-			if (this.selected_customer_is_corporate && Array.isArray(this.invoice_doc.payments)) {
-				if (
-					!this.invoice_doc.payments.some(
-						(p) =>
-							(p.type || "").toLowerCase() === "credit" ||
-							(p.mode_of_payment || "").toLowerCase() === "credit",
-					)
-				) {
-					this.invoice_doc.payments.push({
-						name: "",
-						mode_of_payment: "Credit",
-						account: "",
-						amount: null,
-						base_amount: null,
-						type: "Credit",
-						idx: this.invoice_doc.payments.length + 1,
-						default: 0,
-					});
-					this.$forceUpdate && this.$forceUpdate();
-					console.log("[Payment] Added Credit payment after customer sync");
-				}
-			}
 
 			const item = invoiceData.items?.[0] || {};
 			console.log("[Payment] item fields", {
@@ -3507,7 +3698,7 @@ export default {
 			}
 		});
 
-		this.eventBus.on("update_customer", (customer) => {
+		this.eventBus.on("update_customer", async (customer) => {
 			console.log("[Payment] update_customer received:", customer);
 			if (this.customer !== customer) {
 				this.customer_credit_dict = [];
@@ -3517,8 +3708,8 @@ export default {
 			}
 
 			this.customer = customer;
-			this.syncCorporateCustomerState(customer);
-
+			await this.syncCorporateCustomerState(customer);
+			this.refreshPaymentMethodsForCustomer(this.customer_info, this.invoice_doc);
 			console.log(
 				"[Payment] update_customer set selected_customer_is_corporate:",
 				this.selected_customer_is_corporate,
