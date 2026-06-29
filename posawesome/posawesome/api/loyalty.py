@@ -62,7 +62,9 @@ def on_invoice_submit(doc, method):
                 redeemed_points = loyalty_amount / redemption_factor
 
     if redeemed_points > 0:
-        _create_entry(-redeemed_points, flt(doc.get("loyalty_amount") or doc.get("loyalty_discount_amount") or 0))
+        _create_entry(
+            -redeemed_points, flt(doc.get("loyalty_amount") or doc.get("loyalty_discount_amount") or 0)
+        )
         return
 
     _create_entry(points, doc.net_total)

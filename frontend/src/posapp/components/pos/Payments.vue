@@ -2459,12 +2459,16 @@ export default {
 			this.invoice_doc.loyalty_discount_amount = Number(
 				formatUtils
 					.fromArabicNumerals(
-						String(this.invoice_doc.loyalty_discount_amount || this.invoice_doc.loyalty_amount || 0),
+						String(
+							this.invoice_doc.loyalty_discount_amount || this.invoice_doc.loyalty_amount || 0,
+						),
 					)
 					.replace(/,/g, ""),
 			);
 			this.invoice_doc.redeem_loyalty_points = Math.round(
-				Number(this.invoice_doc.redeemed_loyalty_points || this.invoice_doc.redeem_loyalty_points || 0),
+				Number(
+					this.invoice_doc.redeemed_loyalty_points || this.invoice_doc.redeem_loyalty_points || 0,
+				),
 			);
 			this.invoice_doc.redeemed_loyalty_points = this.invoice_doc.redeem_loyalty_points;
 			this.invoice_doc.total_amount = this.flt(
