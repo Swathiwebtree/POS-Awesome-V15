@@ -1533,7 +1533,6 @@ export default {
 			});
 
 			// Reset related flags
-			this.loyalty_amount = 0;
 			this.redeemed_customer_credit = 0;
 			this.is_cashback = true;
 			this.is_credit_return = false;
@@ -2446,10 +2445,26 @@ export default {
 			}
 
 			this.invoice_doc.loyalty_amount = Number(
-				formatUtils.fromArabicNumerals(String(this.loyalty_amount || 0)).replace(/,/g, ""),
+				formatUtils
+					.fromArabicNumerals(
+						String(
+							this.loyalty_amount ||
+								this.invoice_doc.loyalty_discount_amount ||
+								this.invoice_doc.loyalty_amount ||
+								0,
+						),
+					)
+					.replace(/,/g, ""),
+			);
+			this.invoice_doc.loyalty_discount_amount = Number(
+				formatUtils
+					.fromArabicNumerals(
+						String(this.invoice_doc.loyalty_discount_amount || this.invoice_doc.loyalty_amount || 0),
+					)
+					.replace(/,/g, ""),
 			);
 			this.invoice_doc.redeem_loyalty_points = Math.round(
-				Number(this.invoice_doc.redeem_loyalty_points || 0),
+				Number(this.invoice_doc.redeemed_loyalty_points || this.invoice_doc.redeem_loyalty_points || 0),
 			);
 			this.invoice_doc.redeemed_loyalty_points = this.invoice_doc.redeem_loyalty_points;
 			this.invoice_doc.total_amount = this.flt(
@@ -2594,6 +2609,12 @@ export default {
 					frappe.utils.play_sound("submit");
 
 					updateLocalStock(vm.invoice_doc.items || []);
+					vm.eventBus.emit("payment_completed", {
+						customer: vm.invoice_doc.customer,
+						redeemed_loyalty_points: vm.invoice_doc.redeemed_loyalty_points || 0,
+						loyalty_discount_amount: vm.invoice_doc.loyalty_discount_amount || 0,
+						invoice_name: r.message.name,
+					});
 					vm.eventBus.emit("refresh_drafts");
 					vm.addresses = [];
 					vm.eventBus.emit("clear_invoice");
@@ -3463,6 +3484,9 @@ export default {
 				this.invoice_doc.redeemed_loyalty_points =
 					this.invoice_doc.redeemed_loyalty_points || this.invoice_doc.redeem_loyalty_points || 0;
 			}
+			this.loyalty_amount = Number(
+				this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0,
+			);
 			this.applyLoadedInvoiceTotals(this.invoice_doc);
 			console.log("[Payment][DraftLoad] invoice snapshot", {
 				net_total: this.invoice_doc?.net_total,

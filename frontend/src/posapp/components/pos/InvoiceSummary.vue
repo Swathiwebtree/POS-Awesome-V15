@@ -2828,7 +2828,8 @@ export default {
 
 .compact-summary {
 	height: 100%;
-	overflow: hidden;
+	overflow-y: auto;
+	overflow-x: hidden;
 	margin-top: 12px !important;
 	padding-top: 6px !important;
 }
