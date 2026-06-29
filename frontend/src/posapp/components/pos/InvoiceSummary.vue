@@ -322,6 +322,28 @@
 								</v-card>
 							</v-col>
 
+							<v-col cols="12" v-if="hasAppliedLoyalty">
+								<v-alert
+									color="purple"
+									variant="tonal"
+									density="comfortable"
+									class="mb-0"
+									icon="mdi-ticket-percent"
+								>
+									<div class="d-flex align-center justify-space-between flex-wrap ga-2">
+										<div>
+											<strong>{{ __("Loyalty Applied") }}</strong>
+											<span class="ml-2">
+												{{ formatFloat(stagedLoyaltyPoints, 0) }} pts
+											</span>
+										</div>
+										<div class="font-weight-bold">
+											{{ formatCurrency(stagedLoyaltyAmount, moneyPrecision) }}
+										</div>
+									</div>
+								</v-alert>
+							</v-col>
+
 							<!-- Item Group Bulk Discount Section -->
 							<v-col cols="12" v-if="itemGroupsList && itemGroupsList.length > 0">
 								<v-card class="item-group-discount-card" elevation="2">
@@ -1028,6 +1050,10 @@ export default {
 			customerName: "",
 			pointsToRedeem: 0,
 			conversionFactor: 0,
+			loyaltySnapshotLocked: false,
+			stagedLoyaltyPoints: 0,
+			stagedLoyaltyAmount: 0,
+			stagedLoyaltyProgram: null,
 			redeemLoading: false,
 			// Frequent Cards
 			frequentCards: [],
@@ -1208,6 +1234,9 @@ export default {
 		hasCompletedCards() {
 			return this.frequentCards.some((card) => card.visits >= card.required_visits && !card.is_expired);
 		},
+		hasAppliedLoyalty() {
+			return Number(this.stagedLoyaltyPoints || 0) > 0 || Number(this.stagedLoyaltyAmount || 0) > 0;
+		},
 		completedCardsCount() {
 			return this.frequentCards.filter(
 				(card) => card.visits >= card.required_visits && !card.is_expired,
@@ -1230,12 +1259,20 @@ export default {
 		selectedCustomerId: {
 			handler(newVal) {
 				if (newVal) {
-					this.fetchLoyaltyPoints();
+					if (!this.restoreDraftLoyaltyState()) {
+						this.loyaltySnapshotLocked = false;
+						this.fetchLoyaltyPoints();
+					}
 					this.fetchFrequentCards();
 				} else {
 					this.loyaltyPoints = null;
 					this.customerName = "";
 					this.conversionFactor = 0;
+					this.loyaltySnapshotLocked = false;
+					this.stagedLoyaltyPoints = 0;
+					this.stagedLoyaltyAmount = 0;
+					this.stagedLoyaltyProgram = null;
+					this.pointsToRedeem = 0;
 					this.frequentCards = [];
 				}
 			},
@@ -1627,7 +1664,92 @@ export default {
 			this.$emit("update_discount_umount");
 		},
 
+		getDraftLoyaltySnapshot(data = null) {
+			const source = data || this.$parent?.invoice_doc || {};
+			if (!source || !this.selectedCustomerId) return null;
+			if (!data && !this.$parent?.loaded_draft_name) return null;
+
+			const hasStoredFields =
+				Object.prototype.hasOwnProperty.call(source, "redeemed_loyalty_points") ||
+				Object.prototype.hasOwnProperty.call(source, "redeem_loyalty_points") ||
+				Object.prototype.hasOwnProperty.call(source, "loyalty_discount_amount") ||
+				Object.prototype.hasOwnProperty.call(source, "loyalty_amount") ||
+				Object.prototype.hasOwnProperty.call(source, "loyalty_program") ||
+				Object.prototype.hasOwnProperty.call(source, "loyalty_points") ||
+				Object.prototype.hasOwnProperty.call(source, "available_loyalty_points");
+
+			const redeemedPoints = Number(
+				source.redeemed_loyalty_points ?? source.redeem_loyalty_points ?? 0,
+			);
+			const loyaltyAmount = Number(
+				source.loyalty_discount_amount ?? source.loyalty_amount ?? 0,
+			);
+
+			if (!hasStoredFields && !redeemedPoints && !loyaltyAmount) {
+				return null;
+			}
+
+			const availablePoints = Number(
+				source.available_loyalty_points ?? source.loyalty_points ?? redeemedPoints ?? 0,
+			);
+			const derivedConversionFactor =
+				redeemedPoints > 0 ? Number((loyaltyAmount / redeemedPoints).toFixed(this.moneyPrecision)) : 0;
+
+			return {
+				customer: source.customer || this.selectedCustomerId,
+				customer_name: source.customer_name || this.customerName || "",
+				redeemed_loyalty_points: redeemedPoints,
+				loyalty_discount_amount: loyaltyAmount,
+				loyalty_amount: Number(source.loyalty_amount ?? loyaltyAmount ?? 0),
+				loyalty_program: source.loyalty_program || null,
+				available_loyalty_points: availablePoints,
+				conversion_factor: Number(source.conversion_factor ?? derivedConversionFactor ?? 0),
+			};
+		},
+
+		applyLoyaltySnapshot(snapshot = {}, { lock = false } = {}) {
+			const redeemedPoints = Number(
+				snapshot.redeemed_loyalty_points ?? snapshot.redeem_loyalty_points ?? 0,
+			);
+			const loyaltyAmount = Number(
+				snapshot.loyalty_discount_amount ?? snapshot.loyalty_amount ?? 0,
+			);
+			const availablePoints = Number(
+				snapshot.available_loyalty_points ?? snapshot.loyalty_points ?? redeemedPoints ?? 0,
+			);
+			const conversionFactor =
+				Number(snapshot.conversion_factor ?? 0) ||
+				(redeemedPoints > 0
+					? Number((loyaltyAmount / redeemedPoints).toFixed(this.moneyPrecision))
+					: 0);
+
+			this.loyaltyPoints = availablePoints;
+			this.customerName = snapshot.customer_name || this.customerName || "";
+			this.conversionFactor = conversionFactor;
+			this.stagedLoyaltyPoints = redeemedPoints;
+			this.stagedLoyaltyAmount = loyaltyAmount;
+			this.stagedLoyaltyProgram = snapshot.loyalty_program || null;
+			this.pointsToRedeem = redeemedPoints;
+			this.loyaltySnapshotLocked = lock;
+
+			this.eventBus.emit("sync_loyalty_ui_state", {
+				available_points: availablePoints,
+				loyalty_program: snapshot.loyalty_program || null,
+			});
+		},
+
+		restoreDraftLoyaltyState(snapshot = null) {
+			const resolvedSnapshot = snapshot || this.getDraftLoyaltySnapshot();
+			if (!resolvedSnapshot) return false;
+			this.applyLoyaltySnapshot(resolvedSnapshot, { lock: true });
+			return true;
+		},
+
 		async fetchLoyaltyPoints() {
+			if (this.loyaltySnapshotLocked) {
+				return;
+			}
+
 			const customerId = this.selectedCustomerId;
 			if (!customerId) {
 				this.loyaltyPoints = null;
@@ -1661,7 +1783,13 @@ export default {
 							console.warn("Failed to fetch loyalty redemption factor:", factorErr);
 						}
 					}
-					this.pointsToRedeem = 0;
+					this.eventBus.emit("sync_loyalty_ui_state", {
+						available_points: this.loyaltyPoints,
+						loyalty_program: response.message.loyalty_program || null,
+					});
+					if (!this.hasAppliedLoyalty) {
+						this.pointsToRedeem = 0;
+					}
 				}
 			} catch (err) {
 				console.error("Failed to fetch loyalty points:", err);
@@ -1763,6 +1891,19 @@ export default {
 					amount: newDiscountAmount,
 					customer: this.selectedCustomerId,
 				});
+				this.applyLoyaltySnapshot(
+					{
+						customer: this.selectedCustomerId,
+						customer_name: this.customerName,
+						redeemed_loyalty_points: redeemedPoints,
+						loyalty_discount_amount: newDiscountAmount,
+						loyalty_amount: newDiscountAmount,
+						loyalty_program: this.stagedLoyaltyProgram || this.$parent?.invoice_doc?.loyalty_program || null,
+						available_loyalty_points: this.loyaltyPoints,
+						conversion_factor: this.conversionFactor,
+					},
+					{ lock: false },
+				);
 				this.apply_additional_discount();
 
 				frappe.show_alert({
@@ -2440,9 +2581,31 @@ export default {
 		});
 
 		if (this.selectedCustomerId) {
-			this.fetchLoyaltyPoints();
+			if (!this.restoreDraftLoyaltyState()) {
+				this.fetchLoyaltyPoints();
+			}
 			this.fetchFrequentCards();
 		}
+
+		this.eventBus.on("restore_loyalty_ui_state", (snapshot) => {
+			this.restoreDraftLoyaltyState(snapshot);
+		});
+
+		this.eventBus.on("set_loyalty_redemption", (payload) => {
+			this.stagedLoyaltyPoints = Number(payload?.points || 0);
+			this.stagedLoyaltyAmount = Number(payload?.amount || 0);
+			if (payload?.customer === this.selectedCustomerId && this.stagedLoyaltyPoints > 0) {
+				this.pointsToRedeem = this.stagedLoyaltyPoints;
+			}
+		});
+
+		this.eventBus.on("clear_loyalty_redemption", () => {
+			this.stagedLoyaltyPoints = 0;
+			this.stagedLoyaltyAmount = 0;
+			this.stagedLoyaltyProgram = null;
+			this.pointsToRedeem = 0;
+			this.loyaltySnapshotLocked = false;
+		});
 
 		// Listen for odometer field visibility
 		this.eventBus.on("show_odometer_field", (shouldShow) => {
@@ -2554,6 +2717,9 @@ export default {
 		this.eventBus.off("set_custom_vehicle_no");
 		this.eventBus.off("set_contact_mobile");
 		this.eventBus.off("update_customer_details");
+		this.eventBus.off("restore_loyalty_ui_state");
+		this.eventBus.off("set_loyalty_redemption");
+		this.eventBus.off("clear_loyalty_redemption");
 		this.eventBus.off("payment_completed", this.resetAfterPayment);
 		this.eventBus.off("confirm_cancel_sale", this.handleConfirmedCancelSale);
 		this.eventBus.off("reset_manual_total");

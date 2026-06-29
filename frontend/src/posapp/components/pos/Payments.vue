@@ -1171,6 +1171,7 @@ export default {
 			this.invoice_doc.loyalty_amount = this.flt(loyaltyAmount, moneyPrecision);
 			this.invoice_doc.loyalty_discount_amount = this.flt(loyaltyAmount, moneyPrecision);
 			this.invoice_doc.redeem_loyalty_points = points;
+			this.invoice_doc.redeemed_loyalty_points = points;
 			const netTotal = this.getDiscountedNetTotal(this.invoice_doc);
 			this.invoice_doc.net_total = netTotal;
 			this.invoice_doc.total_taxes_and_charges = this.calculateInvoiceTaxTotal(
@@ -2450,10 +2451,8 @@ export default {
 			this.invoice_doc.redeem_loyalty_points = Math.round(
 				Number(this.invoice_doc.redeem_loyalty_points || 0),
 			);
-			this.invoice_doc.total_amount = this.flt(
-				this.invoice_doc.grand_total || 0,
-				this.currency_precision,
-			);
+			this.invoice_doc.redeemed_loyalty_points = this.invoice_doc.redeem_loyalty_points;
+			this.invoice_doc.total_amount = this.flt(this.invoice_doc.grand_total || 0, this.currency_precision);
 			this.invoice_doc.to_be_paid = this.flt(this.payable_total || 0, this.currency_precision);
 			this.invoice_doc.rounded_total = this.invoice_doc.to_be_paid;
 			this.invoice_doc.rounding_adjustment = this.flt(
@@ -3458,6 +3457,8 @@ export default {
 				}
 				this.invoice_doc.loyalty_discount_amount =
 					this.invoice_doc.loyalty_discount_amount || this.invoice_doc.loyalty_amount || 0;
+				this.invoice_doc.redeemed_loyalty_points =
+					this.invoice_doc.redeemed_loyalty_points || this.invoice_doc.redeem_loyalty_points || 0;
 			}
 			this.applyLoadedInvoiceTotals(this.invoice_doc);
 			console.log("[Payment][DraftLoad] invoice snapshot", {

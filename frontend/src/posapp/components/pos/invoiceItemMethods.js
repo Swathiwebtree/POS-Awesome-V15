@@ -353,6 +353,9 @@ export default {
 
 		this.additional_discount = 0;
 		this.additional_discount_percentage = 0;
+		this.loyalty_redemption_points = 0;
+		this.loyalty_redemption_amount = 0;
+		this.loyalty_redemption_customer = "";
 
 		// Clear group discounts
 		this.itemGroupDiscounts = {};
@@ -367,6 +370,11 @@ export default {
 			this.invoice_doc.discount_amount = 0;
 			this.invoice_doc.additional_discount = 0;
 			this.invoice_doc.additional_discount_percentage = 0;
+			this.invoice_doc.redeem_loyalty_points = 0;
+			this.invoice_doc.redeemed_loyalty_points = 0;
+			this.invoice_doc.loyalty_amount = 0;
+			this.invoice_doc.loyalty_discount_amount = 0;
+			this.invoice_doc.loyalty_program = null;
 		}
 
 		this.eventBus.emit("reset_manual_total");
@@ -726,6 +734,39 @@ export default {
 		if (Object.prototype.hasOwnProperty.call(data, "loyalty_amount")) {
 			this.invoice_doc.loyalty_amount = data.loyalty_amount;
 		}
+		if (Object.prototype.hasOwnProperty.call(data, "loyalty_program")) {
+			this.invoice_doc.loyalty_program = data.loyalty_program;
+		}
+		if (
+			Object.prototype.hasOwnProperty.call(data, "available_loyalty_points") ||
+			Object.prototype.hasOwnProperty.call(data, "loyalty_points")
+		) {
+			this.invoice_doc.loyalty_points = Number(
+				data.available_loyalty_points ?? data.loyalty_points ?? 0,
+			);
+		}
+		const restoredLoyaltyPoints = Number(
+			data.redeemed_loyalty_points ?? data.redeem_loyalty_points ?? 0,
+		);
+		if (
+			Object.prototype.hasOwnProperty.call(data, "redeemed_loyalty_points") ||
+			Object.prototype.hasOwnProperty.call(data, "redeem_loyalty_points")
+		) {
+			this.invoice_doc.redeemed_loyalty_points = restoredLoyaltyPoints;
+			this.invoice_doc.redeem_loyalty_points = restoredLoyaltyPoints;
+			this.loyalty_redemption_points = restoredLoyaltyPoints;
+		}
+		if (
+			Object.prototype.hasOwnProperty.call(data, "loyalty_amount") ||
+			Object.prototype.hasOwnProperty.call(data, "loyalty_discount_amount")
+		) {
+			this.loyalty_redemption_amount = Number(
+				data.loyalty_discount_amount ?? data.loyalty_amount ?? 0,
+			);
+		}
+		if (this.loyalty_redemption_points || this.loyalty_redemption_amount) {
+			this.loyalty_redemption_customer = data.customer || data.customer_name || this.customer || "";
+		}
 		if (Object.prototype.hasOwnProperty.call(data, "net_total")) {
 			this.invoice_doc.net_total = data.net_total;
 		}
@@ -749,6 +790,24 @@ export default {
 		}
 
 		this.$nextTick(() => {
+			this.eventBus.emit("restore_loyalty_ui_state", {
+				customer: data.customer || data.customer_name || this.customer || "",
+				customer_name: data.customer_name || "",
+				redeemed_loyalty_points: restoredLoyaltyPoints,
+				loyalty_discount_amount: Number(data.loyalty_discount_amount ?? data.loyalty_amount ?? 0),
+				loyalty_amount: Number(data.loyalty_amount ?? data.loyalty_discount_amount ?? 0),
+				loyalty_program: data.loyalty_program || this.invoice_doc?.loyalty_program || null,
+				available_loyalty_points: Number(
+					data.available_loyalty_points ??
+						data.loyalty_points ??
+						this.invoice_doc?.loyalty_points ??
+						restoredLoyaltyPoints ??
+						0,
+				),
+				additional_discount: Number(
+					data.additional_discount ?? data.discount_amount ?? this.additional_discount ?? 0,
+				),
+			});
 			this.$forceUpdate();
 		});
 	},
@@ -871,8 +930,50 @@ export default {
 
 			this.customer = data.customer;
 			this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
-			this.discount_amount = data.discount_amount;
-			this.additional_discount_percentage = data.additional_discount_percentage;
+			this.discount_amount = data.discount_amount ?? data.additional_discount ?? 0;
+			this.additional_discount = data.additional_discount ?? data.discount_amount ?? 0;
+			this.additional_discount_percentage = data.additional_discount_percentage ?? 0;
+			this.invoice_doc.discount_amount = this.discount_amount;
+			this.invoice_doc.additional_discount = this.additional_discount;
+			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
+			const restoredLoyaltyPoints = Number(
+				data.redeemed_loyalty_points ?? data.redeem_loyalty_points ?? 0,
+			);
+			const restoredLoyaltyAmount = Number(
+				data.loyalty_discount_amount ?? data.loyalty_amount ?? 0,
+			);
+			this.loyalty_redemption_points = restoredLoyaltyPoints;
+			this.loyalty_redemption_amount = restoredLoyaltyAmount;
+			this.loyalty_redemption_customer = data.customer || "";
+			this.invoice_doc.redeem_loyalty_points = restoredLoyaltyPoints;
+			this.invoice_doc.redeemed_loyalty_points = restoredLoyaltyPoints;
+			this.invoice_doc.loyalty_amount = restoredLoyaltyAmount;
+			this.invoice_doc.loyalty_discount_amount = restoredLoyaltyAmount;
+			this.invoice_doc.loyalty_program = data.loyalty_program || this.invoice_doc.loyalty_program || null;
+			this.invoice_doc.loyalty_points = Number(
+				data.available_loyalty_points ?? data.loyalty_points ?? this.invoice_doc.loyalty_points ?? 0,
+			);
+			this.$nextTick(() => {
+				this.eventBus.emit("restore_loyalty_ui_state", {
+					customer: data.customer || this.customer || "",
+					customer_name: data.customer_name || "",
+					redeemed_loyalty_points: restoredLoyaltyPoints,
+					loyalty_discount_amount: restoredLoyaltyAmount,
+					loyalty_amount: Number(data.loyalty_amount ?? restoredLoyaltyAmount ?? 0),
+					loyalty_program: data.loyalty_program || this.invoice_doc.loyalty_program || null,
+					available_loyalty_points: Number(
+						data.available_loyalty_points ??
+							data.loyalty_points ??
+							this.invoice_doc.loyalty_points ??
+							restoredLoyaltyPoints ??
+							0,
+					),
+					additional_discount: Number(
+						data.additional_discount ?? data.discount_amount ?? this.additional_discount ?? 0,
+					),
+				});
+				this.apply_additional_discount && this.apply_additional_discount();
+			});
 
 			this.items.forEach((item) => {
 				if (item.serial_no) {
@@ -1048,6 +1149,22 @@ export default {
 		doc.selling_price_list = this.pos_profile.selling_price_list;
 		doc.naming_series = doc.naming_series || this.pos_profile.naming_series;
 		doc.customer = this.customer;
+		doc.loyalty_program =
+			doc.loyalty_program || this.invoice_doc?.loyalty_program || this.customer_info?.loyalty_program || null;
+		doc.redeem_loyalty_points = Number(
+			doc.redeem_loyalty_points ?? this.invoice_doc?.redeem_loyalty_points ?? 0,
+		);
+		doc.redeemed_loyalty_points = Number(
+			doc.redeemed_loyalty_points ??
+				this.invoice_doc?.redeemed_loyalty_points ??
+				this.invoice_doc?.redeem_loyalty_points ??
+				0,
+		);
+		doc.loyalty_amount = Number(doc.loyalty_amount ?? this.invoice_doc?.loyalty_amount ?? 0);
+		doc.loyalty_discount_amount = Number(
+			doc.loyalty_discount_amount ?? this.invoice_doc?.loyalty_discount_amount ?? 0,
+		);
+		doc.loyalty_points = Number(doc.loyalty_points ?? this.invoice_doc?.loyalty_points ?? 0);
 
 		// Determine if this is a return invoice
 		const isReturn = this.isReturnInvoice;

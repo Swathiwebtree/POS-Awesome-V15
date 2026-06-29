@@ -849,6 +849,7 @@ def get_current_user_open_shift(user=None):
 def submit_invoice(invoice, data):
     data = json.loads(data)
     invoice = json.loads(invoice)
+    created_new_invoice = False
 
     pos_profile = invoice.get("pos_profile")
     doctype = "Sales Invoice"
@@ -862,6 +863,7 @@ def submit_invoice(invoice, data):
         created = update_invoice(json.dumps(invoice))
         invoice_name = created.get("name")
         invoice_doc = frappe.get_doc(doctype, invoice_name)
+        created_new_invoice = True
     else:
         invoice_doc = frappe.get_doc(doctype, invoice_name)
         invoice_doc.update(invoice)
@@ -1230,8 +1232,24 @@ def submit_invoice(invoice, data):
                 if invoice_doc.docstatus == 1:
                     invoice_doc.reload()
             else:
+                if created_new_invoice and invoice_doc.docstatus == 0:
+                    try:
+                        frappe.delete_doc(invoice_doc.doctype, invoice_doc.name, ignore_permissions=True)
+                    except Exception:
+                        frappe.log_error(
+                            frappe.get_traceback(),
+                            f"POS submit cleanup failed for {invoice_doc.doctype} {invoice_doc.name}",
+                        )
                 raise
         except Exception:
+            if created_new_invoice and invoice_doc.docstatus == 0:
+                try:
+                    frappe.delete_doc(invoice_doc.doctype, invoice_doc.name, ignore_permissions=True)
+                except Exception:
+                    frappe.log_error(
+                        frappe.get_traceback(),
+                        f"POS submit cleanup failed for {invoice_doc.doctype} {invoice_doc.name}",
+                    )
             frappe.log_error(
                 message=frappe.get_traceback(),
                 title=f"POS submit failed for {invoice_doc.doctype} {invoice_doc.name}",
