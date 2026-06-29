@@ -55,12 +55,16 @@ def on_invoice_submit(doc, method):
     if redeemed_points <= 0:
         loyalty_amount = flt(doc.get("loyalty_amount") or doc.get("loyalty_discount_amount") or 0)
         if loyalty_amount > 0 and loyalty_program:
-            redemption_factor = flt(frappe.db.get_value("Loyalty Program", loyalty_program, "conversion_factor"))
+            redemption_factor = flt(
+                frappe.db.get_value("Loyalty Program", loyalty_program, "conversion_factor")
+            )
             if redemption_factor > 0:
                 redeemed_points = loyalty_amount / redemption_factor
 
     if redeemed_points > 0:
-        _create_entry(-redeemed_points, flt(doc.get("loyalty_amount") or doc.get("loyalty_discount_amount") or 0))
+        _create_entry(
+            -redeemed_points, flt(doc.get("loyalty_amount") or doc.get("loyalty_discount_amount") or 0)
+        )
 
     _create_entry(points, doc.net_total)
 

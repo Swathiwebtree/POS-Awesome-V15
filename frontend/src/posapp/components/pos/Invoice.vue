@@ -523,7 +523,8 @@ export default {
 			}
 
 			if (Object.prototype.hasOwnProperty.call(payload, "loyalty_program")) {
-				this.invoice_doc.loyalty_program = payload.loyalty_program || this.invoice_doc.loyalty_program || null;
+				this.invoice_doc.loyalty_program =
+					payload.loyalty_program || this.invoice_doc.loyalty_program || null;
 			}
 		},
 
@@ -2292,16 +2293,16 @@ export default {
 				invoiceData.base_discount_amount = invoiceData.discount_amount * exchangeRate;
 			}
 
-				// LOYALTY DATA
-				if (this.customer_info?.loyalty_program) {
-					invoiceData.loyalty_program = this.customer_info.loyalty_program;
-				}
+			// LOYALTY DATA
+			if (this.customer_info?.loyalty_program) {
+				invoiceData.loyalty_program = this.customer_info.loyalty_program;
+			}
 
-				// Redeem values (safe defaults)
-				invoiceData.redeem_loyalty_points = Number(this.loyalty_redemption_points || 0);
-				invoiceData.redeemed_loyalty_points = Number(this.loyalty_redemption_points || 0);
-				invoiceData.loyalty_amount = Number(this.loyalty_redemption_amount || 0);
-				invoiceData.loyalty_discount_amount = Number(this.invoice_doc?.loyalty_discount_amount || 0);
+			// Redeem values (safe defaults)
+			invoiceData.redeem_loyalty_points = Number(this.loyalty_redemption_points || 0);
+			invoiceData.redeemed_loyalty_points = Number(this.loyalty_redemption_points || 0);
+			invoiceData.loyalty_amount = Number(this.loyalty_redemption_amount || 0);
+			invoiceData.loyalty_discount_amount = Number(this.invoice_doc?.loyalty_discount_amount || 0);
 
 			// Defensive: ERPNext expects numbers
 			if (invoiceData.redeem_loyalty_points < 0) {
@@ -2891,7 +2892,8 @@ export default {
 								loyalty_discount_amount:
 									saved_doc.loyalty_discount_amount ??
 									this.invoice_doc.loyalty_discount_amount,
-								loyalty_program: saved_doc.loyalty_program ?? this.invoice_doc.loyalty_program,
+								loyalty_program:
+									saved_doc.loyalty_program ?? this.invoice_doc.loyalty_program,
 								// ===== NEW: ADD TO EVENT =====
 								contact_mobile: saved_doc.contact_mobile || this.invoice_doc.contact_mobile,
 								custom_vehicle_no:

@@ -771,7 +771,7 @@ def get_customer_by_vehicle(vehicle_no):
                     "name": vehicle.get("name"),
                     "vehicle_no": vehicle.get("vehicle_no"),
                     "model": vehicle.get("model"),
-                    "make" : vehicle.get("make"),
+                    "make": vehicle.get("make"),
                     "chasis_no": vehicle.get("chasis_no"),
                 },
                 "customer": {

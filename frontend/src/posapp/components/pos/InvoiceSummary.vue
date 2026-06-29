@@ -1681,9 +1681,7 @@ export default {
 			const redeemedPoints = Number(
 				source.redeemed_loyalty_points ?? source.redeem_loyalty_points ?? 0,
 			);
-			const loyaltyAmount = Number(
-				source.loyalty_discount_amount ?? source.loyalty_amount ?? 0,
-			);
+			const loyaltyAmount = Number(source.loyalty_discount_amount ?? source.loyalty_amount ?? 0);
 
 			if (!hasStoredFields && !redeemedPoints && !loyaltyAmount) {
 				return null;
@@ -1693,7 +1691,9 @@ export default {
 				source.available_loyalty_points ?? source.loyalty_points ?? redeemedPoints ?? 0,
 			);
 			const derivedConversionFactor =
-				redeemedPoints > 0 ? Number((loyaltyAmount / redeemedPoints).toFixed(this.moneyPrecision)) : 0;
+				redeemedPoints > 0
+					? Number((loyaltyAmount / redeemedPoints).toFixed(this.moneyPrecision))
+					: 0;
 
 			return {
 				customer: source.customer || this.selectedCustomerId,
@@ -1711,9 +1711,7 @@ export default {
 			const redeemedPoints = Number(
 				snapshot.redeemed_loyalty_points ?? snapshot.redeem_loyalty_points ?? 0,
 			);
-			const loyaltyAmount = Number(
-				snapshot.loyalty_discount_amount ?? snapshot.loyalty_amount ?? 0,
-			);
+			const loyaltyAmount = Number(snapshot.loyalty_discount_amount ?? snapshot.loyalty_amount ?? 0);
 			const availablePoints = Number(
 				snapshot.available_loyalty_points ?? snapshot.loyalty_points ?? redeemedPoints ?? 0,
 			);
@@ -1898,7 +1896,8 @@ export default {
 						redeemed_loyalty_points: redeemedPoints,
 						loyalty_discount_amount: newDiscountAmount,
 						loyalty_amount: newDiscountAmount,
-						loyalty_program: this.stagedLoyaltyProgram || this.$parent?.invoice_doc?.loyalty_program || null,
+						loyalty_program:
+							this.stagedLoyaltyProgram || this.$parent?.invoice_doc?.loyalty_program || null,
 						available_loyalty_points: this.loyaltyPoints,
 						conversion_factor: this.conversionFactor,
 					},

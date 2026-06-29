@@ -745,9 +745,7 @@ export default {
 				data.available_loyalty_points ?? data.loyalty_points ?? 0,
 			);
 		}
-		const restoredLoyaltyPoints = Number(
-			data.redeemed_loyalty_points ?? data.redeem_loyalty_points ?? 0,
-		);
+		const restoredLoyaltyPoints = Number(data.redeemed_loyalty_points ?? data.redeem_loyalty_points ?? 0);
 		if (
 			Object.prototype.hasOwnProperty.call(data, "redeemed_loyalty_points") ||
 			Object.prototype.hasOwnProperty.call(data, "redeem_loyalty_points")
@@ -760,9 +758,7 @@ export default {
 			Object.prototype.hasOwnProperty.call(data, "loyalty_amount") ||
 			Object.prototype.hasOwnProperty.call(data, "loyalty_discount_amount")
 		) {
-			this.loyalty_redemption_amount = Number(
-				data.loyalty_discount_amount ?? data.loyalty_amount ?? 0,
-			);
+			this.loyalty_redemption_amount = Number(data.loyalty_discount_amount ?? data.loyalty_amount ?? 0);
 		}
 		if (this.loyalty_redemption_points || this.loyalty_redemption_amount) {
 			this.loyalty_redemption_customer = data.customer || data.customer_name || this.customer || "";
@@ -939,9 +935,7 @@ export default {
 			const restoredLoyaltyPoints = Number(
 				data.redeemed_loyalty_points ?? data.redeem_loyalty_points ?? 0,
 			);
-			const restoredLoyaltyAmount = Number(
-				data.loyalty_discount_amount ?? data.loyalty_amount ?? 0,
-			);
+			const restoredLoyaltyAmount = Number(data.loyalty_discount_amount ?? data.loyalty_amount ?? 0);
 			this.loyalty_redemption_points = restoredLoyaltyPoints;
 			this.loyalty_redemption_amount = restoredLoyaltyAmount;
 			this.loyalty_redemption_customer = data.customer || "";
@@ -949,7 +943,8 @@ export default {
 			this.invoice_doc.redeemed_loyalty_points = restoredLoyaltyPoints;
 			this.invoice_doc.loyalty_amount = restoredLoyaltyAmount;
 			this.invoice_doc.loyalty_discount_amount = restoredLoyaltyAmount;
-			this.invoice_doc.loyalty_program = data.loyalty_program || this.invoice_doc.loyalty_program || null;
+			this.invoice_doc.loyalty_program =
+				data.loyalty_program || this.invoice_doc.loyalty_program || null;
 			this.invoice_doc.loyalty_points = Number(
 				data.available_loyalty_points ?? data.loyalty_points ?? this.invoice_doc.loyalty_points ?? 0,
 			);
@@ -1150,7 +1145,10 @@ export default {
 		doc.naming_series = doc.naming_series || this.pos_profile.naming_series;
 		doc.customer = this.customer;
 		doc.loyalty_program =
-			doc.loyalty_program || this.invoice_doc?.loyalty_program || this.customer_info?.loyalty_program || null;
+			doc.loyalty_program ||
+			this.invoice_doc?.loyalty_program ||
+			this.customer_info?.loyalty_program ||
+			null;
 		doc.redeem_loyalty_points = Number(
 			doc.redeem_loyalty_points ?? this.invoice_doc?.redeem_loyalty_points ?? 0,
 		);
