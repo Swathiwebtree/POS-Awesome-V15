@@ -171,7 +171,9 @@ def _get_vehicle_make_model(data=None, vehicle_no=None, customer=None):
 
         if vehicle:
             row = vehicle[0]
-            make = _first_nonempty(row.get("vehicle_make"), row.get("make"), row.get("brand"), row.get("manufacturer"))
+            make = _first_nonempty(
+                row.get("vehicle_make"), row.get("make"), row.get("brand"), row.get("manufacturer")
+            )
             model = _first_nonempty(row.get("vehicle_model"), row.get("model"))
 
     if (not make or not model) and customer:
@@ -227,14 +229,22 @@ def _resolve_vehicle_make(data=None, invoice_doc=None):
     make = _first_nonempty(
         data.get("custom_vehicle_make"),
         data.get("make"),
-        invoice_doc.get("custom_vehicle_make") if hasattr(invoice_doc, "get") else invoice_doc.get("custom_vehicle_make"),
+        (
+            invoice_doc.get("custom_vehicle_make")
+            if hasattr(invoice_doc, "get")
+            else invoice_doc.get("custom_vehicle_make")
+        ),
     )
     if make:
         return make
 
     vehicle_no = _first_nonempty(
         data.get("custom_vehicle_no"),
-        invoice_doc.get("custom_vehicle_no") if hasattr(invoice_doc, "get") else invoice_doc.get("custom_vehicle_no"),
+        (
+            invoice_doc.get("custom_vehicle_no")
+            if hasattr(invoice_doc, "get")
+            else invoice_doc.get("custom_vehicle_no")
+        ),
     )
     vehicle_no = cstr(vehicle_no or "").strip()
     if not vehicle_no:
@@ -710,10 +720,7 @@ def update_invoice(data):
 
     invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
     invoice_doc.custom_vehicle_model = (
-        data.get("custom_vehicle_model")
-        or data.get("model")
-        or invoice_doc.get("custom_vehicle_model")
-        or ""
+        data.get("custom_vehicle_model") or data.get("model") or invoice_doc.get("custom_vehicle_model") or ""
     )
 
     # Store item name overrides for later application

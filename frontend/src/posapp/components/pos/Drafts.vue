@@ -687,7 +687,8 @@ export default {
 						? String(item.custom_vehicle_model)
 						: "",
 				redeemed_loyalty_points:
-					typeof item.redeemed_loyalty_points !== "undefined" && item.redeemed_loyalty_points !== null
+					typeof item.redeemed_loyalty_points !== "undefined" &&
+					item.redeemed_loyalty_points !== null
 						? Number(item.redeemed_loyalty_points)
 						: 0,
 				redeem_loyalty_points:
@@ -695,7 +696,8 @@ export default {
 						? Number(item.redeem_loyalty_points)
 						: 0,
 				loyalty_discount_amount:
-					typeof item.loyalty_discount_amount !== "undefined" && item.loyalty_discount_amount !== null
+					typeof item.loyalty_discount_amount !== "undefined" &&
+					item.loyalty_discount_amount !== null
 						? Number(item.loyalty_discount_amount)
 						: 0,
 				loyalty_amount:
@@ -809,7 +811,9 @@ export default {
 							available_loyalty_points: availablePoints,
 							conversion_factor:
 								Number(invoice.conversion_factor || 0) ||
-								(redeemedPoints > 0 ? Number((loyaltyAmount / redeemedPoints).toFixed(3)) : 0),
+								(redeemedPoints > 0
+									? Number((loyaltyAmount / redeemedPoints).toFixed(3))
+									: 0),
 							additional_discount: Number(
 								invoice.additional_discount ?? invoice.discount_amount ?? loyaltyAmount ?? 0,
 							),

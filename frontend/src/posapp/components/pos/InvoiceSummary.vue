@@ -298,18 +298,26 @@
 									<v-card-text class="pa-2 loyalty-points-card-text">
 										<div class="loyalty-points-layout">
 											<div class="loyalty-points-main">
-												<v-avatar color="purple" size="34" class="loyalty-points-avatar">
+												<v-avatar
+													color="purple"
+													size="34"
+													class="loyalty-points-avatar"
+												>
 													<v-icon color="white" size="18">mdi-star</v-icon>
 												</v-avatar>
 												<div class="loyalty-points-copy">
-													<p class="text-caption mb-0 loyalty-points-label text-purple">
+													<p
+														class="text-caption mb-0 loyalty-points-label text-purple"
+													>
 														{{ __("Available Loyalty Points") }}
 													</p>
 													<div class="loyalty-points-values">
 														<span class="loyalty-points-amount text-purple">
 															{{ formatLoyaltyPoints(loyaltyPoints) }} pts
 														</span>
-														<span class="loyalty-points-divider text-purple">·</span>
+														<span class="loyalty-points-divider text-purple"
+															>·</span
+														>
 														<span class="loyalty-currency-value text-purple">
 															{{
 																formatCurrency(
@@ -325,8 +333,7 @@
 											<div v-if="hasAppliedLoyalty" class="loyalty-applied-badge">
 												<span class="loyalty-applied-label">{{ __("Applied") }}</span>
 												<span class="loyalty-applied-values">
-													{{ formatLoyaltyPoints(stagedLoyaltyPoints) }} pts
-													·
+													{{ formatLoyaltyPoints(stagedLoyaltyPoints) }} pts ·
 													{{ formatCurrency(stagedLoyaltyAmount, moneyPrecision) }}
 												</span>
 											</div>
@@ -669,11 +676,11 @@
 							</v-col>
 
 							<!-- Cancel + Pay (Right Side, Highlighted) -->
-								<v-col cols="12" class="summary-actions">
-									<v-row dense>
-										<v-col cols="6">
-											<v-btn
-												block
+							<v-col cols="12" class="summary-actions">
+								<v-row dense>
+									<v-col cols="6">
+										<v-btn
+											block
 											color="error"
 											theme="dark"
 											@click="handleCancelSale"
@@ -1685,18 +1692,20 @@ export default {
 				Object.prototype.hasOwnProperty.call(source, "loyalty_points") ||
 				Object.prototype.hasOwnProperty.call(source, "available_loyalty_points");
 
-				const redeemedPoints = Number(
-					source.custom_redeemed_loyalty_points ??
-						source.redeemed_loyalty_points ??
-						source.redeem_loyalty_points ??
-						0,
-				);
-				const loyaltyAmount = Number(source.loyalty_discount_amount ?? source.loyalty_amount ?? 0);
-				const additionalDiscount = Number(source.additional_discount ?? source.discount_amount ?? loyaltyAmount ?? 0);
+			const redeemedPoints = Number(
+				source.custom_redeemed_loyalty_points ??
+					source.redeemed_loyalty_points ??
+					source.redeem_loyalty_points ??
+					0,
+			);
+			const loyaltyAmount = Number(source.loyalty_discount_amount ?? source.loyalty_amount ?? 0);
+			const additionalDiscount = Number(
+				source.additional_discount ?? source.discount_amount ?? loyaltyAmount ?? 0,
+			);
 
-				if (!hasStoredFields && !redeemedPoints && !loyaltyAmount) {
-					return null;
-				}
+			if (!hasStoredFields && !redeemedPoints && !loyaltyAmount) {
+				return null;
+			}
 
 			const availablePoints = Number(
 				source.available_loyalty_points ?? source.loyalty_points ?? redeemedPoints ?? 0,
@@ -1710,11 +1719,11 @@ export default {
 				customer: source.customer || this.selectedCustomerId,
 				customer_name: source.customer_name || this.customerName || "",
 				custom_redeemed_loyalty_points: redeemedPoints,
-					redeemed_loyalty_points: redeemedPoints,
-					loyalty_discount_amount: loyaltyAmount,
-					loyalty_amount: Number(source.loyalty_amount ?? loyaltyAmount ?? 0),
-					additional_discount: additionalDiscount,
-					loyalty_program: source.loyalty_program || null,
+				redeemed_loyalty_points: redeemedPoints,
+				loyalty_discount_amount: loyaltyAmount,
+				loyalty_amount: Number(source.loyalty_amount ?? loyaltyAmount ?? 0),
+				additional_discount: additionalDiscount,
+				loyalty_program: source.loyalty_program || null,
 				available_loyalty_points: availablePoints,
 				conversion_factor: Number(source.conversion_factor ?? derivedConversionFactor ?? 0),
 			};
@@ -1753,7 +1762,9 @@ export default {
 				this.$parent.invoice_doc.redeemed_loyalty_points = redeemedPoints;
 				this.$parent.invoice_doc.redeem_loyalty_points = redeemedPoints;
 				this.$parent.invoice_doc.loyalty_discount_amount = loyaltyAmount;
-				this.$parent.invoice_doc.loyalty_amount = Number(snapshot.loyalty_amount ?? loyaltyAmount ?? 0);
+				this.$parent.invoice_doc.loyalty_amount = Number(
+					snapshot.loyalty_amount ?? loyaltyAmount ?? 0,
+				);
 				this.$parent.invoice_doc.loyalty_program = snapshot.loyalty_program || null;
 				this.$parent.invoice_doc.available_loyalty_points = availablePoints;
 				this.$parent.invoice_doc.loyalty_points = availablePoints;
@@ -1764,9 +1775,9 @@ export default {
 				this.$emit("update:additional_discount", Number(snapshot.additional_discount || 0));
 			}
 
-				this.eventBus.emit("sync_loyalty_ui_state", {
-					available_points: availablePoints,
-					loyalty_program: snapshot.loyalty_program || null,
+			this.eventBus.emit("sync_loyalty_ui_state", {
+				available_points: availablePoints,
+				loyalty_program: snapshot.loyalty_program || null,
 			});
 		},
 
@@ -2817,7 +2828,9 @@ export default {
 }
 
 .loyalty-points-applied {
-	box-shadow: 0 0 0 1px rgba(142, 36, 170, 0.15), 0 6px 16px rgba(142, 36, 170, 0.12) !important;
+	box-shadow:
+		0 0 0 1px rgba(142, 36, 170, 0.15),
+		0 6px 16px rgba(142, 36, 170, 0.12) !important;
 }
 
 .text-purple {

@@ -530,7 +530,10 @@ export default {
 				Number(this.loyalty_redemption_points || 0) > 0 ||
 				Number(this.loyalty_redemption_amount || 0) > 0;
 
-			if (Object.prototype.hasOwnProperty.call(payload, "available_points") && !shouldPreserveDraftLoyalty) {
+			if (
+				Object.prototype.hasOwnProperty.call(payload, "available_points") &&
+				!shouldPreserveDraftLoyalty
+			) {
 				this.invoice_doc.loyalty_points = Number(payload.available_points || 0);
 				this.invoice_doc.available_loyalty_points = Number(payload.available_points || 0);
 			}
@@ -2078,15 +2081,15 @@ export default {
 				return sum + (Number.isFinite(q) && q > 0 ? q : 0);
 			}, 0);
 
-				// Keep rest of totals/fields
-				this.invoice_doc.discount_amount = this.flt(this.discount_amount || 0);
-				this.invoice_doc.additional_discount = this.flt(this.additional_discount || 0);
-				this.invoice_doc.additional_discount_percentage = this.flt(
-					this.additional_discount_percentage || 0,
-				);
-				this.invoice_doc.loyalty_discount_amount = Number(
-					this.invoice_doc.loyalty_discount_amount || this.loyalty_redemption_amount || 0,
-				);
+			// Keep rest of totals/fields
+			this.invoice_doc.discount_amount = this.flt(this.discount_amount || 0);
+			this.invoice_doc.additional_discount = this.flt(this.additional_discount || 0);
+			this.invoice_doc.additional_discount_percentage = this.flt(
+				this.additional_discount_percentage || 0,
+			);
+			this.invoice_doc.loyalty_discount_amount = Number(
+				this.invoice_doc.loyalty_discount_amount || this.loyalty_redemption_amount || 0,
+			);
 
 			const manualRoundOff = this.flt(
 				this.invoice_doc.rounding_adjustment || 0,
@@ -2653,14 +2656,16 @@ export default {
 			);
 			this.invoice_doc.conversion_factor = Number(this.invoice_doc.conversion_factor ?? 0);
 			if (redeemedLoyaltyPoints > 0 || loyaltyAmount > 0) {
-				this.invoice_doc.discount_amount = Number(this.additional_discount || this.discount_amount || 0);
+				this.invoice_doc.discount_amount = Number(
+					this.additional_discount || this.discount_amount || 0,
+				);
 				this.invoice_doc.additional_discount = Number(
 					this.additional_discount || this.discount_amount || 0,
 				);
 			}
 			this.invoice_doc.loyalty_program = this.invoice_doc.loyalty_program || null;
 
-				// ===== NEW: ADD ODOMETER, MOBILE, VEHICLE FIELDS =====
+			// ===== NEW: ADD ODOMETER, MOBILE, VEHICLE FIELDS =====
 			// Employee fields
 			if (this.service_employee) {
 				this.invoice_doc.custom_service_employee = this.service_employee;
@@ -2803,11 +2808,11 @@ export default {
 				if (draft_name_to_update) {
 					// UPDATE EXISTING DRAFT
 
-						const field_map = {
-							items: this.invoice_doc.items,
-							customer: this.invoice_doc.customer,
-							posting_date: this.invoice_doc.posting_date,
-							currency: this.invoice_doc.currency,
+					const field_map = {
+						items: this.invoice_doc.items,
+						customer: this.invoice_doc.customer,
+						posting_date: this.invoice_doc.posting_date,
+						currency: this.invoice_doc.currency,
 						net_total: this.invoice_doc.net_total,
 						total_taxes_and_charges: this.invoice_doc.total_taxes_and_charges,
 						discount_amount: this.invoice_doc.discount_amount,
@@ -2820,22 +2825,21 @@ export default {
 						pos_profile: this.invoice_doc.pos_profile,
 						company: this.invoice_doc.company,
 						posa_pos_opening_shift: this.invoice_doc.posa_pos_opening_shift,
-							custom_service_employee: this.invoice_doc.custom_service_employee,
-							custom_service_employee_name: this.invoice_doc.custom_service_employee_name,
-							custom_redeemed_loyalty_points:
-								this.invoice_doc.custom_redeemed_loyalty_points,
-							redeem_loyalty_points: this.invoice_doc.redeem_loyalty_points,
-							redeemed_loyalty_points: this.invoice_doc.redeemed_loyalty_points,
-							custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
-							loyalty_amount: this.invoice_doc.loyalty_amount,
-							loyalty_discount_amount: this.invoice_doc.loyalty_discount_amount,
-							additional_discount: this.invoice_doc.additional_discount,
-							loyalty_program: this.invoice_doc.loyalty_program,
-							custom_vehicle_make: this.invoice_doc.custom_vehicle_make,
-							custom_vehicle_model: this.invoice_doc.custom_vehicle_model,
-							// ===== NEW: ADD TO UPDATE =====
-							contact_mobile: this.invoice_doc.contact_mobile,
-							custom_vehicle_no: this.invoice_doc.custom_vehicle_no,
+						custom_service_employee: this.invoice_doc.custom_service_employee,
+						custom_service_employee_name: this.invoice_doc.custom_service_employee_name,
+						custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
+						redeem_loyalty_points: this.invoice_doc.redeem_loyalty_points,
+						redeemed_loyalty_points: this.invoice_doc.redeemed_loyalty_points,
+						custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
+						loyalty_amount: this.invoice_doc.loyalty_amount,
+						loyalty_discount_amount: this.invoice_doc.loyalty_discount_amount,
+						additional_discount: this.invoice_doc.additional_discount,
+						loyalty_program: this.invoice_doc.loyalty_program,
+						custom_vehicle_make: this.invoice_doc.custom_vehicle_make,
+						custom_vehicle_model: this.invoice_doc.custom_vehicle_model,
+						// ===== NEW: ADD TO UPDATE =====
+						contact_mobile: this.invoice_doc.contact_mobile,
+						custom_vehicle_no: this.invoice_doc.custom_vehicle_no,
 						custom_odometer_reading: this.invoice_doc.custom_odometer_reading,
 						custom_has_oil_item: this.invoice_doc.custom_has_oil_item,
 						// ===== END NEW =====
@@ -2870,10 +2874,12 @@ export default {
 								custom_service_employee: this.invoice_doc.custom_service_employee,
 								custom_vehicle_make: this.invoice_doc.custom_vehicle_make,
 								custom_vehicle_model: this.invoice_doc.custom_vehicle_model,
-								custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
+								custom_redeemed_loyalty_points:
+									this.invoice_doc.custom_redeemed_loyalty_points,
 								redeem_loyalty_points: this.invoice_doc.redeem_loyalty_points,
 								redeemed_loyalty_points: this.invoice_doc.redeemed_loyalty_points,
-								custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
+								custom_redeemed_loyalty_points:
+									this.invoice_doc.custom_redeemed_loyalty_points,
 								loyalty_amount: this.invoice_doc.loyalty_amount,
 								loyalty_discount_amount: this.invoice_doc.loyalty_discount_amount,
 								additional_discount: this.invoice_doc.additional_discount,
@@ -2933,10 +2939,10 @@ export default {
 								posting_date: saved_doc.posting_date || this.invoice_doc.posting_date,
 								posting_time: saved_doc.posting_time || this.invoice_doc.posting_time || null,
 								grand_total:
-										saved_doc.grand_total != null
-											? saved_doc.grand_total
-											: this.invoice_doc.grand_total,
-									currency: saved_doc.currency || this.invoice_doc.currency,
+									saved_doc.grand_total != null
+										? saved_doc.grand_total
+										: this.invoice_doc.grand_total,
+								currency: saved_doc.currency || this.invoice_doc.currency,
 								custom_service_employee:
 									saved_doc.custom_service_employee ||
 									this.invoice_doc.custom_service_employee,
@@ -2949,17 +2955,17 @@ export default {
 									this.invoice_doc.custom_redeemed_loyalty_points,
 								redeem_loyalty_points:
 									saved_doc.redeem_loyalty_points ?? this.invoice_doc.redeem_loyalty_points,
-									redeemed_loyalty_points:
-										saved_doc.redeemed_loyalty_points ??
-										this.invoice_doc.redeemed_loyalty_points,
-									loyalty_amount: saved_doc.loyalty_amount ?? this.invoice_doc.loyalty_amount,
-									loyalty_discount_amount:
-										saved_doc.loyalty_discount_amount ??
-										this.invoice_doc.loyalty_discount_amount,
-									additional_discount:
-										saved_doc.additional_discount ?? this.invoice_doc.additional_discount,
-									loyalty_program:
-										saved_doc.loyalty_program ?? this.invoice_doc.loyalty_program,
+								redeemed_loyalty_points:
+									saved_doc.redeemed_loyalty_points ??
+									this.invoice_doc.redeemed_loyalty_points,
+								loyalty_amount: saved_doc.loyalty_amount ?? this.invoice_doc.loyalty_amount,
+								loyalty_discount_amount:
+									saved_doc.loyalty_discount_amount ??
+									this.invoice_doc.loyalty_discount_amount,
+								additional_discount:
+									saved_doc.additional_discount ?? this.invoice_doc.additional_discount,
+								loyalty_program:
+									saved_doc.loyalty_program ?? this.invoice_doc.loyalty_program,
 								// ===== NEW: ADD TO EVENT =====
 								contact_mobile: saved_doc.contact_mobile || this.invoice_doc.contact_mobile,
 								custom_vehicle_no:
@@ -3321,7 +3327,8 @@ export default {
 				this.invoice_doc.custom_odometer_reading = data.custom_odometer_reading;
 				this.invoice_doc.contact_mobile = data.contact_mobile || "";
 				this.invoice_doc.custom_vehicle_no = data.custom_vehicle_no || "";
-				this.custom_vehicle_make = data.custom_vehicle_make || data.make || this.custom_vehicle_make || "";
+				this.custom_vehicle_make =
+					data.custom_vehicle_make || data.make || this.custom_vehicle_make || "";
 				this.invoice_doc.custom_vehicle_make =
 					this.custom_vehicle_make || this.invoice_doc.custom_vehicle_make || "";
 			}
@@ -3340,7 +3347,8 @@ export default {
 			if (this.invoice_doc) {
 				this.invoice_doc.contact_mobile = data.contact_mobile || "";
 				this.invoice_doc.custom_vehicle_no = data.custom_vehicle_no || "";
-				this.custom_vehicle_make = data.custom_vehicle_make || data.make || this.custom_vehicle_make || "";
+				this.custom_vehicle_make =
+					data.custom_vehicle_make || data.make || this.custom_vehicle_make || "";
 				this.invoice_doc.custom_vehicle_make =
 					this.custom_vehicle_make || this.invoice_doc.custom_vehicle_make || "";
 				this.invoice_doc.custom_vehicle_model =

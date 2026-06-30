@@ -924,19 +924,13 @@ export default {
 						},
 					);
 
-						this.eventBus.emit("update_customer_details", {
-							contact_mobile: mobile,
-							custom_vehicle_no: vehicleNo,
-							custom_vehicle_make:
-								customerData.custom_vehicle_make ||
-								customerData.make ||
-								"",
-							custom_vehicle_model:
-								customerData.custom_vehicle_model ||
-								customerData.model ||
-								"",
-							is_corporate: isCorporate,
-						});
+					this.eventBus.emit("update_customer_details", {
+						contact_mobile: mobile,
+						custom_vehicle_no: vehicleNo,
+						custom_vehicle_make: customerData.custom_vehicle_make || customerData.make || "",
+						custom_vehicle_model: customerData.custom_vehicle_model || customerData.model || "",
+						is_corporate: isCorporate,
+					});
 				}
 			} catch (error) {
 				console.error("[Customer] Failed to fetch customer details:", error);
@@ -981,13 +975,13 @@ export default {
 					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", null);
 					this.eventBus.emit("clear_vehicle_discounts");
-						this.eventBus.emit("update_customer_details", {
-							contact_mobile: "",
-							custom_vehicle_no: "",
-							custom_vehicle_make: "",
-							custom_vehicle_model: "",
-							is_corporate: !!this.selected_customer_is_corporate,
-						});
+					this.eventBus.emit("update_customer_details", {
+						contact_mobile: "",
+						custom_vehicle_no: "",
+						custom_vehicle_make: "",
+						custom_vehicle_model: "",
+						is_corporate: !!this.selected_customer_is_corporate,
+					});
 				}
 				this.customer = val;
 				this.internalCustomer = val;
@@ -1023,13 +1017,13 @@ export default {
 				this.jobOrderLockUntil = 0;
 				this.eventBus.emit("update_customer", null);
 				this.eventBus.emit("vehicle_selected", null);
-					this.eventBus.emit("update_customer_details", {
-						contact_mobile: "",
-						custom_vehicle_no: "",
-						custom_vehicle_make: "",
-						custom_vehicle_model: "",
-						is_corporate: false,
-					});
+				this.eventBus.emit("update_customer_details", {
+					contact_mobile: "",
+					custom_vehicle_no: "",
+					custom_vehicle_make: "",
+					custom_vehicle_model: "",
+					is_corporate: false,
+				});
 				this.selected_customer_is_corporate = false;
 
 				// EMIT EMPTY CUSTOMER DETAILS
@@ -1404,13 +1398,13 @@ export default {
 							if (msg.is_corporate !== undefined || msg.is_company !== undefined) {
 								const isCorp = !!(msg.is_corporate || msg.is_company);
 								this.selected_customer_is_corporate = isCorp;
-									this.eventBus.emit("update_customer_details", {
-										contact_mobile: msg.mobile_no || "",
-										custom_vehicle_no: msg.vehicle_no || "",
-										custom_vehicle_make: msg.custom_vehicle_make || msg.make || "",
-										custom_vehicle_model: msg.custom_vehicle_model || msg.model || "",
-										is_corporate: isCorp,
-									});
+								this.eventBus.emit("update_customer_details", {
+									contact_mobile: msg.mobile_no || "",
+									custom_vehicle_no: msg.vehicle_no || "",
+									custom_vehicle_make: msg.custom_vehicle_make || msg.make || "",
+									custom_vehicle_model: msg.custom_vehicle_model || msg.model || "",
+									is_corporate: isCorp,
+								});
 								// If we only got summary and need full info for vehicles, fetch it
 								if (msg.name) {
 									this.fetchAndEmitCustomerDetails(msg.name);
@@ -2062,43 +2056,43 @@ export default {
 					this.vehicle_no = nextVehicle.vehicle_no || "";
 					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", nextVehicle.name);
-						this.eventBus.emit("update_customer_details", {
-							contact_mobile: this.customer_info?.mobile_no || "",
-							custom_vehicle_no: this.vehicle_no || "",
-							custom_vehicle_make:
-								nextVehicle.custom_vehicle_make ||
-								nextVehicle.make ||
-								nextVehicle.vehicle_make ||
-								"",
-							custom_vehicle_model:
-								nextVehicle.custom_vehicle_model ||
-								nextVehicle.model ||
-								nextVehicle.vehicle_model ||
-								nextVehicle.model_no ||
-								"",
-							is_corporate: !!this.selected_customer_is_corporate,
-						});
+					this.eventBus.emit("update_customer_details", {
+						contact_mobile: this.customer_info?.mobile_no || "",
+						custom_vehicle_no: this.vehicle_no || "",
+						custom_vehicle_make:
+							nextVehicle.custom_vehicle_make ||
+							nextVehicle.make ||
+							nextVehicle.vehicle_make ||
+							"",
+						custom_vehicle_model:
+							nextVehicle.custom_vehicle_model ||
+							nextVehicle.model ||
+							nextVehicle.vehicle_model ||
+							nextVehicle.model_no ||
+							"",
+						is_corporate: !!this.selected_customer_is_corporate,
+					});
 				} else if (allowDefaultSelection && this.vehicles.length === 1 && !currentSelectedVehicleNo) {
 					this.selectedVehicle = this.vehicles[0].name;
 					this.vehicle_no = this.vehicles[0].vehicle_no;
 					this.vehicleSearchText = "";
 					this.eventBus.emit("vehicle_selected", this.selectedVehicle);
-						this.eventBus.emit("update_customer_details", {
-							contact_mobile: this.customer_info?.mobile_no || "",
-							custom_vehicle_no: this.vehicle_no || "",
-							custom_vehicle_make:
-								this.vehicles[0].custom_vehicle_make ||
-								this.vehicles[0].make ||
-								this.vehicles[0].vehicle_make ||
-								"",
-							custom_vehicle_model:
-								this.vehicles[0].custom_vehicle_model ||
-								this.vehicles[0].model ||
-								this.vehicles[0].vehicle_model ||
-								this.vehicles[0].model_no ||
-								"",
-							is_corporate: !!this.selected_customer_is_corporate,
-						});
+					this.eventBus.emit("update_customer_details", {
+						contact_mobile: this.customer_info?.mobile_no || "",
+						custom_vehicle_no: this.vehicle_no || "",
+						custom_vehicle_make:
+							this.vehicles[0].custom_vehicle_make ||
+							this.vehicles[0].make ||
+							this.vehicles[0].vehicle_make ||
+							"",
+						custom_vehicle_model:
+							this.vehicles[0].custom_vehicle_model ||
+							this.vehicles[0].model ||
+							this.vehicles[0].vehicle_model ||
+							this.vehicles[0].model_no ||
+							"",
+						is_corporate: !!this.selected_customer_is_corporate,
+					});
 
 					this.eventBus.emit("apply_vehicle_discount", {
 						customer: customerName,
@@ -2158,19 +2152,19 @@ export default {
 			);
 
 			this.eventBus.emit("vehicle_selected", vehicle.name);
-				this.eventBus.emit("update_customer_details", {
-					contact_mobile: this.customer_info?.mobile_no || "",
-					custom_vehicle_no: vehicle.vehicle_no || "",
-					custom_vehicle_make:
-						vehicle.custom_vehicle_make || vehicle.make || vehicle.vehicle_make || "",
-					custom_vehicle_model:
-						vehicle.custom_vehicle_model ||
-						vehicle.model ||
-						vehicle.vehicle_model ||
-						vehicle.model_no ||
-						"",
-					is_corporate: !!this.selected_customer_is_corporate,
-				});
+			this.eventBus.emit("update_customer_details", {
+				contact_mobile: this.customer_info?.mobile_no || "",
+				custom_vehicle_no: vehicle.vehicle_no || "",
+				custom_vehicle_make:
+					vehicle.custom_vehicle_make || vehicle.make || vehicle.vehicle_make || "",
+				custom_vehicle_model:
+					vehicle.custom_vehicle_model ||
+					vehicle.model ||
+					vehicle.vehicle_model ||
+					vehicle.model_no ||
+					"",
+				is_corporate: !!this.selected_customer_is_corporate,
+			});
 
 			if (!this.customer) {
 				if (vehicle.customer) {

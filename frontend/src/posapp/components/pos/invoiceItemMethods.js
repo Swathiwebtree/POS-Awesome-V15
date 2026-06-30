@@ -573,43 +573,41 @@ export default {
 			});
 		}
 
-			this.customer = data.customer || data.customer_name || "";
-			this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
-			const restoredLoyaltyPoints = Number(
-				data.custom_redeemed_loyalty_points ??
-					data.redeemed_loyalty_points ??
-					data.redeem_loyalty_points ??
-					0,
-			);
-			const restoredLoyaltyAmount = Number(
-				data.loyalty_discount_amount ?? data.loyalty_amount ?? 0,
-			);
-			const restoredAdditionalDiscount =
-				restoredLoyaltyAmount > 0
-					? restoredLoyaltyAmount
-					: Number(data.additional_discount ?? data.discount_amount ?? 0);
-			this.discount_amount = restoredAdditionalDiscount;
-			this.additional_discount = restoredAdditionalDiscount;
-			this.additional_discount_percentage = data.additional_discount_percentage ?? 0;
-			this.invoice_doc.discount_amount = this.discount_amount;
-			this.invoice_doc.additional_discount = this.additional_discount;
-				this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
-			const restoredAvailableLoyaltyPoints = Number(
-				data.available_loyalty_points ?? data.loyalty_points ?? 0,
-			);
-				const restoredConversionFactor = Number(data.conversion_factor ?? 0);
-				this.custom_vehicle_make = data.custom_vehicle_make || data.make || this.custom_vehicle_make || "";
-					this.invoice_doc.available_loyalty_points = restoredAvailableLoyaltyPoints;
-					this.invoice_doc.loyalty_points = restoredAvailableLoyaltyPoints;
-					this.invoice_doc.conversion_factor = restoredConversionFactor;
-					this.invoice_doc.custom_vehicle_make =
-						this.custom_vehicle_make || this.invoice_doc.custom_vehicle_make || "";
-					this.invoice_doc.custom_vehicle_model =
-						data.custom_vehicle_model || data.model || this.invoice_doc.custom_vehicle_model || "";
+		this.customer = data.customer || data.customer_name || "";
+		this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
+		const restoredLoyaltyPoints = Number(
+			data.custom_redeemed_loyalty_points ??
+				data.redeemed_loyalty_points ??
+				data.redeem_loyalty_points ??
+				0,
+		);
+		const restoredLoyaltyAmount = Number(data.loyalty_discount_amount ?? data.loyalty_amount ?? 0);
+		const restoredAdditionalDiscount =
+			restoredLoyaltyAmount > 0
+				? restoredLoyaltyAmount
+				: Number(data.additional_discount ?? data.discount_amount ?? 0);
+		this.discount_amount = restoredAdditionalDiscount;
+		this.additional_discount = restoredAdditionalDiscount;
+		this.additional_discount_percentage = data.additional_discount_percentage ?? 0;
+		this.invoice_doc.discount_amount = this.discount_amount;
+		this.invoice_doc.additional_discount = this.additional_discount;
+		this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
+		const restoredAvailableLoyaltyPoints = Number(
+			data.available_loyalty_points ?? data.loyalty_points ?? 0,
+		);
+		const restoredConversionFactor = Number(data.conversion_factor ?? 0);
+		this.custom_vehicle_make = data.custom_vehicle_make || data.make || this.custom_vehicle_make || "";
+		this.invoice_doc.available_loyalty_points = restoredAvailableLoyaltyPoints;
+		this.invoice_doc.loyalty_points = restoredAvailableLoyaltyPoints;
+		this.invoice_doc.conversion_factor = restoredConversionFactor;
+		this.invoice_doc.custom_vehicle_make =
+			this.custom_vehicle_make || this.invoice_doc.custom_vehicle_make || "";
+		this.invoice_doc.custom_vehicle_model =
+			data.custom_vehicle_model || data.model || this.invoice_doc.custom_vehicle_model || "";
 
-				if (this.items.length > 0) {
-				this.items.forEach((item) => {
-					if (item.serial_no) {
+		if (this.items.length > 0) {
+			this.items.forEach((item) => {
+				if (item.serial_no) {
 					item.serial_no_selected = [];
 					const serial_list = item.serial_no.split("\n");
 					serial_list.forEach((element) => {
@@ -620,21 +618,21 @@ export default {
 					item.serial_no_selected_count = item.serial_no_selected.length;
 				}
 			});
-			}
+		}
 
-				if (data.is_return) {
-					this.return_doc = data;
-				} else {
-					this.eventBus.emit("set_pos_coupons", data.posa_coupons);
-				}
+		if (data.is_return) {
+			this.return_doc = data;
+		} else {
+			this.eventBus.emit("set_pos_coupons", data.posa_coupons);
+		}
 
 		const hasContactField =
 			Object.prototype.hasOwnProperty.call(data, "contact_mobile") ||
 			Object.prototype.hasOwnProperty.call(data, "mobile_no") ||
 			Object.prototype.hasOwnProperty.call(data, "customer_mobile");
-			const finalContactMobile =
-				resolvedContactMobile || (!hasContactField ? this.contact_mobile || "" : "");
-			const finalVehicleNo = resolvedVehicleNo;
+		const finalContactMobile =
+			resolvedContactMobile || (!hasContactField ? this.contact_mobile || "" : "");
+		const finalVehicleNo = resolvedVehicleNo;
 
 		this.custom_has_oil_item = !!data.custom_has_oil_item;
 		this.custom_odometer_reading = data.custom_odometer_reading || null;
@@ -665,8 +663,8 @@ export default {
 			items: this.items.length,
 			customer: this.customer,
 		});
-			if (data.customer || data.customer_name) {
-				const customerToLoad = data.customer || data.customer_name;
+		if (data.customer || data.customer_name) {
+			const customerToLoad = data.customer || data.customer_name;
 			console.log("[Invoice] Emitting load_invoice_customer event:", customerToLoad);
 			// Emit event to Customer component to update customer and vehicle without overwriting invoice data
 			console.log("[Invoice] Emitting load_invoice_customer from second location");
@@ -718,17 +716,17 @@ export default {
 					: "none",
 			});
 
-				this.eventBus.emit("load_invoice_customer", {
-					customer: customerToLoad,
-					contact_mobile: emitContactMobile,
-					custom_vehicle_no: emitVehicleNo,
-					redeemed_loyalty_points: restoredLoyaltyPoints,
-					loyalty_discount_amount: restoredLoyaltyAmount,
-					loyalty_amount: restoredLoyaltyAmount,
-					additional_discount: restoredAdditionalDiscount,
-					allow_vehicle_fallback: false,
-				});
-			}
+			this.eventBus.emit("load_invoice_customer", {
+				customer: customerToLoad,
+				contact_mobile: emitContactMobile,
+				custom_vehicle_no: emitVehicleNo,
+				redeemed_loyalty_points: restoredLoyaltyPoints,
+				loyalty_discount_amount: restoredLoyaltyAmount,
+				loyalty_amount: restoredLoyaltyAmount,
+				additional_discount: restoredAdditionalDiscount,
+				allow_vehicle_fallback: false,
+			});
+		}
 
 		// Also ensure customer is synced to local state:
 		this.customer = data.customer || data.customer_name || "";
@@ -774,23 +772,23 @@ export default {
 				data.available_loyalty_points ?? data.loyalty_points ?? 0,
 			);
 		}
-			if (
-				Object.prototype.hasOwnProperty.call(data, "redeemed_loyalty_points") ||
-				Object.prototype.hasOwnProperty.call(data, "redeem_loyalty_points")
-			) {
-				this.invoice_doc.redeemed_loyalty_points = restoredLoyaltyPoints;
-				this.invoice_doc.redeem_loyalty_points = restoredLoyaltyPoints;
-				this.loyalty_redemption_points = restoredLoyaltyPoints;
-			}
-			if (
-				Object.prototype.hasOwnProperty.call(data, "loyalty_amount") ||
-				Object.prototype.hasOwnProperty.call(data, "loyalty_discount_amount")
-			) {
-				this.loyalty_redemption_amount = restoredLoyaltyAmount;
-			}
-				if (this.loyalty_redemption_points || this.loyalty_redemption_amount) {
-					this.loyalty_redemption_customer = data.customer || data.customer_name || this.customer || "";
-				}
+		if (
+			Object.prototype.hasOwnProperty.call(data, "redeemed_loyalty_points") ||
+			Object.prototype.hasOwnProperty.call(data, "redeem_loyalty_points")
+		) {
+			this.invoice_doc.redeemed_loyalty_points = restoredLoyaltyPoints;
+			this.invoice_doc.redeem_loyalty_points = restoredLoyaltyPoints;
+			this.loyalty_redemption_points = restoredLoyaltyPoints;
+		}
+		if (
+			Object.prototype.hasOwnProperty.call(data, "loyalty_amount") ||
+			Object.prototype.hasOwnProperty.call(data, "loyalty_discount_amount")
+		) {
+			this.loyalty_redemption_amount = restoredLoyaltyAmount;
+		}
+		if (this.loyalty_redemption_points || this.loyalty_redemption_amount) {
+			this.loyalty_redemption_customer = data.customer || data.customer_name || this.customer || "";
+		}
 		if (Object.prototype.hasOwnProperty.call(data, "net_total")) {
 			this.invoice_doc.net_total = data.net_total;
 		}
@@ -813,25 +811,25 @@ export default {
 			this.invoice_doc.base_rounded_total = data.base_rounded_total;
 		}
 
-				this.$nextTick(() => {
-					this.eventBus.emit("restore_loyalty_ui_state", {
-						customer: data.customer || data.customer_name || this.customer || "",
-						customer_name: data.customer_name || "",
-						redeemed_loyalty_points: restoredLoyaltyPoints,
-						redeem_loyalty_points: restoredLoyaltyPoints,
-						loyalty_discount_amount: restoredLoyaltyAmount,
-						loyalty_amount: restoredLoyaltyAmount,
-						loyalty_program: data.loyalty_program || this.invoice_doc?.loyalty_program || null,
-						available_loyalty_points: restoredAvailableLoyaltyPoints,
-						conversion_factor: restoredConversionFactor,
-						custom_vehicle_make:
-							data.custom_vehicle_make || data.make || this.invoice_doc?.custom_vehicle_make || "",
-						custom_vehicle_model:
-							data.custom_vehicle_model || data.model || this.invoice_doc?.custom_vehicle_model || "",
-						additional_discount: restoredAdditionalDiscount,
-					});
-					this.$forceUpdate();
-				});
+		this.$nextTick(() => {
+			this.eventBus.emit("restore_loyalty_ui_state", {
+				customer: data.customer || data.customer_name || this.customer || "",
+				customer_name: data.customer_name || "",
+				redeemed_loyalty_points: restoredLoyaltyPoints,
+				redeem_loyalty_points: restoredLoyaltyPoints,
+				loyalty_discount_amount: restoredLoyaltyAmount,
+				loyalty_amount: restoredLoyaltyAmount,
+				loyalty_program: data.loyalty_program || this.invoice_doc?.loyalty_program || null,
+				available_loyalty_points: restoredAvailableLoyaltyPoints,
+				conversion_factor: restoredConversionFactor,
+				custom_vehicle_make:
+					data.custom_vehicle_make || data.make || this.invoice_doc?.custom_vehicle_make || "",
+				custom_vehicle_model:
+					data.custom_vehicle_model || data.model || this.invoice_doc?.custom_vehicle_model || "",
+				additional_discount: restoredAdditionalDiscount,
+			});
+			this.$forceUpdate();
+		});
 	},
 
 	// Save and clear the current invoice (draft logic)
@@ -954,56 +952,60 @@ export default {
 
 			this.customer = data.customer;
 			this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
-				this.discount_amount = data.discount_amount ?? data.additional_discount ?? 0;
-				this.additional_discount = data.additional_discount ?? data.discount_amount ?? 0;
-				this.additional_discount_percentage = data.additional_discount_percentage ?? 0;
-				this.invoice_doc.discount_amount = this.discount_amount;
-				this.invoice_doc.additional_discount = this.additional_discount;
-				this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
-				const restoredAvailableLoyaltyPoints = Number(
-					data.available_loyalty_points ?? data.loyalty_points ?? 0,
-				);
-				const restoredConversionFactor = Number(data.conversion_factor ?? 0);
-				const restoredLoyaltyPoints = Number(
-					data.redeemed_loyalty_points ?? data.redeem_loyalty_points ?? 0,
-				);
-				const restoredLoyaltyAmount = Number(data.loyalty_discount_amount ?? data.loyalty_amount ?? 0);
-				this.loyalty_redemption_points = restoredLoyaltyPoints;
+			this.discount_amount = data.discount_amount ?? data.additional_discount ?? 0;
+			this.additional_discount = data.additional_discount ?? data.discount_amount ?? 0;
+			this.additional_discount_percentage = data.additional_discount_percentage ?? 0;
+			this.invoice_doc.discount_amount = this.discount_amount;
+			this.invoice_doc.additional_discount = this.additional_discount;
+			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
+			const restoredAvailableLoyaltyPoints = Number(
+				data.available_loyalty_points ?? data.loyalty_points ?? 0,
+			);
+			const restoredConversionFactor = Number(data.conversion_factor ?? 0);
+			const restoredLoyaltyPoints = Number(
+				data.redeemed_loyalty_points ?? data.redeem_loyalty_points ?? 0,
+			);
+			const restoredLoyaltyAmount = Number(data.loyalty_discount_amount ?? data.loyalty_amount ?? 0);
+			this.loyalty_redemption_points = restoredLoyaltyPoints;
 			this.loyalty_redemption_amount = restoredLoyaltyAmount;
 			this.loyalty_redemption_customer = data.customer || "";
-				this.invoice_doc.custom_redeemed_loyalty_points = restoredLoyaltyPoints;
-				this.invoice_doc.redeem_loyalty_points = restoredLoyaltyPoints;
-				this.invoice_doc.redeemed_loyalty_points = restoredLoyaltyPoints;
-					this.invoice_doc.loyalty_amount = restoredLoyaltyAmount;
-					this.invoice_doc.loyalty_discount_amount = restoredLoyaltyAmount;
-					this.invoice_doc.available_loyalty_points = restoredAvailableLoyaltyPoints;
-					this.invoice_doc.loyalty_points = restoredAvailableLoyaltyPoints;
-					this.invoice_doc.conversion_factor = restoredConversionFactor;
-					this.invoice_doc.custom_vehicle_make =
-						data.custom_vehicle_make || data.make || this.invoice_doc.custom_vehicle_make || "";
-					this.invoice_doc.custom_vehicle_model =
-						data.custom_vehicle_model || data.model || this.invoice_doc.custom_vehicle_model || "";
-					this.invoice_doc.loyalty_program =
-						data.loyalty_program || this.invoice_doc.loyalty_program || null;
-				this.$nextTick(() => {
-						this.eventBus.emit("restore_loyalty_ui_state", {
-							customer: data.customer || this.customer || "",
-							customer_name: data.customer_name || "",
-							custom_redeemed_loyalty_points: restoredLoyaltyPoints,
-							redeemed_loyalty_points: restoredLoyaltyPoints,
-							redeem_loyalty_points: restoredLoyaltyPoints,
-							loyalty_discount_amount: restoredLoyaltyAmount,
-							loyalty_amount: Number(data.loyalty_amount ?? restoredLoyaltyAmount ?? 0),
-							loyalty_program: data.loyalty_program || this.invoice_doc.loyalty_program || null,
-							available_loyalty_points: restoredAvailableLoyaltyPoints,
-							conversion_factor: restoredConversionFactor,
-							custom_vehicle_make: this.custom_vehicle_make || this.invoice_doc.custom_vehicle_make || "",
-							custom_vehicle_model:
-								data.custom_vehicle_model || data.model || this.invoice_doc.custom_vehicle_model || "",
-							additional_discount: Number(
-								data.additional_discount ?? data.discount_amount ?? this.additional_discount ?? 0,
-							),
-						});
+			this.invoice_doc.custom_redeemed_loyalty_points = restoredLoyaltyPoints;
+			this.invoice_doc.redeem_loyalty_points = restoredLoyaltyPoints;
+			this.invoice_doc.redeemed_loyalty_points = restoredLoyaltyPoints;
+			this.invoice_doc.loyalty_amount = restoredLoyaltyAmount;
+			this.invoice_doc.loyalty_discount_amount = restoredLoyaltyAmount;
+			this.invoice_doc.available_loyalty_points = restoredAvailableLoyaltyPoints;
+			this.invoice_doc.loyalty_points = restoredAvailableLoyaltyPoints;
+			this.invoice_doc.conversion_factor = restoredConversionFactor;
+			this.invoice_doc.custom_vehicle_make =
+				data.custom_vehicle_make || data.make || this.invoice_doc.custom_vehicle_make || "";
+			this.invoice_doc.custom_vehicle_model =
+				data.custom_vehicle_model || data.model || this.invoice_doc.custom_vehicle_model || "";
+			this.invoice_doc.loyalty_program =
+				data.loyalty_program || this.invoice_doc.loyalty_program || null;
+			this.$nextTick(() => {
+				this.eventBus.emit("restore_loyalty_ui_state", {
+					customer: data.customer || this.customer || "",
+					customer_name: data.customer_name || "",
+					custom_redeemed_loyalty_points: restoredLoyaltyPoints,
+					redeemed_loyalty_points: restoredLoyaltyPoints,
+					redeem_loyalty_points: restoredLoyaltyPoints,
+					loyalty_discount_amount: restoredLoyaltyAmount,
+					loyalty_amount: Number(data.loyalty_amount ?? restoredLoyaltyAmount ?? 0),
+					loyalty_program: data.loyalty_program || this.invoice_doc.loyalty_program || null,
+					available_loyalty_points: restoredAvailableLoyaltyPoints,
+					conversion_factor: restoredConversionFactor,
+					custom_vehicle_make:
+						this.custom_vehicle_make || this.invoice_doc.custom_vehicle_make || "",
+					custom_vehicle_model:
+						data.custom_vehicle_model ||
+						data.model ||
+						this.invoice_doc.custom_vehicle_model ||
+						"",
+					additional_discount: Number(
+						data.additional_discount ?? data.discount_amount ?? this.additional_discount ?? 0,
+					),
+				});
 				this.apply_additional_discount && this.apply_additional_discount();
 			});
 
@@ -1182,7 +1184,10 @@ export default {
 		doc.naming_series = doc.naming_series || this.pos_profile.naming_series;
 		doc.customer = this.customer;
 		doc.custom_vehicle_make =
-			doc.custom_vehicle_make || this.custom_vehicle_make || this.invoice_doc?.custom_vehicle_make || "";
+			doc.custom_vehicle_make ||
+			this.custom_vehicle_make ||
+			this.invoice_doc?.custom_vehicle_make ||
+			"";
 		doc.custom_vehicle_model = doc.custom_vehicle_model || this.invoice_doc?.custom_vehicle_model || "";
 		doc.loyalty_program =
 			doc.loyalty_program ||

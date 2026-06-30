@@ -69,6 +69,7 @@ def on_invoice_submit(doc, method):
 
     _create_entry(points, doc.net_total)
 
+
 def validate_loyalty_redeem(doc, method=None):
     if flt(doc.loyalty_points) >= 0:
         return

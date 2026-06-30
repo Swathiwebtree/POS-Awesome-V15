@@ -954,51 +954,53 @@ export default {
 				return;
 			}
 
-				frappe.call({
-					method: "posawesome.posawesome.api.payment_entry.process_pos_payment",
-					args: { payload },
-					freeze: true,
-					freeze_message: __("Processing Payment"),
-					callback: function (r) {
-						vm.isSubmitting = false;
-						if (!r.message) {
-							frappe.msgprint(__("Payment submission failed. Please try again."));
-							frappe.utils.play_sound("error");
-							return;
-						}
+			frappe.call({
+				method: "posawesome.posawesome.api.payment_entry.process_pos_payment",
+				args: { payload },
+				freeze: true,
+				freeze_message: __("Processing Payment"),
+				callback: function (r) {
+					vm.isSubmitting = false;
+					if (!r.message) {
+						frappe.msgprint(__("Payment submission failed. Please try again."));
+						frappe.utils.play_sound("error");
+						return;
+					}
 
-						const submitErrors = Array.isArray(r.message.errors)
-							? r.message.errors.filter((error) => !!error)
-							: [];
-						if (submitErrors.length > 0) {
-							const errorMessage = submitErrors
-								.map((error) => (typeof error === "string" ? error : JSON.stringify(error)))
-								.join("\n");
-							frappe.msgprint({
-								title: __("Payment submission errors"),
-								message: errorMessage,
-								indicator: "red",
-							});
-							vm.eventBus.emit("show_message", {
-								title: __("Payment submission finished with errors. Please review and try again."),
-								color: "error",
-							});
-							frappe.utils.play_sound("error");
-							return;
-						}
+					const submitErrors = Array.isArray(r.message.errors)
+						? r.message.errors.filter((error) => !!error)
+						: [];
+					if (submitErrors.length > 0) {
+						const errorMessage = submitErrors
+							.map((error) => (typeof error === "string" ? error : JSON.stringify(error)))
+							.join("\n");
+						frappe.msgprint({
+							title: __("Payment submission errors"),
+							message: errorMessage,
+							indicator: "red",
+						});
+						vm.eventBus.emit("show_message", {
+							title: __(
+								"Payment submission finished with errors. Please review and try again.",
+							),
+							color: "error",
+						});
+						frappe.utils.play_sound("error");
+						return;
+					}
 
-						frappe.utils.play_sound("submit");
-						vm.clear_all(false);
-						vm.customer_name = customer;
-						vm.get_outstanding_invoices();
-						vm.get_unallocated_payments();
-						vm.set_mpesa_search_params();
-						vm.get_draft_mpesa_payments_register();
-					},
-					error: function () {
-						vm.isSubmitting = false;
-					},
-				});
+					frappe.utils.play_sound("submit");
+					vm.clear_all(false);
+					vm.customer_name = customer;
+					vm.get_outstanding_invoices();
+					vm.get_unallocated_payments();
+					vm.set_mpesa_search_params();
+					vm.get_draft_mpesa_payments_register();
+				},
+				error: function () {
+					vm.isSubmitting = false;
+				},
+			});
 		},
 		submit_and_print() {
 			if (this.isSubmitting) return;
@@ -1072,70 +1074,72 @@ export default {
 				return;
 			}
 
-				frappe.call({
-					method: "posawesome.posawesome.api.payment_entry.process_pos_payment",
-					args: { payload },
-					freeze: true,
-					freeze_message: __("Processing Payment"),
-					callback: function (r) {
-						vm.isSubmitting = false;
-						if (!r.message) {
-							frappe.msgprint(__("Payment submission failed. Please try again."));
-							frappe.utils.play_sound("error");
-							return;
-						}
+			frappe.call({
+				method: "posawesome.posawesome.api.payment_entry.process_pos_payment",
+				args: { payload },
+				freeze: true,
+				freeze_message: __("Processing Payment"),
+				callback: function (r) {
+					vm.isSubmitting = false;
+					if (!r.message) {
+						frappe.msgprint(__("Payment submission failed. Please try again."));
+						frappe.utils.play_sound("error");
+						return;
+					}
 
-						const submitErrors = Array.isArray(r.message.errors)
-							? r.message.errors.filter((error) => !!error)
-							: [];
-						if (submitErrors.length > 0) {
-							const errorMessage = submitErrors
-								.map((error) => (typeof error === "string" ? error : JSON.stringify(error)))
-								.join("\n");
-							frappe.msgprint({
-								title: __("Payment submission errors"),
-								message: errorMessage,
-								indicator: "red",
-							});
-							vm.eventBus.emit("show_message", {
-								title: __("Payment submission finished with errors. Please review and try again."),
-								color: "error",
-							});
-							frappe.utils.play_sound("error");
-							return;
-						}
+					const submitErrors = Array.isArray(r.message.errors)
+						? r.message.errors.filter((error) => !!error)
+						: [];
+					if (submitErrors.length > 0) {
+						const errorMessage = submitErrors
+							.map((error) => (typeof error === "string" ? error : JSON.stringify(error)))
+							.join("\n");
+						frappe.msgprint({
+							title: __("Payment submission errors"),
+							message: errorMessage,
+							indicator: "red",
+						});
+						vm.eventBus.emit("show_message", {
+							title: __(
+								"Payment submission finished with errors. Please review and try again.",
+							),
+							color: "error",
+						});
+						frappe.utils.play_sound("error");
+						return;
+					}
 
-						console.log("Server response:", JSON.stringify(r.message));
-						frappe.utils.play_sound("submit");
+					console.log("Server response:", JSON.stringify(r.message));
+					frappe.utils.play_sound("submit");
 
-						// Extract payment name from server response
-						const payment_name =
-							r.message.new_payments_entry && r.message.new_payments_entry.length > 0
-								? r.message.new_payments_entry[0].name
-								: null;
+					// Extract payment name from server response
+					const payment_name =
+						r.message.new_payments_entry && r.message.new_payments_entry.length > 0
+							? r.message.new_payments_entry[0].name
+							: null;
 
-						if (payment_name) {
-							console.log("Opening print view with payment name:", payment_name);
-							vm.load_print_page(payment_name);
-						} else {
-							console.log("No payment_name found in response");
-							frappe.msgprint(
-								__(
-									"Payment submitted but print function could not be executed. Payment name not found.",
-								),
-							);
-						}
-						vm.clear_all(false);
-						vm.customer_name = customer;
-						vm.get_outstanding_invoices();
-						vm.get_unallocated_payments();
-						vm.set_mpesa_search_params();
-						vm.get_draft_mpesa_payments_register();
-					},
-					error: function () {
-						vm.isSubmitting = false;
-					},
-				});
+					if (payment_name) {
+						console.log("Opening print view with payment name:", payment_name);
+						vm.load_print_page(payment_name);
+					} else {
+						console.log("No payment_name found in response");
+						frappe.msgprint(
+							__(
+								"Payment submitted but print function could not be executed. Payment name not found.",
+							),
+						);
+					}
+					vm.clear_all(false);
+					vm.customer_name = customer;
+					vm.get_outstanding_invoices();
+					vm.get_unallocated_payments();
+					vm.set_mpesa_search_params();
+					vm.get_draft_mpesa_payments_register();
+				},
+				error: function () {
+					vm.isSubmitting = false;
+				},
+			});
 		},
 		selectSingleInvoice(item) {
 			console.log("Row clicked:", item);
