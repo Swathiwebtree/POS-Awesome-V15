@@ -308,6 +308,9 @@ fixtures = [
                     "Vehicle Master-custom_default_discount___stock_items",
                     "Vehicle Master-custom_max_discount___service_items",
                     "Vehicle Master-custom_max_discount___stock_items",
+                    "Sales Invoice-custom_vehicle_make",
+                    "Sales Invoice-custom_vehicle_model",
+                    "Sales Invoice-custom_redeemed_loyalty_points",
                 ],
             ]
         ],

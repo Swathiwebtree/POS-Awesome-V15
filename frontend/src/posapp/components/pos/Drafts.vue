@@ -686,6 +686,32 @@ export default {
 					typeof item.custom_vehicle_model !== "undefined" && item.custom_vehicle_model !== null
 						? String(item.custom_vehicle_model)
 						: "",
+				redeemed_loyalty_points:
+					typeof item.redeemed_loyalty_points !== "undefined" && item.redeemed_loyalty_points !== null
+						? Number(item.redeemed_loyalty_points)
+						: 0,
+				redeem_loyalty_points:
+					typeof item.redeem_loyalty_points !== "undefined" && item.redeem_loyalty_points !== null
+						? Number(item.redeem_loyalty_points)
+						: 0,
+				loyalty_discount_amount:
+					typeof item.loyalty_discount_amount !== "undefined" && item.loyalty_discount_amount !== null
+						? Number(item.loyalty_discount_amount)
+						: 0,
+				loyalty_amount:
+					typeof item.loyalty_amount !== "undefined" && item.loyalty_amount !== null
+						? Number(item.loyalty_amount)
+						: 0,
+				loyalty_program: item.loyalty_program || null,
+				available_loyalty_points:
+					typeof item.available_loyalty_points !== "undefined" &&
+					item.available_loyalty_points !== null
+						? Number(item.available_loyalty_points)
+						: 0,
+				conversion_factor:
+					typeof item.conversion_factor !== "undefined" && item.conversion_factor !== null
+						? Number(item.conversion_factor)
+						: 0,
 				// Keep odometer as string if present (e.g. "12345"), empty string if not
 				custom_odometer_reading:
 					typeof item.custom_odometer_reading !== "undefined" &&
@@ -763,6 +789,32 @@ export default {
 						custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
 						allow_vehicle_fallback: false,
 					});
+
+					const redeemedPoints = Number(
+						invoice.redeemed_loyalty_points ?? invoice.redeem_loyalty_points ?? 0,
+					);
+					const loyaltyAmount = Number(
+						invoice.loyalty_discount_amount ?? invoice.loyalty_amount ?? 0,
+					);
+					const availablePoints = Number(invoice.loyalty_points ?? 0);
+					if (redeemedPoints > 0 || loyaltyAmount > 0) {
+						this.eventBus.emit("restore_loyalty_ui_state", {
+							customer: invoice.customer,
+							customer_name: invoice.customer_name || invoice.customer,
+							redeemed_loyalty_points: redeemedPoints,
+							redeem_loyalty_points: redeemedPoints,
+							loyalty_discount_amount: loyaltyAmount,
+							loyalty_amount: loyaltyAmount,
+							loyalty_program: invoice.loyalty_program || null,
+							available_loyalty_points: availablePoints,
+							conversion_factor:
+								Number(invoice.conversion_factor || 0) ||
+								(redeemedPoints > 0 ? Number((loyaltyAmount / redeemedPoints).toFixed(3)) : 0),
+							additional_discount: Number(
+								invoice.additional_discount ?? invoice.discount_amount ?? loyaltyAmount ?? 0,
+							),
+						});
+					}
 
 					// Keep InvoiceSummary/Invoice state aligned even when draft is loaded from Drafts panel
 					this.eventBus.emit("set_contact_mobile", invoice.contact_mobile || "");

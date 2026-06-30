@@ -2530,127 +2530,144 @@ export default {
 				}
 			}
 
-			frappe.call({
-				method:
-					this.invoiceType === "Order" && this.pos_profile.posa_create_only_sales_order
-						? "posawesome.posawesome.api.sales_orders.submit_sales_order"
-						: "posawesome.posawesome.api.invoices.submit_invoice",
-				args: {
-					data: data,
-					invoice: this.invoice_doc,
-					order: this.invoice_doc,
-				},
-				async: true,
-				timeout: 30000,
-				callback: function (r) {
-					vm.loading = false;
+				frappe.call({
+					method:
+						this.invoiceType === "Order" && this.pos_profile.posa_create_only_sales_order
+							? "posawesome.posawesome.api.sales_orders.submit_sales_order"
+							: "posawesome.posawesome.api.invoices.submit_invoice",
+					args: {
+						data: data,
+						invoice: this.invoice_doc,
+						order: this.invoice_doc,
+					},
+					async: true,
+					timeout: 30000,
+					callback: function (r) {
+						vm.loading = false;
 
-					if (r.exc) {
-						console.error("Error submitting invoice:", r.exc);
-						let errorMsg = r.exc.toString();
-						if (errorMsg.includes("Amount must be negative")) {
-							vm.eventBus.emit("show_message", {
-								title: __("Fixing payment amounts for return invoice..."),
-								color: "warning",
-							});
-							vm.invoice_doc.payments.forEach((payment) => {
-								if (payment.amount > 0) {
-									payment.amount = -Math.abs(payment.amount);
-								}
-								if (payment.base_amount > 0) {
-									payment.base_amount = -Math.abs(payment.base_amount);
-								}
-							});
-							setTimeout(() => {
-								vm.submit_invoice(print);
-							}, 500);
-						} else {
-							console.log("[Payment] Error occurred - closing modal immediately");
-							vm.showDialog = false;
-							vm.loading = false;
+						if (r.exc) {
+							console.error("Error submitting invoice:", r.exc);
+							const errorMsg = r.exc.toString();
+							if (errorMsg.includes("Amount must be negative")) {
+								vm.eventBus.emit("show_message", {
+									title: __("Fixing payment amounts for return invoice..."),
+									color: "warning",
+								});
+								vm.invoice_doc.payments.forEach((payment) => {
+									if (payment.amount > 0) {
+										payment.amount = -Math.abs(payment.amount);
+									}
+									if (payment.base_amount > 0) {
+										payment.base_amount = -Math.abs(payment.base_amount);
+									}
+								});
+								setTimeout(() => {
+									vm.submit_invoice(print);
+								}, 500);
+							} else {
+								vm.highlightSubmit = false;
+								vm.eventBus.emit("show_message", {
+									title: __("Error submitting invoice: ") + errorMsg,
+									color: "error",
+								});
+								frappe.utils.play_sound("error");
+							}
+							return;
+						}
+
+						if (!r.message) {
 							vm.highlightSubmit = false;
-							vm.eventBus.emit("show_payment", "false");
-
 							vm.eventBus.emit("show_message", {
-								title: __("Error submitting invoice: ") + errorMsg,
+								title: __("Error submitting invoice: No response from server"),
 								color: "error",
 							});
 							frappe.utils.play_sound("error");
+							return;
 						}
-						return;
-					}
 
-					if (!r.message) {
+						const submitErrors = Array.isArray(r.message.errors)
+							? r.message.errors.filter((error) => !!error)
+							: [];
+						if (submitErrors.length > 0) {
+							const errorMessage = submitErrors
+								.map((error) => (typeof error === "string" ? error : JSON.stringify(error)))
+								.join("\n");
+							vm.highlightSubmit = false;
+							vm.eventBus.emit("show_message", {
+								title: __("Payment submission finished with errors. Please review and try again."),
+								color: "error",
+							});
+							frappe.msgprint({
+								title: __("Payment submission errors"),
+								message: errorMessage,
+								indicator: "red",
+							});
+							frappe.utils.play_sound("error");
+							console.error("[Payment] Submission completed with errors:", r.message.errors);
+							return;
+						}
+
+						vm.invoice_doc.name = r.message.name;
+						vm.invoice_doc.docstatus = r.message.docstatus || 1;
+
+						if (print) {
+							vm.load_print_page();
+						}
+
+						vm.customer_credit_dict = [];
+						vm.redeem_customer_credit = false;
+						vm.is_cashback = true;
+						vm.is_credit_return = false;
+						vm.sales_person = "";
+						vm.eventBus.emit("set_last_invoice", r.message.name);
 						vm.eventBus.emit("show_message", {
-							title: __("Error submitting invoice: No response from server"),
+							title:
+								vm.invoiceType === "Order" && vm.pos_profile.posa_create_only_sales_order
+									? __("Sales Order {0} is Submitted", [r.message.name])
+									: __("Invoice {0} is Submitted", [r.message.name]),
+							color: "success",
+						});
+						frappe.utils.play_sound("submit");
+
+						updateLocalStock(vm.invoice_doc.items || []);
+						vm.eventBus.emit("payment_completed", {
+							customer: vm.invoice_doc.customer,
+							redeemed_loyalty_points: vm.invoice_doc.redeemed_loyalty_points || 0,
+							loyalty_discount_amount: vm.invoice_doc.loyalty_discount_amount || 0,
+							invoice_name: r.message.name,
+						});
+						vm.eventBus.emit("refresh_drafts");
+						vm.addresses = [];
+						vm.eventBus.emit("clear_invoice");
+						vm.eventBus.emit("reset_posting_date");
+						vm.back_to_invoice();
+					},
+					fail: function (error) {
+						console.error("Invoice submission failed (network error):", error);
+
+						vm.loading = false;
+						vm.highlightSubmit = false;
+						vm.eventBus.emit("show_message", {
+							title: __(
+								"Network error while submitting invoice. Please check your connection and try again.",
+							),
 							color: "error",
 						});
-						vm.showDialog = false;
 						frappe.utils.play_sound("error");
-						return;
-					}
+					},
+					error: function (error) {
+						console.error("Invoice submission error:", error);
 
-					vm.invoice_doc.name = r.message.name;
-					vm.invoice_doc.docstatus = r.message.docstatus || 1;
-
-					if (print) {
-						vm.load_print_page();
-					}
-
-					vm.customer_credit_dict = [];
-					vm.redeem_customer_credit = false;
-					vm.is_cashback = true;
-					vm.is_credit_return = false;
-					vm.sales_person = "";
-					vm.eventBus.emit("set_last_invoice", r.message.name);
-					vm.eventBus.emit("show_message", {
-						title:
-							vm.invoiceType === "Order" && vm.pos_profile.posa_create_only_sales_order
-								? __("Sales Order {0} is Submitted", [r.message.name])
-								: __("Invoice {0} is Submitted", [r.message.name]),
-						color: "success",
-					});
-					frappe.utils.play_sound("submit");
-
-					updateLocalStock(vm.invoice_doc.items || []);
-					vm.eventBus.emit("payment_completed", {
-						customer: vm.invoice_doc.customer,
-						redeemed_loyalty_points: vm.invoice_doc.redeemed_loyalty_points || 0,
-						loyalty_discount_amount: vm.invoice_doc.loyalty_discount_amount || 0,
-						invoice_name: r.message.name,
-					});
-					vm.eventBus.emit("refresh_drafts");
-					vm.addresses = [];
-					vm.eventBus.emit("clear_invoice");
-					vm.eventBus.emit("reset_posting_date");
-					vm.back_to_invoice();
-				},
-				fail: function (error) {
-					console.error("Invoice submission failed (network error):", error);
-
-					vm.loading = false;
-					vm.showDialog = false;
-					vm.eventBus.emit("show_message", {
-						title: __(
-							"Network error while submitting invoice. Please check your connection and try again.",
-						),
-						color: "error",
-					});
-					frappe.utils.play_sound("error");
-				},
-				error: function (error) {
-					console.error("Invoice submission error:", error);
-
-					vm.loading = false;
-					vm.showDialog = false;
-					vm.eventBus.emit("show_message", {
-						title: __("An error occurred while submitting the invoice. Please try again."),
-						color: "error",
-					});
-					frappe.utils.play_sound("error");
-				},
-			});
-		},
+						vm.loading = false;
+						vm.highlightSubmit = false;
+						vm.eventBus.emit("show_message", {
+							title: __("An error occurred while submitting the invoice. Please try again."),
+							color: "error",
+						});
+						frappe.utils.play_sound("error");
+					},
+				});
+			},
 		set_full_amount(idx) {
 			const isReturn = this.invoice_doc.is_return || this.invoiceType === "Return";
 			const totalAmount = this.getEffectiveInvoiceTotal();

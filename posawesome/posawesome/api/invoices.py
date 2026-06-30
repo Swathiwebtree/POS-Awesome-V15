@@ -63,6 +63,194 @@ def _apply_item_name_overrides(invoice_doc, overrides=None):
             item.name_overridden = 0
 
 
+def _first_nonempty(*values):
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return ""
+
+
+def _has_column(table, column):
+    try:
+        table_name = table if str(table).startswith("tab") else f"tab{table}"
+        rows = frappe.db.sql(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = %s
+              AND column_name = %s
+            LIMIT 1
+            """,
+            (table_name, column),
+            as_dict=True,
+        )
+        return bool(rows)
+    except Exception:
+        return False
+
+
+def _get_vehicle_make_model(data=None, vehicle_no=None, customer=None):
+    """Resolve make/model from available vehicle/customer data."""
+    data = data or {}
+    vehicle_no = cstr(vehicle_no or "").strip()
+    customer = cstr(customer or "").strip()
+
+    vehicle_data = data.get("vehicle") if isinstance(data.get("vehicle"), dict) else {}
+    customer_data = data.get("customer") if isinstance(data.get("customer"), dict) else {}
+
+    # Direct payload values should win when they are already available.
+    make = _first_nonempty(
+        data.get("custom_vehicle_make"),
+        data.get("vehicle_make"),
+        data.get("make"),
+        vehicle_data.get("custom_vehicle_make"),
+        vehicle_data.get("vehicle_make"),
+        vehicle_data.get("make"),
+        customer_data.get("custom_vehicle_make"),
+        customer_data.get("vehicle_make"),
+        customer_data.get("make"),
+    )
+    model = _first_nonempty(
+        data.get("custom_vehicle_model"),
+        data.get("vehicle_model"),
+        data.get("model"),
+        vehicle_data.get("custom_vehicle_model"),
+        vehicle_data.get("vehicle_model"),
+        vehicle_data.get("model"),
+        customer_data.get("custom_vehicle_model"),
+        customer_data.get("vehicle_model"),
+        customer_data.get("model"),
+    )
+
+    if make and model:
+        return make, model
+
+    vehicle_fields = ["name"]
+    for field in ("vehicle_make", "vehicle_model", "make", "model", "brand", "manufacturer"):
+        if _has_column("Vehicle Master", field):
+            vehicle_fields.append(field)
+
+    if vehicle_no:
+        try:
+            vehicle = frappe.get_all(
+                "Vehicle Master",
+                filters={"vehicle_no": vehicle_no},
+                fields=vehicle_fields,
+                limit_page_length=1,
+            )
+        except Exception:
+            vehicle = []
+
+        if not vehicle:
+            vehicle_fields_vehicle = ["name"]
+            for field in (
+                "vehicle_make",
+                "vehicle_model",
+                "make",
+                "model",
+                "brand",
+                "manufacturer",
+            ):
+                if _has_column("Vehicle", field):
+                    vehicle_fields_vehicle.append(field)
+            for id_field in ("vehicle_no", "license_plate", "plate_no", "name"):
+                if not _has_column("Vehicle", id_field):
+                    continue
+                try:
+                    vehicle = frappe.get_all(
+                        "Vehicle",
+                        filters={id_field: vehicle_no},
+                        fields=vehicle_fields_vehicle,
+                        limit_page_length=1,
+                    )
+                except Exception:
+                    vehicle = []
+                if vehicle:
+                    break
+
+        if vehicle:
+            row = vehicle[0]
+            make = _first_nonempty(row.get("vehicle_make"), row.get("make"), row.get("brand"), row.get("manufacturer"))
+            model = _first_nonempty(row.get("vehicle_model"), row.get("model"))
+
+    if (not make or not model) and customer:
+        try:
+            customer_vehicle = frappe.get_all(
+                "Vehicle Master",
+                filters={"customer": customer},
+                fields=vehicle_fields,
+                limit_page_length=1,
+                order_by="modified desc",
+            )
+        except Exception:
+            customer_vehicle = []
+
+        if not customer_vehicle:
+            vehicle_fields_vehicle = ["name"]
+            for field in (
+                "vehicle_make",
+                "vehicle_model",
+                "make",
+                "model",
+                "brand",
+                "manufacturer",
+            ):
+                if _has_column("Vehicle", field):
+                    vehicle_fields_vehicle.append(field)
+            try:
+                customer_vehicle = frappe.get_all(
+                    "Vehicle",
+                    filters={"customer": customer},
+                    fields=vehicle_fields_vehicle,
+                    limit_page_length=1,
+                    order_by="modified desc",
+                )
+            except Exception:
+                customer_vehicle = []
+
+        if customer_vehicle:
+            row = customer_vehicle[0]
+            make = make or _first_nonempty(
+                row.get("vehicle_make"), row.get("make"), row.get("brand"), row.get("manufacturer")
+            )
+            model = model or _first_nonempty(row.get("vehicle_model"), row.get("model"))
+
+    return make or "", model or ""
+
+
+def _resolve_vehicle_make(data=None, invoice_doc=None):
+    """Resolve vehicle make from payload, existing doc, or Vehicle lookup."""
+    data = data or {}
+    invoice_doc = invoice_doc or {}
+
+    make = _first_nonempty(
+        data.get("custom_vehicle_make"),
+        data.get("make"),
+        invoice_doc.get("custom_vehicle_make") if hasattr(invoice_doc, "get") else invoice_doc.get("custom_vehicle_make"),
+    )
+    if make:
+        return make
+
+    vehicle_no = _first_nonempty(
+        data.get("custom_vehicle_no"),
+        invoice_doc.get("custom_vehicle_no") if hasattr(invoice_doc, "get") else invoice_doc.get("custom_vehicle_no"),
+    )
+    vehicle_no = cstr(vehicle_no or "").strip()
+    if not vehicle_no:
+        return ""
+
+    for filters in ({"license_plate": vehicle_no}, {"name": vehicle_no}):
+        try:
+            make = frappe.db.get_value("Vehicle", filters, "make")
+        except Exception:
+            make = ""
+        if make:
+            return cstr(make).strip()
+
+    return ""
+
+
 def _get_available_stock(item):
     """Return available stock qty for an item row.
 
@@ -520,6 +708,14 @@ def update_invoice(data):
         except Exception as e:
             frappe.log_error(f"Failed to create customer {customer_name}: {e}")
 
+    invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
+    invoice_doc.custom_vehicle_model = (
+        data.get("custom_vehicle_model")
+        or data.get("model")
+        or invoice_doc.get("custom_vehicle_model")
+        or ""
+    )
+
     # Store item name overrides for later application
     overrides = {d.idx: {"item_name": d.item_name} for d in invoice_doc.items}
 
@@ -802,6 +998,9 @@ def update_invoice(data):
     response["to_be_paid"] = flt(invoice_doc.rounded_total)
     response["total"] = flt(invoice_doc.total)
     response["net_total"] = flt(invoice_doc.net_total)
+    response["redeem_loyalty_points"] = flt(invoice_doc.get("redeem_loyalty_points") or 0)
+    response["redeemed_loyalty_points"] = flt(invoice_doc.get("redeemed_loyalty_points") or 0)
+    response["loyalty_amount"] = flt(invoice_doc.get("loyalty_amount") or 0)
     response["loyalty_discount_amount"] = flt(invoice_doc.loyalty_discount_amount)
     response["base_grand_total"] = flt(invoice_doc.base_grand_total)
     response["base_net_total"] = flt(invoice_doc.base_net_total)
@@ -971,6 +1170,14 @@ def submit_invoice(invoice, data):
         )
     )
     invoice_doc.update(invoice)
+    invoice_doc.custom_vehicle_make = _resolve_vehicle_make(invoice, invoice_doc)
+    invoice_doc.custom_vehicle_model = (
+        invoice_doc.get("custom_vehicle_model")
+        or invoice.get("custom_vehicle_model")
+        or invoice.get("model")
+        or ""
+    )
+
     invoice_doc.flags.ignore_permissions = True
     frappe.flags.ignore_account_permission = True
 
@@ -1120,6 +1327,7 @@ def submit_invoice(invoice, data):
         frappe.log_error(str(e), "POS Shift Ensure Error")
 
     invoice_doc = _clean_invoice_payments_before_submit(invoice_doc)
+    invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
     invoice_doc.save()
 
     # ============================================================
@@ -1187,6 +1395,7 @@ def submit_invoice(invoice, data):
                 )
             except Exception:
                 frappe.log_error(frappe.get_traceback(), "POS Submit GL Map Debug Failed")
+            invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
             invoice_doc.submit()
             frappe.log_error(
                 title="POS Debtors Debug",
@@ -1374,10 +1583,12 @@ def submit_in_background_job(kwargs):
     grand_total = f"\nGrand Total: {invoice_doc.grand_total}"
     items.append(grand_total)
 
+    invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
     invoice_doc.remarks = "\n".join(items)
     invoice_doc.save()
 
     _log_submit_debug(invoice_doc, label="submit_in_background_job.before_submit")
+    invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
     invoice_doc.submit()
     invoice_doc.reload()
     if flt((data or {}).get("redeemed_customer_credit") or 0) > 0:

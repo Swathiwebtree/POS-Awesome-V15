@@ -288,60 +288,51 @@
 
 							<!-- Available Loyalty Points Display (RIGHT SIDE - BELOW LOYALTY BUTTON) -->
 							<v-col cols="12" v-if="loyaltyPoints !== null && selectedCustomerId">
-								<v-card class="loyalty-points-display-card" elevation="2">
-									<v-card-text class="pa-3">
-										<v-row align="center" no-gutters>
-											<v-col cols="auto" class="mr-3">
-												<v-avatar color="purple" size="40">
-													<v-icon color="white" size="24">mdi-star</v-icon>
+								<v-card
+									:class="[
+										'loyalty-points-display-card',
+										{ 'loyalty-points-applied': hasAppliedLoyalty },
+									]"
+									elevation="2"
+								>
+									<v-card-text class="pa-2 loyalty-points-card-text">
+										<div class="loyalty-points-layout">
+											<div class="loyalty-points-main">
+												<v-avatar color="purple" size="34" class="loyalty-points-avatar">
+													<v-icon color="white" size="18">mdi-star</v-icon>
 												</v-avatar>
-											</v-col>
-											<v-col>
-												<p class="text-caption mb-0 text-grey-darken-1">
-													{{ __("Available Loyalty Points") }}
-												</p>
-												<p :class="['text-h6 font-weight-bold mb-0 text-purple']">
-													{{ formatFloat(loyaltyPoints, 0) }} pts
-												</p>
-											</v-col>
-											<v-col cols="auto" class="text-end">
-												<p
-													class="text-h6 font-weight-bold text-purple mb-0 loyalty-currency-value"
-												>
-													{{
-														formatCurrency(
-															loyaltyPoints * conversionFactor,
-															moneyPrecision,
-														)
-													}}
-													{{ displayCurrency }}
-												</p>
-											</v-col>
-										</v-row>
+												<div class="loyalty-points-copy">
+													<p class="text-caption mb-0 loyalty-points-label text-purple">
+														{{ __("Available Loyalty Points") }}
+													</p>
+													<div class="loyalty-points-values">
+														<span class="loyalty-points-amount text-purple">
+															{{ formatLoyaltyPoints(loyaltyPoints) }} pts
+														</span>
+														<span class="loyalty-points-divider text-purple">·</span>
+														<span class="loyalty-currency-value text-purple">
+															{{
+																formatCurrency(
+																	loyaltyPoints * conversionFactor,
+																	moneyPrecision,
+																)
+															}}
+															{{ displayCurrency }}
+														</span>
+													</div>
+												</div>
+											</div>
+											<div v-if="hasAppliedLoyalty" class="loyalty-applied-badge">
+												<span class="loyalty-applied-label">{{ __("Applied") }}</span>
+												<span class="loyalty-applied-values">
+													{{ formatLoyaltyPoints(stagedLoyaltyPoints) }} pts
+													·
+													{{ formatCurrency(stagedLoyaltyAmount, moneyPrecision) }}
+												</span>
+											</div>
+										</div>
 									</v-card-text>
 								</v-card>
-							</v-col>
-
-							<v-col cols="12" v-if="hasAppliedLoyalty">
-								<v-alert
-									color="purple"
-									variant="tonal"
-									density="comfortable"
-									class="mb-0"
-									icon="mdi-ticket-percent"
-								>
-									<div class="d-flex align-center justify-space-between flex-wrap ga-2">
-										<div>
-											<strong>{{ __("Loyalty Applied") }}</strong>
-											<span class="ml-2">
-												{{ formatFloat(stagedLoyaltyPoints, 0) }} pts
-											</span>
-										</div>
-										<div class="font-weight-bold">
-											{{ formatCurrency(stagedLoyaltyAmount, moneyPrecision) }}
-										</div>
-									</div>
-								</v-alert>
 							</v-col>
 
 							<!-- Item Group Bulk Discount Section -->
@@ -678,11 +669,11 @@
 							</v-col>
 
 							<!-- Cancel + Pay (Right Side, Highlighted) -->
-							<v-col cols="12">
-								<v-row dense class="summary-actions">
-									<v-col cols="6">
-										<v-btn
-											block
+								<v-col cols="12" class="summary-actions">
+									<v-row dense>
+										<v-col cols="6">
+											<v-btn
+												block
 											color="error"
 											theme="dark"
 											@click="handleCancelSale"
@@ -753,7 +744,7 @@
 								<v-col>
 									<p class="text-caption mb-1">{{ __("Available Points") }}</p>
 									<p class="text-h5 font-weight-bold mb-0">
-										{{ formatFloat(loyaltyPoints, 0) }} pts
+										{{ formatLoyaltyPoints(loyaltyPoints) }} pts
 									</p>
 								</v-col>
 								<v-col cols="auto">
@@ -789,7 +780,7 @@
 								<v-col cols="6">
 									<p class="text-caption mb-0 text-grey">{{ __("Points") }}</p>
 									<p class="text-subtitle-1 font-weight-bold mb-0">
-										{{ formatFloat(pointsToRedeem, 0) }} pts
+										{{ formatLoyaltyPoints(pointsToRedeem) }} pts
 									</p>
 								</v-col>
 								<v-col cols="6" class="text-right">
@@ -1080,6 +1071,7 @@ export default {
 			odometerReading: null,
 			odometerLoadLockUntil: 0,
 			vehicleNumber: "",
+			vehicleMake: "",
 			mobileNumber: "",
 
 			manualRoundApplied: false,
@@ -1259,7 +1251,10 @@ export default {
 		selectedCustomerId: {
 			handler(newVal) {
 				if (newVal) {
-					if (!this.restoreDraftLoyaltyState()) {
+					const draftSnapshot = this.getDraftLoyaltySnapshot();
+					if (draftSnapshot) {
+						this.applyLoyaltySnapshot(draftSnapshot, { lock: true });
+					} else if (!this.restoreDraftLoyaltyState()) {
 						this.loyaltySnapshotLocked = false;
 						this.fetchLoyaltyPoints();
 					}
@@ -1523,6 +1518,16 @@ export default {
 			const num = Number(value || 0);
 			return num.toFixed(this.decimalPrecision);
 		},
+		formatLoyaltyPoints(value) {
+			const num = Number(value || 0);
+			if (!Number.isFinite(num)) {
+				return "0";
+			}
+			return num.toLocaleString(undefined, {
+				minimumFractionDigits: 0,
+				maximumFractionDigits: 3,
+			});
+		},
 		handleAdditionalDiscountUpdate(value) {
 			this.$emit("update:additional_discount", value);
 		},
@@ -1552,6 +1557,7 @@ export default {
 				custom_odometer_reading: this.odometerReading,
 				contact_mobile: this.mobileNumber,
 				custom_vehicle_no: this.vehicleNumber,
+				custom_vehicle_make: this.vehicleMake,
 			};
 
 			this.eventBus.emit("update_odometer_data", odometerData);
@@ -1610,6 +1616,7 @@ export default {
 		clearOdometerFields() {
 			this.odometerReading = null;
 			this.vehicleNumber = "";
+			this.vehicleMake = "";
 			this.mobileNumber = "";
 			this.showOdometerField = false;
 		},
@@ -1667,9 +1674,9 @@ export default {
 		getDraftLoyaltySnapshot(data = null) {
 			const source = data || this.$parent?.invoice_doc || {};
 			if (!source || !this.selectedCustomerId) return null;
-			if (!data && !this.$parent?.loaded_draft_name) return null;
 
 			const hasStoredFields =
+				Object.prototype.hasOwnProperty.call(source, "custom_redeemed_loyalty_points") ||
 				Object.prototype.hasOwnProperty.call(source, "redeemed_loyalty_points") ||
 				Object.prototype.hasOwnProperty.call(source, "redeem_loyalty_points") ||
 				Object.prototype.hasOwnProperty.call(source, "loyalty_discount_amount") ||
@@ -1678,14 +1685,18 @@ export default {
 				Object.prototype.hasOwnProperty.call(source, "loyalty_points") ||
 				Object.prototype.hasOwnProperty.call(source, "available_loyalty_points");
 
-			const redeemedPoints = Number(
-				source.redeemed_loyalty_points ?? source.redeem_loyalty_points ?? 0,
-			);
-			const loyaltyAmount = Number(source.loyalty_discount_amount ?? source.loyalty_amount ?? 0);
+				const redeemedPoints = Number(
+					source.custom_redeemed_loyalty_points ??
+						source.redeemed_loyalty_points ??
+						source.redeem_loyalty_points ??
+						0,
+				);
+				const loyaltyAmount = Number(source.loyalty_discount_amount ?? source.loyalty_amount ?? 0);
+				const additionalDiscount = Number(source.additional_discount ?? source.discount_amount ?? loyaltyAmount ?? 0);
 
-			if (!hasStoredFields && !redeemedPoints && !loyaltyAmount) {
-				return null;
-			}
+				if (!hasStoredFields && !redeemedPoints && !loyaltyAmount) {
+					return null;
+				}
 
 			const availablePoints = Number(
 				source.available_loyalty_points ?? source.loyalty_points ?? redeemedPoints ?? 0,
@@ -1698,10 +1709,12 @@ export default {
 			return {
 				customer: source.customer || this.selectedCustomerId,
 				customer_name: source.customer_name || this.customerName || "",
-				redeemed_loyalty_points: redeemedPoints,
-				loyalty_discount_amount: loyaltyAmount,
-				loyalty_amount: Number(source.loyalty_amount ?? loyaltyAmount ?? 0),
-				loyalty_program: source.loyalty_program || null,
+				custom_redeemed_loyalty_points: redeemedPoints,
+					redeemed_loyalty_points: redeemedPoints,
+					loyalty_discount_amount: loyaltyAmount,
+					loyalty_amount: Number(source.loyalty_amount ?? loyaltyAmount ?? 0),
+					additional_discount: additionalDiscount,
+					loyalty_program: source.loyalty_program || null,
 				available_loyalty_points: availablePoints,
 				conversion_factor: Number(source.conversion_factor ?? derivedConversionFactor ?? 0),
 			};
@@ -1709,7 +1722,10 @@ export default {
 
 		applyLoyaltySnapshot(snapshot = {}, { lock = false } = {}) {
 			const redeemedPoints = Number(
-				snapshot.redeemed_loyalty_points ?? snapshot.redeem_loyalty_points ?? 0,
+				snapshot.custom_redeemed_loyalty_points ??
+					snapshot.redeemed_loyalty_points ??
+					snapshot.redeem_loyalty_points ??
+					0,
 			);
 			const loyaltyAmount = Number(snapshot.loyalty_discount_amount ?? snapshot.loyalty_amount ?? 0);
 			const availablePoints = Number(
@@ -1730,9 +1746,27 @@ export default {
 			this.pointsToRedeem = redeemedPoints;
 			this.loyaltySnapshotLocked = lock;
 
-			this.eventBus.emit("sync_loyalty_ui_state", {
-				available_points: availablePoints,
-				loyalty_program: snapshot.loyalty_program || null,
+			if (this.$parent?.invoice_doc) {
+				this.$parent.loyalty_redemption_points = redeemedPoints;
+				this.$parent.loyalty_redemption_amount = loyaltyAmount;
+				this.$parent.invoice_doc.custom_redeemed_loyalty_points = redeemedPoints;
+				this.$parent.invoice_doc.redeemed_loyalty_points = redeemedPoints;
+				this.$parent.invoice_doc.redeem_loyalty_points = redeemedPoints;
+				this.$parent.invoice_doc.loyalty_discount_amount = loyaltyAmount;
+				this.$parent.invoice_doc.loyalty_amount = Number(snapshot.loyalty_amount ?? loyaltyAmount ?? 0);
+				this.$parent.invoice_doc.loyalty_program = snapshot.loyalty_program || null;
+				this.$parent.invoice_doc.available_loyalty_points = availablePoints;
+				this.$parent.invoice_doc.loyalty_points = availablePoints;
+				this.$parent.invoice_doc.conversion_factor = conversionFactor;
+			}
+
+			if (Object.prototype.hasOwnProperty.call(snapshot, "additional_discount")) {
+				this.$emit("update:additional_discount", Number(snapshot.additional_discount || 0));
+			}
+
+				this.eventBus.emit("sync_loyalty_ui_state", {
+					available_points: availablePoints,
+					loyalty_program: snapshot.loyalty_program || null,
 			});
 		},
 
@@ -1744,7 +1778,7 @@ export default {
 		},
 
 		async fetchLoyaltyPoints() {
-			if (this.loyaltySnapshotLocked) {
+			if (this.loyaltySnapshotLocked || this.hasAppliedLoyalty) {
 				return;
 			}
 
@@ -1762,6 +1796,9 @@ export default {
 				});
 
 				if (response?.message) {
+					if (this.loyaltySnapshotLocked || this.hasAppliedLoyalty) {
+						return;
+					}
 					this.loyaltyPoints = response.message.loyalty_points || 0;
 					this.customerName = response.message.customer_name || "";
 					this.conversionFactor = response.message.conversion_factor || 0;
@@ -1912,8 +1949,6 @@ export default {
 					indicator: "green",
 					title: this.__("Redemption Staged"),
 				});
-
-				await this.fetchLoyaltyPoints();
 				this.pointsToRedeem = 0;
 				this.showLoyaltyDialog = false;
 			} catch (err) {
@@ -2660,6 +2695,7 @@ export default {
 			// Auto-populate mobile and vehicle from customer
 			this.mobileNumber = data.contact_mobile || "";
 			this.vehicleNumber = data.custom_vehicle_no || "";
+			this.vehicleMake = data.custom_vehicle_make || data.make || "";
 
 			// If odometer field is visible, emit the data immediately
 			if (this.showOdometerField) {
@@ -2757,6 +2793,33 @@ export default {
 	transform: translateY(-2px);
 }
 
+.loyalty-applied-badge {
+	flex: 0 0 auto;
+	margin-left: auto;
+	padding: 4px 10px;
+	border-radius: 12px;
+	background: rgba(156, 39, 176, 0.12);
+	border: 1px solid rgba(156, 39, 176, 0.24);
+	color: #7b1fa2;
+	font-size: 12px;
+	line-height: 1.15;
+	font-weight: 700;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	justify-content: center;
+	text-align: right;
+	gap: 2px;
+	white-space: normal;
+	overflow: hidden;
+	word-break: normal;
+	pointer-events: none;
+}
+
+.loyalty-points-applied {
+	box-shadow: 0 0 0 1px rgba(142, 36, 170, 0.15), 0 6px 16px rgba(142, 36, 170, 0.12) !important;
+}
+
 .text-purple {
 	color: #8e24aa !important;
 }
@@ -2828,7 +2891,7 @@ export default {
 
 .compact-summary {
 	height: 100%;
-	overflow-y: auto;
+	overflow-y: hidden;
 	overflow-x: hidden;
 	margin-top: 12px !important;
 	padding-top: 6px !important;
@@ -3027,7 +3090,7 @@ export default {
 }
 
 .summary-actions {
-	margin-top: 20px !important;
+	margin-top: 6px !important;
 }
 
 @media (max-width: 1366px) {
@@ -3528,5 +3591,98 @@ export default {
 
 :deep(.summary-field .v-field__overlay) {
 	opacity: 0 !important;
+}
+.loyalty-points-display-card {
+	min-height: 58px !important;
+}
+
+.loyalty-points-card-text {
+	padding: 6px 10px !important;
+	min-height: 58px;
+	position: relative;
+}
+
+.loyalty-points-layout {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 42px;
+	position: relative;
+	flex-wrap: nowrap;
+}
+
+.loyalty-points-main {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	flex: 1 1 auto;
+	max-width: calc(100% - 150px);
+}
+
+.loyalty-points-copy {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.loyalty-points-label {
+	line-height: 1.1;
+	font-weight: 700;
+}
+
+.loyalty-points-values {
+	display: flex;
+	align-items: baseline;
+	gap: 4px;
+	flex-wrap: nowrap;
+	min-width: 0;
+}
+
+.loyalty-points-amount,
+.loyalty-currency-value {
+	font-size: 0.9rem !important;
+	font-weight: 700;
+	line-height: 1.1;
+	white-space: nowrap;
+}
+
+.loyalty-points-divider {
+	font-weight: 700;
+}
+
+.loyalty-currency-value {
+	font-size: 0.84rem !important;
+}
+
+.loyalty-applied-badge {
+	min-width: 140px;
+	max-width: 54%;
+}
+
+.loyalty-applied-label {
+	font-size: 0.68rem;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	opacity: 0.85;
+}
+
+.loyalty-applied-values {
+	white-space: nowrap;
+}
+
+:deep(.v-theme--dark) .loyalty-applied-badge {
+	background: rgba(156, 39, 176, 0.18);
+	border-color: rgba(156, 39, 176, 0.34);
+	color: #e1bee7;
+}
+
+:deep(.v-theme--dark) .loyalty-points-label,
+:deep(.v-theme--dark) .loyalty-points-amount,
+:deep(.v-theme--dark) .loyalty-currency-value,
+:deep(.v-theme--dark) .loyalty-points-divider {
+	color: #d8b4fe !important;
 }
 </style>
