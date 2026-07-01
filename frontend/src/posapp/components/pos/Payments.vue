@@ -132,8 +132,16 @@
 													<div class="method-left">
 														<div class="method-logo-shell">
 															<img
-																v-if="getPaymentMethodImage(payment.mode_of_payment)"
-																:src="getPaymentMethodImage(payment.mode_of_payment)"
+																v-if="
+																	getPaymentMethodImage(
+																		payment.mode_of_payment,
+																	)
+																"
+																:src="
+																	getPaymentMethodImage(
+																		payment.mode_of_payment,
+																	)
+																"
 																:alt="payment.mode_of_payment"
 																class="payment-method-logo-img"
 															/>

@@ -334,19 +334,19 @@ export default {
 				sortable: false,
 				width: "140px",
 			},
-				{ title: __("Customer"), value: "customer", align: "start", sortable: true },
-				{ title: __("Date"), value: "posting_date", align: "start", sortable: true, width: "100px" },
-				{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
-				{
-					title: __("Modified"),
-					value: "modified",
-					align: "start",
-					sortable: true,
-					width: "0px",
-					headerProps: { class: "d-none" },
-					cellProps: { class: "d-none" },
-				},
-				{ title: __("Invoice"), value: "name", align: "start", sortable: true },
+			{ title: __("Customer"), value: "customer", align: "start", sortable: true },
+			{ title: __("Date"), value: "posting_date", align: "start", sortable: true, width: "100px" },
+			{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
+			{
+				title: __("Modified"),
+				value: "modified",
+				align: "start",
+				sortable: true,
+				width: "0px",
+				headerProps: { class: "d-none" },
+				cellProps: { class: "d-none" },
+			},
+			{ title: __("Invoice"), value: "name", align: "start", sortable: true },
 			{
 				title: __("Employee"),
 				value: "custom_service_employee",
@@ -682,7 +682,7 @@ export default {
 			return {
 				name: item.name,
 				modified: item.modified || "",
-                creation: item.creation || "",
+				creation: item.creation || "",
 				customer: item.customer || "",
 				customer_name: item.customer_name || "",
 				custom_display_name: item.custom_display_name || "",
@@ -762,7 +762,7 @@ export default {
 				if ((a.name || "") < (b.name || "")) return 1;
 				return 0;
 			});
-		}
+		},
 	},
 
 	created() {
@@ -813,7 +813,8 @@ export default {
 							invoice.custom_redeemed_loyalty_points ?? invoice.redeemed_loyalty_points ?? 0,
 						redeemed_loyalty_points: invoice.redeemed_loyalty_points ?? 0,
 						redeem_loyalty_points: invoice.redeem_loyalty_points ?? 0,
-						loyalty_discount_amount: invoice.loyalty_discount_amount ?? invoice.loyalty_amount ?? 0,
+						loyalty_discount_amount:
+							invoice.loyalty_discount_amount ?? invoice.loyalty_amount ?? 0,
 						loyalty_amount: invoice.loyalty_amount ?? invoice.loyalty_discount_amount ?? 0,
 						custom_odometer_reading: normalizedOdometer,
 						custom_has_oil_item: normalizedHasOilItem ? 1 : 0,

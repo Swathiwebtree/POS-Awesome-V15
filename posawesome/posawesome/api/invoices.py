@@ -1014,9 +1014,7 @@ def update_invoice(data):
     response["net_total"] = flt(invoice_doc.net_total)
     response["redeem_loyalty_points"] = flt(invoice_doc.get("redeem_loyalty_points") or 0)
     response["redeemed_loyalty_points"] = flt(invoice_doc.get("redeemed_loyalty_points") or 0)
-    response["custom_redeemed_loyalty_points"] = flt(
-        invoice_doc.get("custom_redeemed_loyalty_points") or 0
-    )
+    response["custom_redeemed_loyalty_points"] = flt(invoice_doc.get("custom_redeemed_loyalty_points") or 0)
     response["loyalty_amount"] = flt(invoice_doc.get("loyalty_amount") or 0)
     response["loyalty_discount_amount"] = flt(invoice_doc.loyalty_discount_amount)
     response["base_grand_total"] = flt(invoice_doc.base_grand_total)
