@@ -494,6 +494,7 @@ export default {
 			this.loyalty_redemption_customer = payload.customer || this.customer || "";
 
 			if (this.invoice_doc) {
+				this.invoice_doc.custom_redeemed_loyalty_points = this.loyalty_redemption_points;
 				this.invoice_doc.redeem_loyalty_points = this.loyalty_redemption_points;
 				this.invoice_doc.redeemed_loyalty_points = this.loyalty_redemption_points;
 				this.invoice_doc.loyalty_amount = this.loyalty_redemption_amount;
@@ -515,6 +516,7 @@ export default {
 			this.loyalty_redemption_customer = "";
 
 			if (this.invoice_doc) {
+				this.invoice_doc.custom_redeemed_loyalty_points = 0;
 				this.invoice_doc.redeem_loyalty_points = 0;
 				this.invoice_doc.redeemed_loyalty_points = 0;
 				this.invoice_doc.loyalty_amount = 0;
@@ -2866,6 +2868,12 @@ export default {
 						try {
 							const savedDraft = {
 								name: draft_name_to_update,
+								modified:
+									updResp.message?.modified ||
+									(frappe.datetime && frappe.datetime.now_datetime
+										? frappe.datetime.now_datetime()
+										: this.invoice_doc.modified || ""),
+								creation: updResp.message?.creation || this.invoice_doc.creation || "",
 								customer: this.invoice_doc.customer,
 								posting_date: this.invoice_doc.posting_date,
 								posting_time: this.invoice_doc.posting_time || null,
@@ -2935,6 +2943,8 @@ export default {
 						try {
 							const savedDraft = {
 								name: saved_doc.name,
+								modified: saved_doc.modified || saved_doc.creation || "",
+								creation: saved_doc.creation || "",
 								customer: saved_doc.customer || this.invoice_doc.customer,
 								posting_date: saved_doc.posting_date || this.invoice_doc.posting_date,
 								posting_time: saved_doc.posting_time || this.invoice_doc.posting_time || null,

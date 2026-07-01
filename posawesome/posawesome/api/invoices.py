@@ -722,6 +722,13 @@ def update_invoice(data):
     invoice_doc.custom_vehicle_model = (
         data.get("custom_vehicle_model") or data.get("model") or invoice_doc.get("custom_vehicle_model") or ""
     )
+    invoice_doc.custom_redeemed_loyalty_points = flt(
+        data.get("custom_redeemed_loyalty_points")
+        or invoice_doc.get("custom_redeemed_loyalty_points")
+        or data.get("redeemed_loyalty_points")
+        or data.get("redeem_loyalty_points")
+        or 0
+    )
 
     # Store item name overrides for later application
     overrides = {d.idx: {"item_name": d.item_name} for d in invoice_doc.items}
@@ -1007,6 +1014,9 @@ def update_invoice(data):
     response["net_total"] = flt(invoice_doc.net_total)
     response["redeem_loyalty_points"] = flt(invoice_doc.get("redeem_loyalty_points") or 0)
     response["redeemed_loyalty_points"] = flt(invoice_doc.get("redeemed_loyalty_points") or 0)
+    response["custom_redeemed_loyalty_points"] = flt(
+        invoice_doc.get("custom_redeemed_loyalty_points") or 0
+    )
     response["loyalty_amount"] = flt(invoice_doc.get("loyalty_amount") or 0)
     response["loyalty_discount_amount"] = flt(invoice_doc.loyalty_discount_amount)
     response["base_grand_total"] = flt(invoice_doc.base_grand_total)
@@ -1184,6 +1194,13 @@ def submit_invoice(invoice, data):
         or invoice.get("model")
         or ""
     )
+    invoice_doc.custom_redeemed_loyalty_points = flt(
+        invoice.get("custom_redeemed_loyalty_points")
+        or invoice_doc.get("custom_redeemed_loyalty_points")
+        or invoice.get("redeemed_loyalty_points")
+        or invoice.get("redeem_loyalty_points")
+        or 0
+    )
 
     invoice_doc.flags.ignore_permissions = True
     frappe.flags.ignore_account_permission = True
@@ -1335,6 +1352,13 @@ def submit_invoice(invoice, data):
 
     invoice_doc = _clean_invoice_payments_before_submit(invoice_doc)
     invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
+    invoice_doc.custom_redeemed_loyalty_points = flt(
+        data.get("custom_redeemed_loyalty_points")
+        or invoice_doc.get("custom_redeemed_loyalty_points")
+        or data.get("redeemed_loyalty_points")
+        or data.get("redeem_loyalty_points")
+        or 0
+    )
     invoice_doc.save()
 
     # ============================================================
@@ -1403,6 +1427,13 @@ def submit_invoice(invoice, data):
             except Exception:
                 frappe.log_error(frappe.get_traceback(), "POS Submit GL Map Debug Failed")
             invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
+            invoice_doc.custom_redeemed_loyalty_points = flt(
+                data.get("custom_redeemed_loyalty_points")
+                or invoice_doc.get("custom_redeemed_loyalty_points")
+                or data.get("redeemed_loyalty_points")
+                or data.get("redeem_loyalty_points")
+                or 0
+            )
             invoice_doc.submit()
             frappe.log_error(
                 title="POS Debtors Debug",
@@ -1592,10 +1623,24 @@ def submit_in_background_job(kwargs):
 
     invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
     invoice_doc.remarks = "\n".join(items)
+    invoice_doc.custom_redeemed_loyalty_points = flt(
+        data.get("custom_redeemed_loyalty_points")
+        or invoice_doc.get("custom_redeemed_loyalty_points")
+        or data.get("redeemed_loyalty_points")
+        or data.get("redeem_loyalty_points")
+        or 0
+    )
     invoice_doc.save()
 
     _log_submit_debug(invoice_doc, label="submit_in_background_job.before_submit")
     invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
+    invoice_doc.custom_redeemed_loyalty_points = flt(
+        data.get("custom_redeemed_loyalty_points")
+        or invoice_doc.get("custom_redeemed_loyalty_points")
+        or data.get("redeemed_loyalty_points")
+        or data.get("redeem_loyalty_points")
+        or 0
+    )
     invoice_doc.submit()
     invoice_doc.reload()
     if flt((data or {}).get("redeemed_customer_credit") or 0) > 0:

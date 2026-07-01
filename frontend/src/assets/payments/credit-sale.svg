@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs><filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".12"/></filter></defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#fff" filter="url(#s)"/>
+  <rect x="16" y="17" width="26" height="22" rx="3" fill="#f44343"/><path d="M21 23h14M21 30h10" stroke="#fff" stroke-width="3" stroke-linecap="round"/><circle cx="43" cy="39" r="10" fill="#fff" stroke="#f44343" stroke-width="3"/><path d="M43 33v7l5 3" stroke="#f44343" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>

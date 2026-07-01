@@ -4,6 +4,7 @@
 			<v-data-table
 				:headers="headers"
 				:items="dialog_data"
+				:sort-by="[{ key: 'modified', order: 'desc' }]"
 				item-value="name"
 				class="elevation-0 drafts-table"
 				:theme="isDarkTheme ? 'dark' : 'light'"
@@ -29,6 +30,9 @@
 					<span class="text-caption">{{
 						item.posting_time ? item.posting_time.split(".")[0] : ""
 					}}</span>
+				</template>
+				<template v-slot:item.modified="{ item }">
+					<span class="d-none">{{ item.modified }}</span>
 				</template>
 
 				<!-- Mobile -->
@@ -162,6 +166,7 @@
 								<v-data-table
 									:headers="headers"
 									:items="dialog_data"
+									:sort-by="[{ key: 'modified', order: 'desc' }]"
 									item-value="name"
 									class="elevation-0"
 									:theme="isDarkTheme ? 'dark' : 'light'"
@@ -191,6 +196,9 @@
 											item.posting_time ? item.posting_time.split(".")[0] : ""
 										}}</span></template
 									>
+									<template v-slot:item.modified="{ item }">
+										<span class="d-none">{{ item.modified }}</span>
+									</template>
 
 									<template v-slot:item.name="{ item }">
 										<div class="d-flex align-center">
@@ -326,10 +334,19 @@ export default {
 				sortable: false,
 				width: "140px",
 			},
-			{ title: __("Customer"), value: "customer", align: "start", sortable: true },
-			{ title: __("Date"), value: "posting_date", align: "start", sortable: true, width: "100px" },
-			{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
-			{ title: __("Invoice"), value: "name", align: "start", sortable: true },
+				{ title: __("Customer"), value: "customer", align: "start", sortable: true },
+				{ title: __("Date"), value: "posting_date", align: "start", sortable: true, width: "100px" },
+				{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
+				{
+					title: __("Modified"),
+					value: "modified",
+					align: "start",
+					sortable: true,
+					width: "0px",
+					headerProps: { class: "d-none" },
+					cellProps: { class: "d-none" },
+				},
+				{ title: __("Invoice"), value: "name", align: "start", sortable: true },
 			{
 				title: __("Employee"),
 				value: "custom_service_employee",
@@ -429,6 +446,8 @@ export default {
 				filters: { docstatus: 0, company: "webtree", pos_profile: "pos" },
 				fields: [
 					"name",
+					"modified",
+					"creation",
 					"customer",
 					"customer_name",
 					"custom_display_name",
@@ -662,6 +681,8 @@ export default {
 
 			return {
 				name: item.name,
+				modified: item.modified || "",
+                creation: item.creation || "",
 				customer: item.customer || "",
 				customer_name: item.customer_name || "",
 				custom_display_name: item.custom_display_name || "",
@@ -732,15 +753,16 @@ export default {
 
 		_sortByDateTime(arr) {
 			return arr.slice().sort((a, b) => {
-				const da = `${a.posting_date || ""} ${a.posting_time || ""}`.trim();
-				const db = `${b.posting_date || ""} ${b.posting_time || ""}`.trim();
-				if (da > db) return -1;
-				if (da < db) return 1;
+				const ma = a.modified || a.creation || `${a.posting_date || ""} ${a.posting_time || ""}`;
+				const mb = b.modified || b.creation || `${b.posting_date || ""} ${b.posting_time || ""}`;
+
+				if (ma > mb) return -1;
+				if (ma < mb) return 1;
 				if ((a.name || "") > (b.name || "")) return -1;
 				if ((a.name || "") < (b.name || "")) return 1;
 				return 0;
 			});
-		},
+		}
 	},
 
 	created() {
@@ -787,13 +809,22 @@ export default {
 						invoice_name: invoice.name || "",
 						contact_mobile: invoice.contact_mobile || "",
 						custom_vehicle_no: invoice.custom_vehicle_no || "",
+						custom_redeemed_loyalty_points:
+							invoice.custom_redeemed_loyalty_points ?? invoice.redeemed_loyalty_points ?? 0,
+						redeemed_loyalty_points: invoice.redeemed_loyalty_points ?? 0,
+						redeem_loyalty_points: invoice.redeem_loyalty_points ?? 0,
+						loyalty_discount_amount: invoice.loyalty_discount_amount ?? invoice.loyalty_amount ?? 0,
+						loyalty_amount: invoice.loyalty_amount ?? invoice.loyalty_discount_amount ?? 0,
 						custom_odometer_reading: normalizedOdometer,
 						custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
 						allow_vehicle_fallback: false,
 					});
 
 					const redeemedPoints = Number(
-						invoice.redeemed_loyalty_points ?? invoice.redeem_loyalty_points ?? 0,
+						invoice.custom_redeemed_loyalty_points ??
+							invoice.redeemed_loyalty_points ??
+							invoice.redeem_loyalty_points ??
+							0,
 					);
 					const loyaltyAmount = Number(
 						invoice.loyalty_discount_amount ?? invoice.loyalty_amount ?? 0,
@@ -803,6 +834,7 @@ export default {
 						this.eventBus.emit("restore_loyalty_ui_state", {
 							customer: invoice.customer,
 							customer_name: invoice.customer_name || invoice.customer,
+							custom_redeemed_loyalty_points: redeemedPoints,
 							redeemed_loyalty_points: redeemedPoints,
 							redeem_loyalty_points: redeemedPoints,
 							loyalty_discount_amount: loyaltyAmount,

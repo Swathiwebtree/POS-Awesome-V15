@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs><filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".12"/></filter></defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#fff" filter="url(#s)"/>
+  <text x="11" y="31" font-family="Arial Black,Arial" font-size="18" fill="#6d2c91">eazy</text><rect x="19" y="34" width="28" height="13" rx="1" fill="#1bb8a9"/><text x="22" y="45" font-family="Arial Black,Arial" font-size="11" fill="#fff">PAY</text>
+</svg>

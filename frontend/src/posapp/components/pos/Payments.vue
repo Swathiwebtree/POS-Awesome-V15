@@ -74,13 +74,22 @@
 											:class="{ active: is_credit_sale }"
 										>
 											<div class="method-left">
-												<v-icon
-													size="26"
-													:color="is_credit_sale ? 'success' : 'grey'"
-												>
-													mdi-credit-card-clock
-												</v-icon>
-												<div>
+												<div class="method-logo-shell">
+													<img
+														v-if="getPaymentMethodImage('Credit Sale')"
+														:src="getPaymentMethodImage('Credit Sale')"
+														:alt="__('Credit Sale')"
+														class="payment-method-logo-img"
+													/>
+													<v-icon
+														v-else
+														size="24"
+														:color="is_credit_sale ? 'success' : 'grey'"
+													>
+														mdi-credit-card
+													</v-icon>
+												</div>
+												<div class="method-copy">
 													<div class="method-title">Credit Sale</div>
 													<div class="method-amount">
 														Amount will be added to customer credit
@@ -121,17 +130,19 @@
 													@click.stop
 												>
 													<div class="method-left">
-														<v-icon size="26" color="primary">
-															{{
-																payment.mode_of_payment
-																	.toLowerCase()
-																	.includes("cash")
-																	? "mdi-cash"
-																	: "mdi-credit-card"
-															}}
-														</v-icon>
+														<div class="method-logo-shell">
+															<img
+																v-if="getPaymentMethodImage(payment.mode_of_payment)"
+																:src="getPaymentMethodImage(payment.mode_of_payment)"
+																:alt="payment.mode_of_payment"
+																class="payment-method-logo-img"
+															/>
+															<v-icon v-else size="24" color="primary">
+																mdi-credit-card
+															</v-icon>
+														</div>
 
-														<div>
+														<div class="method-copy">
 															<div class="method-title">
 																{{ payment.mode_of_payment }}
 															</div>
@@ -884,6 +895,27 @@ import {
 
 import renderOfflineInvoiceHTML from "../../../offline_print_template";
 import { silentPrint } from "../../plugins/print.js";
+import cash from "../../../assets/payments/cash.svg";
+import benefitPay from "../../../assets/payments/benefit-pay.svg";
+import creditCard from "../../../assets/payments/credit-card.svg";
+import credimax from "../../../assets/payments/credimax.svg";
+import eazyPay from "../../../assets/payments/eazy-pay.svg";
+import bankDraft from "../../../assets/payments/bank-draft.svg";
+import cheque from "../../../assets/payments/cheque.svg";
+import onAccount from "../../../assets/payments/on-account.svg";
+import creditSale from "../../../assets/payments/credit-sale.svg";
+
+const paymentMethodImages = {
+	Cash: cash,
+	"Benefit Pay": benefitPay,
+	"Credit Card": creditCard,
+	Credimax: credimax,
+	"Eazy Pay": eazyPay,
+	"Bank Draft": bankDraft,
+	Cheque: cheque,
+	"On Account": onAccount,
+	"Credit Sale": creditSale,
+};
 
 export default {
 	// Using format mixin for shared formatting methods
@@ -1272,6 +1304,21 @@ export default {
 		},
 	},
 	methods: {
+		getPaymentMethodImage(paymentMethod) {
+			if (!paymentMethod) {
+				return null;
+			}
+			const key = String(paymentMethod).trim();
+			if (paymentMethodImages[key]) {
+				return paymentMethodImages[key];
+			}
+			const normalizedKey = key.toLowerCase();
+			const matchedKey = Object.keys(paymentMethodImages).find(
+				(name) => name.toLowerCase() === normalizedKey,
+			);
+			return matchedKey ? paymentMethodImages[matchedKey] : null;
+		},
+
 		isCarWashServiceItem(item) {
 			if (!item) {
 				return false;
@@ -4180,14 +4227,14 @@ export default {
 .payment-methods-grid {
 	display: grid;
 	grid-template-columns: 1fr;
-	gap: 4px;
+	gap: 3px;
 }
 
 /* Tighten cards */
 .payment-method-card {
 	width: 100%;
-	padding: 6px 8px;
-	min-height: 36px;
+	padding: 5px 8px;
+	min-height: 50px;
 }
 
 .method-title {
@@ -4196,7 +4243,7 @@ export default {
 }
 
 .method-input {
-	max-width: 70px;
+	max-width: 96px;
 }
 
 /* Icon Animations */
@@ -4719,22 +4766,31 @@ div.v-card.selection {
 }
 
 .payment-method-card {
-	min-height: 36px;
+	min-height: 58px;
 	padding: 6px 8px;
-	border-radius: 8px;
+	border-radius: 12px;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	gap: 8px;
+	border: 1px solid #e5e7eb;
+	background: #ffffff;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+	transition:
+		transform 0.18s ease,
+		box-shadow 0.18s ease,
+		border-color 0.18s ease;
 }
 
 .payment-method-card:hover {
-	background: #f0f7ff;
-	border-color: #2563eb;
+	transform: translateY(-1px);
+	border-color: #d1d5db;
+	box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
 }
 
 .payment-method-card.active {
-	border-color: #16a34a;
-	background: #f0fdf4;
+	border-color: #d1d5db;
+	background: #ffffff;
 }
 
 .payment-method-card.disabled {
@@ -4747,39 +4803,89 @@ div.v-card.selection {
 	align-items: center;
 	gap: 8px;
 	flex: 1;
+	min-width: 0;
+}
+
+.method-logo-shell {
+	width: 28px;
+	height: 28px;
+	border-radius: 7px;
+	background: #ffffff;
+	box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 28px;
+	overflow: hidden;
+}
+
+.payment-method-logo-img {
+	width: 100%;
+	height: 100%;
+	display: block;
+	object-fit: contain;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+.method-copy {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
 }
 
 .method-title {
-	font-size: 11px;
-	font-weight: 600;
+	font-size: 12px;
+	font-weight: 700;
+	color: #0f172a;
+	line-height: 1.2;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
-.payment-method-card .v-icon {
-	font-size: 16px !important;
+.method-logo-shell .v-icon {
+	font-size: 14px !important;
 }
 
 .method-amount {
-	font-size: 11px;
-	color: #6b7280;
-	display: none;
+	font-size: 9px;
+	color: #94a3b8;
+	margin-top: 1px;
+	line-height: 1.2;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .method-input {
-	min-width: 120px;
-	max-width: 140px;
+	min-width: 84px;
+	max-width: 96px;
 }
 .method-input :deep(.v-field) {
-	min-height: 28px !important;
+	min-height: 32px !important;
+	border-radius: 10px !important;
+	background: #f8fafc !important;
+	box-shadow: inset 0 0 0 1px #e5e7eb;
 }
 .method-input :deep(input) {
-	font-size: 14px;
-	padding: 2px 8px;
+	font-size: 12px;
+	font-weight: 700;
+	padding: 0 6px;
 	text-align: left;
 }
 .method-input :deep(.v-field__prefix) {
 	margin-right: 6px;
-	font-size: 11px;
+	font-size: 10px;
 	white-space: nowrap;
+}
+
+.credit-sale-card .method-title {
+	font-size: 12px;
+}
+
+.credit-sale-card .method-amount {
+	color: #94a3b8;
 }
 .payment-summary-row {
 	margin-bottom: 8px;
@@ -4881,9 +4987,9 @@ div.v-card.selection {
 	font-size: clamp(12px, 0.9vw, 13px);
 }
 .payment-left-column {
-	max-height: calc(90vh - 130px); /* header + summary + footer */
+	max-height: calc(90vh - 118px); /* header + summary + footer */
 	overflow-y: auto;
-	padding-right: 6px;
+	padding-right: 4px;
 }
 
 /* smooth scrollbar */
