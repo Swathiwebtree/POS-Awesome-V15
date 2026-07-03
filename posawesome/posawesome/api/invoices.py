@@ -261,6 +261,83 @@ def _resolve_vehicle_make(data=None, invoice_doc=None):
     return ""
 
 
+def _normalize_discount_state(invoice_doc, data=None):
+    """Keep only one active discount path on the invoice."""
+    data = data or {}
+
+    custom_redeemed_loyalty_points = flt(
+        data.get("custom_redeemed_loyalty_points")
+        or invoice_doc.get("custom_redeemed_loyalty_points")
+        or data.get("redeemed_loyalty_points")
+        or data.get("redeem_loyalty_points")
+        or 0
+    )
+    loyalty_discount_amount = flt(
+        data.get("loyalty_discount_amount")
+        or data.get("loyalty_amount")
+        or invoice_doc.get("loyalty_discount_amount")
+        or invoice_doc.get("loyalty_amount")
+        or 0
+    )
+    redeemed_coupon_amount = flt(
+        data.get("redeemed_coupon_amount") or invoice_doc.get("redeemed_coupon_amount") or 0
+    )
+    redeemed_offer_amount = flt(
+        data.get("redeemed_offer_amount") or invoice_doc.get("redeemed_offer_amount") or 0
+    )
+    additional_discount = flt(
+        data.get("additional_discount") or invoice_doc.get("additional_discount") or 0
+    )
+    discount_amount = flt(data.get("discount_amount") or invoice_doc.get("discount_amount") or 0)
+
+    active_type = None
+    active_amount = additional_discount or discount_amount
+
+    if custom_redeemed_loyalty_points > 0 or loyalty_discount_amount > 0:
+        active_type = "loyalty"
+        active_amount = loyalty_discount_amount or additional_discount or discount_amount
+        invoice_doc.custom_redeemed_loyalty_points = custom_redeemed_loyalty_points
+        invoice_doc.redeemed_loyalty_points = custom_redeemed_loyalty_points
+        invoice_doc.redeem_loyalty_points = custom_redeemed_loyalty_points
+        invoice_doc.loyalty_amount = active_amount
+        invoice_doc.loyalty_discount_amount = active_amount
+        invoice_doc.redeemed_coupon_amount = 0
+        invoice_doc.redeemed_offer_amount = 0
+    elif redeemed_coupon_amount > 0:
+        active_type = "coupon"
+        active_amount = redeemed_coupon_amount or additional_discount or discount_amount
+        invoice_doc.custom_redeemed_loyalty_points = 0
+        invoice_doc.redeemed_loyalty_points = 0
+        invoice_doc.redeem_loyalty_points = 0
+        invoice_doc.loyalty_amount = 0
+        invoice_doc.loyalty_discount_amount = 0
+        invoice_doc.redeemed_coupon_amount = active_amount
+        invoice_doc.redeemed_offer_amount = 0
+    elif redeemed_offer_amount > 0:
+        active_type = "offer"
+        active_amount = redeemed_offer_amount or additional_discount or discount_amount
+        invoice_doc.custom_redeemed_loyalty_points = 0
+        invoice_doc.redeemed_loyalty_points = 0
+        invoice_doc.redeem_loyalty_points = 0
+        invoice_doc.loyalty_amount = 0
+        invoice_doc.loyalty_discount_amount = 0
+        invoice_doc.redeemed_coupon_amount = 0
+        invoice_doc.redeemed_offer_amount = active_amount
+    else:
+        invoice_doc.custom_redeemed_loyalty_points = 0
+        invoice_doc.redeemed_loyalty_points = 0
+        invoice_doc.redeem_loyalty_points = 0
+        invoice_doc.loyalty_amount = 0
+        invoice_doc.loyalty_discount_amount = 0
+        invoice_doc.redeemed_coupon_amount = 0
+        invoice_doc.redeemed_offer_amount = 0
+
+    invoice_doc.discount_amount = active_amount
+    invoice_doc.additional_discount = active_amount
+
+    return active_type
+
+
 def _get_available_stock(item):
     """Return available stock qty for an item row.
 
@@ -722,13 +799,7 @@ def update_invoice(data):
     invoice_doc.custom_vehicle_model = (
         data.get("custom_vehicle_model") or data.get("model") or invoice_doc.get("custom_vehicle_model") or ""
     )
-    invoice_doc.custom_redeemed_loyalty_points = flt(
-        data.get("custom_redeemed_loyalty_points")
-        or invoice_doc.get("custom_redeemed_loyalty_points")
-        or data.get("redeemed_loyalty_points")
-        or data.get("redeem_loyalty_points")
-        or 0
-    )
+    _normalize_discount_state(invoice_doc, data)
 
     # Store item name overrides for later application
     overrides = {d.idx: {"item_name": d.item_name} for d in invoice_doc.items}
@@ -1014,7 +1085,11 @@ def update_invoice(data):
     response["net_total"] = flt(invoice_doc.net_total)
     response["redeem_loyalty_points"] = flt(invoice_doc.get("redeem_loyalty_points") or 0)
     response["redeemed_loyalty_points"] = flt(invoice_doc.get("redeemed_loyalty_points") or 0)
-    response["custom_redeemed_loyalty_points"] = flt(invoice_doc.get("custom_redeemed_loyalty_points") or 0)
+    response["custom_redeemed_loyalty_points"] = flt(
+        invoice_doc.get("custom_redeemed_loyalty_points") or 0
+    )
+    response["redeemed_coupon_amount"] = flt(invoice_doc.get("redeemed_coupon_amount") or 0)
+    response["redeemed_offer_amount"] = flt(invoice_doc.get("redeemed_offer_amount") or 0)
     response["loyalty_amount"] = flt(invoice_doc.get("loyalty_amount") or 0)
     response["loyalty_discount_amount"] = flt(invoice_doc.loyalty_discount_amount)
     response["base_grand_total"] = flt(invoice_doc.base_grand_total)
@@ -1199,6 +1274,12 @@ def submit_invoice(invoice, data):
         or invoice.get("redeem_loyalty_points")
         or 0
     )
+    invoice_doc.redeemed_coupon_amount = flt(
+        invoice.get("redeemed_coupon_amount") or invoice_doc.get("redeemed_coupon_amount") or 0
+    )
+    invoice_doc.redeemed_offer_amount = flt(
+        invoice.get("redeemed_offer_amount") or invoice_doc.get("redeemed_offer_amount") or 0
+    )
 
     invoice_doc.flags.ignore_permissions = True
     frappe.flags.ignore_account_permission = True
@@ -1350,13 +1431,7 @@ def submit_invoice(invoice, data):
 
     invoice_doc = _clean_invoice_payments_before_submit(invoice_doc)
     invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
-    invoice_doc.custom_redeemed_loyalty_points = flt(
-        data.get("custom_redeemed_loyalty_points")
-        or invoice_doc.get("custom_redeemed_loyalty_points")
-        or data.get("redeemed_loyalty_points")
-        or data.get("redeem_loyalty_points")
-        or 0
-    )
+    _normalize_discount_state(invoice_doc, data)
     invoice_doc.save()
 
     # ============================================================
@@ -1431,6 +1506,12 @@ def submit_invoice(invoice, data):
                 or data.get("redeemed_loyalty_points")
                 or data.get("redeem_loyalty_points")
                 or 0
+            )
+            invoice_doc.redeemed_coupon_amount = flt(
+                data.get("redeemed_coupon_amount") or invoice_doc.get("redeemed_coupon_amount") or 0
+            )
+            invoice_doc.redeemed_offer_amount = flt(
+                data.get("redeemed_offer_amount") or invoice_doc.get("redeemed_offer_amount") or 0
             )
             invoice_doc.submit()
             frappe.log_error(
@@ -1628,6 +1709,12 @@ def submit_in_background_job(kwargs):
         or data.get("redeem_loyalty_points")
         or 0
     )
+    invoice_doc.redeemed_coupon_amount = flt(
+        data.get("redeemed_coupon_amount") or invoice_doc.get("redeemed_coupon_amount") or 0
+    )
+    invoice_doc.redeemed_offer_amount = flt(
+        data.get("redeemed_offer_amount") or invoice_doc.get("redeemed_offer_amount") or 0
+    )
     invoice_doc.save()
 
     _log_submit_debug(invoice_doc, label="submit_in_background_job.before_submit")
@@ -1638,6 +1725,12 @@ def submit_in_background_job(kwargs):
         or data.get("redeemed_loyalty_points")
         or data.get("redeem_loyalty_points")
         or 0
+    )
+    invoice_doc.redeemed_coupon_amount = flt(
+        data.get("redeemed_coupon_amount") or invoice_doc.get("redeemed_coupon_amount") or 0
+    )
+    invoice_doc.redeemed_offer_amount = flt(
+        data.get("redeemed_offer_amount") or invoice_doc.get("redeemed_offer_amount") or 0
     )
     invoice_doc.submit()
     invoice_doc.reload()

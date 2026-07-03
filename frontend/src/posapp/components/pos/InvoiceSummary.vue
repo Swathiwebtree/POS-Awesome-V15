@@ -99,11 +99,6 @@
 													<v-icon v-else color="white">mdi-account</v-icon>
 												</v-avatar>
 											</template>
-											<template v-slot:subtitle>
-												<span class="text-caption">
-													{{ buildEmployeeSubtitle(item.raw) }}
-												</span>
-											</template>
 										</v-list-item>
 									</template>
 									<template v-slot:selection="{ item }">
@@ -116,16 +111,6 @@
 											</span>
 											<span v-else class="employee-selection-placeholder">
 												{{ __("Select Service Employee") }}
-											</span>
-											<span
-												v-if="selectedEmployeeDetails"
-												class="employee-selection-id"
-											>
-												({{
-													selectedEmployeeDetails.custom_employee_id ||
-													selectedEmployeeDetails.employee_id ||
-													selectedEmployeeDetails.name
-												}})
 											</span>
 										</div>
 									</template>
@@ -173,7 +158,8 @@
 									:disabled="
 										!pos_profile ||
 										!pos_profile.posa_allow_user_to_edit_additional_discount ||
-										!!discount_percentage_offer_name
+										!!discount_percentage_offer_name ||
+										isDiscountLocked
 									"
 									class="summary-field"
 								/>
@@ -194,7 +180,8 @@
 									color="warning"
 									:disabled="
 										!pos_profile.posa_allow_user_to_edit_additional_discount ||
-										!!discount_percentage_offer_name
+										!!discount_percentage_offer_name ||
+										isDiscountLocked
 									"
 									class="summary-field"
 								/>
@@ -273,17 +260,28 @@
 
 							<!-- Loyalty Points Button -->
 							<v-col cols="6">
-								<v-btn
-									block
-									color="purple"
-									theme="dark"
-									prepend-icon="mdi-star"
-									@click="handleLoyaltyPoints"
-									class="summary-btn"
-									:loading="loyaltyLoading"
+								<v-tooltip
+									location="top"
+									:text="discountConflictMessage"
+									:disabled="!isLoyaltyButtonDisabled"
 								>
-									{{ __("LOYALTY POINTS") }}
-								</v-btn>
+									<template #activator="{ props }">
+										<span v-bind="props" class="discount-lock-activator">
+											<v-btn
+												block
+												color="purple"
+												theme="dark"
+												prepend-icon="mdi-star"
+												@click="handleLoyaltyPoints"
+												class="summary-btn"
+												:loading="loyaltyLoading"
+												:disabled="isLoyaltyButtonDisabled"
+											>
+												{{ __("LOYALTY POINTS") }}
+											</v-btn>
+										</span>
+									</template>
+								</v-tooltip>
 							</v-col>
 
 							<!-- Available Loyalty Points Display (RIGHT SIDE - BELOW LOYALTY BUTTON) -->
@@ -779,6 +777,7 @@
 							]"
 							:hint="__('Enter points to redeem for a discount')"
 							persistent-hint
+							:disabled="isLoyaltyInputDisabled"
 						/>
 
 						<!-- Redemption Preview -->
@@ -815,7 +814,7 @@
 					<v-btn
 						color="purple"
 						variant="flat"
-						:disabled="!isValidRedemption || redeemLoading"
+						:disabled="!isValidRedemption || redeemLoading || isLoyaltyInputDisabled"
 						:loading="redeemLoading"
 						@click="handleRedeemPoints"
 					>
@@ -1033,6 +1032,14 @@ export default {
 		offersCount: [Number, String],
 		couponsCount: [Number, String],
 		items_view: String,
+		activeDiscountType: {
+			type: String,
+			default: null,
+		},
+		activeDiscountMessage: {
+			type: String,
+			default: "",
+		},
 	},
 	data() {
 		return {
@@ -1059,6 +1066,10 @@ export default {
 			applyingCard: false,
 			showFrequentCardsDialog: false,
 			frequentCardsLoading: false,
+			discountConflictState: {
+				activeType: null,
+				message: "",
+			},
 
 			employees: [],
 			allEmployees: [],
@@ -1230,6 +1241,21 @@ export default {
 				this.conversionFactor > 0
 			);
 		},
+		isDiscountLocked() {
+			return !!this.sharedActiveDiscountType;
+		},
+		isLoyaltyButtonDisabled() {
+			return !!this.sharedActiveDiscountType && this.sharedActiveDiscountType !== "loyalty";
+		},
+		isLoyaltyInputDisabled() {
+			return !!this.sharedActiveDiscountType && this.sharedActiveDiscountType !== "loyalty";
+		},
+		discountConflictMessage() {
+			return this.activeDiscountMessage || this.discountConflictState.message || "";
+		},
+		sharedActiveDiscountType() {
+			return this.activeDiscountType || this.discountConflictState.activeType || null;
+		},
 		hasCompletedCards() {
 			return this.frequentCards.some((card) => card.visits >= card.required_visits && !card.is_expired);
 		},
@@ -1309,6 +1335,12 @@ export default {
 		},
 	},
 	methods: {
+		updateDiscountConflictState(payload = {}) {
+			this.discountConflictState = {
+				activeType: payload.activeType || null,
+				message: payload.message || "",
+			};
+		},
 		getAutoRoundedBase() {
 			return this.roundByLastTwoDecimals(this.subtotal || 0);
 		},
@@ -1609,6 +1641,25 @@ export default {
 			}
 			this.closeEmployeeDropdown();
 		},
+
+		hasSelectedVehicle() {
+			return Boolean(
+				String(
+					this.vehicleNumber ||
+						this.$parent?.custom_vehicle_no ||
+						this.$parent?.invoice_doc?.custom_vehicle_no ||
+						"",
+				).trim(),
+			);
+		},
+
+		showVehicleSelectionAlert() {
+			frappe.show_alert({
+				message: this.__("Please select the vehicle"),
+				indicator: "warning",
+			});
+		},
+
 		applyOdometerData(data = {}) {
 			this.showOdometerField = this.normalizeOilItemFlag(data.custom_has_oil_item);
 			this.odometerReading =
@@ -1629,6 +1680,11 @@ export default {
 		},
 
 		async handleSaveAndClear() {
+			if (!this.hasSelectedVehicle()) {
+				this.showVehicleSelectionAlert();
+				return;
+			}
+
 			//  MANDATORY EMPLOYEE VALIDATION FOR CAR WASH SERVICE
 			if (this.showEmployeeSelection && !this.selectedEmployee) {
 				frappe.show_alert({
@@ -1698,7 +1754,9 @@ export default {
 					source.redeem_loyalty_points ??
 					0,
 			);
-			const loyaltyAmount = Number(source.loyalty_discount_amount ?? source.loyalty_amount ?? 0);
+			const loyaltyDiscountAmount = Number(source.loyalty_discount_amount ?? 0);
+			const legacyLoyaltyAmount = Number(source.loyalty_amount ?? 0);
+			const loyaltyAmount = loyaltyDiscountAmount > 0 ? loyaltyDiscountAmount : legacyLoyaltyAmount;
 			const additionalDiscount = Number(
 				source.additional_discount ?? source.discount_amount ?? loyaltyAmount ?? 0,
 			);
@@ -1721,7 +1779,7 @@ export default {
 				custom_redeemed_loyalty_points: redeemedPoints,
 				redeemed_loyalty_points: redeemedPoints,
 				loyalty_discount_amount: loyaltyAmount,
-				loyalty_amount: Number(source.loyalty_amount ?? loyaltyAmount ?? 0),
+				loyalty_amount: loyaltyAmount,
 				additional_discount: additionalDiscount,
 				loyalty_program: source.loyalty_program || null,
 				available_loyalty_points: availablePoints,
@@ -1762,9 +1820,7 @@ export default {
 				this.$parent.invoice_doc.redeemed_loyalty_points = redeemedPoints;
 				this.$parent.invoice_doc.redeem_loyalty_points = redeemedPoints;
 				this.$parent.invoice_doc.loyalty_discount_amount = loyaltyAmount;
-				this.$parent.invoice_doc.loyalty_amount = Number(
-					snapshot.loyalty_amount ?? loyaltyAmount ?? 0,
-				);
+				this.$parent.invoice_doc.loyalty_amount = loyaltyAmount;
 				this.$parent.invoice_doc.loyalty_program = snapshot.loyalty_program || null;
 				this.$parent.invoice_doc.available_loyalty_points = availablePoints;
 				this.$parent.invoice_doc.loyalty_points = availablePoints;
@@ -1879,6 +1935,13 @@ export default {
 				frappe.show_alert({ message: this.__("Please select a customer first"), indicator: "red" });
 				return;
 			}
+			if (this.isLoyaltyButtonDisabled) {
+				frappe.show_alert({
+					message: this.discountConflictMessage,
+					indicator: "red",
+				});
+				return;
+			}
 
 			this.loyaltyLoading = true;
 			try {
@@ -1909,6 +1972,11 @@ export default {
 		},
 
 		async handleSelectOrder() {
+			if (!this.hasSelectedVehicle()) {
+				this.showVehicleSelectionAlert();
+				return;
+			}
+
 			this.selectOrderLoading = true;
 			try {
 				this.$emit("select-order");
@@ -1923,15 +1991,19 @@ export default {
 			if (!this.isValidRedemption) {
 				return;
 			}
+			if (this.isLoyaltyInputDisabled) {
+				frappe.show_alert({
+					message: this.discountConflictMessage,
+					indicator: "red",
+				});
+				return;
+			}
 
 			this.redeemLoading = true;
 			try {
 				const redeemedPoints = Number(this.pointsToRedeem || 0);
 				const newDiscountAmount = Number(this.redemptionValue || 0);
-				const currentDiscount = parseFloat(this.additional_discount || 0);
-				const updatedDiscount = currentDiscount + newDiscountAmount;
-
-				this.$emit("update:additional_discount", updatedDiscount);
+				this.$emit("update:additional_discount", newDiscountAmount);
 				this.eventBus.emit("set_loyalty_redemption", {
 					points: redeemedPoints,
 					amount: newDiscountAmount,
@@ -2070,32 +2142,23 @@ export default {
 		buildEmployeeDisplayLabel(employee) {
 			if (!employee) return "";
 			const employeeId = this.normalizeEmployeeValue(
-				employee.custom_employee_id || employee.employee_id || employee.name,
+				employee.custom_employee_id || employee.employee_number || employee.employee_id || employee.name,
 			);
 			const employeeName = this.normalizeEmployeeValue(
 				employee.employee_name || employee.display_name || employee.full_name,
 			);
 			return employeeId && employeeName
-				? `${employeeId} - ${employeeName}`
+				? `${employeeId} - ${employeeName} (${employeeId})`
 				: employeeName || employeeId;
-		},
-
-		buildEmployeeSubtitle(employee) {
-			if (!employee) return "";
-			const details = [];
-			if (employee.designation) {
-				details.push(employee.designation);
-			}
-			if (employee.department) {
-				details.push(employee.department);
-			}
-			return details.join(" · ");
 		},
 
 		normalizeEmployeeRecord(employee) {
 			if (!employee) return null;
 			const employeeId = this.normalizeEmployeeValue(employee.employee_id || employee.name);
 			const customEmployeeId = this.normalizeEmployeeValue(employee.custom_employee_id);
+			const employeeNumber = this.normalizeEmployeeValue(
+				employee.employee_number || customEmployeeId || employeeId,
+			);
 			const employeeName = this.normalizeEmployeeValue(
 				employee.employee_name ||
 					employee.display_name ||
@@ -2104,17 +2167,17 @@ export default {
 					customEmployeeId,
 			);
 			const displayLabel =
-				typeof employee.display_label === "string" && employee.display_label.trim()
-					? employee.display_label.trim()
-					: this.buildEmployeeDisplayLabel({
-							employee_id: employeeId,
-							custom_employee_id: customEmployeeId,
-							employee_name: employeeName,
-						});
+				this.buildEmployeeDisplayLabel({
+					employee_id: employeeId,
+					custom_employee_id: customEmployeeId,
+					employee_number: employeeNumber,
+					employee_name: employeeName,
+				});
 			return {
 				...employee,
 				employee_id: employeeId,
 				custom_employee_id: customEmployeeId,
+				employee_number: employeeNumber,
 				employee_name: employeeName,
 				display_label: displayLabel,
 				name: this.normalizeEmployeeValue(employee.name || employeeId || customEmployeeId),
@@ -2291,19 +2354,19 @@ export default {
 			const searchTerm = query.toLowerCase();
 			const employeeName = this.normalizeEmployeeValue(item.raw.employee_name).toLowerCase();
 			const employeeCode = this.normalizeEmployeeValue(
-				item.raw.custom_employee_id || item.raw.employee_id || item.raw.name,
+				item.raw.custom_employee_id ||
+					item.raw.employee_number ||
+					item.raw.employee_id ||
+					item.raw.name,
 			).toLowerCase();
-			const designation = this.normalizeEmployeeValue(item.raw.designation).toLowerCase();
 			const displayLabel = this.normalizeEmployeeValue(item.raw.display_label).toLowerCase();
 
-			// Extract just the number from employee code (e.g., "HR-EMP-00001" -> "00001" or "1")
 			const codeNumber = employeeCode.replace(/[^0-9]/g, "");
 			const queryNumber = searchTerm.replace(/[^0-9]/g, "");
 
 			return (
 				employeeName.includes(searchTerm) ||
 				employeeCode.includes(searchTerm) ||
-				designation.includes(searchTerm) ||
 				displayLabel.includes(searchTerm) ||
 				(queryNumber && codeNumber.includes(queryNumber))
 			);
@@ -2536,6 +2599,11 @@ export default {
 		handleConfirmedCancelSale() {
 			console.log("[InvoiceSummary] Cancel sale confirmed by user - clearing data");
 
+			if (!this.hasSelectedVehicle()) {
+				this.showVehicleSelectionAlert();
+				return;
+			}
+
 			// Reset local state
 			this.resetAfterPayment();
 
@@ -2577,6 +2645,11 @@ export default {
 		async handleShowPayment() {
 			console.log("[InvoiceSummary] handleShowPayment called - START");
 			console.trace("[InvoiceSummary] Call stack:");
+
+			if (!this.hasSelectedVehicle()) {
+				this.showVehicleSelectionAlert();
+				return;
+			}
 
 			if (!this.selectedCustomerId) {
 				frappe.show_alert({
@@ -2635,6 +2708,7 @@ export default {
 		this.eventBus.on("restore_loyalty_ui_state", (snapshot) => {
 			this.restoreDraftLoyaltyState(snapshot);
 		});
+		this.eventBus.on("discount_conflict_state", this.updateDiscountConflictState);
 
 		this.eventBus.on("set_loyalty_redemption", (payload) => {
 			this.stagedLoyaltyPoints = Number(payload?.points || 0);
@@ -2764,6 +2838,7 @@ export default {
 		this.eventBus.off("set_contact_mobile");
 		this.eventBus.off("update_customer_details");
 		this.eventBus.off("restore_loyalty_ui_state");
+		this.eventBus.off("discount_conflict_state", this.updateDiscountConflictState);
 		this.eventBus.off("set_loyalty_redemption");
 		this.eventBus.off("clear_loyalty_redemption");
 		this.eventBus.off("payment_completed", this.resetAfterPayment);
@@ -3349,6 +3424,12 @@ export default {
 .item-group-discount-card:hover {
 	border-color: rgba(33, 150, 243, 0.45);
 	transform: translateY(-2px);
+}
+
+.discount-lock-activator {
+	display: block;
+	width: 100%;
+	cursor: not-allowed;
 }
 
 :deep(.v-theme--dark) .item-group-discount-card {

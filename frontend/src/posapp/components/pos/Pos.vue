@@ -60,10 +60,16 @@
 
 						<!-- Additional components with proper card styling -->
 						<div v-show="showOffers" class="column-card offers-coupons-card">
-							<PosOffers></PosOffers>
+							<PosOffers
+								:activeDiscountType="activeDiscountType"
+								:activeDiscountMessage="activeDiscountMessage"
+							></PosOffers>
 						</div>
 						<div v-show="showCoupons" class="column-card offers-coupons-card">
-							<PosCoupons></PosCoupons>
+							<PosCoupons
+								:activeDiscountType="activeDiscountType"
+								:activeDiscountMessage="activeDiscountMessage"
+							></PosCoupons>
 						</div>
 					</div>
 
@@ -324,6 +330,8 @@ export default {
 			showPriceListDialog: false,
 			offersCount: 0,
 			couponsCount: 0,
+			activeDiscountType: null,
+			activeDiscountMessage: "",
 			active_price_list: "",
 			first_search: "",
 			search: "",
@@ -809,6 +817,11 @@ export default {
 				this.couponsCount = data.couponsCount || 0;
 			});
 
+			this.eventBus.on("discount_conflict_state", (data) => {
+				this.activeDiscountType = data?.activeType || null;
+				this.activeDiscountMessage = data?.message || "";
+			});
+
 			this.eventBus.on("barcode_scanned", (code) => {
 				this.onBarcodeScanned(code);
 			});
@@ -838,6 +851,7 @@ export default {
 		this.eventBus.off("refresh_drafts");
 		this.eventBus.off("update_offers_counters");
 		this.eventBus.off("update_coupons_counters");
+		this.eventBus.off("discount_conflict_state");
 		this.eventBus.off("barcode_scanned");
 
 		if (this.isFullscreen) {

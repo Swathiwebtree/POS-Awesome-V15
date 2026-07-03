@@ -311,6 +311,8 @@ fixtures = [
                     "Sales Invoice-custom_vehicle_make",
                     "Sales Invoice-custom_vehicle_model",
                     "Sales Invoice-custom_redeemed_loyalty_points",
+                    "Sales Invoice-redeemed_coupon_amount",
+                    "Sales Invoice-redeemed_offer_amount",
                 ],
             ]
         ],

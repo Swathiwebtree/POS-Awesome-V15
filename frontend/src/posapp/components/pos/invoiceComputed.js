@@ -51,8 +51,8 @@ export default {
 		total += delivery_charges;
 
 		// Subtract invoice and loyalty discounts before tax
-		const invoice_discount_raw = Number(this.discount_amount ?? this.additional_discount ?? 0);
-		const additional_discount_raw = Number(this.additional_discount ?? 0);
+		const invoice_discount_raw = Number(this.discount_amount || this.additional_discount || 0);
+		const additional_discount_raw = Number(this.additional_discount || 0);
 		const loyalty_discount_raw = Number(
 			this.invoice_doc?.loyalty_discount_amount ?? this.invoice_doc?.loyalty_amount ?? 0,
 		);

@@ -877,6 +877,7 @@ export default {
 		});
 
 		let old_invoice = null;
+		this.resetDiscountState({ clearCoupons: true, clearOffers: true });
 		this.eventBus.emit("set_customer_readonly", false);
 		this.expanded = [];
 		this.posa_offers = [];
@@ -2284,6 +2285,27 @@ export default {
 		// defensive: ensure object
 		item = item || {};
 
+		const hasOfferState = Number(item.posa_offer_applied || 0) === 1 || !!item.posa_offers;
+		const preservedOfferState = hasOfferState
+			? {
+					discount_percentage: item.discount_percentage,
+					discount_amount: item.discount_amount,
+					amount: item.amount,
+					posa_offer_applied: item.posa_offer_applied,
+					posa_offers: item.posa_offers,
+			  }
+			: null;
+		const restoreOfferState = (target) => {
+			if (!preservedOfferState) {
+				return;
+			}
+			target.discount_percentage = preservedOfferState.discount_percentage;
+			target.discount_amount = preservedOfferState.discount_amount;
+			target.amount = preservedOfferState.amount;
+			target.posa_offer_applied = preservedOfferState.posa_offer_applied;
+			target.posa_offers = preservedOfferState.posa_offers;
+		};
+
 		// Normalize flags
 		item.is_service_item = item.is_service_item ? 1 : 0;
 
@@ -2335,6 +2357,8 @@ export default {
 				base_rate: item.base_rate,
 				amount: item.amount,
 			});
+
+			restoreOfferState(item);
 
 			// Do NOT call server for service items
 			this.$forceUpdate && this.$forceUpdate();
@@ -2593,6 +2617,7 @@ export default {
 
 					item.amount = vm.flt(item.qty * item.rate, vm.currency_precision);
 					item.base_amount = vm.flt(item.qty * item.base_rate, vm.currency_precision);
+					restoreOfferState(item);
 
 					console.log(`Updated rates for ${item.item_code} on expand:`, {
 						base_rate: item.base_rate,

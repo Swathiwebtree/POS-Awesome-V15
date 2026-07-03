@@ -3,7 +3,7 @@
 		<div class="drafts-content">
 			<v-data-table
 				:headers="headers"
-				:items="dialog_data"
+				:items="visibleDialogData"
 				:sort-by="[{ key: 'modified', order: 'desc' }]"
 				item-value="name"
 				class="elevation-0 drafts-table"
@@ -117,7 +117,7 @@
 				<template v-slot:bottom>
 					<div
 						class="pa-4 text-center text-caption text-medium-emphasis"
-						v-if="dialog_data.length === 0"
+						v-if="visibleDialogData.length === 0"
 					>
 						<v-icon size="48" color="grey-lighten-1" class="mb-2"
 							>mdi-file-document-outline</v-icon
@@ -165,7 +165,7 @@
 							<v-col cols="12" class="pa-1">
 								<v-data-table
 									:headers="headers"
-									:items="dialog_data"
+									:items="visibleDialogData"
 									:sort-by="[{ key: 'modified', order: 'desc' }]"
 									item-value="name"
 									class="elevation-0"
@@ -270,7 +270,7 @@
 									<template v-slot:bottom>
 										<div
 											class="pa-2 text-caption text-medium-emphasis"
-											v-if="dialog_data.length === 0"
+											v-if="visibleDialogData.length === 0"
 										>
 											{{ __("No draft invoices found.") }}
 										</div>
@@ -318,6 +318,8 @@ export default {
 		selected: [],
 		dialog_data: [],
 		refreshing: false,
+		nowTick: Date.now(),
+		_expiryTimer: null,
 		headers: [
 			{ title: __("Mobile"), value: "contact_mobile", align: "start", sortable: false, width: "130px" },
 			{
@@ -376,6 +378,9 @@ export default {
 		isMobileModal() {
 			return window.innerWidth < 768;
 		},
+		visibleDialogData() {
+			return (this.dialog_data || []).filter((draft) => !this.isDraftExpired(draft));
+		},
 	},
 	methods: {
 		formatDateDMY(dateStr) {
@@ -405,17 +410,91 @@ export default {
 			return formatPhoneForDisplay(value, this.getDefaultCountryIso() || "BH");
 		},
 
+		getDraftTimestamp(item) {
+			if (!item) return null;
+
+			const normalizeDateTime = (value) => {
+				if (!value) return null;
+				const asString = String(value).trim();
+				if (!asString) return null;
+				const normalized = asString.replace(" ", "T").split(".")[0];
+				const parsed = Date.parse(normalized);
+				if (!Number.isNaN(parsed)) return parsed;
+				const [datePart, timePart = "00:00:00"] = normalized.split("T");
+				const [year, month, day] = datePart.split("-").map((v) => Number(v));
+				const [hour = 0, minute = 0, second = 0] = timePart.split(":").map((v) => Number(v));
+				if (
+					!year ||
+					!month ||
+					!day ||
+					Number.isNaN(hour) ||
+					Number.isNaN(minute) ||
+					Number.isNaN(second)
+				) {
+					return null;
+				}
+				const built = new Date(year, month - 1, day, hour, minute, second);
+				return Number.isNaN(built.getTime()) ? null : built.getTime();
+			};
+
+			const creationTimestamp = normalizeDateTime(item.creation || item.created_at);
+			if (creationTimestamp) return creationTimestamp;
+
+			const postingDate = String(item.posting_date || "").trim();
+			if (!postingDate) return null;
+			const postingTime = String(item.posting_time || "00:00:00").split(".")[0].trim() || "00:00:00";
+			return normalizeDateTime(`${postingDate}T${postingTime}`);
+		},
+
+		getTodayDateKey() {
+			const now = new Date(this.nowTick);
+			const year = now.getFullYear();
+			const month = String(now.getMonth() + 1).padStart(2, "0");
+			const day = String(now.getDate()).padStart(2, "0");
+			return `${year}-${month}-${day}`;
+		},
+
+		getDraftDateKey(item) {
+			if (!item) return "";
+			const postingDate = String(item.posting_date || "").trim();
+			if (postingDate) return postingDate;
+
+			const createdAt = this.getDraftTimestamp(item);
+			if (!createdAt) return "";
+			const created = new Date(createdAt);
+			const year = created.getFullYear();
+			const month = String(created.getMonth() + 1).padStart(2, "0");
+			const day = String(created.getDate()).padStart(2, "0");
+			return `${year}-${month}-${day}`;
+		},
+
+		isDraftExpired(item) {
+			const draftDate = this.getDraftDateKey(item);
+			if (!draftDate) return false;
+			return draftDate !== this.getTodayDateKey();
+		},
+
+		pruneExpiredSelection() {
+			if (!Array.isArray(this.selected) || !this.selected.length) return;
+			const visibleNames = new Set((this.visibleDialogData || []).map((draft) => draft.name));
+			const filtered = this.selected.filter((draft) => visibleNames.has(draft.name));
+			if (filtered.length !== this.selected.length) {
+				this.selected = filtered;
+			}
+		},
+
 		isCurrentDraft(draftName) {
 			return this.$parent?.loaded_draft_name === draftName;
 		},
 
 		// ✅ FIXED: Only emit the draft name, not the whole object
 		submit_selection() {
-			if (this.selected.length > 0) {
+			if (this.selected.length > 0 && !this.isDraftExpired(this.selected[0])) {
 				const draftName = this.selected[0].name;
 				this.eventBus.emit("draft_selected", draftName);
 				this.selected = [];
 			} else {
+				this.selected = [];
 				this.eventBus.emit("show_message", {
 					title: __("Select an invoice to load"),
 					color: "error",
@@ -431,11 +510,12 @@ export default {
 
 		// ✅ FIXED: Only emit the draft name, not the whole object
 		submit_dialog() {
-			if (this.selected.length > 0) {
+			if (this.selected.length > 0 && !this.isDraftExpired(this.selected[0])) {
 				const draftName = this.selected[0].name;
 				this.eventBus.emit("draft_selected", draftName);
 				this.close_dialog();
 			} else {
+				this.selected = [];
 				this.eventBus.emit("show_message", { title: `Select an invoice to load`, color: "error" });
 			}
 		},
@@ -535,7 +615,10 @@ export default {
 					return d;
 				});
 
-				this.dialog_data = this._sortByDateTime(drafts);
+				this.dialog_data = this._sortByDateTime(
+					drafts.filter((draft) => !this.isDraftExpired(draft)),
+				);
+				this.pruneExpiredSelection();
 			} catch (err) {
 				console.error("[Drafts] fetchDrafts error:", err);
 			} finally {
@@ -631,6 +714,9 @@ export default {
 			if (!newDraft || !newDraft.name) return;
 
 			const nd = this._normalizeSingle(newDraft);
+			if (this.isDraftExpired(nd)) {
+				return;
+			}
 
 			const empId = nd.custom_service_employee;
 			if (nd.custom_service_employee_name) {
@@ -669,7 +755,10 @@ export default {
 
 			this.dialog_data = this.dialog_data.filter((d) => d.name !== nd.name);
 			this.dialog_data.unshift(nd);
-			this.dialog_data = this._sortByDateTime(this.dialog_data);
+			this.dialog_data = this._sortByDateTime(
+				(this.dialog_data || []).filter((draft) => !this.isDraftExpired(draft)),
+			);
+			this.pruneExpiredSelection();
 		},
 
 		_normalizeSingle(item) {
@@ -763,6 +852,20 @@ export default {
 				return 0;
 			});
 		},
+	},
+
+	mounted() {
+		this._expiryTimer = window.setInterval(() => {
+			this.nowTick = Date.now();
+			this.pruneExpiredSelection();
+		}, 60000);
+	},
+
+	beforeUnmount() {
+		if (this._expiryTimer) {
+			clearInterval(this._expiryTimer);
+			this._expiryTimer = null;
+		}
 	},
 
 	created() {
@@ -958,7 +1061,9 @@ export default {
 					return d;
 				});
 
-				this.dialog_data = this._sortByDateTime(drafts);
+				this.dialog_data = this._sortByDateTime(
+					drafts.filter((draft) => !this.isDraftExpired(draft)),
+				);
 			} else {
 				this.dialog_data = [];
 				this.selected = [];
@@ -988,11 +1093,12 @@ export default {
 
 			// Remove the deleted draft from the dialog data
 			this.dialog_data = this.dialog_data.filter((d) => d.name !== draftName);
+			this.pruneExpiredSelection();
 
 			console.log("[Drafts] Draft removed from list:", draftName);
 
 			// Show message if no more drafts
-			if (this.dialog_data.length === 0) {
+			if (this.visibleDialogData.length === 0) {
 				this.eventBus.emit("show_message", {
 					title: __("All invoices completed. No more drafts."),
 					color: "success",

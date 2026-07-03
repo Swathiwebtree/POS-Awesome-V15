@@ -326,6 +326,8 @@
 				:active_price_list="selected_price_list"
 				:offersCount="offersCount"
 				:couponsCount="couponsCount"
+				:activeDiscountType="activeDiscountType"
+				:activeDiscountMessage="activeDiscountMessage"
 				v-model:items_view="items_view"
 				@update:additional_discount="(val) => (additional_discount = val)"
 				@update:additional_discount_percentage="(val) => (additional_discount_percentage = val)"
@@ -421,6 +423,11 @@ export default {
 			items_view: "list",
 			offersCount: 0,
 			couponsCount: 0,
+			activeDiscountType: null,
+			activeDiscountMessage: "",
+			discount_lock_type: null,
+			discount_lock_amount: 0,
+			discount_lock_percentage: 0,
 			packedItemsHeaders: [
 				{ title: __("No."), key: "index" },
 				{ title: __("Parent Item"), key: "parent_item" },
@@ -484,6 +491,288 @@ export default {
 			return ig.includes("engine oil") || name.includes("engine oil") || code.includes("engine oil");
 		},
 
+		getDiscountConflictMessage(discountType) {
+			const messages = {
+				loyalty: __("Remove loyalty points to apply coupon or offer."),
+				coupon: __("Remove coupon to apply loyalty points or offer."),
+				offer: __("Remove offer to apply loyalty points or coupon."),
+			};
+
+			return messages[discountType] || "";
+		},
+
+		getActiveDiscountType() {
+			const loyaltyPoints = Number(
+				this.loyalty_redemption_points ||
+					this.invoice_doc?.custom_redeemed_loyalty_points ||
+					this.invoice_doc?.redeemed_loyalty_points ||
+					this.invoice_doc?.redeem_loyalty_points ||
+					0,
+			);
+			const loyaltyAmount = Number(
+				this.loyalty_redemption_amount || this.invoice_doc?.loyalty_discount_amount || 0,
+			);
+			if (loyaltyPoints > 0 || loyaltyAmount > 0) {
+				return "loyalty";
+			}
+
+			const couponApplied = Array.isArray(this.posa_coupons)
+				? this.posa_coupons.some((coupon) => !!coupon.applied)
+				: false;
+			if (couponApplied) {
+				return "coupon";
+			}
+
+			const couponAmount = Number(this.invoice_doc?.redeemed_coupon_amount || 0);
+			if (couponAmount > 0) {
+				return "coupon";
+			}
+
+			const couponOfferApplied = Array.isArray(this.posa_offers)
+				? this.posa_offers.some((offer) => offer?.offer_applied && offer?.coupon_based)
+				: false;
+			if (couponOfferApplied) {
+				return "coupon";
+			}
+
+			const offerAmount = Number(this.invoice_doc?.redeemed_offer_amount || 0);
+			if (
+				offerAmount > 0 ||
+				this.discount_percentage_offer_name ||
+				Number(this.additional_discount || 0) > 0 ||
+				(Array.isArray(this.posa_offers)
+					? this.posa_offers.some((offer) => offer?.offer_applied && !offer?.coupon_based)
+					: false)
+			) {
+				return "offer";
+			}
+
+			if (
+				(this.discount_lock_type === "coupon" || this.discount_lock_type === "offer") &&
+				Number(this.discount_lock_amount || 0) > 0
+			) {
+				return this.discount_lock_type;
+			}
+
+			return null;
+		},
+
+		updateDiscountLockState(activeType = null) {
+			this.activeDiscountType = activeType || null;
+			this.activeDiscountMessage = this.getDiscountConflictMessage(activeType);
+			this.eventBus.emit("discount_conflict_state", {
+				activeType: this.activeDiscountType,
+				message: this.activeDiscountMessage,
+			});
+		},
+
+		lockInvoiceDiscountState(activeType, amount, percentage = null) {
+			if (activeType !== "coupon" && activeType !== "offer") {
+				this.discount_lock_type = null;
+				this.discount_lock_amount = 0;
+				this.discount_lock_percentage = 0;
+				return;
+			}
+
+			const lockedAmount = this.flt(amount || 0, this.currency_precision);
+			const lockedPercentage =
+				percentage !== null && percentage !== undefined
+					? this.flt(percentage || 0, this.currency_precision)
+					: this.subtotal
+						? this.flt((lockedAmount / this.subtotal) * 100, this.currency_precision)
+						: 0;
+
+			this.discount_lock_type = activeType;
+			this.discount_lock_amount = lockedAmount;
+			this.discount_lock_percentage = lockedPercentage;
+		},
+
+		clearInvoiceDiscountLock(activeType = null) {
+			if (activeType && this.discount_lock_type && this.discount_lock_type !== activeType) {
+				return;
+			}
+
+			this.discount_lock_type = null;
+			this.discount_lock_amount = 0;
+			this.discount_lock_percentage = 0;
+		},
+
+		getLockedInvoiceDiscountAmount(activeType) {
+			const lockedAmount = Number(this.discount_lock_amount || 0);
+			const couponAmount = Number(this.invoice_doc?.redeemed_coupon_amount || 0);
+			const offerAmount = Number(this.invoice_doc?.redeemed_offer_amount || 0);
+			const currentAmount = Number(
+				this.additional_discount || this.discount_amount || this.invoice_doc?.discount_amount || 0,
+			);
+
+			if (activeType === "coupon") {
+				return lockedAmount || couponAmount || currentAmount;
+			}
+			if (activeType === "offer") {
+				return lockedAmount || offerAmount || currentAmount;
+			}
+			return currentAmount;
+		},
+
+		syncLockedInvoiceDiscountFields(activeType) {
+			if (activeType !== "coupon" && activeType !== "offer") {
+				this.clearInvoiceDiscountLock();
+				return 0;
+			}
+
+			const lockedAmount = this.getLockedInvoiceDiscountAmount(activeType);
+			const lockedPercentage = this.subtotal
+				? this.flt((lockedAmount / this.subtotal) * 100, this.currency_precision)
+				: Number(this.discount_lock_percentage || this.additional_discount_percentage || 0);
+
+			this.lockInvoiceDiscountState(activeType, lockedAmount, lockedPercentage);
+			this.discount_amount = this.flt(lockedAmount, this.currency_precision);
+			this.additional_discount = this.flt(lockedAmount, this.currency_precision);
+			this.additional_discount_percentage = this.flt(lockedPercentage, this.currency_precision);
+
+			if (this.invoice_doc) {
+				this.invoice_doc.discount_amount = this.discount_amount;
+				this.invoice_doc.additional_discount = this.additional_discount;
+				this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage;
+
+				this.invoice_doc.custom_redeemed_loyalty_points = 0;
+				this.invoice_doc.redeemed_loyalty_points = 0;
+				this.invoice_doc.redeem_loyalty_points = 0;
+				this.invoice_doc.loyalty_amount = 0;
+				this.invoice_doc.loyalty_discount_amount = 0;
+
+				if (activeType === "coupon") {
+					this.invoice_doc.redeemed_coupon_amount = this.discount_amount;
+					this.invoice_doc.redeemed_offer_amount = 0;
+				} else {
+					this.invoice_doc.redeemed_coupon_amount = 0;
+					this.invoice_doc.redeemed_offer_amount = this.discount_amount;
+				}
+			}
+
+			this.updateDiscountLockState(activeType);
+			return lockedAmount;
+		},
+
+		resetDiscountState({ clearCoupons = false, clearOffers = false } = {}) {
+			this.discount_amount = 0;
+			this.additional_discount = 0;
+			this.additional_discount_percentage = 0;
+			this.loyalty_redemption_points = 0;
+			this.loyalty_redemption_amount = 0;
+			this.loyalty_redemption_customer = "";
+			this.discount_percentage_offer_name = null;
+			this.clearInvoiceDiscountLock();
+			this.updateDiscountLockState(null);
+
+			if (this.invoice_doc) {
+				this.invoice_doc.discount_amount = 0;
+				this.invoice_doc.additional_discount = 0;
+				this.invoice_doc.additional_discount_percentage = 0;
+				this.invoice_doc.custom_redeemed_loyalty_points = 0;
+				this.invoice_doc.redeemed_loyalty_points = 0;
+				this.invoice_doc.redeem_loyalty_points = 0;
+				this.invoice_doc.loyalty_amount = 0;
+				this.invoice_doc.loyalty_discount_amount = 0;
+				this.invoice_doc.redeemed_coupon_amount = 0;
+				this.invoice_doc.redeemed_offer_amount = 0;
+			}
+
+			if (clearCoupons) {
+				this.posa_coupons = [];
+				this.eventBus.emit("set_pos_coupons", []);
+			}
+
+			if (clearOffers) {
+				this.posa_offers = [];
+				const resetOffers = (this.posOffers || []).map((offer) => ({
+					...offer,
+					offer_applied: false,
+					coupon: null,
+					items: [],
+					give_item_row_id: null,
+				}));
+				this.eventBus.emit("update_pos_offers", resetOffers);
+			}
+		},
+
+		syncMutuallyExclusiveDiscountFields() {
+			if (!this.invoice_doc) {
+				return;
+			}
+
+			const activeType = this.getActiveDiscountType();
+			const discountAmount = this.flt(
+				this.getLockedInvoiceDiscountAmount(activeType),
+				this.currency_precision,
+			);
+			const loyaltyAmount = this.flt(
+				this.loyalty_redemption_amount || this.invoice_doc.loyalty_discount_amount || 0,
+				this.currency_precision,
+			);
+			const loyaltyPoints = this.flt(
+				this.loyalty_redemption_points ||
+					this.invoice_doc.custom_redeemed_loyalty_points ||
+					this.invoice_doc.redeemed_loyalty_points ||
+					this.invoice_doc.redeem_loyalty_points ||
+					0,
+				this.float_precision,
+			);
+			const resolvedAmount =
+				activeType === "loyalty"
+					? loyaltyAmount || discountAmount
+					: activeType === "coupon"
+						? discountAmount || Number(this.invoice_doc.redeemed_coupon_amount || 0)
+						: activeType === "offer"
+							? discountAmount || Number(this.invoice_doc.redeemed_offer_amount || 0)
+							: discountAmount;
+
+			if (activeType === "coupon" || activeType === "offer") {
+				this.syncLockedInvoiceDiscountFields(activeType);
+				return;
+			}
+
+			this.invoice_doc.discount_amount = resolvedAmount;
+			this.invoice_doc.additional_discount = resolvedAmount;
+			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
+
+			if (activeType === "loyalty") {
+				this.invoice_doc.custom_redeemed_loyalty_points = loyaltyPoints;
+				this.invoice_doc.redeemed_loyalty_points = loyaltyPoints;
+				this.invoice_doc.redeem_loyalty_points = loyaltyPoints;
+				this.invoice_doc.loyalty_amount = resolvedAmount;
+				this.invoice_doc.loyalty_discount_amount = resolvedAmount;
+				this.invoice_doc.redeemed_coupon_amount = 0;
+				this.invoice_doc.redeemed_offer_amount = 0;
+			} else if (activeType === "coupon") {
+				this.invoice_doc.custom_redeemed_loyalty_points = 0;
+				this.invoice_doc.redeemed_loyalty_points = 0;
+				this.invoice_doc.redeem_loyalty_points = 0;
+				this.invoice_doc.loyalty_amount = 0;
+				this.invoice_doc.loyalty_discount_amount = 0;
+				this.invoice_doc.redeemed_coupon_amount = resolvedAmount;
+				this.invoice_doc.redeemed_offer_amount = 0;
+			} else if (activeType === "offer") {
+				this.invoice_doc.custom_redeemed_loyalty_points = 0;
+				this.invoice_doc.redeemed_loyalty_points = 0;
+				this.invoice_doc.redeem_loyalty_points = 0;
+				this.invoice_doc.loyalty_amount = 0;
+				this.invoice_doc.loyalty_discount_amount = 0;
+				this.invoice_doc.redeemed_coupon_amount = 0;
+				this.invoice_doc.redeemed_offer_amount = resolvedAmount;
+			} else {
+				this.invoice_doc.custom_redeemed_loyalty_points = 0;
+				this.invoice_doc.redeemed_loyalty_points = 0;
+				this.invoice_doc.redeem_loyalty_points = 0;
+				this.invoice_doc.loyalty_amount = 0;
+				this.invoice_doc.loyalty_discount_amount = 0;
+				this.invoice_doc.redeemed_coupon_amount = 0;
+				this.invoice_doc.redeemed_offer_amount = 0;
+			}
+
+			this.updateDiscountLockState(activeType);
+		},
+
 		handleItemGroupUpdate(newGroup) {
 			this.item_group = newGroup;
 		},
@@ -508,20 +797,12 @@ export default {
 				this.invoice_doc.loyalty_program =
 					this.customer_info?.loyalty_program || this.invoice_doc.loyalty_program || null;
 			}
+
+			this.syncMutuallyExclusiveDiscountFields();
 		},
 
 		clearLoyaltyRedemption() {
-			this.loyalty_redemption_points = 0;
-			this.loyalty_redemption_amount = 0;
-			this.loyalty_redemption_customer = "";
-
-			if (this.invoice_doc) {
-				this.invoice_doc.custom_redeemed_loyalty_points = 0;
-				this.invoice_doc.redeem_loyalty_points = 0;
-				this.invoice_doc.redeemed_loyalty_points = 0;
-				this.invoice_doc.loyalty_amount = 0;
-				this.invoice_doc.loyalty_discount_amount = 0;
-			}
+			this.resetDiscountState();
 		},
 
 		syncLoyaltyUiState(payload = {}) {
@@ -555,6 +836,27 @@ export default {
 				!!doc.custom_odometer_reading ||
 				!!doc.contact_mobile;
 			return hasContent && !this.loaded_draft_name;
+		},
+
+		getSelectedVehicleNumber() {
+			return String(
+				this.custom_vehicle_no ||
+					this.invoice_doc?.custom_vehicle_no ||
+					this.vehicle_number ||
+					"",
+			).trim();
+		},
+
+		validateVehicleSelection() {
+			if (this.getSelectedVehicleNumber()) {
+				return true;
+			}
+
+			frappe.show_alert({
+				message: this.__("Please select the vehicle"),
+				indicator: "warning",
+			});
+			return false;
 		},
 
 		async applyVehicleDiscountsToAllItems() {
@@ -1230,21 +1532,35 @@ export default {
 		},
 
 		apply_additional_discount() {
-			// Get subtotal from computed property (already calculated)
-			const totalBeforeDiscount = this.subtotal;
+			const activeType = this.getActiveDiscountType();
 			let discountAmount = 0;
 
-			// Calculate discount based on percentage or fixed amount
-			if (this.flt(this.additional_discount_percentage) > 0) {
-				discountAmount = this.flt(
-					(totalBeforeDiscount * this.flt(this.additional_discount_percentage)) / 100,
+			if (activeType === "coupon" || activeType === "offer") {
+				const preservedAmount = this.syncLockedInvoiceDiscountFields(activeType);
+				discountAmount = this.flt(preservedAmount, this.currency_precision);
+				this.discount_amount = discountAmount;
+				this.additional_discount = discountAmount;
+				this.additional_discount_percentage = this.flt(
+					this.subtotal ? (preservedAmount / this.subtotal) * 100 : this.discount_lock_percentage || 0,
+					this.currency_precision,
 				);
-			} else if (this.flt(this.additional_discount) > 0) {
-				discountAmount = this.flt(this.additional_discount);
-			}
+			} else {
+				// Get subtotal from computed property (already calculated)
+				const totalBeforeDiscount = this.subtotal;
 
-			// Update discount_amount without dropping configured decimals.
-			this.discount_amount = this.flt(discountAmount, this.currency_precision);
+				// Calculate discount based on percentage or fixed amount
+				if (this.flt(this.additional_discount_percentage) > 0) {
+					discountAmount = this.flt(
+						(totalBeforeDiscount * this.flt(this.additional_discount_percentage)) / 100,
+					);
+				} else if (this.flt(this.additional_discount) > 0) {
+					discountAmount = this.flt(this.additional_discount);
+				}
+
+				// Update discount_amount without dropping configured decimals.
+				this.discount_amount = this.flt(discountAmount, this.currency_precision);
+				this.additional_discount = this.flt(this.discount_amount || 0, this.currency_precision);
+			}
 
 			// Sync to invoice_doc
 			if (this.invoice_doc) {
@@ -1266,6 +1582,8 @@ export default {
 				this.invoice_doc.total_amount = this.invoice_doc.grand_total;
 				this.invoice_doc.to_be_paid = this.invoice_doc.rounded_total;
 			}
+
+			this.syncMutuallyExclusiveDiscountFields();
 
 			// Force UI update to reflect changes
 			this.$nextTick(() => {
@@ -1291,7 +1609,10 @@ export default {
 
 			// Sync into invoice_doc
 			if (this.invoice_doc) {
-				this.invoice_doc.discount_amount = this.total_items_discount_amount;
+				this.invoice_doc.total_items_discount_amount = this.total_items_discount_amount;
+				if (!this.getActiveDiscountType()) {
+					this.invoice_doc.discount_amount = this.total_items_discount_amount;
+				}
 			}
 		},
 
@@ -1320,6 +1641,10 @@ export default {
 		},
 
 		get_draft_orders() {
+			if (!this.validateVehicleSelection()) {
+				return;
+			}
+
 			this.eventBus.emit("select_order");
 		},
 
@@ -1328,6 +1653,10 @@ export default {
 		},
 
 		show_payment() {
+			if (!this.validateVehicleSelection()) {
+				return;
+			}
+
 			this.get_invoice_doc();
 			this.recalculateTotals();
 
@@ -2146,6 +2475,7 @@ export default {
 			this.invoice_doc.contact_mobile = this.contact_mobile || "";
 			this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no || "";
 
+			this.syncMutuallyExclusiveDiscountFields();
 			return this.invoice_doc;
 		},
 
@@ -2332,6 +2662,8 @@ export default {
 				invoiceData.loyalty_amount = 0;
 			}
 
+			this.syncMutuallyExclusiveDiscountFields();
+
 			return invoiceData;
 		},
 
@@ -2495,6 +2827,10 @@ export default {
 
 		// UPDATE: save_and_clear_invoice method - CORRECTED VERSION
 		async save_and_clear_invoice() {
+			if (!this.validateVehicleSelection()) {
+				return null;
+			}
+
 			// Basic validations
 			if (!this.items || this.items.length === 0) {
 				frappe.show_alert({
@@ -2607,6 +2943,7 @@ export default {
 			this.invoice_doc.additional_discount = this.additional_discount || 0;
 			this.invoice_doc.additional_discount_percentage = this.additional_discount_percentage || 0;
 			this.invoice_doc.loyalty_discount_amount = Number(this.invoice_doc.loyalty_discount_amount || 0);
+			this.syncMutuallyExclusiveDiscountFields();
 			if (
 				(this.invoice_doc.discount_amount > 0 ||
 					this.invoice_doc.additional_discount > 0 ||
@@ -2637,12 +2974,16 @@ export default {
 					this.loyalty_redemption_points ??
 					0,
 			);
-			const loyaltyAmount = Number(
-				this.invoice_doc?.loyalty_discount_amount ??
-					this.invoice_doc?.loyalty_amount ??
-					this.loyalty_redemption_amount ??
-					0,
+			const stagedLoyaltyAmount = Number(
+				this.loyalty_redemption_amount ?? this.invoice_doc?.loyalty_discount_amount ?? 0,
 			);
+			let loyaltyAmount = stagedLoyaltyAmount;
+			if (!Number.isFinite(loyaltyAmount) || loyaltyAmount < 0) {
+				loyaltyAmount = 0;
+			}
+			if (Number.isFinite(grandTotal) && loyaltyAmount > grandTotal) {
+				loyaltyAmount = grandTotal;
+			}
 			this.loyalty_redemption_points = redeemedLoyaltyPoints;
 			this.loyalty_redemption_amount = loyaltyAmount;
 			if (this.customer_info?.loyalty_program) {
@@ -2653,18 +2994,13 @@ export default {
 			this.invoice_doc.redeemed_loyalty_points = redeemedLoyaltyPoints;
 			this.invoice_doc.loyalty_amount = loyaltyAmount;
 			this.invoice_doc.loyalty_discount_amount = loyaltyAmount;
+			this.invoice_doc.redeemed_coupon_amount = Number(this.invoice_doc.redeemed_coupon_amount || 0);
+			this.invoice_doc.redeemed_offer_amount = Number(this.invoice_doc.redeemed_offer_amount || 0);
 			this.invoice_doc.available_loyalty_points = Number(
 				this.invoice_doc.available_loyalty_points ?? this.invoice_doc.loyalty_points ?? 0,
 			);
 			this.invoice_doc.conversion_factor = Number(this.invoice_doc.conversion_factor ?? 0);
-			if (redeemedLoyaltyPoints > 0 || loyaltyAmount > 0) {
-				this.invoice_doc.discount_amount = Number(
-					this.additional_discount || this.discount_amount || 0,
-				);
-				this.invoice_doc.additional_discount = Number(
-					this.additional_discount || this.discount_amount || 0,
-				);
-			}
+			this.syncMutuallyExclusiveDiscountFields();
 			this.invoice_doc.loyalty_program = this.invoice_doc.loyalty_program || null;
 
 			// ===== NEW: ADD ODOMETER, MOBILE, VEHICLE FIELDS =====
@@ -2830,12 +3166,12 @@ export default {
 						custom_service_employee: this.invoice_doc.custom_service_employee,
 						custom_service_employee_name: this.invoice_doc.custom_service_employee_name,
 						custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
+						redeemed_coupon_amount: this.invoice_doc.redeemed_coupon_amount,
+						redeemed_offer_amount: this.invoice_doc.redeemed_offer_amount,
 						redeem_loyalty_points: this.invoice_doc.redeem_loyalty_points,
 						redeemed_loyalty_points: this.invoice_doc.redeemed_loyalty_points,
-						custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
 						loyalty_amount: this.invoice_doc.loyalty_amount,
 						loyalty_discount_amount: this.invoice_doc.loyalty_discount_amount,
-						additional_discount: this.invoice_doc.additional_discount,
 						loyalty_program: this.invoice_doc.loyalty_program,
 						custom_vehicle_make: this.invoice_doc.custom_vehicle_make,
 						custom_vehicle_model: this.invoice_doc.custom_vehicle_model,
@@ -2884,10 +3220,10 @@ export default {
 								custom_vehicle_model: this.invoice_doc.custom_vehicle_model,
 								custom_redeemed_loyalty_points:
 									this.invoice_doc.custom_redeemed_loyalty_points,
+								redeemed_coupon_amount: this.invoice_doc.redeemed_coupon_amount,
+								redeemed_offer_amount: this.invoice_doc.redeemed_offer_amount,
 								redeem_loyalty_points: this.invoice_doc.redeem_loyalty_points,
 								redeemed_loyalty_points: this.invoice_doc.redeemed_loyalty_points,
-								custom_redeemed_loyalty_points:
-									this.invoice_doc.custom_redeemed_loyalty_points,
 								loyalty_amount: this.invoice_doc.loyalty_amount,
 								loyalty_discount_amount: this.invoice_doc.loyalty_discount_amount,
 								additional_discount: this.invoice_doc.additional_discount,
@@ -2963,6 +3299,10 @@ export default {
 								custom_redeemed_loyalty_points:
 									saved_doc.custom_redeemed_loyalty_points ??
 									this.invoice_doc.custom_redeemed_loyalty_points,
+								redeemed_coupon_amount:
+									saved_doc.redeemed_coupon_amount ?? this.invoice_doc.redeemed_coupon_amount,
+								redeemed_offer_amount:
+									saved_doc.redeemed_offer_amount ?? this.invoice_doc.redeemed_offer_amount,
 								redeem_loyalty_points:
 									saved_doc.redeem_loyalty_points ?? this.invoice_doc.redeem_loyalty_points,
 								redeemed_loyalty_points:
@@ -3037,6 +3377,10 @@ export default {
 			}
 		},
 		async save_invoice() {
+			if (!this.validateVehicleSelection()) {
+				return null;
+			}
+
 			let invoice = this.get_invoice_doc();
 
 			if (!invoice) {
@@ -3056,18 +3400,19 @@ export default {
 		},
 
 		clear_invoice({ skipCustomerClear = false, preserveDraftName = false } = {}) {
+			if (!this.validateVehicleSelection()) {
+				return;
+			}
+
 			// Reset all data
-			this.invoice_doc = null;
 			this.customer = "";
 			this.customer_name = "";
 			this.vehicle_number = "";
 			this.custom_vehicle_make = "";
 			this.items = [];
-			this.additional_discount = 0;
-			this.additional_discount_percentage = 0;
-			this.discount_amount = 0;
 			this.total_tax = 0;
-			this.clearLoyaltyRedemption();
+			this.resetDiscountState({ clearCoupons: true, clearOffers: true });
+			this.invoice_doc = null;
 			this.subtotal = 0;
 			this.grand_total = 0;
 			this.rounded_total = 0;
@@ -3129,6 +3474,22 @@ export default {
 	},
 
 	mounted() {
+		this.eventBus.on("handle_offers", () => {
+			console.log("[EVENT] handle_offers received");
+			this.handelOffers();
+			console.log("[handelOffers] START", {
+				coupons: this.posa_coupons,
+				offers: this.posOffers,
+				items: this.items,
+			});
+			console.log("[handelOffers] RAW DATA", {
+				posOffersLength: this.posOffers?.length,
+				couponsLength: this.posa_coupons?.length,
+				firstOffer: this.posOffers?.[0],
+				firstCoupon: this.posa_coupons?.[0],
+				firstItem: this.items?.[0],
+			});
+		});
 		this.eventBus.on("apply_vehicle_discount", async (data) => {
 			console.log("[Discount] Apply vehicle discount event received:", data);
 
@@ -3567,10 +3928,12 @@ export default {
 		});
 		this.eventBus.on("update_invoice_offers", (data) => {
 			this.updateInvoiceOffers(data);
+			this.syncMutuallyExclusiveDiscountFields();
 		});
 		this.eventBus.on("update_invoice_coupons", (data) => {
 			this.posa_coupons = data;
 			this.handelOffers();
+			this.syncMutuallyExclusiveDiscountFields();
 		});
 		this.eventBus.on("set_loyalty_redemption", this.setLoyaltyRedemption);
 		this.eventBus.on("clear_loyalty_redemption", this.clearLoyaltyRedemption);
@@ -3624,6 +3987,10 @@ export default {
 			this.fetch_available_currencies();
 		}
 
+		this.$nextTick(() => {
+			this.syncMutuallyExclusiveDiscountFields();
+		});
+
 		// Listen for reset_posting_date to reset posting date after invoice submission
 		this.eventBus.on("reset_posting_date", () => {
 			this.posting_date = frappe.datetime.nowdate();
@@ -3646,6 +4013,7 @@ export default {
 
 	// Cleanup event listeners before component is destroyed
 	beforeUnmount() {
+		this.eventBus.off("handle_offers");
 		this.eventBus.off("update_offers_counters");
 		this.eventBus.off("update_coupons_counters");
 		this.eventBus.off("register_item_groups");

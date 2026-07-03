@@ -11,34 +11,67 @@
 			<div class="my-0 py-0 overflow-y-auto" @mouseover="style = 'cursor: pointer'">
 				<v-data-table
 					:headers="items_headers"
-					:items="pos_offers"
+					:items="displayOffers"
 					:single-expand="singleExpand"
 					v-model:expanded="expanded"
 					show-expand
 					item-value="row_id"
+					:item-class="getOfferRowClass"
 					class="elevation-1"
 					:items-per-page="itemsPerPage"
 					hide-default-footer
 				>
 					<template v-slot:item.offer_applied="{ item }">
-						<v-btn
-							v-if="!item.offer_applied"
-							color="green"
-							@click="applyOffer(item)"
-							:disabled="
-								(item.offer == 'Give Product' &&
-									!item.give_item &&
-									(!item.replace_cheapest_item || !item.replace_item)) ||
-								(item.offer == 'Grand Total' &&
-									discount_percentage_offer_name &&
-									discount_percentage_offer_name != item.name)
-							"
+						<v-tooltip
+							v-if="!(item.raw || item).offer_applied"
+							location="top"
+							:text="offerConflictMessage"
+							:disabled="!isOfferActionsDisabled"
 						>
-							{{ __("Apply") }}
-						</v-btn>
-						<v-btn v-else color="red" @click="removeOffer(item)">
-							{{ __("Remove") }}
-						</v-btn>
+							<template #activator="{ props }">
+								<span
+									v-bind="props"
+									:class="['discount-lock-activator', { 'discount-lock-activator--disabled': isOfferActionsDisabled }]"
+								>
+									<v-btn
+										color="green"
+										:disabled="
+											isOfferActionsDisabled ||
+											((item.raw || item).offer == 'Give Product' &&
+												!(item.raw || item).give_item &&
+												(!((item.raw || item).replace_cheapest_item) || !((item.raw || item).replace_item))) ||
+											((item.raw || item).offer == 'Grand Total' &&
+												discount_percentage_offer_name &&
+												discount_percentage_offer_name != (item.raw || item).name)
+										"
+										@click.stop.prevent="applyOffer(item.raw || item)"
+									>
+										{{ __("Apply") }}
+									</v-btn>
+								</span>
+							</template>
+						</v-tooltip>
+						<div v-else class="offer-applied-cell">
+							<div class="d-flex flex-wrap align-center ga-2">
+								<v-chip color="green" variant="tonal" size="small" label>
+									{{ __("APPLIED") }}
+								</v-chip>
+								<span class="offer-applied-amount">
+									{{ __("Applied") }}
+									{{ currencySymbol(getOfferCurrencyCode()) }}{{ getOfferAppliedAmount(item.raw || item) }}
+								</span>
+							</div>
+							<v-btn
+								color="red"
+								variant="tonal"
+								size="small"
+								prepend-icon="mdi-close"
+								class="mt-1 offer-remove-btn"
+								@click="removeOffer(item.raw || item)"
+							>
+								{{ __("REMOVE") }}
+							</v-btn>
+						</div>
 					</template>
 					<template v-slot:expanded-row="{ item }">
 						<td :colspan="items_headers.length">
@@ -95,6 +128,16 @@
 import format from "../../format";
 export default {
 	mixins: [format],
+	props: {
+		activeDiscountType: {
+			type: String,
+			default: null,
+		},
+		activeDiscountMessage: {
+			type: String,
+			default: "",
+		},
+	},
 	data: () => ({
 		loading: false,
 		pos_profile: "",
@@ -102,6 +145,11 @@ export default {
 		allItems: [],
 		groupItemCache: {},
 		discount_percentage_offer_name: null,
+		suppressPosOffersWatcher: false,
+		discountConflictState: {
+			activeType: null,
+			message: "",
+		},
 		itemsPerPage: 1000,
 		expanded: [],
 		singleExpand: true,
@@ -118,14 +166,32 @@ export default {
 			return this.pos_offers.length;
 		},
 		appliedOffersCount() {
-			return this.pos_offers.filter((el) => !!el.offer_applied).length;
+			return this.displayOffers.filter((el) => !!el.offer_applied).length;
+		},
+		displayOffers() {
+			return this.pos_offers.filter((offer) => !offer.coupon_based);
 		},
 		isDarkTheme() {
 			return this.$theme?.current === "dark";
 		},
+		isOfferActionsDisabled() {
+			return !!this.sharedActiveDiscountType;
+		},
+		offerConflictMessage() {
+			return this.activeDiscountMessage || this.discountConflictState.message || "";
+		},
+		sharedActiveDiscountType() {
+			return this.activeDiscountType || this.discountConflictState.activeType || null;
+		},
 	},
 
 	methods: {
+		updateDiscountConflictState(payload = {}) {
+			this.discountConflictState = {
+				activeType: payload.activeType || null,
+				message: payload.message || "",
+			};
+		},
 		back_to_invoice() {
 			this.eventBus.emit("show_offers", "false");
 		},
@@ -167,13 +233,91 @@ export default {
 			list_offers = [...this.pos_offers];
 			this.pos_offers = list_offers;
 		},
-		applyOffer(item) {
-			item.offer_applied = true;
-			this.forceUpdateItem();
+		applyOffer(offer) {
+			console.log("[OFFER APPLY CLICK]", offer.name, offer);
+			if (this.isOfferActionsDisabled) {
+				this.eventBus.emit("show_message", {
+					title: this.offerConflictMessage,
+					color: "error",
+				});
+				return;
+			}
+			if (!offer.coupon_based) {
+				offer.offer_applied = true;
+			} else {
+				return;
+			}
+			this.suppressPosOffersWatcher = true;
+			this.$nextTick(() => {
+				this.suppressPosOffersWatcher = false;
+			});
+			this.eventBus.emit("update_invoice_offers", [offer]);
+		},
+		getOfferRowClass(item) {
+			const offer = item.raw || item;
+			return offer.offer_applied ? "offer-row-applied" : "";
+		},
+		getOfferCurrencyCode() {
+			return (
+				this.$parent?.$refs?.invoiceComponent?.pos_profile?.currency ||
+				this.$parent?.pos_profile?.currency ||
+				"INR"
+			);
+		},
+		getOfferCurrencyPrecision() {
+			return Number(this.$parent?.$refs?.invoiceComponent?.currency_precision || this.currency_precision || 2);
+		},
+		getOfferAppliedAmount(item) {
+			const offer = item.raw || item;
+			const directAmount = Number(
+				offer.applied_discount_amount ||
+					offer.applied_amount ||
+					offer.redeemed_offer_amount ||
+					offer.discount_amount ||
+					0,
+			);
+			const invoiceAmount = Number(
+				this.$parent?.$refs?.invoiceComponent?.invoice_doc?.redeemed_offer_amount || 0,
+			);
+			const amount = directAmount > 0 ? directAmount : offer.offer_applied ? invoiceAmount : 0;
+			return this.formatFloat(amount, this.getOfferCurrencyPrecision());
 		},
 		removeOffer(item) {
-			item.offer_applied = false;
-			this.forceUpdateItem();
+			const offer = item.raw || item;
+			if (offer.coupon_based) return;
+
+			offer.offer_applied = false;
+			offer.applied_discount_amount = 0;
+			offer.applied_amount = 0;
+			offer.redeemed_offer_amount = 0;
+
+			this.suppressPosOffersWatcher = true;
+
+			this.pos_offers = this.pos_offers.map((row) => {
+				if (row.row_id === offer.row_id || row.name === offer.name) {
+					return {
+						...row,
+						offer_applied: false,
+						coupon: null,
+						coupon_code: null,
+						applied_discount_amount: 0,
+						applied_amount: 0,
+						redeemed_offer_amount: 0,
+					};
+				}
+				return row;
+			});
+
+			this.$nextTick(() => {
+				this.suppressPosOffersWatcher = false;
+			});
+
+			const remainingOffers = this.pos_offers.filter(
+				(row) => row.offer_applied && !row.coupon_based,
+			);
+
+			this.eventBus.emit("update_invoice_offers", remainingOffers);
+			this.updateCounters();
 		},
 		makeid(length) {
 			let result = "";
@@ -185,19 +329,24 @@ export default {
 			return result;
 		},
 		updatePosOffers(offers) {
-			const toRemove = [];
-			this.pos_offers.forEach((pos_offer) => {
-				const offer = offers.find((offer) => offer.name === pos_offer.name);
-				if (!offer) {
-					toRemove.push(pos_offer.row_id);
-				}
-			});
-			this.removeOffers(toRemove);
+			offers = Array.isArray(offers) ? offers : [];
 			offers.forEach((offer) => {
 				const pos_offer = this.pos_offers.find((pos_offer) => offer.name === pos_offer.name);
 				if (pos_offer) {
 					pos_offer.items = offer.items;
-					if (pos_offer.offer === "Grand Total" && !this.discount_percentage_offer_name) {
+					const incomingApplied =
+						!!offer.offer_applied || (!!offer.coupon_based && !!offer.coupon);
+
+					if (Object.prototype.hasOwnProperty.call(offer, "offer_applied")) {
+						pos_offer.offer_applied = incomingApplied;
+					} else {
+						pos_offer.offer_applied = !!pos_offer.offer_applied || incomingApplied;
+					}
+					if (
+						pos_offer.offer === "Grand Total" &&
+						!pos_offer.coupon_based &&
+						!this.discount_percentage_offer_name
+					) {
 						pos_offer.offer_applied = !!pos_offer.auto;
 					}
 					if (
@@ -217,7 +366,7 @@ export default {
 						newOffer.give_item = offer.apply_item_code || "Nothing";
 					}
 					if (offer.offer_applied) {
-						newOffer.offer_applied == !!offer.offer_applied;
+						newOffer.offer_applied = !!offer.offer_applied;
 					} else {
 						if (
 							offer.apply_type == "Item Group" &&
@@ -305,12 +454,18 @@ export default {
 			);
 			this.eventBus.emit("update_pos_coupons", applyedOffers);
 		},
+		setOffers(data) {
+			this.pos_offers = Array.isArray(data) ? data.map((offer) => ({ ...offer })) : [];
+		},
 	},
 
 	watch: {
 		pos_offers: {
 			deep: true,
 			handler() {
+				if (this.suppressPosOffersWatcher) {
+					return;
+				}
 				this.handelOffers();
 				this.updateCounters();
 				this.updatePosCoupuns();
@@ -332,12 +487,18 @@ export default {
 		this.eventBus.on("update_pos_offers", (data) => {
 			this.updatePosOffers(data);
 		});
+		this.eventBus.on("set_offers", this.setOffers);
 		this.eventBus.on("update_discount_percentage_offer_name", (data) => {
 			this.discount_percentage_offer_name = data.value;
 		});
+		this.eventBus.on("discount_conflict_state", this.updateDiscountConflictState);
 		this.eventBus.on("set_all_items", (data) => {
 			this.allItems = data;
 		});
+	},
+	beforeUnmount() {
+		this.eventBus.off("discount_conflict_state", this.updateDiscountConflictState);
+		this.eventBus.off("set_offers", this.setOffers);
 	},
 };
 </script>
@@ -429,6 +590,15 @@ export default {
 	height: 80px;
 }
 
+.discount-lock-activator {
+	display: block;
+	width: 100%;
+}
+
+.discount-lock-activator--disabled {
+	cursor: not-allowed;
+}
+
 /* FIX bottom white gap in Offers */
 .selection {
 	display: flex;
@@ -438,5 +608,50 @@ export default {
 
 .selection > .overflow-y-auto {
 	flex: 1;
+}
+
+:deep(.offer-row-applied > td) {
+	background-color: rgba(76, 175, 80, 0.08);
+}
+
+:deep(.offer-row-applied:hover > td) {
+	background-color: rgba(76, 175, 80, 0.12);
+}
+
+.offer-applied-cell {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+}
+
+.offer-applied-amount {
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: rgba(0, 0, 0, 0.72);
+}
+
+:deep(.theme--dark) .offer-applied-amount {
+	color: rgba(255, 255, 255, 0.8);
+}
+.offer-applied-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	align-items: flex-start;
+	min-width: 110px;
+}
+
+.offer-applied-amount {
+	font-size: 12px;
+	font-weight: 700;
+	color: #2e7d32;
+	white-space: nowrap;
+}
+
+.offer-remove-btn {
+	height: 24px !important;
+	min-width: 74px !important;
+	font-size: 11px !important;
+	font-weight: 700 !important;
 }
 </style>

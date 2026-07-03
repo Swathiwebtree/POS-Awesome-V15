@@ -12,29 +12,57 @@
 			<!-- Input and Button Row - Same Level -->
 			<v-row class="coupon-input-row px-4 pb-2" no-gutters>
 				<v-col cols="8" class="pr-2">
-					<v-text-field
-						density="compact"
-						variant="outlined"
-						color="primary"
-						:label="frappe._('Coupon')"
-						:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
-						hide-details
-						v-model="new_coupon"
-						class="coupon-input"
-						@keydown.enter="add_coupon(new_coupon)"
+					<v-tooltip
+						location="top"
+						:text="discountConflictMessage"
+						:disabled="!isCouponActionsDisabled"
 					>
-					</v-text-field>
+						<template #activator="{ props }">
+							<span
+								v-bind="props"
+								:class="['discount-lock-activator', { 'discount-lock-activator--disabled': isCouponActionsDisabled }]"
+							>
+								<v-text-field
+									density="compact"
+									variant="outlined"
+									color="primary"
+									:label="frappe._('Coupon')"
+									:bg-color="isDarkTheme ? '#1E1E1E' : 'white'"
+									hide-details
+									v-model="new_coupon"
+									class="coupon-input"
+									:disabled="isCouponActionsDisabled"
+									@keydown.enter.prevent="handleCouponEnter"
+								>
+								</v-text-field>
+							</span>
+						</template>
+					</v-tooltip>
 				</v-col>
 				<v-col cols="4">
-					<v-btn
-						class="add-coupon-btn"
-						color="success"
-						theme="dark"
-						block
-						@click="add_coupon(new_coupon)"
+					<v-tooltip
+						location="top"
+						:text="discountConflictMessage"
+						:disabled="!isCouponActionsDisabled"
 					>
-						{{ __("add") }}
-					</v-btn>
+						<template #activator="{ props }">
+							<span
+								v-bind="props"
+								:class="['discount-lock-activator', { 'discount-lock-activator--disabled': isCouponActionsDisabled }]"
+							>
+								<v-btn
+									class="add-coupon-btn"
+									color="success"
+									theme="dark"
+									block
+									:disabled="isCouponActionsDisabled"
+									@click="add_coupon(new_coupon)"
+								>
+									{{ __("add") }}
+								</v-btn>
+							</span>
+						</template>
+					</v-tooltip>
 				</v-col>
 			</v-row>
 
@@ -50,7 +78,15 @@
 					hide-default-footer
 				>
 					<template v-slot:item.applied="{ item }">
-						<v-checkbox-btn v-model="item.applied" disabled></v-checkbox-btn>
+						<v-btn
+							:color="(item.raw || item).applied ? 'red' : 'green'"
+							variant="flat"
+							size="small"
+							:disabled="isCouponActionsDisabled && !(item.raw || item).applied"
+							@click="(item.raw || item).applied ? removeCoupon(item.raw || item) : applyCoupon(item.raw || item)"
+						>
+							{{ (item.raw || item).applied ? __("Remove") : __("Apply") }}
+						</v-btn>
 					</template>
 				</v-data-table>
 			</div>
@@ -78,13 +114,27 @@
 
 <script>
 /* global __, frappe */
-export default {
+	export default {
+	props: {
+		activeDiscountType: {
+			type: String,
+			default: null,
+		},
+		activeDiscountMessage: {
+			type: String,
+			default: "",
+		},
+	},
 	data: () => ({
 		loading: false,
 		pos_profile: "",
 		customer: "",
 		posa_coupons: [],
 		new_coupon: null,
+		discountConflictState: {
+			activeType: null,
+			message: "",
+		},
 		itemsPerPage: 1000,
 		singleExpand: true,
 		items_headers: [
@@ -105,20 +155,64 @@ export default {
 		isDarkTheme() {
 			return this.$theme?.current === "dark";
 		},
+		isCouponActionsDisabled() {
+			return ["offer", "loyalty"].includes(this.sharedActiveDiscountType);
+		},
+		discountConflictMessage() {
+			return this.activeDiscountMessage || this.discountConflictState.message || "";
+		},
+		sharedActiveDiscountType() {
+			return this.activeDiscountType || this.discountConflictState.activeType || null;
+		},
 	},
 
 	methods: {
+		updateDiscountConflictState(payload = {}) {
+			this.discountConflictState = {
+				activeType: payload.activeType || null,
+				message: payload.message || "",
+			};
+		},
 		back_to_invoice() {
 			this.eventBus.emit("show_coupons", "false");
 		},
+		handleCouponEnter() {
+			if (this.isCouponActionsDisabled) {
+				this.eventBus.emit("show_message", {
+					title: this.discountConflictMessage,
+					color: "error",
+				});
+				return;
+			}
+			this.add_coupon(this.new_coupon);
+		},
 		add_coupon(new_coupon) {
-			if (!this.customer || !new_coupon) {
+			if (this.isCouponActionsDisabled) {
+				this.eventBus.emit("show_message", {
+					title: this.discountConflictMessage,
+					color: "error",
+				});
+				return;
+			}
+
+			if (!new_coupon) {
+				this.eventBus.emit("show_message", {
+					title: __("Enter coupon code"),
+					color: "error",
+				});
+				return;
+			}
+
+			if (!this.customer) {
 				this.eventBus.emit("show_message", {
 					title: __("Select a customer to use coupon"),
 					color: "error",
 				});
 				return;
 			}
+
+			new_coupon = String(new_coupon).trim().toUpperCase();
+
 			const exist = this.posa_coupons.find((el) => el.coupon_code == new_coupon);
 			if (exist) {
 				this.eventBus.emit("show_message", {
@@ -127,6 +221,7 @@ export default {
 				});
 				return;
 			}
+
 			const vm = this;
 			frappe.call({
 				method: "posawesome.posawesome.api.offers.get_pos_coupon",
@@ -150,14 +245,44 @@ export default {
 								coupon: coupon.name,
 								coupon_code: coupon.coupon_code,
 								type: coupon.coupon_type,
-								applied: 0,
+								applied: 1,
 								pos_offer: coupon.pos_offer,
 								customer: coupon.customer || vm.customer,
 							});
+							console.log("====================================");
+							console.log("[COUPON] Coupon added to POS");
+							console.log(vm.posa_coupons);
+							console.log("====================================");
+							vm.setExclusiveCoupon(coupon.name);
+							vm.updateInvoice();
+
+							setTimeout(() => {
+								console.log("[COUPON] Emitting handle_offers");
+								vm.eventBus.emit("handle_offers");
+							}, 300);
 						}
 					}
 				},
 			});
+		},
+		setExclusiveCoupon(activeCouponId) {
+			this.posa_coupons.forEach((coupon) => {
+				coupon.applied = coupon.coupon === activeCouponId;
+			});
+		},
+		applyCoupon(coupon) {
+			if (this.isCouponActionsDisabled) {
+				this.eventBus.emit("show_message", {
+					title: this.discountConflictMessage,
+					color: "error",
+				});
+				return;
+			}
+
+			this.setExclusiveCoupon(coupon.coupon);
+			coupon.applied = true;
+			this.updateInvoice();
+			this.eventBus.emit("handle_offers");
 		},
 		setActiveGiftCoupons() {
 			if (!this.customer) return;
@@ -181,17 +306,35 @@ export default {
 
 		updatePosCoupons(offers) {
 			this.posa_coupons.forEach((coupon) => {
-				const offer = offers.find((el) => el.offer_applied && el.coupon == coupon.coupon);
-				if (offer) {
-					coupon.applied = 1;
-				} else {
-					coupon.applied = 0;
-				}
+				const offer = offers.find((el) => {
+					return (
+						el.offer_applied &&
+						(
+							el.coupon === coupon.coupon ||
+							el.coupon_code === coupon.coupon_code ||
+							el.pos_offer === coupon.pos_offer ||
+							el.name === coupon.pos_offer
+						)
+						);
+				});
+
+				coupon.applied = !!offer;
 			});
+
+			this.updateCounters();
 		},
 
-		removeCoupon(reomove_list) {
-			this.posa_coupons = this.posa_coupons.filter((coupon) => !reomove_list.includes(coupon.coupon));
+		removeCoupon(target) {
+			if (Array.isArray(target)) {
+				this.posa_coupons = this.posa_coupons.filter((coupon) => !target.includes(coupon.coupon));
+				return;
+			}
+			this.posa_coupons = this.posa_coupons.map((coupon) => ({
+				...coupon,
+				applied: coupon.coupon === target.coupon ? 0 : coupon.applied,
+			}));
+			this.updateInvoice();
+			this.eventBus.emit("handle_offers");
 		},
 		updateInvoice() {
 			this.eventBus.emit("update_invoice_coupons", this.posa_coupons);
@@ -236,13 +379,18 @@ export default {
 				}
 			}
 			this.setActiveGiftCoupons();
+			console.log("Coupon customer updated:", customer);
 		});
+		this.eventBus.on("discount_conflict_state", this.updateDiscountConflictState);
 		this.eventBus.on("update_pos_coupons", (data) => {
 			this.updatePosCoupons(data);
 		});
 		this.eventBus.on("set_pos_coupons", (data) => {
 			this.posa_coupons = data;
 		});
+	},
+	beforeUnmount() {
+		this.eventBus.off("discount_conflict_state", this.updateDiscountConflictState);
 	},
 };
 </script>
@@ -371,6 +519,15 @@ export default {
 .back-btn .v-icon {
 	font-size: 24px;
 	margin-right: 8px;
+}
+
+.discount-lock-activator {
+	display: block;
+	width: 100%;
+}
+
+.discount-lock-activator--disabled {
+	cursor: not-allowed;
 }
 
 /* Responsive */
