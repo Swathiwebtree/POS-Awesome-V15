@@ -69,7 +69,9 @@ export default {
 			if (!isNormalAppliedOffer && !isCouponOffer) {
 				return;
 			}
-			const applyOn = String(offer.apply_on || "").trim().toLowerCase();
+			const applyOn = String(offer.apply_on || "")
+				.trim()
+				.toLowerCase();
 
 			if (applyOn === "item code") {
 				const itemOffer = this.getItemOffer(offer);
@@ -136,7 +138,9 @@ export default {
 		return combined.find((el) => el.posa_row_id == row_id);
 	},
 	normalizeOfferMatchValue(value) {
-		return String(value ?? "").trim().toLowerCase();
+		return String(value ?? "")
+			.trim()
+			.toLowerCase();
 	},
 
 	checkQtyAnountOffer(offer, qty, amount) {
@@ -201,13 +205,13 @@ export default {
 
 		const hasLoyalty = Number(
 			this.loyalty_redemption_points ||
-			this.loyalty_redemption_amount ||
-			this.invoice_doc?.custom_redeemed_loyalty_points ||
-			this.invoice_doc?.redeemed_loyalty_points ||
-			this.invoice_doc?.redeem_loyalty_points ||
-			this.invoice_doc?.loyalty_amount ||
-			this.invoice_doc?.loyalty_discount_amount ||
-			0,
+				this.loyalty_redemption_amount ||
+				this.invoice_doc?.custom_redeemed_loyalty_points ||
+				this.invoice_doc?.redeemed_loyalty_points ||
+				this.invoice_doc?.redeem_loyalty_points ||
+				this.invoice_doc?.loyalty_amount ||
+				this.invoice_doc?.loyalty_discount_amount ||
+				0,
 		);
 
 		if (hasLoyalty > 0) {
@@ -316,10 +320,7 @@ export default {
 		if (item.original_base_rate !== undefined && item.original_base_rate !== null) {
 			item.base_rate = item.original_base_rate;
 		}
-		if (
-			item.original_base_price_list_rate !== undefined &&
-			item.original_base_price_list_rate !== null
-		) {
+		if (item.original_base_price_list_rate !== undefined && item.original_base_price_list_rate !== null) {
 			item.base_price_list_rate = item.original_base_price_list_rate;
 		}
 
@@ -344,9 +345,7 @@ export default {
 			return [];
 		}
 
-		return combined.filter(
-			(item) => item && offerItems.includes(item.posa_row_id),
-		);
+		return combined.filter((item) => item && offerItems.includes(item.posa_row_id));
 	},
 	getOfferDiscountAmount(offer) {
 		if (!offer) return 0;
@@ -374,7 +373,10 @@ export default {
 		}
 
 		if (offer.discount_type === "Discount Percentage") {
-			return this.flt((grossAmount * Number(offer.discount_percentage || 0)) / 100, this.currency_precision);
+			return this.flt(
+				(grossAmount * Number(offer.discount_percentage || 0)) / 100,
+				this.currency_precision,
+			);
 		}
 
 		if (offer.discount_type === "Discount Amount") {
@@ -407,7 +409,11 @@ export default {
 		let matchedItems = [];
 		const targetItem = this.normalizeOfferMatchValue(offer.item);
 
-		if (String(offer.apply_on || "").trim().toLowerCase() === "item code") {
+		if (
+			String(offer.apply_on || "")
+				.trim()
+				.toLowerCase() === "item code"
+		) {
 			if (this.checkOfferCoupon(offer)) {
 				combined.forEach((item) => {
 					console.log("[ITEM MATCH CHECK]", {
@@ -489,8 +495,12 @@ export default {
 				combined.forEach((item) => {
 					if (
 						!item.posa_is_offer &&
-						String(item.item_group || "").trim().toLowerCase() ===
-						String(offer.item_group || "").trim().toLowerCase()
+						String(item.item_group || "")
+							.trim()
+							.toLowerCase() ===
+							String(offer.item_group || "")
+								.trim()
+								.toLowerCase()
 					) {
 						if (
 							offer.offer === "Item Price" &&
@@ -610,7 +620,11 @@ export default {
 		});
 		offers.forEach((offer) => {
 			if (!offer.items || !offer.items.length) {
-				if (String(offer.apply_on || "").trim().toLowerCase() === "item code") {
+				if (
+					String(offer.apply_on || "")
+						.trim()
+						.toLowerCase() === "item code"
+				) {
 					offer = this.getItemOffer(offer) || offer;
 				}
 			}

@@ -2142,7 +2142,10 @@ export default {
 		buildEmployeeDisplayLabel(employee) {
 			if (!employee) return "";
 			const employeeId = this.normalizeEmployeeValue(
-				employee.custom_employee_id || employee.employee_number || employee.employee_id || employee.name,
+				employee.custom_employee_id ||
+					employee.employee_number ||
+					employee.employee_id ||
+					employee.name,
 			);
 			const employeeName = this.normalizeEmployeeValue(
 				employee.employee_name || employee.display_name || employee.full_name,
@@ -2166,13 +2169,12 @@ export default {
 					employeeId ||
 					customEmployeeId,
 			);
-			const displayLabel =
-				this.buildEmployeeDisplayLabel({
-					employee_id: employeeId,
-					custom_employee_id: customEmployeeId,
-					employee_number: employeeNumber,
-					employee_name: employeeName,
-				});
+			const displayLabel = this.buildEmployeeDisplayLabel({
+				employee_id: employeeId,
+				custom_employee_id: customEmployeeId,
+				employee_number: employeeNumber,
+				employee_name: employeeName,
+			});
 			return {
 				...employee,
 				employee_id: employeeId,

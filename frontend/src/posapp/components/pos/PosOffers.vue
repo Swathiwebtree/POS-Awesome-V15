@@ -31,7 +31,10 @@
 							<template #activator="{ props }">
 								<span
 									v-bind="props"
-									:class="['discount-lock-activator', { 'discount-lock-activator--disabled': isOfferActionsDisabled }]"
+									:class="[
+										'discount-lock-activator',
+										{ 'discount-lock-activator--disabled': isOfferActionsDisabled },
+									]"
 								>
 									<v-btn
 										color="green"
@@ -39,7 +42,8 @@
 											isOfferActionsDisabled ||
 											((item.raw || item).offer == 'Give Product' &&
 												!(item.raw || item).give_item &&
-												(!((item.raw || item).replace_cheapest_item) || !((item.raw || item).replace_item))) ||
+												(!(item.raw || item).replace_cheapest_item ||
+													!(item.raw || item).replace_item)) ||
 											((item.raw || item).offer == 'Grand Total' &&
 												discount_percentage_offer_name &&
 												discount_percentage_offer_name != (item.raw || item).name)
@@ -58,7 +62,8 @@
 								</v-chip>
 								<span class="offer-applied-amount">
 									{{ __("Applied") }}
-									{{ currencySymbol(getOfferCurrencyCode()) }}{{ getOfferAppliedAmount(item.raw || item) }}
+									{{ currencySymbol(getOfferCurrencyCode())
+									}}{{ getOfferAppliedAmount(item.raw || item) }}
 								</span>
 							</div>
 							<v-btn
@@ -265,7 +270,9 @@ export default {
 			);
 		},
 		getOfferCurrencyPrecision() {
-			return Number(this.$parent?.$refs?.invoiceComponent?.currency_precision || this.currency_precision || 2);
+			return Number(
+				this.$parent?.$refs?.invoiceComponent?.currency_precision || this.currency_precision || 2,
+			);
 		},
 		getOfferAppliedAmount(item) {
 			const offer = item.raw || item;
@@ -312,9 +319,7 @@ export default {
 				this.suppressPosOffersWatcher = false;
 			});
 
-			const remainingOffers = this.pos_offers.filter(
-				(row) => row.offer_applied && !row.coupon_based,
-			);
+			const remainingOffers = this.pos_offers.filter((row) => row.offer_applied && !row.coupon_based);
 
 			this.eventBus.emit("update_invoice_offers", remainingOffers);
 			this.updateCounters();
@@ -334,8 +339,7 @@ export default {
 				const pos_offer = this.pos_offers.find((pos_offer) => offer.name === pos_offer.name);
 				if (pos_offer) {
 					pos_offer.items = offer.items;
-					const incomingApplied =
-						!!offer.offer_applied || (!!offer.coupon_based && !!offer.coupon);
+					const incomingApplied = !!offer.offer_applied || (!!offer.coupon_based && !!offer.coupon);
 
 					if (Object.prototype.hasOwnProperty.call(offer, "offer_applied")) {
 						pos_offer.offer_applied = incomingApplied;

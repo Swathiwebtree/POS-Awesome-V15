@@ -2293,7 +2293,7 @@ export default {
 					amount: item.amount,
 					posa_offer_applied: item.posa_offer_applied,
 					posa_offers: item.posa_offers,
-			  }
+				}
 			: null;
 		const restoreOfferState = (target) => {
 			if (!preservedOfferState) {

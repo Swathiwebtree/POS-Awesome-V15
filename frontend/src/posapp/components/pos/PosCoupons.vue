@@ -20,7 +20,10 @@
 						<template #activator="{ props }">
 							<span
 								v-bind="props"
-								:class="['discount-lock-activator', { 'discount-lock-activator--disabled': isCouponActionsDisabled }]"
+								:class="[
+									'discount-lock-activator',
+									{ 'discount-lock-activator--disabled': isCouponActionsDisabled },
+								]"
 							>
 								<v-text-field
 									density="compact"
@@ -48,7 +51,10 @@
 						<template #activator="{ props }">
 							<span
 								v-bind="props"
-								:class="['discount-lock-activator', { 'discount-lock-activator--disabled': isCouponActionsDisabled }]"
+								:class="[
+									'discount-lock-activator',
+									{ 'discount-lock-activator--disabled': isCouponActionsDisabled },
+								]"
 							>
 								<v-btn
 									class="add-coupon-btn"
@@ -83,7 +89,11 @@
 							variant="flat"
 							size="small"
 							:disabled="isCouponActionsDisabled && !(item.raw || item).applied"
-							@click="(item.raw || item).applied ? removeCoupon(item.raw || item) : applyCoupon(item.raw || item)"
+							@click="
+								(item.raw || item).applied
+									? removeCoupon(item.raw || item)
+									: applyCoupon(item.raw || item)
+							"
 						>
 							{{ (item.raw || item).applied ? __("Remove") : __("Apply") }}
 						</v-btn>
@@ -114,7 +124,7 @@
 
 <script>
 /* global __, frappe */
-	export default {
+export default {
 	props: {
 		activeDiscountType: {
 			type: String,
@@ -309,13 +319,11 @@
 				const offer = offers.find((el) => {
 					return (
 						el.offer_applied &&
-						(
-							el.coupon === coupon.coupon ||
+						(el.coupon === coupon.coupon ||
 							el.coupon_code === coupon.coupon_code ||
 							el.pos_offer === coupon.pos_offer ||
-							el.name === coupon.pos_offer
-						)
-						);
+							el.name === coupon.pos_offer)
+					);
 				});
 
 				coupon.applied = !!offer;

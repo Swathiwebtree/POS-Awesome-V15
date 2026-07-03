@@ -840,10 +840,7 @@ export default {
 
 		getSelectedVehicleNumber() {
 			return String(
-				this.custom_vehicle_no ||
-					this.invoice_doc?.custom_vehicle_no ||
-					this.vehicle_number ||
-					"",
+				this.custom_vehicle_no || this.invoice_doc?.custom_vehicle_no || this.vehicle_number || "",
 			).trim();
 		},
 
@@ -1541,7 +1538,9 @@ export default {
 				this.discount_amount = discountAmount;
 				this.additional_discount = discountAmount;
 				this.additional_discount_percentage = this.flt(
-					this.subtotal ? (preservedAmount / this.subtotal) * 100 : this.discount_lock_percentage || 0,
+					this.subtotal
+						? (preservedAmount / this.subtotal) * 100
+						: this.discount_lock_percentage || 0,
 					this.currency_precision,
 				);
 			} else {
@@ -3300,7 +3299,8 @@ export default {
 									saved_doc.custom_redeemed_loyalty_points ??
 									this.invoice_doc.custom_redeemed_loyalty_points,
 								redeemed_coupon_amount:
-									saved_doc.redeemed_coupon_amount ?? this.invoice_doc.redeemed_coupon_amount,
+									saved_doc.redeemed_coupon_amount ??
+									this.invoice_doc.redeemed_coupon_amount,
 								redeemed_offer_amount:
 									saved_doc.redeemed_offer_amount ?? this.invoice_doc.redeemed_offer_amount,
 								redeem_loyalty_points:

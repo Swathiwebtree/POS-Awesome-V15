@@ -285,9 +285,7 @@ def _normalize_discount_state(invoice_doc, data=None):
     redeemed_offer_amount = flt(
         data.get("redeemed_offer_amount") or invoice_doc.get("redeemed_offer_amount") or 0
     )
-    additional_discount = flt(
-        data.get("additional_discount") or invoice_doc.get("additional_discount") or 0
-    )
+    additional_discount = flt(data.get("additional_discount") or invoice_doc.get("additional_discount") or 0)
     discount_amount = flt(data.get("discount_amount") or invoice_doc.get("discount_amount") or 0)
 
     active_type = None
@@ -1085,9 +1083,7 @@ def update_invoice(data):
     response["net_total"] = flt(invoice_doc.net_total)
     response["redeem_loyalty_points"] = flt(invoice_doc.get("redeem_loyalty_points") or 0)
     response["redeemed_loyalty_points"] = flt(invoice_doc.get("redeemed_loyalty_points") or 0)
-    response["custom_redeemed_loyalty_points"] = flt(
-        invoice_doc.get("custom_redeemed_loyalty_points") or 0
-    )
+    response["custom_redeemed_loyalty_points"] = flt(invoice_doc.get("custom_redeemed_loyalty_points") or 0)
     response["redeemed_coupon_amount"] = flt(invoice_doc.get("redeemed_coupon_amount") or 0)
     response["redeemed_offer_amount"] = flt(invoice_doc.get("redeemed_offer_amount") or 0)
     response["loyalty_amount"] = flt(invoice_doc.get("loyalty_amount") or 0)

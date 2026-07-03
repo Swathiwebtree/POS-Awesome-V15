@@ -442,7 +442,10 @@ export default {
 
 			const postingDate = String(item.posting_date || "").trim();
 			if (!postingDate) return null;
-			const postingTime = String(item.posting_time || "00:00:00").split(".")[0].trim() || "00:00:00";
+			const postingTime =
+				String(item.posting_time || "00:00:00")
+					.split(".")[0]
+					.trim() || "00:00:00";
 			return normalizeDateTime(`${postingDate}T${postingTime}`);
 		},
 
