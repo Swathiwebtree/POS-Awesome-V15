@@ -1086,12 +1086,14 @@ export default {
 
 			discountAmount += itemDiscount;
 
-			if (typeof this.calc_item_price === "function") {
-				this.calc_item_price(item);
-			}
+			// Do NOT call calc_item_price here.
+			// It recalculates item and resets offer discount back to 0.
 		});
 
 		offer.offer_applied = true;
+		offer.applied_discount_amount = discountAmount;
+		offer.applied_amount = discountAmount;
+		offer.redeemed_offer_amount = discountAmount;
 
 		if (offer.coupon_based) {
 			this.invoice_doc.redeemed_coupon_amount = discountAmount;
