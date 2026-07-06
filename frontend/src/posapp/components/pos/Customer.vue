@@ -1312,6 +1312,10 @@ export default {
 					if (vehicleData) {
 						this.selectedVehicle = vehicleData.name;
 						this.eventBus.emit("vehicle_selected", vehicleData.name);
+						this.eventBus.emit(
+							"set_custom_vehicle_no",
+							vehicleData.vehicle_no || vehicleNo || "",
+						);
 						await this.fetchVehiclesForCustomer(customerName);
 
 						// Highlight the selected vehicle
@@ -1327,10 +1331,13 @@ export default {
 					} else {
 						this.selectedVehicle = null;
 						this.eventBus.emit("vehicle_selected", null);
+						this.eventBus.emit("set_custom_vehicle_no", "");
 					}
 
 					// ensure we fetch and emit the corporate flag as well
-					await this.fetchAndEmitCustomerDetails(customerName);
+					await this.fetchAndEmitCustomerDetails(customerName, {
+						preferVehicleNo: vehicleData?.vehicle_no || vehicleNo,
+					});
 				} else {
 					frappe.show_alert({
 						message: __("No customer found for vehicle: " + vehicleNo),
@@ -1338,6 +1345,7 @@ export default {
 					});
 					this.selectedVehicle = null;
 					this.eventBus.emit("vehicle_selected", null);
+					this.eventBus.emit("set_custom_vehicle_no", "");
 				}
 			} catch (err) {
 				console.error("Failed to lookup customer by vehicle:", err);
@@ -2129,6 +2137,7 @@ export default {
 				this.clearVehicleSearchText();
 
 				this.eventBus.emit("vehicle_selected", null);
+				this.eventBus.emit("set_custom_vehicle_no", "");
 				this.eventBus.emit("clear_vehicle_discounts");
 				return;
 			}
@@ -2139,6 +2148,7 @@ export default {
 			this.clearVehicleSearchText();
 			this.selectedVehicle = val;
 			this.vehicle_no = vehicle.vehicle_no || "";
+			this.eventBus.emit("set_custom_vehicle_no", this.vehicle_no || "");
 			this._upsertCustomerInList(
 				vehicle.customer,
 				vehicle.custom_display_name || vehicle.customer_name || vehicle.customer,
@@ -2172,7 +2182,9 @@ export default {
 					this.internalCustomer = vehicle.customer;
 
 					this.eventBus.emit("update_customer", vehicle.customer);
-					this.fetchAndEmitCustomerDetails(vehicle.customer);
+					this.fetchAndEmitCustomerDetails(vehicle.customer, {
+						preferVehicleNo: vehicle.vehicle_no || "",
+					});
 
 					// load vehicles ONLY ONCE after auto-customer set
 					this.fetchVehiclesForCustomer(vehicle.customer, vehicle.vehicle_no);
@@ -2474,6 +2486,7 @@ export default {
 		this.eventBus.on("clear_vehicle_number", () => {
 			this.selectedVehicle = null;
 			this.vehicle_no = "";
+			this.eventBus.emit("set_custom_vehicle_no", "");
 		});
 
 		this.eventBus.on("clear_all_fields", () => {
@@ -2484,6 +2497,7 @@ export default {
 			this.selectedVehicle = null;
 			this.vehicle_no = "";
 			this.vehicles = [];
+			this.eventBus.emit("set_custom_vehicle_no", "");
 			this.jobOrderCustomer = null;
 			this.jobOrderVehicleNo = null;
 			this.jobOrderLoading = false;

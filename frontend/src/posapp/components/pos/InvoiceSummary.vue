@@ -1645,7 +1645,8 @@ export default {
 		hasSelectedVehicle() {
 			return Boolean(
 				String(
-					this.vehicleNumber ||
+					this.$parent?.getSelectedVehicleNumber?.() ||
+						this.vehicleNumber ||
 						this.$parent?.custom_vehicle_no ||
 						this.$parent?.invoice_doc?.custom_vehicle_no ||
 						"",
@@ -2789,6 +2790,9 @@ export default {
 				this.emitOdometerData();
 			}
 		});
+		this.eventBus.on("invoice_cleared", () => {
+			this.clearOdometerFields();
+		});
 
 		// Listen for item additions to check for auto-apply
 		this.eventBus.on("item_added_to_invoice", this.checkAutoApplyCard);
@@ -2839,6 +2843,7 @@ export default {
 		this.eventBus.off("set_custom_vehicle_no");
 		this.eventBus.off("set_contact_mobile");
 		this.eventBus.off("update_customer_details");
+		this.eventBus.off("invoice_cleared");
 		this.eventBus.off("restore_loyalty_ui_state");
 		this.eventBus.off("discount_conflict_state", this.updateDiscountConflictState);
 		this.eventBus.off("set_loyalty_redemption");

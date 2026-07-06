@@ -839,9 +839,7 @@ export default {
 		},
 
 		getSelectedVehicleNumber() {
-			return String(
-				this.custom_vehicle_no || this.invoice_doc?.custom_vehicle_no || this.vehicle_number || "",
-			).trim();
+			return String(this.custom_vehicle_no || this.invoice_doc?.custom_vehicle_no || "").trim();
 		},
 
 		validateVehicleSelection() {
@@ -3407,7 +3405,10 @@ export default {
 			// Reset all data
 			this.customer = "";
 			this.customer_name = "";
-			this.vehicle_number = "";
+			this.custom_vehicle_no = "";
+			if (this.invoice_doc) {
+				this.invoice_doc.custom_vehicle_no = "";
+			}
 			this.custom_vehicle_make = "";
 			this.items = [];
 			this.total_tax = 0;
@@ -3733,6 +3734,12 @@ export default {
 				}
 			}
 		});
+		this.eventBus.on("set_custom_vehicle_no", (value) => {
+			this.custom_vehicle_no = value || "";
+			if (this.invoice_doc) {
+				this.invoice_doc.custom_vehicle_no = this.custom_vehicle_no;
+			}
+		});
 
 		this.eventBus.on("employee_selected", (data) => {
 			if (!data || !data.employee_id) {
@@ -4038,6 +4045,7 @@ export default {
 
 		this.eventBus.off("update_odometer_data");
 		this.eventBus.off("update_customer_details");
+		this.eventBus.off("set_custom_vehicle_no");
 		this.eventBus.off("update_manual_round_off");
 		this.eventBus.off("set_loyalty_redemption", this.setLoyaltyRedemption);
 		this.eventBus.off("clear_loyalty_redemption", this.clearLoyaltyRedemption);
