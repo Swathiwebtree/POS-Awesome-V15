@@ -30,6 +30,7 @@ from erpnext.accounts.doctype.payment_entry.payment_entry import (
 from posawesome.posawesome.api.payments import (
     redeeming_customer_credit,
 )  # Updated import
+from posawesome.posawesome.api.customers import get_loyalty_points
 from posawesome.posawesome.api.utilities import (
     ensure_child_doctype,
     set_batch_nos_for_bundels,
@@ -287,6 +288,15 @@ def _normalize_discount_state(invoice_doc, data=None):
     )
     additional_discount = flt(data.get("additional_discount") or invoice_doc.get("additional_discount") or 0)
     discount_amount = flt(data.get("discount_amount") or invoice_doc.get("discount_amount") or 0)
+    conversion_factor = flt(
+        data.get("conversion_factor")
+        or invoice_doc.get("conversion_factor")
+        or invoice_doc.get("loyalty_conversion_factor")
+        or 0
+    )
+    available_loyalty_points = flt(
+        data.get("available_loyalty_points") or invoice_doc.get("available_loyalty_points") or 0
+    )
 
     active_type = None
     active_amount = additional_discount or discount_amount
@@ -1063,6 +1073,7 @@ def update_invoice(data):
     frappe.flags.ignore_account_permission = True
     invoice_doc.docstatus = 0
     invoice_doc.save()
+    invoice_doc.reload()
 
     # Prepare response with all calculated values
     response = invoice_doc.as_dict()
@@ -1111,6 +1122,27 @@ def update_invoice(data):
     )
 
     return response
+
+
+@frappe.whitelist()
+def delete_draft_invoice(name, doctype="Sales Invoice"):
+    """Delete a draft invoice created while setting up payment."""
+
+    if not name:
+        return {"deleted": False, "reason": "missing_name"}
+
+    if doctype not in {"Sales Invoice", "POS Invoice"}:
+        frappe.throw(_("Unsupported doctype {0}").format(doctype))
+
+    if not frappe.db.exists(doctype, name):
+        return {"deleted": False, "reason": "not_found"}
+
+    doc = frappe.get_doc(doctype, name)
+    if cint(doc.docstatus) != 0:
+        return {"deleted": False, "reason": "not_draft"}
+
+    frappe.delete_doc(doctype, name, ignore_permissions=True)
+    return {"deleted": True, "name": name, "doctype": doctype}
 
 
 def get_current_user_open_shift(user=None):
@@ -1429,6 +1461,7 @@ def submit_invoice(invoice, data):
     invoice_doc.custom_vehicle_make = _resolve_vehicle_make(data, invoice_doc)
     _normalize_discount_state(invoice_doc, data)
     invoice_doc.save()
+    invoice_doc.reload()
 
     # ============================================================
 
@@ -1578,8 +1611,33 @@ def submit_invoice(invoice, data):
             )
             raise
 
-        if invoice_doc.docstatus == 1 and flt(data.get("redeemed_customer_credit") or 0) > 0:
-            redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
+    if invoice_doc.docstatus == 1 and flt(data.get("redeemed_customer_credit") or 0) > 0:
+        redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
+
+    if invoice_doc.docstatus == 1 and (
+        invoice_doc.get("loyalty_program")
+        or flt(invoice_doc.get("custom_redeemed_loyalty_points") or 0) > 0
+        or flt(invoice_doc.get("redeemed_loyalty_points") or 0) > 0
+        or flt(invoice_doc.get("redeem_loyalty_points") or 0) > 0
+    ):
+        try:
+            remaining_loyalty_points = flt(
+                get_loyalty_points(invoice_doc.customer, invoice_doc.loyalty_program, invoice_doc.company)
+            )
+            invoice_doc.loyalty_points = remaining_loyalty_points
+            frappe.db.set_value(
+                invoice_doc.doctype,
+                invoice_doc.name,
+                "loyalty_points",
+                remaining_loyalty_points,
+                update_modified=False,
+            )
+            invoice_doc.reload()
+        except Exception as loyalty_error:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"POS loyalty remaining points sync failed for {invoice_doc.doctype} {invoice_doc.name}: {loyalty_error}",
+            )
 
     # ============================================================
     # FREQUENT CARDS INTEGRATION - Process after invoice is submitted
@@ -1732,6 +1790,31 @@ def submit_in_background_job(kwargs):
     invoice_doc.reload()
     if flt((data or {}).get("redeemed_customer_credit") or 0) > 0:
         redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
+
+    if invoice_doc.docstatus == 1 and (
+        invoice_doc.get("loyalty_program")
+        or flt(invoice_doc.get("custom_redeemed_loyalty_points") or 0) > 0
+        or flt(invoice_doc.get("redeemed_loyalty_points") or 0) > 0
+        or flt(invoice_doc.get("redeem_loyalty_points") or 0) > 0
+    ):
+        try:
+            remaining_loyalty_points = flt(
+                get_loyalty_points(invoice_doc.customer, invoice_doc.loyalty_program, invoice_doc.company)
+            )
+            invoice_doc.loyalty_points = remaining_loyalty_points
+            frappe.db.set_value(
+                invoice_doc.doctype,
+                invoice_doc.name,
+                "loyalty_points",
+                remaining_loyalty_points,
+                update_modified=False,
+            )
+            invoice_doc.reload()
+        except Exception as loyalty_error:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"POS loyalty remaining points sync failed for {invoice_doc.doctype} {invoice_doc.name}: {loyalty_error}",
+            )
 
     # ============================================================
     # FREQUENT CARDS INTEGRATION - Background Job

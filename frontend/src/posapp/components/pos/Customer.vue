@@ -528,6 +528,10 @@ export default {
 	},
 
 	methods: {
+		hasVehicleStore() {
+			return Array.isArray(db?.tables) && db.tables.some((table) => table?.name === "vehicles");
+		},
+
 		sanitizeVehicleNo(val) {
 			if (!val) return "";
 			return String(val)
@@ -1099,7 +1103,7 @@ export default {
 					const q = term.toString().toLowerCase();
 
 					// Load all local vehicles and filter
-					const all = await db.table("vehicles").toArray();
+					const all = this.hasVehicleStore() ? await db.table("vehicles").toArray() : [];
 
 					const filtered = all.filter((v) => {
 						try {
@@ -1249,7 +1253,9 @@ export default {
 				try {
 					await checkDbHealth();
 					if (!db.isOpen()) await db.open();
-					const local = await db.table("vehicles").where("vehicle_no").equals(vehicleNo).first();
+					const local = this.hasVehicleStore()
+						? await db.table("vehicles").where("vehicle_no").equals(vehicleNo).first()
+						: null;
 					if (local) {
 						customerName = local.customer;
 						customerDisplayName = local.custom_display_name || local.customer_name || "";
@@ -1968,8 +1974,9 @@ export default {
 				try {
 					await checkDbHealth();
 					if (!db.isOpen()) await db.open();
-					let localQuery = db.table("vehicles").where("customer").equals(customerName);
-					const local = await localQuery.toArray();
+					const local = this.hasVehicleStore()
+						? await db.table("vehicles").where("customer").equals(customerName).toArray()
+						: [];
 					if (local && local.length) {
 						fetchedVehicles = local.map((r) => ({
 							name: r.name || r.id,

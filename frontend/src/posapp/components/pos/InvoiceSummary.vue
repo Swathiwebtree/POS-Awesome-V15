@@ -1824,7 +1824,6 @@ export default {
 				this.$parent.invoice_doc.loyalty_amount = loyaltyAmount;
 				this.$parent.invoice_doc.loyalty_program = snapshot.loyalty_program || null;
 				this.$parent.invoice_doc.available_loyalty_points = availablePoints;
-				this.$parent.invoice_doc.loyalty_points = availablePoints;
 				this.$parent.invoice_doc.conversion_factor = conversionFactor;
 			}
 

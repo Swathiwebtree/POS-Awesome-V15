@@ -934,6 +934,7 @@ export default {
 			selectedEmployee: null,
 			showDialog: false,
 			selected_customer_is_corporate: false,
+			pending_cash_payment_reset: false,
 			loading: false, // UI loading state
 			pos_profile: "", // POS profile settings
 			pos_settings: "", // POS settings
@@ -1266,9 +1267,13 @@ export default {
 		selected_customer_is_corporate(newVal) {
 			if (newVal) {
 				this.is_credit_sale = true;
-				this.$nextTick(() => {
-					this.reset_cash_payments();
-				});
+				if (this.invoice_doc && this.invoice_doc.payments) {
+					this.$nextTick(() => {
+						this.reset_cash_payments();
+					});
+				} else {
+					this.pending_cash_payment_reset = true;
+				}
 			} else {
 				this.is_credit_sale = false;
 			}
@@ -2175,10 +2180,11 @@ export default {
 		},
 		reset_cash_payments() {
 			if (!this.invoice_doc || !this.invoice_doc.payments) {
-				console.warn("[Payment] Cannot reset cash payments - invoice_doc not ready");
+				this.pending_cash_payment_reset = true;
 				return;
 			}
 
+			this.pending_cash_payment_reset = false;
 			this.invoice_doc.payments.forEach((payment) => {
 				if (payment.mode_of_payment && payment.mode_of_payment.toLowerCase() === "cash") {
 					payment.amount = null;
@@ -3198,6 +3204,7 @@ export default {
 		request_payment() {
 			this.phone_dialog = false;
 			const vm = this;
+			const invoiceWasNew = !this.invoice_doc?.name;
 			if (!this.invoice_doc.contact_mobile) {
 				this.eventBus.emit("show_message", {
 					title: __("Please set the customer's mobile number"),
@@ -3236,6 +3243,18 @@ export default {
 							args: { doc: vm.invoice_doc },
 						})
 						.fail(() => {
+							if (invoiceWasNew && vm.invoice_doc?.name) {
+								frappe.call({
+									method: "posawesome.posawesome.api.invoices.delete_draft_invoice",
+									args: {
+										name: vm.invoice_doc.name,
+										doctype: vm.invoice_doc.doctype || "Sales Invoice",
+									},
+									async: false,
+								});
+								vm.invoice_doc.name = null;
+								vm.invoice_doc.docstatus = 0;
+							}
 							vm.eventBus.emit("unfreeze");
 							vm.eventBus.emit("show_message", {
 								title: __("Payment request failed"),
@@ -3561,6 +3580,9 @@ export default {
 					this.invoice_doc.loyalty_discount_amount || this.invoice_doc.loyalty_amount || 0;
 				this.invoice_doc.redeemed_loyalty_points =
 					this.invoice_doc.redeemed_loyalty_points || this.invoice_doc.redeem_loyalty_points || 0;
+				if (this.pending_cash_payment_reset) {
+					this.reset_cash_payments();
+				}
 			}
 			this.loyalty_amount = Number(
 				this.invoice_doc?.loyalty_discount_amount || this.invoice_doc?.loyalty_amount || 0,
@@ -4251,7 +4273,7 @@ export default {
 }
 
 .method-input {
-	max-width: 96px;
+	max-width: 106px;
 }
 
 /* Icon Animations */
@@ -4867,8 +4889,9 @@ div.v-card.selection {
 }
 
 .method-input {
-	min-width: 84px;
-	max-width: 96px;
+	flex: 0 0 128px;
+	min-width: 128px;
+	max-width: 128px;
 }
 .method-input :deep(.v-field) {
 	min-height: 32px !important;
@@ -4876,14 +4899,18 @@ div.v-card.selection {
 	background: #f8fafc !important;
 	box-shadow: inset 0 0 0 1px #e5e7eb;
 }
+.method-input :deep(.v-field__input) {
+	padding-inline: 4px !important;
+}
 .method-input :deep(input) {
 	font-size: 12px;
 	font-weight: 700;
-	padding: 0 6px;
-	text-align: left;
+	padding: 0;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
 }
 .method-input :deep(.v-field__prefix) {
-	margin-right: 6px;
+	margin-right: 4px;
 	font-size: 10px;
 	white-space: nowrap;
 }

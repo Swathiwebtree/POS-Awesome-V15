@@ -817,7 +817,6 @@ export default {
 				Object.prototype.hasOwnProperty.call(payload, "available_points") &&
 				!shouldPreserveDraftLoyalty
 			) {
-				this.invoice_doc.loyalty_points = Number(payload.available_points || 0);
 				this.invoice_doc.available_loyalty_points = Number(payload.available_points || 0);
 			}
 
