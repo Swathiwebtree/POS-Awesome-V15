@@ -4257,23 +4257,30 @@ export default {
 .payment-methods-grid {
 	display: grid;
 	grid-template-columns: 1fr;
-	gap: 3px;
+	gap: 2px;
 }
 
 /* Tighten cards */
 .payment-method-card {
 	width: 100%;
-	padding: 5px 8px;
-	min-height: 50px;
+	padding: 3px 6px;
+	min-height: 42px;
 }
 
 .method-title {
-	font-size: 11px;
+	font-size: 10px;
 	font-weight: 600;
+	line-height: 1.05;
+}
+
+.method-amount {
+	font-size: 8px;
+	margin-top: 0;
+	line-height: 1.05;
 }
 
 .method-input {
-	max-width: 106px;
+	max-width: 96px;
 }
 
 /* Icon Animations */
@@ -4446,10 +4453,10 @@ export default {
 .payment-card-wrapper .v-card .overflow-y-auto {
 	flex: 1 1 auto;
 	overflow-y: auto !important;
-	padding: 12px !important;
+	padding: 10px !important;
 	max-height: none !important;
 	box-sizing: border-box;
-	padding-bottom: 120px;
+	padding-bottom: 90px;
 }
 
 .payment-card-wrapper .overflow-y-auto .pa-1 {
@@ -4462,7 +4469,7 @@ export default {
 	left: 0;
 	right: 0;
 	background: inherit;
-	padding: 6px 10px;
+	padding: 4px 8px;
 	box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.06);
 	z-index: 25;
 }
@@ -4472,7 +4479,7 @@ export default {
 .v-card.footer-actions .button-row {
 	max-width: 1000px;
 	width: calc(100% - 24px);
-	margin: 10px auto 0 !important;
+	margin: 6px auto 0 !important;
 	box-sizing: border-box;
 	position: relative;
 	z-index: 55;
@@ -4491,12 +4498,12 @@ export default {
 .submit-btn-main {
 	font-weight: 700 !important;
 	font-size: 1rem !important;
-	height: 44px !important;
+	height: 38px !important;
 }
 .cancel-btn {
 	font-weight: 600 !important;
 	font-size: 0.95rem !important;
-	height: 40px !important;
+	height: 36px !important;
 }
 
 @media (max-width: 760px) {
@@ -4505,7 +4512,11 @@ export default {
 		max-height: 78vh !important;
 	}
 	.payment-card-wrapper .overflow-y-auto {
-		padding-bottom: 180px !important;
+		padding-bottom: 110px !important;
+	}
+	.payment-left-column {
+		padding-bottom: 150px;
+		scroll-padding-bottom: 150px;
 	}
 	.payments-header {
 		padding: 6px 10px !important;
@@ -4724,21 +4735,21 @@ div.v-card.selection {
 .payment-summary-hero {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
-	gap: 8px;
-	margin-bottom: 8px;
+	gap: 6px;
+	margin-bottom: 6px;
 	padding-left: 12px;
 	padding-right: 12px;
 }
 
 /* Main box */
 .summary-box {
-	padding: 4px 8px; /* ⬅ reduced height */
-	border-radius: 12px; /* slightly tighter */
+	padding: 3px 8px;
+	border-radius: 10px;
 	color: #fff;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	min-height: 42px; /* ⬅ controlled compact height */
+	min-height: 38px;
 }
 
 /* Paid (green) */
@@ -4753,16 +4764,16 @@ div.v-card.selection {
 
 /* Label */
 .summary-box .label {
-	font-size: 11px;
-	font-weight: 700; /* ⬅ bold label */
+	font-size: 10px;
+	font-weight: 700;
 	line-height: 1.1;
 	opacity: 0.95;
 }
 
 /* Value */
 .summary-box .value {
-	font-size: 15px; /* slightly smaller */
-	font-weight: 800; /* ⬅ strong bold for amount */
+	font-size: 14px;
+	font-weight: 800;
 	line-height: 1.2;
 	margin-top: 2px;
 }
@@ -4865,10 +4876,10 @@ div.v-card.selection {
 }
 
 .method-title {
-	font-size: 12px;
+	font-size: 15px;
 	font-weight: 700;
 	color: #0f172a;
-	line-height: 1.2;
+	line-height: 1.05;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -4879,44 +4890,44 @@ div.v-card.selection {
 }
 
 .method-amount {
-	font-size: 9px;
+	font-size: 14px;
 	color: #94a3b8;
-	margin-top: 1px;
-	line-height: 1.2;
+	margin-top: 0;
+	line-height: 1.05;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
 .method-input {
-	flex: 0 0 128px;
-	min-width: 128px;
-	max-width: 128px;
+	flex: 0 0 96px;
+	min-width: 96px;
+	max-width: 96px;
 }
 .method-input :deep(.v-field) {
-	min-height: 32px !important;
-	border-radius: 10px !important;
+	min-height: 30px !important;
+	border-radius: 8px !important;
 	background: #f8fafc !important;
 	box-shadow: inset 0 0 0 1px #e5e7eb;
 }
 .method-input :deep(.v-field__input) {
-	padding-inline: 4px !important;
+	padding-inline: 5px !important;
 }
 .method-input :deep(input) {
-	font-size: 12px;
+	font-size: 11px;
 	font-weight: 700;
 	padding: 0;
 	text-align: right;
 	font-variant-numeric: tabular-nums;
 }
 .method-input :deep(.v-field__prefix) {
-	margin-right: 4px;
-	font-size: 10px;
+	margin-right: 3px;
+	font-size: 9px;
 	white-space: nowrap;
 }
 
 .credit-sale-card .method-title {
-	font-size: 12px;
+	font-size: 10px;
 }
 
 .credit-sale-card .method-amount {
@@ -4984,6 +4995,7 @@ div.v-card.selection {
 
 .payment-content-container {
 	flex: 1;
+	min-height: 0;
 	overflow: hidden; /* parent should NOT scroll */
 }
 @media (min-width: 1400px) {
@@ -5022,9 +5034,13 @@ div.v-card.selection {
 	font-size: clamp(12px, 0.9vw, 13px);
 }
 .payment-left-column {
+	flex: 1 1 auto;
+	min-height: 0;
 	max-height: calc(90vh - 118px); /* header + summary + footer */
 	overflow-y: auto;
 	padding-right: 4px;
+	padding-bottom: 160px;
+	scroll-padding-bottom: 160px;
 }
 
 /* smooth scrollbar */

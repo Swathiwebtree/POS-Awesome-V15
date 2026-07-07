@@ -818,6 +818,8 @@ export default {
 				!shouldPreserveDraftLoyalty
 			) {
 				this.invoice_doc.available_loyalty_points = Number(payload.available_points || 0);
+				// Keep the legacy field in sync for code paths that still read loyalty_points.
+				this.invoice_doc.loyalty_points = Number(payload.available_points || 0);
 			}
 
 			if (Object.prototype.hasOwnProperty.call(payload, "loyalty_program")) {

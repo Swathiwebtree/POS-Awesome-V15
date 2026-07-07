@@ -583,6 +583,18 @@ def _submit_payment_entries_for_invoice(invoice_doc):
     if cint(invoice_doc.get("is_return")):
         return []
 
+    existing_payment_entries = frappe.get_all(
+        "Payment Entry Reference",
+        filters={
+            "reference_doctype": invoice_doc.doctype,
+            "reference_name": invoice_doc.name,
+            "docstatus": 1,
+        },
+        fields=["parent"],
+    )
+    if existing_payment_entries:
+        return list({row.parent for row in existing_payment_entries if row.parent})
+
     valid_payments = [
         payment
         for payment in (invoice_doc.get("payments") or [])
@@ -1413,6 +1425,8 @@ def submit_invoice(invoice, data):
 
     payments = invoice_doc.payments
 
+    pos_payment_rows = [p.as_dict() for p in invoice_doc.get("payments") or []]
+
     try:
         current_open = get_current_user_open_shift(frappe.session.user)
         if current_open:
@@ -1542,6 +1556,14 @@ def submit_invoice(invoice, data):
             invoice_doc.redeemed_offer_amount = flt(
                 data.get("redeemed_offer_amount") or invoice_doc.get("redeemed_offer_amount") or 0
             )
+            invoice_doc.set("payments", [])
+            invoice_doc.is_pos = 0
+            invoice_doc.paid_amount = 0
+            invoice_doc.base_paid_amount = 0
+            invoice_doc.outstanding_amount = flt(
+                invoice_doc.rounded_total or invoice_doc.grand_total or 0
+            )
+
             invoice_doc.submit()
             frappe.log_error(
                 title="POS Debtors Debug",
@@ -1557,6 +1579,9 @@ def submit_invoice(invoice, data):
                     }
                 ),
             )
+            invoice_doc.reload()
+            invoice_doc.set("payments", pos_payment_rows)
+            _submit_payment_entries_for_invoice(invoice_doc)
             invoice_doc.reload()
 
         except frappe.ValidationError as e:
@@ -1582,7 +1607,17 @@ def submit_invoice(invoice, data):
                 frappe.flags.ignore_account_permission = True
                 invoice_doc.save()
                 invoice_doc.reload()
+                invoice_doc.set("payments", [])
+                invoice_doc.is_pos = 0
+                invoice_doc.paid_amount = 0
+                invoice_doc.base_paid_amount = 0
+                invoice_doc.outstanding_amount = flt(
+                    invoice_doc.rounded_total or invoice_doc.grand_total or 0
+                )
                 invoice_doc.submit()
+                invoice_doc.reload()
+                invoice_doc.set("payments", pos_payment_rows)
+                _submit_payment_entries_for_invoice(invoice_doc)
                 invoice_doc.reload()
                 if invoice_doc.docstatus == 1:
                     invoice_doc.reload()
@@ -1786,7 +1821,18 @@ def submit_in_background_job(kwargs):
     invoice_doc.redeemed_offer_amount = flt(
         data.get("redeemed_offer_amount") or invoice_doc.get("redeemed_offer_amount") or 0
     )
+    pos_payment_rows = [p.as_dict() for p in invoice_doc.get("payments") or []]
+
+    invoice_doc.set("payments", [])
+    invoice_doc.is_pos = 0
+    invoice_doc.paid_amount = 0
+    invoice_doc.base_paid_amount = 0
+    invoice_doc.outstanding_amount = flt(invoice_doc.rounded_total or invoice_doc.grand_total or 0)
+
     invoice_doc.submit()
+    invoice_doc.reload()
+    invoice_doc.set("payments", pos_payment_rows)
+    _submit_payment_entries_for_invoice(invoice_doc)
     invoice_doc.reload()
     if flt((data or {}).get("redeemed_customer_credit") or 0) > 0:
         redeeming_customer_credit(invoice_doc, data, is_payment_entry, total_cash, cash_account, payments)
