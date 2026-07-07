@@ -3144,6 +3144,12 @@ export default {
 				if (draft_name_to_update) {
 					// UPDATE EXISTING DRAFT
 
+					// POS uses contact_mobile directly; clear stale ERPNext contact linkage
+					// so changing the customer on a draft does not fail validation.
+					this.invoice_doc.contact_person = null;
+					this.invoice_doc.contact_display = null;
+					this.invoice_doc.contact_email = null;
+
 					const field_map = {
 						items: this.invoice_doc.items,
 						customer: this.invoice_doc.customer,
@@ -3174,6 +3180,9 @@ export default {
 						custom_vehicle_make: this.invoice_doc.custom_vehicle_make,
 						custom_vehicle_model: this.invoice_doc.custom_vehicle_model,
 						// ===== NEW: ADD TO UPDATE =====
+						contact_person: null,
+						contact_display: null,
+						contact_email: null,
 						contact_mobile: this.invoice_doc.contact_mobile,
 						custom_vehicle_no: this.invoice_doc.custom_vehicle_no,
 						custom_odometer_reading: this.invoice_doc.custom_odometer_reading,
@@ -3252,6 +3261,11 @@ export default {
 					}
 				} else {
 					// CREATE NEW DRAFT
+
+					// Avoid carrying an old ERPNext contact reference into a new customer draft.
+					this.invoice_doc.contact_person = null;
+					this.invoice_doc.contact_display = null;
+					this.invoice_doc.contact_email = null;
 
 					const insertResp = await frappe.call({
 						method: "frappe.client.insert",

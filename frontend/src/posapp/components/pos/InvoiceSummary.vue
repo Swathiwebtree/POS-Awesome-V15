@@ -1766,6 +1766,12 @@ export default {
 				return null;
 			}
 
+			// A plain draft with zero loyalty usage should not lock the widget to stale 0 points.
+			// In that case we should fetch the customer's current balance from the backend.
+			if (!redeemedPoints && !loyaltyAmount) {
+				return null;
+			}
+
 			const availablePoints = Number(
 				source.available_loyalty_points ?? source.loyalty_points ?? redeemedPoints ?? 0,
 			);
@@ -1840,7 +1846,9 @@ export default {
 		},
 
 		restoreDraftLoyaltyState(snapshot = null) {
-			const resolvedSnapshot = snapshot || this.getDraftLoyaltySnapshot();
+			const resolvedSnapshot = snapshot
+				? this.getDraftLoyaltySnapshot(snapshot)
+				: this.getDraftLoyaltySnapshot();
 			if (!resolvedSnapshot) return false;
 			this.applyLoyaltySnapshot(resolvedSnapshot, { lock: true });
 			return true;
@@ -2710,7 +2718,10 @@ export default {
 		}
 
 		this.eventBus.on("restore_loyalty_ui_state", (snapshot) => {
-			this.restoreDraftLoyaltyState(snapshot);
+			if (!this.restoreDraftLoyaltyState(snapshot)) {
+				this.loyaltySnapshotLocked = false;
+				this.fetchLoyaltyPoints();
+			}
 		});
 		this.eventBus.on("discount_conflict_state", this.updateDiscountConflictState);
 
