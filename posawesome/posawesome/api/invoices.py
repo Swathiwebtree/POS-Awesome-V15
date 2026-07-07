@@ -1560,9 +1560,7 @@ def submit_invoice(invoice, data):
             invoice_doc.is_pos = 0
             invoice_doc.paid_amount = 0
             invoice_doc.base_paid_amount = 0
-            invoice_doc.outstanding_amount = flt(
-                invoice_doc.rounded_total or invoice_doc.grand_total or 0
-            )
+            invoice_doc.outstanding_amount = flt(invoice_doc.rounded_total or invoice_doc.grand_total or 0)
 
             invoice_doc.submit()
             frappe.log_error(
