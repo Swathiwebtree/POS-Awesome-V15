@@ -695,11 +695,11 @@
 										</v-btn>
 									</v-col>
 									<v-col cols="6">
-									<v-btn
-										block
-										color="green darken-2"
-										theme="dark"
-										@click="handleShowPayment"
+										<v-btn
+											block
+											color="green darken-2"
+											theme="dark"
+											@click="handleShowPayment"
 											class="summary-btn pay-btn primary-action"
 											:loading="paymentLoading"
 											style="
@@ -1131,9 +1131,7 @@ export default {
 	computed: {
 		finalTotal() {
 			const invoiceDoc = this.invoice_doc || {};
-			const base = Number(
-				invoiceDoc.grand_total != null ? invoiceDoc.grand_total : this.subtotal || 0,
-			);
+			const base = Number(invoiceDoc.grand_total != null ? invoiceDoc.grand_total : this.subtotal || 0);
 			const roundOff = Number(invoiceDoc.rounding_adjustment ?? this.manual_round_off ?? 0);
 			return Number((base + roundOff).toFixed(3));
 		},

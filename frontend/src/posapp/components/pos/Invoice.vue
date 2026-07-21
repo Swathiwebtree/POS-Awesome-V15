@@ -86,8 +86,8 @@
 						@update:priceList="
 							(val) => {
 								selected_price_list = val;
-						}
-					"
+							}
+						"
 					/>
 
 					<!-- Multi-Currency Section (Only if enabled in POS profile) -->
@@ -3169,11 +3169,11 @@ export default {
 						pos_profile: this.invoice_doc.pos_profile,
 						company: this.invoice_doc.company,
 						posa_pos_opening_shift: this.invoice_doc.posa_pos_opening_shift,
-								custom_service_employee: this.invoice_doc.custom_service_employee,
-								custom_service_employee_name: this.invoice_doc.custom_service_employee_name,
-								custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
-								redeemed_coupon_amount: this.invoice_doc.redeemed_coupon_amount,
-								redeemed_offer_amount: this.invoice_doc.redeemed_offer_amount,
+						custom_service_employee: this.invoice_doc.custom_service_employee,
+						custom_service_employee_name: this.invoice_doc.custom_service_employee_name,
+						custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
+						redeemed_coupon_amount: this.invoice_doc.redeemed_coupon_amount,
+						redeemed_offer_amount: this.invoice_doc.redeemed_offer_amount,
 						redeem_loyalty_points: this.invoice_doc.redeem_loyalty_points,
 						redeemed_loyalty_points: this.invoice_doc.redeemed_loyalty_points,
 						loyalty_amount: this.invoice_doc.loyalty_amount,

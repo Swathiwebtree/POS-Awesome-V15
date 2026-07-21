@@ -1,9 +1,9 @@
 <template>
-			<template v-if="!useAsModal">
-			<div class="drafts-wrapper">
-				<div class="drafts-header-bar">
-					<v-spacer></v-spacer>
-					<div class="drafts-header-due-date">
+	<template v-if="!useAsModal">
+		<div class="drafts-wrapper">
+			<div class="drafts-header-bar">
+				<v-spacer></v-spacer>
+				<div class="drafts-header-due-date">
 					<v-text-field
 						v-model="selectedDueDateValue"
 						type="date"
@@ -33,115 +33,119 @@
 					:items-per-page="100"
 					:item-class="(item) => (isCurrentDraft(item.name) ? 'v-data-table__tr--active' : '')"
 				>
-				<template v-slot:column.posting_time="{ column }">
-					<span class="text-caption font-weight-medium">{{ column.title }}</span>
-				</template>
-				<template v-slot:item.posting_time="{ item }">
-					<span class="text-caption">{{
-						item.posting_time ? item.posting_time.split(".")[0] : ""
-					}}</span>
-				</template>
-				<template v-slot:item.modified="{ item }">
-					<span class="d-none">{{ item.modified }}</span>
-				</template>
+					<template v-slot:column.posting_time="{ column }">
+						<span class="text-caption font-weight-medium">{{ column.title }}</span>
+					</template>
+					<template v-slot:item.posting_time="{ item }">
+						<span class="text-caption">{{
+							item.posting_time ? item.posting_time.split(".")[0] : ""
+						}}</span>
+					</template>
+					<template v-slot:item.modified="{ item }">
+						<span class="d-none">{{ item.modified }}</span>
+					</template>
 
-				<!-- Mobile -->
-				<template v-slot:item.contact_mobile="{ item }">
-					<span class="text-caption">{{ formatMobileForDisplay(item.contact_mobile) }}</span>
-				</template>
+					<!-- Mobile -->
+					<template v-slot:item.contact_mobile="{ item }">
+						<span class="text-caption">{{ formatMobileForDisplay(item.contact_mobile) }}</span>
+					</template>
 
-				<!-- Vehicle -->
-				<template v-slot:item.custom_vehicle_no="{ item }">
-					<span class="text-caption">{{ item.custom_vehicle_no || "—" }}</span>
-				</template>
+					<!-- Vehicle -->
+					<template v-slot:item.custom_vehicle_no="{ item }">
+						<span class="text-caption">{{ item.custom_vehicle_no || "—" }}</span>
+					</template>
 
-				<!-- Model -->
-				<template v-slot:item.custom_vehicle_model="{ item }">
-					<span class="text-caption">{{ item.custom_vehicle_model || "—" }}</span>
-				</template>
+					<!-- Model -->
+					<template v-slot:item.custom_vehicle_model="{ item }">
+						<span class="text-caption">{{ item.custom_vehicle_model || "—" }}</span>
+					</template>
 
-				<template v-slot:item.customer="{ item }">
-					<div class="d-flex align-center gap-1">
-						<span class="customer-name">
+					<template v-slot:item.customer="{ item }">
+						<div class="d-flex align-center gap-1">
+							<span class="customer-name">
+								{{
+									item.custom_display_name ||
+									item.title ||
+									item.display_name ||
+									item.customer_name ||
+									item.customer
+								}}
+							</span>
+							<v-chip
+								v-if="item.is_corporate"
+								color="teal"
+								text="black"
+								size="x-small"
+								variant="tonal"
+								class="ml-1"
+							>
+								{{ __("Corporate") }}
+							</v-chip>
+						</div>
+					</template>
+
+					<template v-slot:item.name="{ item }">
+						<div class="d-flex align-center">
+							<v-chip
+								v-if="isCurrentDraft(item.name)"
+								color="success"
+								size="x-small"
+								class="mr-2"
+								prepend-icon="mdi-check-circle"
+							>
+								{{ __("Current") }}
+							</v-chip>
+							<span class="text-caption font-weight-medium text-primary">{{ item.name }}</span>
+						</div>
+					</template>
+
+					<!-- Service Employee Column -->
+					<template v-slot:item.custom_service_employee="{ item }">
+						<div v-if="item.custom_service_employee" class="d-flex align-center">
+							<v-chip size="x-small" color="primary" prepend-icon="mdi-account-hard-hat">
+								{{ item.custom_service_employee }}
+							</v-chip>
+						</div>
+						<span v-else class="text-caption">_</span>
+					</template>
+
+					<!-- Odometer -->
+					<template v-slot:item.custom_odometer_reading="{ item }">
+						<span class="text-caption" v-if="item.custom_has_oil_item">
 							{{
-								item.custom_display_name ||
-								item.title ||
-								item.display_name ||
-								item.customer_name ||
-								item.customer
+								item.custom_odometer_reading !== ""
+									? item.custom_odometer_reading + " km"
+									: "—"
 							}}
 						</span>
-						<v-chip
-							v-if="item.is_corporate"
-							color="teal"
-							text="black"
-							size="x-small"
-							variant="tonal"
-							class="ml-1"
+						<span class="text-caption" v-else>—</span>
+					</template>
+
+					<template v-slot:item.grand_total="{ item }">
+						<span class="draft-amount">
+							{{ currencySymbol(item.currency) }}
+							{{ formatCurrency(item.grand_total) }}
+						</span>
+					</template>
+
+					<template v-slot:item.due_date="{ item }">
+						<span class="text-caption drafts-due-date">
+							{{ formatDateDMY(item.due_date) || "—" }}
+						</span>
+					</template>
+
+					<template v-slot:bottom>
+						<div
+							class="pa-4 text-center text-caption text-medium-emphasis"
+							v-if="visibleDialogData.length === 0"
 						>
-							{{ __("Corporate") }}
-						</v-chip>
-					</div>
-				</template>
-
-				<template v-slot:item.name="{ item }">
-					<div class="d-flex align-center">
-						<v-chip
-							v-if="isCurrentDraft(item.name)"
-							color="success"
-							size="x-small"
-							class="mr-2"
-							prepend-icon="mdi-check-circle"
-						>
-							{{ __("Current") }}
-						</v-chip>
-						<span class="text-caption font-weight-medium text-primary">{{ item.name }}</span>
-					</div>
-				</template>
-
-				<!-- Service Employee Column -->
-				<template v-slot:item.custom_service_employee="{ item }">
-					<div v-if="item.custom_service_employee" class="d-flex align-center">
-						<v-chip size="x-small" color="primary" prepend-icon="mdi-account-hard-hat">
-							{{ item.custom_service_employee }}
-						</v-chip>
-					</div>
-					<span v-else class="text-caption">_</span>
-				</template>
-
-				<!-- Odometer -->
-				<template v-slot:item.custom_odometer_reading="{ item }">
-					<span class="text-caption" v-if="item.custom_has_oil_item">
-						{{ item.custom_odometer_reading !== "" ? item.custom_odometer_reading + " km" : "—" }}
-					</span>
-					<span class="text-caption" v-else>—</span>
-				</template>
-
-				<template v-slot:item.grand_total="{ item }">
-					<span class="draft-amount">
-						{{ currencySymbol(item.currency) }}
-						{{ formatCurrency(item.grand_total) }}
-					</span>
-				</template>
-
-				<template v-slot:item.due_date="{ item }">
-					<span class="text-caption drafts-due-date">
-						{{ formatDateDMY(item.due_date) || "—" }}
-					</span>
-				</template>
-
-				<template v-slot:bottom>
-					<div
-						class="pa-4 text-center text-caption text-medium-emphasis"
-						v-if="visibleDialogData.length === 0"
-					>
-						<v-icon size="48" color="grey-lighten-1" class="mb-2"
-							>mdi-file-document-outline</v-icon
-						>
-						<div>{{ __("No draft invoices found.") }}</div>
-						<div class="text-caption mt-1">{{ __("Create a new sale to get started") }}</div>
-					</div>
-				</template>
+							<v-icon size="48" color="grey-lighten-1" class="mb-2"
+								>mdi-file-document-outline</v-icon
+							>
+							<div>{{ __("No draft invoices found.") }}</div>
+							<div class="text-caption mt-1">{{ __("Create a new sale to get started") }}</div>
+						</div>
+					</template>
 				</v-data-table>
 			</div>
 
@@ -170,7 +174,10 @@
 				:fullscreen="isMobileModal"
 				:scrollable="true"
 			>
-				<v-card variant="flat" :color="isDarkTheme ? $vuetify.theme.themes.dark.colors.surface : 'white'">
+				<v-card
+					variant="flat"
+					:color="isDarkTheme ? $vuetify.theme.themes.dark.colors.surface : 'white'"
+				>
 					<v-card-title class="pb-1 pt-3">
 						<span class="text-h6 text-primary">{{ __("Load Sales Invoice") }}</span>
 					</v-card-title>
@@ -247,7 +254,10 @@
 
 										<!-- Service Employee Column -->
 										<template v-slot:item.custom_service_employee="{ item }">
-											<div v-if="item.custom_service_employee" class="d-flex align-center">
+											<div
+												v-if="item.custom_service_employee"
+												class="d-flex align-center"
+											>
 												<v-chip
 													size="x-small"
 													color="primary"
@@ -268,7 +278,9 @@
 
 										<!-- Vehicle -->
 										<template v-slot:item.custom_vehicle_no="{ item }">
-											<span class="text-caption">{{ item.custom_vehicle_no || "—" }}</span>
+											<span class="text-caption">{{
+												item.custom_vehicle_no || "—"
+											}}</span>
 										</template>
 
 										<!-- Model -->
@@ -380,9 +392,9 @@ export default {
 		selected: [],
 		dialog_data: [],
 		refreshing: false,
-			nowTick: Date.now(),
-			_expiryTimer: null,
-			headers: [
+		nowTick: Date.now(),
+		_expiryTimer: null,
+		headers: [
 			{ title: __("Mobile"), value: "contact_mobile", align: "start", sortable: false, width: "130px" },
 			{
 				title: __("Vehicle No"),
@@ -397,10 +409,10 @@ export default {
 				align: "start",
 				sortable: false,
 				width: "140px",
-				},
-				{ title: __("Customer"), value: "customer", align: "start", sortable: true },
-				{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
-				{ title: __("Due Date"), value: "due_date", align: "start", sortable: true, width: "100px" },
+			},
+			{ title: __("Customer"), value: "customer", align: "start", sortable: true },
+			{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
+			{ title: __("Due Date"), value: "due_date", align: "start", sortable: true, width: "100px" },
 			{
 				title: __("Modified"),
 				value: "modified",
@@ -425,12 +437,12 @@ export default {
 				sortable: false,
 				width: "100px",
 			},
-				{ title: __("Amount"), value: "grand_total", align: "end", sortable: false, width: "120px" },
+			{ title: __("Amount"), value: "grand_total", align: "end", sortable: false, width: "120px" },
 		],
-			selectedDueDateValue: "",
-			dueDateDialog: false,
-			dueDateSaving: false,
-			dueDateDraft: null,
+		selectedDueDateValue: "",
+		dueDateDialog: false,
+		dueDateSaving: false,
+		dueDateDraft: null,
 		dueDateValue: "",
 		_employeeNameCache: {},
 		_customerTypeCache: {},

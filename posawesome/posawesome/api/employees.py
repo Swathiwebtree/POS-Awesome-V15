@@ -38,9 +38,8 @@ def _get_company_lift_employee_departments(company):
     return [
         str(department.name)
         for department in departments
-        if "lift employee" in str(
-            getattr(department, "department_name", None) or getattr(department, "name", "") or ""
-        ).lower()
+        if "lift employee"
+        in str(getattr(department, "department_name", None) or getattr(department, "name", "") or "").lower()
     ]
 
 

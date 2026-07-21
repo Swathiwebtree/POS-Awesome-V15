@@ -2002,9 +2002,9 @@ export default {
 						? Number(this.getDiscountedNetTotal(doc))
 						: doc?.net_total != null
 							? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
-					: itemBaseTotal -
-						this.getPreTaxDiscountAmount(doc) -
-						this.getLoyaltyDiscountAmount(doc);
+							: itemBaseTotal -
+								this.getPreTaxDiscountAmount(doc) -
+								this.getLoyaltyDiscountAmount(doc);
 			const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
 			const taxTemplate = this.pos_profile?.taxes_and_charges
 				? getTaxTemplate(this.pos_profile.taxes_and_charges)

@@ -36,16 +36,8 @@
 				/>
 			</v-col>
 			<v-col cols="12" md="8" class="d-flex align-center flex-wrap">
-				<v-btn v-if="!isEditingDueDate" color="info" @click="startDueDateEdit">
-					Edit Due Date
-				</v-btn>
-				<v-btn
-					v-else
-					color="success"
-					class="mr-2"
-					:loading="dueDateSaving"
-					@click="saveDueDate"
-				>
+				<v-btn v-if="!isEditingDueDate" color="info" @click="startDueDateEdit"> Edit Due Date </v-btn>
+				<v-btn v-else color="success" class="mr-2" :loading="dueDateSaving" @click="saveDueDate">
 					Save Due Date
 				</v-btn>
 				<v-btn v-if="isEditingDueDate" variant="text" color="grey" @click="cancelDueDateEdit">

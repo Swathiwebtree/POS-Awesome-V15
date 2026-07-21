@@ -40,7 +40,8 @@ export default {
 				let taxTotal = 0;
 				const items = Array.isArray(this.items) ? this.items : [];
 				const hasItemTaxRates = items.some((item) => item?.item_tax_rate);
-				const allItemsHaveItemTaxRates = items.length > 0 && items.every((item) => item?.item_tax_rate);
+				const allItemsHaveItemTaxRates =
+					items.length > 0 && items.every((item) => item?.item_tax_rate);
 				if (hasItemTaxRates && allItemsHaveItemTaxRates && this.calculate_item_tax_from_items) {
 					taxTotal = this.calculate_item_tax_from_items();
 				} else if (this.apply_tax_template_totals) {
