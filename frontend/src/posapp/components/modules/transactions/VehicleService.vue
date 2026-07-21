@@ -26,6 +26,34 @@
 			</v-col>
 		</v-row>
 
+		<v-row dense class="mb-3">
+			<v-col cols="12" md="4">
+				<v-text-field
+					label="Due Date"
+					v-model="nextServiceDate"
+					type="date"
+					:readonly="!isEditingDueDate"
+				/>
+			</v-col>
+			<v-col cols="12" md="8" class="d-flex align-center flex-wrap">
+				<v-btn v-if="!isEditingDueDate" color="info" @click="startDueDateEdit">
+					Edit Due Date
+				</v-btn>
+				<v-btn
+					v-else
+					color="success"
+					class="mr-2"
+					:loading="dueDateSaving"
+					@click="saveDueDate"
+				>
+					Save Due Date
+				</v-btn>
+				<v-btn v-if="isEditingDueDate" variant="text" color="grey" @click="cancelDueDateEdit">
+					Cancel
+				</v-btn>
+			</v-col>
+		</v-row>
+
 		<!-- Item Selection & Order Summary -->
 		<v-row dense>
 			<v-col cols="12" md="5">
@@ -141,6 +169,9 @@ const customer = ref("");
 const staffCode = ref("");
 const staffName = ref("");
 const points = ref(0);
+const nextServiceDate = ref("");
+const isEditingDueDate = ref(false);
+const dueDateSaving = ref(false);
 const orderItems = ref([]);
 const categories = ref(["Body Wash", "Engine Oil", "Extra Services"]);
 const barcode = ref("");
@@ -195,6 +226,8 @@ async function fetchWorkOrderDetails() {
 			customer.value = data.customer || "";
 			staffCode.value = data.staff_code || "";
 			staffName.value = data.staff_name || "";
+			nextServiceDate.value = normalizeDateValue(data.next_service_date);
+			isEditingDueDate.value = false;
 			workOrderDiscount.value = data.discount || 0;
 			orderItems.value = data.items.map((i) => ({ ...i, qty: i.qty || 1 }));
 		}
@@ -261,6 +294,7 @@ async function saveWorkOrder() {
 			staff_name: staffName.value,
 			items: orderItems.value,
 			discount: workOrderDiscount.value,
+			next_service_date: nextServiceDate.value || null,
 		});
 		alert("Work Order saved successfully!");
 	} catch (err) {
@@ -283,6 +317,37 @@ async function voidWorkOrder() {
 		alert("Work Order voided!");
 	} catch (err) {
 		console.error(err);
+	}
+}
+
+function normalizeDateValue(value) {
+	if (!value) return "";
+	return String(value).slice(0, 10);
+}
+
+function startDueDateEdit() {
+	isEditingDueDate.value = true;
+}
+
+function cancelDueDateEdit() {
+	isEditingDueDate.value = false;
+}
+
+async function saveDueDate() {
+	if (!workOrder.value) return alert("Load a work order first.");
+	dueDateSaving.value = true;
+	try {
+		await axios.post("/api/method/posawesome.posawesome.api.lazer_pos.update_work_order_due_date", {
+			order_no: workOrder.value,
+			due_date: nextServiceDate.value || null,
+		});
+		isEditingDueDate.value = false;
+		alert("Due date saved successfully!");
+	} catch (err) {
+		console.error(err);
+		alert("Error saving due date");
+	} finally {
+		dueDateSaving.value = false;
 	}
 }
 
@@ -342,6 +407,8 @@ function resetOrder() {
 	workOrder.value = "";
 	vehicle.value = "";
 	customer.value = "";
+	nextServiceDate.value = "";
+	isEditingDueDate.value = false;
 	orderItems.value = [];
 	workOrderDiscount.value = 0;
 	paidAmount.value = 0;

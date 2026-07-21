@@ -179,7 +179,14 @@ def remove_item_from_order(order_no, item_code):
 
 @frappe.whitelist()
 def save_work_order(
-    work_order=None, vehicle=None, customer=None, staff_code=None, staff_name=None, items=None, discount=0
+    work_order=None,
+    vehicle=None,
+    customer=None,
+    staff_code=None,
+    staff_name=None,
+    items=None,
+    discount=0,
+    next_service_date=None,
 ):
     """
     Create or update a Vehicle Service Work Order (simple generic implementation).
@@ -202,6 +209,7 @@ def save_work_order(
     doc.staff_code = staff_code
     doc.staff_name = staff_name
     doc.discount = discount
+    doc.next_service_date = getdate(next_service_date) if next_service_date else None
 
     # append items
     if items:
@@ -226,6 +234,22 @@ def save_work_order(
     doc.save(ignore_permissions=True)
     frappe.db.commit()
     return {"status": "ok", "work_order": doc.name}
+
+
+@frappe.whitelist()
+def update_work_order_due_date(order_no, due_date=None):
+    """Update the next service / due date on an existing work order."""
+    if not order_no:
+        frappe.throw(_("Work order number required"))
+
+    if not frappe.db.exists("Work Order", order_no):
+        frappe.throw(_("Work order not found"))
+
+    wo = frappe.get_doc("Work Order", order_no)
+    wo.next_service_date = getdate(due_date) if due_date else None
+    wo.save(ignore_permissions=True)
+    frappe.db.commit()
+    return get_work_order_details(order_no)
 
 
 @frappe.whitelist()

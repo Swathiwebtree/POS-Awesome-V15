@@ -86,8 +86,8 @@
 						@update:priceList="
 							(val) => {
 								selected_price_list = val;
-							}
-						"
+						}
+					"
 					/>
 
 					<!-- Multi-Currency Section (Only if enabled in POS profile) -->
@@ -306,6 +306,7 @@
 			<InvoiceSummary
 				@apply-group-discount="applyItemGroupDiscount"
 				:maxDiscountInfo="maxDiscountInfo"
+				:invoice_doc="invoice_doc"
 				:pos_profile="pos_profile"
 				:total_qty="total_qty"
 				:additional_discount="additional_discount"
@@ -2601,6 +2602,7 @@ export default {
 
 			invoiceData.total = this.Total;
 			invoiceData.net_total = this.net_total;
+			invoiceData.due_date = this.invoice_doc?.due_date || invoiceData.due_date || null;
 			invoiceData.total_taxes_and_charges = effectiveTaxTotal;
 			invoiceData.grand_total = effectiveGrandTotal;
 			invoiceData.rounded_total = effectiveRoundedTotal;
@@ -3167,11 +3169,11 @@ export default {
 						pos_profile: this.invoice_doc.pos_profile,
 						company: this.invoice_doc.company,
 						posa_pos_opening_shift: this.invoice_doc.posa_pos_opening_shift,
-						custom_service_employee: this.invoice_doc.custom_service_employee,
-						custom_service_employee_name: this.invoice_doc.custom_service_employee_name,
-						custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
-						redeemed_coupon_amount: this.invoice_doc.redeemed_coupon_amount,
-						redeemed_offer_amount: this.invoice_doc.redeemed_offer_amount,
+								custom_service_employee: this.invoice_doc.custom_service_employee,
+								custom_service_employee_name: this.invoice_doc.custom_service_employee_name,
+								custom_redeemed_loyalty_points: this.invoice_doc.custom_redeemed_loyalty_points,
+								redeemed_coupon_amount: this.invoice_doc.redeemed_coupon_amount,
+								redeemed_offer_amount: this.invoice_doc.redeemed_offer_amount,
 						redeem_loyalty_points: this.invoice_doc.redeem_loyalty_points,
 						redeemed_loyalty_points: this.invoice_doc.redeemed_loyalty_points,
 						loyalty_amount: this.invoice_doc.loyalty_amount,
@@ -3179,6 +3181,7 @@ export default {
 						loyalty_program: this.invoice_doc.loyalty_program,
 						custom_vehicle_make: this.invoice_doc.custom_vehicle_make,
 						custom_vehicle_model: this.invoice_doc.custom_vehicle_model,
+						due_date: this.invoice_doc.due_date,
 						// ===== NEW: ADD TO UPDATE =====
 						contact_person: null,
 						contact_display: null,
@@ -3240,6 +3243,7 @@ export default {
 								custom_vehicle_no: this.invoice_doc.custom_vehicle_no,
 								custom_odometer_reading: this.invoice_doc.custom_odometer_reading,
 								custom_has_oil_item: this.invoice_doc.custom_has_oil_item,
+								due_date: this.invoice_doc.due_date,
 								// ===== END NEW =====
 							};
 							this.eventBus.emit("draft_saved", savedDraft);
@@ -3308,6 +3312,7 @@ export default {
 									saved_doc.custom_vehicle_make || this.invoice_doc.custom_vehicle_make,
 								custom_vehicle_model:
 									saved_doc.custom_vehicle_model || this.invoice_doc.custom_vehicle_model,
+								due_date: saved_doc.due_date ?? this.invoice_doc.due_date,
 								custom_redeemed_loyalty_points:
 									saved_doc.custom_redeemed_loyalty_points ??
 									this.invoice_doc.custom_redeemed_loyalty_points,
@@ -3942,6 +3947,17 @@ export default {
 		this.eventBus.on("load_invoice", (data) => {
 			this.load_invoice(data);
 		});
+		this._handleDraftDueDateUpdated = (payload) => {
+			if (!payload?.name || !payload?.due_date) return;
+			if (this.loaded_draft_name !== payload.name && this.invoice_doc?.name !== payload.name) {
+				return;
+			}
+			if (this.invoice_doc) {
+				this.invoice_doc.due_date = payload.due_date;
+			}
+			this.$forceUpdate();
+		};
+		this.eventBus.on("draft_due_date_updated", this._handleDraftDueDateUpdated);
 		this.eventBus.on("load_order", (data) => {
 			this.new_order(data);
 		});
@@ -4047,6 +4063,9 @@ export default {
 		this.eventBus.off("clear_invoice");
 		// Cleanup reset_posting_date listener
 		this.eventBus.off("reset_posting_date");
+		if (this._handleDraftDueDateUpdated) {
+			this.eventBus.off("draft_due_date_updated", this._handleDraftDueDateUpdated);
+		}
 
 		// Cleanup with stored handler reference
 		if (this._handleGetInvoice) {

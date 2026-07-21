@@ -9,6 +9,41 @@ def _employee_has_field(fieldname):
         return False
 
 
+def _get_company_lift_employee_departments(company):
+    if not company:
+        return []
+
+    try:
+        departments = frappe.get_all(
+            "Department",
+            filters={"company": company},
+            fields=["name", "department_name"],
+        )
+    except Exception:
+        return []
+
+    lift_departments = []
+    for department in departments:
+        department_label = str(
+            getattr(department, "department_name", None) or getattr(department, "name", "") or ""
+        ).strip()
+        if not department_label:
+            continue
+        if department_label.lower().startswith("lift employee"):
+            lift_departments.append(str(department.name))
+
+    if lift_departments:
+        return lift_departments
+
+    return [
+        str(department.name)
+        for department in departments
+        if "lift employee" in str(
+            getattr(department, "department_name", None) or getattr(department, "name", "") or ""
+        ).lower()
+    ]
+
+
 @frappe.whitelist()
 def get_active_employees(company=None, search_term=None):
     """
@@ -19,6 +54,11 @@ def get_active_employees(company=None, search_term=None):
 
     if company:
         filters["company"] = company
+        lift_departments = _get_company_lift_employee_departments(company)
+        if lift_departments:
+            filters["department"] = ["in", lift_departments]
+        else:
+            filters["department"] = ["like", "Lift Employee%"]
 
     has_custom_employee_id = _employee_has_field("custom_employee_id")
 

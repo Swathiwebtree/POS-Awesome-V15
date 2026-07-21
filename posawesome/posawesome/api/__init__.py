@@ -25,6 +25,7 @@ from .invoices import (
     search_invoices_for_return,
     submit_invoice,
     update_invoice,
+    update_draft_due_date,
     validate_return_items,
 )
 from .items import (

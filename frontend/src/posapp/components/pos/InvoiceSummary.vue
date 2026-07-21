@@ -204,7 +204,7 @@
 
 							<!-- Total -->
 							<v-text-field
-								:model-value="formatByPrecision(finalTotal)"
+								:model-value="formatByPrecision(invoice_doc?.net_total ?? subtotal ?? 0)"
 								:label="__('Total')"
 								prepend-inner-icon="mdi-cash"
 								variant="solo"
@@ -695,11 +695,11 @@
 										</v-btn>
 									</v-col>
 									<v-col cols="6">
-										<v-btn
-											block
-											color="green darken-2"
-											theme="dark"
-											@click="handleShowPayment"
+									<v-btn
+										block
+										color="green darken-2"
+										theme="dark"
+										@click="handleShowPayment"
 											class="summary-btn pay-btn primary-action"
 											:loading="paymentLoading"
 											style="
@@ -710,6 +710,13 @@
 										>
 											<v-icon left size="18">mdi-credit-card</v-icon>
 											{{ __("PAY") }}
+											{{
+												formatCurrency(
+													invoice_doc?.grand_total ?? payableTotal,
+													moneyPrecision,
+												)
+											}}
+											{{ displayCurrency }}
 										</v-btn>
 									</v-col>
 								</v-row>
@@ -1014,6 +1021,7 @@
 export default {
 	props: {
 		pos_profile: Object,
+		invoice_doc: Object,
 		total_qty: [Number, String],
 		additional_discount: [Number, String],
 		additional_discount_percentage: [Number, String],
@@ -1122,9 +1130,32 @@ export default {
 	],
 	computed: {
 		finalTotal() {
-			const base = Number(this.subtotal || 0);
-			const roundOff = Number(this.invoice_doc?.rounding_adjustment ?? this.manual_round_off ?? 0);
+			const invoiceDoc = this.invoice_doc || {};
+			const base = Number(
+				invoiceDoc.grand_total != null ? invoiceDoc.grand_total : this.subtotal || 0,
+			);
+			const roundOff = Number(invoiceDoc.rounding_adjustment ?? this.manual_round_off ?? 0);
 			return Number((base + roundOff).toFixed(3));
+		},
+
+		payableTotal() {
+			const invoiceDoc = this.invoice_doc || {};
+			const candidates = [
+				invoiceDoc.to_be_paid,
+				invoiceDoc.rounded_total,
+				invoiceDoc.grand_total,
+				invoiceDoc.total_amount,
+				this.finalTotal,
+			];
+
+			for (const value of candidates) {
+				const amount = Number(value);
+				if (Number.isFinite(amount) && amount > 0) {
+					return amount;
+				}
+			}
+
+			return 0;
 		},
 
 		selectedEmployeeDisplayLabel() {

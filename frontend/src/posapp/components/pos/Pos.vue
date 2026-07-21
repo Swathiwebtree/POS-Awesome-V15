@@ -585,6 +585,7 @@ export default {
 							"title",
 							"posting_date",
 							"posting_time",
+							"due_date",
 							"grand_total",
 							"currency",
 							"custom_service_employee",

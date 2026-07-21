@@ -1290,12 +1290,18 @@ export default {
 					}
 				});
 			} else {
-				// If credit sale is disabled, set cash payment to invoice total
-				this.invoice_doc.payments.forEach((payment) => {
-					if (payment.mode_of_payment && payment.mode_of_payment.toLowerCase() === "cash") {
-						payment.amount = this.getEffectiveInvoiceTotal();
-					}
+				// Preserve split payments if any non-cash amount was already entered.
+				const hasSplitPayment = this.invoice_doc.payments.some((payment) => {
+					const mode = String(payment.mode_of_payment || "").toLowerCase();
+					return !mode.includes("cash") && this.flt(payment.amount || 0) > 0;
 				});
+				if (!hasSplitPayment) {
+					this.invoice_doc.payments.forEach((payment) => {
+						if (payment.mode_of_payment && payment.mode_of_payment.toLowerCase() === "cash") {
+							payment.amount = this.getEffectiveInvoiceTotal();
+						}
+					});
+				}
 			}
 		},
 		// Watch is_credit_return to toggle cashback payments
@@ -1405,12 +1411,11 @@ export default {
 		},
 
 		validateCashPaymentAmount(value, payment) {
-			if (!payment?.mode_of_payment?.toLowerCase().includes("cash") || this.is_credit_sale) {
-				return true;
-			}
 			const enteredAmount = this.parsePaymentAmountInput(value);
-			const minimumAmount = this.payable_total;
-			return enteredAmount >= minimumAmount || "Cash payment cannot be less than invoice total";
+			if (enteredAmount < 0) {
+				return "Payment amount cannot be negative";
+			}
+			return true;
 		},
 
 		getPaymentInputDisplayValue(payment, index) {
@@ -1997,30 +2002,45 @@ export default {
 						? Number(this.getDiscountedNetTotal(doc))
 						: doc?.net_total != null
 							? Number(formatUtils.fromArabicNumerals(String(doc.net_total)).replace(/,/g, ""))
-							: itemBaseTotal -
-								this.getPreTaxDiscountAmount(doc) -
-								this.getLoyaltyDiscountAmount(doc);
+					: itemBaseTotal -
+						this.getPreTaxDiscountAmount(doc) -
+						this.getLoyaltyDiscountAmount(doc);
 			const taxableFactor = itemBaseTotal ? discountedItemTotal / itemBaseTotal : 1;
+			const taxTemplate = this.pos_profile?.taxes_and_charges
+				? getTaxTemplate(this.pos_profile.taxes_and_charges)
+				: null;
 
 			doc.items.forEach((item) => {
-				if (!item.item_tax_rate) return;
-
-				let taxMap = {};
-				try {
-					taxMap = JSON.parse(item.item_tax_rate);
-				} catch (e) {
-					return;
-				}
-
 				//  POS Awesome uses net_amount as taxable value
 				const rate = item.net_rate ?? item.rate ?? 0;
 				const quantity = Number(item.qty || 0);
 				const amount = item.net_amount ?? item.amount ?? rate * quantity;
 				const taxableAmount = amount * taxableFactor;
 
-				Object.values(taxMap).forEach((rate) => {
-					taxTotal += (taxableAmount * rate) / 100;
-				});
+				if (item.item_tax_rate) {
+					let taxMap = {};
+					try {
+						taxMap = JSON.parse(item.item_tax_rate);
+					} catch (e) {
+						taxMap = {};
+					}
+
+					Object.values(taxMap).forEach((rate) => {
+						taxTotal += (taxableAmount * Number(rate || 0)) / 100;
+					});
+					return;
+				}
+
+				if (taxTemplate && Array.isArray(taxTemplate.taxes) && taxTemplate.taxes.length) {
+					taxTemplate.taxes.forEach((row) => {
+						const rowRate = Number(row.rate || 0);
+						if (row.charge_type === "Actual") {
+							taxTotal += Number(row.tax_amount || 0);
+						} else {
+							taxTotal += (taxableAmount * rowRate) / 100;
+						}
+					});
+				}
 			});
 
 			return this.flt(taxTotal, moneyPrecision);
@@ -2028,8 +2048,10 @@ export default {
 
 		calculateInvoiceTaxTotal(doc = this.invoice_doc, baseAmount = null) {
 			if (!doc) return 0;
-			const hasItemTaxRates = Array.isArray(doc.items) && doc.items.some((item) => item?.item_tax_rate);
-			if (hasItemTaxRates) {
+			const items = Array.isArray(doc.items) ? doc.items : [];
+			const hasItemTaxRates = items.some((item) => item?.item_tax_rate);
+			const allItemsHaveItemTaxRates = items.length > 0 && items.every((item) => item?.item_tax_rate);
+			if (hasItemTaxRates && allItemsHaveItemTaxRates) {
 				return this.calculateItemTax(doc, baseAmount);
 			}
 			return this.calculateTemplateTaxTotal(doc, baseAmount);
@@ -2682,28 +2704,36 @@ export default {
 					vm.is_cashback = true;
 					vm.is_credit_return = false;
 					vm.sales_person = "";
+					const successTitle =
+						vm.invoiceType === "Order" && vm.pos_profile.posa_create_only_sales_order
+							? __("Sales Order {0} is Submitted", [r.message.name])
+							: __("Invoice {0} is Submitted", [r.message.name]);
+
 					vm.eventBus.emit("set_last_invoice", r.message.name);
 					vm.eventBus.emit("show_message", {
-						title:
-							vm.invoiceType === "Order" && vm.pos_profile.posa_create_only_sales_order
-								? __("Sales Order {0} is Submitted", [r.message.name])
-								: __("Invoice {0} is Submitted", [r.message.name]),
+						title: successTitle,
 						color: "success",
+					});
+					frappe.show_alert({
+						message: successTitle,
+						indicator: "green",
 					});
 					frappe.utils.play_sound("submit");
 
-					updateLocalStock(vm.invoice_doc.items || []);
-					vm.eventBus.emit("payment_completed", {
-						customer: vm.invoice_doc.customer,
-						redeemed_loyalty_points: vm.invoice_doc.redeemed_loyalty_points || 0,
-						loyalty_discount_amount: vm.invoice_doc.loyalty_discount_amount || 0,
-						invoice_name: r.message.name,
-					});
-					vm.eventBus.emit("refresh_drafts");
-					vm.addresses = [];
-					vm.eventBus.emit("clear_invoice");
-					vm.eventBus.emit("reset_posting_date");
-					vm.back_to_invoice();
+					window.setTimeout(() => {
+						updateLocalStock(vm.invoice_doc.items || []);
+						vm.eventBus.emit("payment_completed", {
+							customer: vm.invoice_doc.customer,
+							redeemed_loyalty_points: vm.invoice_doc.redeemed_loyalty_points || 0,
+							loyalty_discount_amount: vm.invoice_doc.loyalty_discount_amount || 0,
+							invoice_name: r.message.name,
+						});
+						vm.eventBus.emit("refresh_drafts");
+						vm.addresses = [];
+						vm.eventBus.emit("clear_invoice");
+						vm.eventBus.emit("reset_posting_date");
+						vm.back_to_invoice();
+					}, 150);
 				},
 				fail: function (error) {
 					console.error("Invoice submission failed (network error):", error);
@@ -3880,6 +3910,12 @@ export default {
 			this.resetPaymentData();
 			this.resetPaymentAmounts();
 		});
+		this._handleDraftDueDateUpdated = (payload) => {
+			if (!payload?.name || !payload?.due_date) return;
+			if (this.invoice_doc?.name !== payload.name) return;
+			this.invoice_doc.due_date = payload.due_date;
+		};
+		this.eventBus.on("draft_due_date_updated", this._handleDraftDueDateUpdated);
 	},
 	beforeUnmount() {
 		// Remove all event listeners
@@ -3895,6 +3931,9 @@ export default {
 		this.eventBus.off("network-online", this.syncPendingInvoices);
 		this.eventBus.off("server-online", this.syncPendingInvoices);
 		this.eventBus.off("show_payment", this.handleShowPayment);
+		if (this._handleDraftDueDateUpdated) {
+			this.eventBus.off("draft_due_date_updated", this._handleDraftDueDateUpdated);
+		}
 	},
 	// Lifecycle hook: unmounted
 	unmounted() {

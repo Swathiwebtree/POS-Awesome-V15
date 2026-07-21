@@ -1,28 +1,38 @@
 <template>
-	<div class="drafts-wrapper" v-if="!useAsModal">
-		<div class="drafts-content">
-			<v-data-table
-				:headers="headers"
-				:items="visibleDialogData"
-				:sort-by="[{ key: 'modified', order: 'desc' }]"
-				item-value="name"
-				class="elevation-0 drafts-table"
-				:theme="isDarkTheme ? 'dark' : 'light'"
-				show-select
-				v-model="selected"
-				select-strategy="single"
-				return-object
-				density="compact"
-				:items-per-page="100"
-				:item-class="(item) => (isCurrentDraft(item.name) ? 'v-data-table__tr--active' : '')"
-			>
-				<template v-slot:column.posting_date="{ column }">
-					<span class="text-caption font-weight-medium">{{ column.title }}</span>
-				</template>
-				<template v-slot:item.posting_date="{ item }">
-					<span class="text-caption">{{ formatDateDMY(item.posting_date) }}</span>
-				</template>
-
+			<template v-if="!useAsModal">
+			<div class="drafts-wrapper">
+				<div class="drafts-header-bar">
+					<v-spacer></v-spacer>
+					<div class="drafts-header-due-date">
+					<v-text-field
+						v-model="selectedDueDateValue"
+						type="date"
+						:label="__('Due Date')"
+						variant="solo"
+						density="compact"
+						hide-details
+						:disabled="!selectedDraft || dueDateSaving"
+						@change="saveSelectedDueDate"
+					/>
+				</div>
+			</div>
+			<div class="drafts-content">
+				<v-data-table
+					:headers="headers"
+					:items="visibleDialogData"
+					:sort-by="[{ key: 'modified', order: 'desc' }]"
+					item-value="name"
+					class="elevation-0 drafts-table"
+					:theme="isDarkTheme ? 'dark' : 'light'"
+					show-select
+					v-model="selected"
+					@update:model-value="handleSelectionChange"
+					select-strategy="single"
+					return-object
+					density="compact"
+					:items-per-page="100"
+					:item-class="(item) => (isCurrentDraft(item.name) ? 'v-data-table__tr--active' : '')"
+				>
 				<template v-slot:column.posting_time="{ column }">
 					<span class="text-caption font-weight-medium">{{ column.title }}</span>
 				</template>
@@ -114,6 +124,12 @@
 					</span>
 				</template>
 
+				<template v-slot:item.due_date="{ item }">
+					<span class="text-caption drafts-due-date">
+						{{ formatDateDMY(item.due_date) || "—" }}
+					</span>
+				</template>
+
 				<template v-slot:bottom>
 					<div
 						class="pa-4 text-center text-caption text-medium-emphasis"
@@ -126,181 +142,227 @@
 						<div class="text-caption mt-1">{{ __("Create a new sale to get started") }}</div>
 					</div>
 				</template>
-			</v-data-table>
-		</div>
+				</v-data-table>
+			</div>
 
-		<div class="drafts-footer">
-			<v-btn
-				block
-				color="success"
-				size="large"
-				variant="flat"
-				prepend-icon="mdi-file-document-check"
-				@click="submit_selection"
-				:disabled="selected.length === 0"
-				class="load-draft-btn"
+			<div class="drafts-footer">
+				<v-btn
+					block
+					color="success"
+					size="large"
+					variant="flat"
+					prepend-icon="mdi-file-document-check"
+					@click="submit_selection"
+					:disabled="selected.length === 0"
+					class="load-draft-btn"
+				>
+					{{ __("LOAD JOB ORDERS") }}
+				</v-btn>
+			</div>
+		</div>
+	</template>
+
+	<template v-else>
+		<v-row justify="center">
+			<v-dialog
+				v-model="draftsDialog"
+				:max-width="isMobileModal ? '100%' : maxWidth"
+				:fullscreen="isMobileModal"
+				:scrollable="true"
 			>
-				{{ __("LOAD JOB ORDERS") }}
-			</v-btn>
-		</div>
-	</div>
-
-	<v-row justify="center" v-else>
-		<v-dialog
-			v-model="draftsDialog"
-			:max-width="isMobileModal ? '100%' : maxWidth"
-			:fullscreen="isMobileModal"
-			:scrollable="true"
-		>
-			<v-card variant="flat" :color="isDarkTheme ? $vuetify.theme.themes.dark.colors.surface : 'white'">
-				<v-card-title class="pb-1 pt-3">
-					<span class="text-h6 text-primary">{{ __("Load Sales Invoice") }}</span>
-				</v-card-title>
-				<v-card-subtitle class="pt-0 pb-2">
-					<span class="text-primary">{{ __("Load previously saved invoices") }}</span>
-				</v-card-subtitle>
-				<v-card-text class="pa-0">
-					<v-container fluid class="pa-0">
-						<v-row no-gutters>
-							<v-col cols="12" class="pa-1">
-								<v-data-table
-									:headers="headers"
-									:items="visibleDialogData"
-									:sort-by="[{ key: 'modified', order: 'desc' }]"
-									item-value="name"
-									class="elevation-0"
-									:theme="isDarkTheme ? 'dark' : 'light'"
-									show-select
-									v-model="selected"
-									select-strategy="single"
-									return-object
-									density="compact"
-									:items-per-page="10"
-									:item-class="
-										(item) =>
-											isCurrentDraft(item.name) ? 'v-data-table__tr--active' : ''
-									"
-								>
-									<template v-slot:column.posting_date="{ column }"
-										><span class="d-none">{{ column.title }}</span></template
+				<v-card variant="flat" :color="isDarkTheme ? $vuetify.theme.themes.dark.colors.surface : 'white'">
+					<v-card-title class="pb-1 pt-3">
+						<span class="text-h6 text-primary">{{ __("Load Sales Invoice") }}</span>
+					</v-card-title>
+					<v-card-subtitle class="pt-0 pb-2">
+						<span class="text-primary">{{ __("Load previously saved invoices") }}</span>
+					</v-card-subtitle>
+					<div class="drafts-header-bar drafts-header-bar-modal">
+						<div class="drafts-header-title">{{ __("Due Date") }}</div>
+						<v-spacer></v-spacer>
+						<div class="drafts-header-due-date">
+							<v-text-field
+								v-model="selectedDueDateValue"
+								type="date"
+								:label="__('Due Date')"
+								variant="solo"
+								density="compact"
+								hide-details
+								:disabled="!selectedDraft || dueDateSaving"
+								@change="saveSelectedDueDate"
+							/>
+						</div>
+					</div>
+					<v-card-text class="pa-0">
+						<v-container fluid class="pa-0">
+							<v-row no-gutters>
+								<v-col cols="12" class="pa-1">
+									<v-data-table
+										:headers="headers"
+										:items="visibleDialogData"
+										:sort-by="[{ key: 'modified', order: 'desc' }]"
+										item-value="name"
+										class="elevation-0"
+										:theme="isDarkTheme ? 'dark' : 'light'"
+										show-select
+										v-model="selected"
+										@update:model-value="handleSelectionChange"
+										select-strategy="single"
+										return-object
+										density="compact"
+										:items-per-page="10"
+										:item-class="
+											(item) =>
+												isCurrentDraft(item.name) ? 'v-data-table__tr--active' : ''
+										"
 									>
-									<template v-slot:item.posting_date="{ item }"
-										><span class="text-caption">{{ item.posting_date }}</span></template
-									>
-
-									<template v-slot:column.posting_time="{ column }"
-										><span class="d-none">{{ column.title }}</span></template
-									>
-									<template v-slot:item.posting_time="{ item }"
-										><span class="text-caption">{{
-											item.posting_time ? item.posting_time.split(".")[0] : ""
-										}}</span></template
-									>
-									<template v-slot:item.modified="{ item }">
-										<span class="d-none">{{ item.modified }}</span>
-									</template>
-
-									<template v-slot:item.name="{ item }">
-										<div class="d-flex align-center">
-											<v-chip
-												v-if="isCurrentDraft(item.name)"
-												color="success"
-												size="x-small"
-												class="mr-2"
-												prepend-icon="mdi-check-circle"
-											>
-												{{ __("Current") }}
-											</v-chip>
-											<span class="text-caption font-weight-medium text-primary">{{
-												item.name
-											}}</span>
-										</div>
-									</template>
-
-									<!-- Service Employee Column -->
-									<template v-slot:item.custom_service_employee="{ item }">
-										<div v-if="item.custom_service_employee" class="d-flex align-center">
-											<v-chip
-												size="x-small"
-												color="primary"
-												prepend-icon="mdi-account-hard-hat"
-											>
-												{{ item.custom_service_employee }}
-											</v-chip>
-										</div>
-										<span v-else class="text-caption text-grey">-</span>
-									</template>
-
-									<!-- Mobile -->
-									<template v-slot:item.contact_mobile="{ item }">
-										<span class="text-caption">{{
-											formatMobileForDisplay(item.contact_mobile)
-										}}</span>
-									</template>
-
-									<!-- Vehicle -->
-									<template v-slot:item.custom_vehicle_no="{ item }">
-										<span class="text-caption">{{ item.custom_vehicle_no || "—" }}</span>
-									</template>
-
-									<!-- Model -->
-									<template v-slot:item.custom_vehicle_model="{ item }">
-										<span class="text-caption">{{
-											item.custom_vehicle_model || "—"
-										}}</span>
-									</template>
-
-									<!-- Odometer -->
-									<template v-slot:item.custom_odometer_reading="{ item }">
-										<span class="text-caption" v-if="item.custom_has_oil_item">
-											{{
-												item.custom_odometer_reading !== ""
-													? item.custom_odometer_reading + " km"
-													: "—"
-											}}
-										</span>
-										<span class="text-caption" v-else>—</span>
-									</template>
-
-									<template v-slot:item.grand_total="{ item }"
-										>{{ currencySymbol(item.currency)
-										}}{{ formatCurrency(item.grand_total) }}</template
-									>
-
-									<template v-slot:bottom>
-										<div
-											class="pa-2 text-caption text-medium-emphasis"
-											v-if="visibleDialogData.length === 0"
+										<template v-slot:column.posting_time="{ column }"
+											><span class="d-none">{{ column.title }}</span></template
 										>
-											{{ __("No draft invoices found.") }}
-										</div>
-										<v-pagination
-											v-else
-											:length="1"
-											:total-visible="3"
-											size="small"
-											class="mt-2"
-										></v-pagination>
-									</template>
-								</v-data-table>
-							</v-col>
-						</v-row>
-					</v-container>
-				</v-card-text>
-				<v-card-actions class="pt-1">
-					<v-spacer></v-spacer>
-					<v-btn color="error" variant="text" @click="close_dialog">{{ __("Close") }}</v-btn>
-					<v-btn
-						color="success"
-						variant="flat"
-						@click="submit_dialog"
-						:disabled="selected.length === 0"
-						>{{ __("Load Sale") }}</v-btn
-					>
-				</v-card-actions>
-			</v-card>
-		</v-dialog>
-	</v-row>
+										<template v-slot:item.posting_time="{ item }"
+											><span class="text-caption">{{
+												item.posting_time ? item.posting_time.split(".")[0] : ""
+											}}</span></template
+										>
+										<template v-slot:item.modified="{ item }">
+											<span class="d-none">{{ item.modified }}</span>
+										</template>
+
+										<template v-slot:item.name="{ item }">
+											<div class="d-flex align-center">
+												<v-chip
+													v-if="isCurrentDraft(item.name)"
+													color="success"
+													size="x-small"
+													class="mr-2"
+													prepend-icon="mdi-check-circle"
+												>
+													{{ __("Current") }}
+												</v-chip>
+												<span class="text-caption font-weight-medium text-primary">{{
+													item.name
+												}}</span>
+											</div>
+										</template>
+
+										<!-- Service Employee Column -->
+										<template v-slot:item.custom_service_employee="{ item }">
+											<div v-if="item.custom_service_employee" class="d-flex align-center">
+												<v-chip
+													size="x-small"
+													color="primary"
+													prepend-icon="mdi-account-hard-hat"
+												>
+													{{ item.custom_service_employee }}
+												</v-chip>
+											</div>
+											<span v-else class="text-caption text-grey">-</span>
+										</template>
+
+										<!-- Mobile -->
+										<template v-slot:item.contact_mobile="{ item }">
+											<span class="text-caption">{{
+												formatMobileForDisplay(item.contact_mobile)
+											}}</span>
+										</template>
+
+										<!-- Vehicle -->
+										<template v-slot:item.custom_vehicle_no="{ item }">
+											<span class="text-caption">{{ item.custom_vehicle_no || "—" }}</span>
+										</template>
+
+										<!-- Model -->
+										<template v-slot:item.custom_vehicle_model="{ item }">
+											<span class="text-caption">{{
+												item.custom_vehicle_model || "—"
+											}}</span>
+										</template>
+
+										<!-- Odometer -->
+										<template v-slot:item.custom_odometer_reading="{ item }">
+											<span class="text-caption" v-if="item.custom_has_oil_item">
+												{{
+													item.custom_odometer_reading !== ""
+														? item.custom_odometer_reading + " km"
+														: "—"
+												}}
+											</span>
+											<span class="text-caption" v-else>—</span>
+										</template>
+
+										<template v-slot:item.grand_total="{ item }"
+											>{{ currencySymbol(item.currency)
+											}}{{ formatCurrency(item.grand_total) }}</template
+										>
+
+										<template v-slot:item.due_date="{ item }">
+											<span class="text-caption drafts-due-date">
+												{{ formatDateDMY(item.due_date) || "—" }}
+											</span>
+										</template>
+
+										<template v-slot:bottom>
+											<div
+												class="pa-2 text-caption text-medium-emphasis"
+												v-if="visibleDialogData.length === 0"
+											>
+												{{ __("No draft invoices found.") }}
+											</div>
+											<v-pagination
+												v-else
+												:length="1"
+												:total-visible="3"
+												size="small"
+												class="mt-2"
+											></v-pagination>
+										</template>
+									</v-data-table>
+								</v-col>
+							</v-row>
+						</v-container>
+					</v-card-text>
+					<v-card-actions class="pt-1">
+						<v-spacer></v-spacer>
+						<v-btn color="error" variant="text" @click="close_dialog">{{ __("Close") }}</v-btn>
+						<v-btn
+							color="success"
+							variant="flat"
+							@click="submit_dialog"
+							:disabled="selected.length === 0"
+							>{{ __("Load Sale") }}</v-btn
+						>
+					</v-card-actions>
+				</v-card>
+			</v-dialog>
+		</v-row>
+	</template>
+
+	<v-dialog v-model="dueDateDialog" max-width="420px" persistent>
+		<v-card>
+			<v-card-title class="text-h6 pt-4 px-4">
+				{{ __("Edit Due Date") }}
+			</v-card-title>
+			<v-card-text class="px-4 pb-2">
+				<v-text-field
+					v-model="dueDateValue"
+					type="date"
+					:label="__('Due Date')"
+					variant="solo"
+					density="compact"
+					hide-details
+				/>
+			</v-card-text>
+			<v-card-actions class="px-4 pb-4">
+				<v-btn variant="text" color="grey" @click="closeDueDateDialog">
+					{{ __("Cancel") }}
+				</v-btn>
+				<v-spacer></v-spacer>
+				<v-btn color="primary" variant="flat" :loading="dueDateSaving" @click="saveDueDate">
+					{{ __("Save") }}
+				</v-btn>
+			</v-card-actions>
+		</v-card>
+	</v-dialog>
 </template>
 
 <script>
@@ -318,9 +380,9 @@ export default {
 		selected: [],
 		dialog_data: [],
 		refreshing: false,
-		nowTick: Date.now(),
-		_expiryTimer: null,
-		headers: [
+			nowTick: Date.now(),
+			_expiryTimer: null,
+			headers: [
 			{ title: __("Mobile"), value: "contact_mobile", align: "start", sortable: false, width: "130px" },
 			{
 				title: __("Vehicle No"),
@@ -335,10 +397,10 @@ export default {
 				align: "start",
 				sortable: false,
 				width: "140px",
-			},
-			{ title: __("Customer"), value: "customer", align: "start", sortable: true },
-			{ title: __("Date"), value: "posting_date", align: "start", sortable: true, width: "100px" },
-			{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
+				},
+				{ title: __("Customer"), value: "customer", align: "start", sortable: true },
+				{ title: __("Time"), value: "posting_time", align: "start", sortable: true, width: "80px" },
+				{ title: __("Due Date"), value: "due_date", align: "start", sortable: true, width: "100px" },
 			{
 				title: __("Modified"),
 				value: "modified",
@@ -363,8 +425,13 @@ export default {
 				sortable: false,
 				width: "100px",
 			},
-			{ title: __("Amount"), value: "grand_total", align: "end", sortable: false, width: "120px" },
+				{ title: __("Amount"), value: "grand_total", align: "end", sortable: false, width: "120px" },
 		],
+			selectedDueDateValue: "",
+			dueDateDialog: false,
+			dueDateSaving: false,
+			dueDateDraft: null,
+		dueDateValue: "",
 		_employeeNameCache: {},
 		_customerTypeCache: {},
 		_customerNameCache: {},
@@ -377,6 +444,9 @@ export default {
 		},
 		isMobileModal() {
 			return window.innerWidth < 768;
+		},
+		selectedDraft() {
+			return Array.isArray(this.selected) && this.selected.length === 1 ? this.selected[0] : null;
 		},
 		visibleDialogData() {
 			return (this.dialog_data || []).filter((draft) => !this.isDraftExpired(draft));
@@ -408,6 +478,121 @@ export default {
 		},
 		formatMobileForDisplay(value) {
 			return formatPhoneForDisplay(value, this.getDefaultCountryIso() || "BH");
+		},
+
+		handleSelectionChange(value) {
+			this.selected = Array.isArray(value) ? value : [];
+			this.syncSelectedDueDateValue();
+		},
+
+		syncSelectedDueDateValue() {
+			if (this.selectedDraft?.name) {
+				this.dueDateDraft = this.selectedDraft;
+				this.selectedDueDateValue = this.normalizeDateValue(this.selectedDraft.due_date);
+			} else {
+				this.dueDateDraft = null;
+				this.selectedDueDateValue = "";
+			}
+		},
+
+		normalizeDateValue(value) {
+			if (!value) return "";
+			const raw = String(value).trim();
+			if (!raw) return "";
+			if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+				return raw;
+			}
+			if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(raw)) {
+				const [day, month, year] = raw.split(/[/-]/);
+				return `${year}-${month}-${day}`;
+			}
+			return raw.slice(0, 10);
+		},
+
+		openDueDateDialog(item) {
+			if (!item || !item.name) return;
+			this.dueDateDraft = item;
+			this.dueDateValue = this.normalizeDateValue(item.due_date);
+			this.dueDateDialog = true;
+		},
+
+		closeDueDateDialog() {
+			this.dueDateDialog = false;
+			this.dueDateDraft = null;
+			this.dueDateValue = "";
+		},
+
+		async persistDueDate(draftName, dueDate) {
+			const response = await frappe.call({
+				method: "posawesome.posawesome.api.update_draft_due_date",
+				args: {
+					name: draftName,
+					due_date: dueDate,
+					doctype: "Sales Invoice",
+				},
+			});
+
+			const updatedDueDate = response?.message?.due_date || dueDate || "";
+
+			this.dialog_data = this.dialog_data.map((draft) =>
+				draft.name === draftName ? { ...draft, due_date: updatedDueDate } : draft,
+			);
+
+			this.eventBus.emit("draft_due_date_updated", {
+				name: draftName,
+				due_date: updatedDueDate,
+			});
+			this.eventBus.emit("refresh_drafts");
+
+			return updatedDueDate;
+		},
+
+		async saveDueDate() {
+			if (!this.dueDateDraft?.name) return;
+
+			this.dueDateSaving = true;
+			try {
+				await this.persistDueDate(this.dueDateDraft.name, this.dueDateValue || null);
+				frappe.show_alert({
+					message: __("Due date updated successfully"),
+					indicator: "green",
+				});
+				this.closeDueDateDialog();
+			} catch (error) {
+				console.error("[Drafts] Failed to update due date:", error);
+				frappe.msgprint({
+					message: __("Failed to update due date"),
+					indicator: "red",
+				});
+			} finally {
+				this.dueDateSaving = false;
+			}
+		},
+
+		async saveSelectedDueDate() {
+			if (!this.selectedDraft?.name || this.dueDateSaving) return;
+
+			this.dueDateSaving = true;
+			try {
+				const updatedDueDate = await this.persistDueDate(
+					this.selectedDraft.name,
+					this.selectedDueDateValue || null,
+				);
+				this.selectedDueDateValue = this.normalizeDateValue(updatedDueDate);
+				this.dueDateDraft = { ...this.selectedDraft, due_date: updatedDueDate };
+				frappe.show_alert({
+					message: __("Due date updated successfully"),
+					indicator: "green",
+				});
+			} catch (error) {
+				console.error("[Drafts] Failed to update selected due date:", error);
+				frappe.msgprint({
+					message: __("Failed to update due date"),
+					indicator: "red",
+				});
+			} finally {
+				this.dueDateSaving = false;
+			}
 		},
 
 		getDraftTimestamp(item) {
@@ -537,6 +722,7 @@ export default {
 					"title",
 					"posting_date",
 					"posting_time",
+					"due_date",
 					"grand_total",
 					"currency",
 					"custom_service_employee",
@@ -782,6 +968,10 @@ export default {
 				display_name: item.display_name || "",
 				posting_date,
 				posting_time,
+				due_date:
+					typeof item.due_date !== "undefined" && item.due_date !== null
+						? String(item.due_date)
+						: "",
 				grand_total: item.grand_total != null ? item.grand_total : 0,
 				currency: item.currency || "INR",
 				custom_service_employee: item.custom_service_employee || null,

@@ -246,23 +246,50 @@ export default {
 				? Number(this.net_total || 0)
 				: subtotal - invoiceDiscount - loyaltyDiscount;
 		const taxableFactor = subtotal ? taxableSubtotal / subtotal : 1;
-		(this.items || []).forEach((item) => {
-			if (!item || !item.item_tax_rate) return;
-			let taxMap = {};
-			try {
-				taxMap = JSON.parse(item.item_tax_rate);
-			} catch {
-				return;
-			}
+		const items = Array.isArray(this.items) ? this.items : [];
+		const hasItemTaxRates = items.some((item) => item?.item_tax_rate);
+		const allItemsHaveItemTaxRates = items.length > 0 && items.every((item) => item?.item_tax_rate);
+		const taxTemplate = this.pos_profile?.taxes_and_charges
+			? getTaxTemplate(this.pos_profile.taxes_and_charges)
+			: null;
+
+		// If only some lines carry item-level tax metadata, fall back to the invoice-level
+		// POS tax template so mixed carts keep the full invoice VAT.
+		if (taxTemplate && hasItemTaxRates && !allItemsHaveItemTaxRates) {
+			return this.apply_tax_template_totals(this.invoice_doc, taxableSubtotal);
+		}
+
+		items.forEach((item) => {
 			const rate = item.net_rate ?? item.rate ?? 0;
 			const quantity = Number(item.qty || 0);
 			const amount = item.net_amount ?? item.amount ?? rate * quantity;
 			const taxableAmount = this.flt
 				? this.flt(amount * taxableFactor, moneyPrecision)
 				: Number((amount * taxableFactor).toFixed(3));
-			Object.values(taxMap).forEach((taxRate) => {
-				taxTotal += (taxableAmount * taxRate) / 100;
-			});
+
+			if (item && item.item_tax_rate) {
+				let taxMap = {};
+				try {
+					taxMap = JSON.parse(item.item_tax_rate);
+				} catch {
+					taxMap = {};
+				}
+				Object.values(taxMap).forEach((taxRate) => {
+					taxTotal += (taxableAmount * Number(taxRate || 0)) / 100;
+				});
+				return;
+			}
+
+			if (taxTemplate && Array.isArray(taxTemplate.taxes) && taxTemplate.taxes.length) {
+				taxTemplate.taxes.forEach((row) => {
+					const rowRate = Number(row?.rate || 0);
+					if (row.charge_type === "Actual") {
+						taxTotal += Number(row.tax_amount || 0);
+					} else {
+						taxTotal += (taxableAmount * rowRate) / 100;
+					}
+				});
+			}
 		});
 		return this.flt ? this.flt(taxTotal, moneyPrecision) : taxTotal;
 	},
@@ -445,27 +472,39 @@ export default {
 		this.invoiceType = this.pos_profile.posa_default_sales_order ? "Order" : "Invoice";
 		this.invoiceTypes = ["Invoice", "Order"];
 		this.posting_date = frappe.datetime.nowdate();
-		var vm = this;
-		if (doc.name && this.pos_profile.posa_allow_delete) {
-			await frappe.call({
-				method: "posawesome.posawesome.api.invoices.delete_invoice",
-				args: { invoice: doc.name },
+		const vm = this;
+		const isDraftInvoice = doc && Number(doc.docstatus || 0) === 0;
+		const shouldDeleteDraft = !!doc?.name && (isDraftInvoice || this.loaded_draft_name);
+
+		if (doc) {
+			doc.rounding_adjustment = 0;
+		}
+
+		if (doc?.name && (shouldDeleteDraft || this.pos_profile.posa_allow_delete)) {
+			const method = shouldDeleteDraft
+				? "posawesome.posawesome.api.invoices.delete_draft_invoice"
+				: "posawesome.posawesome.api.invoices.delete_invoice";
+			const args = shouldDeleteDraft
+				? { name: doc.name, doctype: doc.doctype || "Sales Invoice" }
+				: { invoice: doc.name };
+
+			const response = await frappe.call({
+				method,
+				args,
 				async: true,
-				callback: function (r) {
-					if (r.message) {
-						vm.eventBus.emit("show_message", {
-							text: r.message,
-							color: "warning",
-						});
-					}
-				},
 			});
+
+			const deletedMessage = response?.message;
+			if (deletedMessage?.deleted || typeof deletedMessage === "string") {
+				vm.eventBus.emit("show_message", {
+					title: typeof deletedMessage === "string" ? deletedMessage : __("Draft deleted"),
+					color: "warning",
+				});
+				vm.eventBus.emit("refresh_drafts");
+			}
 		}
 		this.clear_invoice();
 		this.cancel_dialog = false;
-		// Clear manual total & round off
-		this.invoice_doc.rounding_adjustment = 0;
-
 		this.eventBus.emit("reset_manual_total");
 
 		// recalc to sync UI + payment
@@ -575,6 +614,9 @@ export default {
 
 		this.customer = data.customer || data.customer_name || "";
 		this.posting_date = this.formatDateForBackend(data.posting_date || frappe.datetime.nowdate());
+		if (this.invoice_doc) {
+			this.invoice_doc.due_date = data.due_date || this.invoice_doc.due_date || null;
+		}
 		const restoredLoyaltyPoints = Number(
 			data.custom_redeemed_loyalty_points ??
 				data.redeemed_loyalty_points ??

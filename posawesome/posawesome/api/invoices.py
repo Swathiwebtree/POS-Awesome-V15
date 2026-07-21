@@ -23,14 +23,11 @@ from frappe.utils import (
     strip_html_tags,
 )
 from frappe.utils.background_jobs import enqueue
-from erpnext.accounts.doctype.payment_entry.payment_entry import (
-    get_payment_entry as erpnext_get_payment_entry,
-)
-
 from posawesome.posawesome.api.payments import (
     redeeming_customer_credit,
 )  # Updated import
 from posawesome.posawesome.api.customers import get_loyalty_points
+from posawesome.posawesome.api.payment_entry import create_payment_entry
 from posawesome.posawesome.api.utilities import (
     ensure_child_doctype,
     set_batch_nos_for_bundels,
@@ -612,34 +609,70 @@ def _submit_payment_entries_for_invoice(invoice_doc):
     paid_amount = flt(sum(flt(payment.get("amount")) for payment in valid_payments))
     if paid_amount <= 0:
         return []
+    submitted_entries = []
 
-    payment_entry = erpnext_get_payment_entry("Sales Invoice", invoice_doc.name)
-    payment_entry.flags.ignore_permissions = True
-    frappe.flags.ignore_account_permission = True
-    payment_entry.mode_of_payment = valid_payments[0].get("mode_of_payment")
-    payment_entry.reference_no = payment_entry.reference_no or invoice_doc.name
-    payment_entry.reference_date = payment_entry.reference_date or invoice_doc.get("posting_date")
+    def _rollback_submitted_payment_entries(entry_names):
+        for entry_name in reversed(entry_names or []):
+            try:
+                pe = frappe.get_doc("Payment Entry", entry_name)
+                if cint(pe.docstatus) == 1:
+                    pe.cancel()
+                if frappe.db.exists("Payment Entry", entry_name):
+                    frappe.delete_doc("Payment Entry", entry_name, ignore_permissions=True)
+            except Exception:
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    f"POS payment entry cleanup failed for {entry_name}",
+                )
 
-    payment_amount = flt(paid_amount)
-    payment_entry.paid_amount = payment_amount
-    payment_entry.received_amount = payment_amount
-    if payment_entry.get("references"):
-        payment_entry.references[0].allocated_amount = payment_amount
+    for index, payment in enumerate(valid_payments, start=1):
+        current_amount = flt(payment.get("amount"))
+        if current_amount <= 0:
+            continue
 
-    payment_entry.setup_party_account_field()
-    payment_entry.set_missing_values()
-    payment_entry.set_amounts()
-    payment_entry.save()
-    payment_entry.submit()
+        invoice_doc.reload()
+        remaining_outstanding = flt(
+            invoice_doc.get("outstanding_amount")
+            or invoice_doc.get("rounded_total")
+            or invoice_doc.get("grand_total")
+            or 0
+        )
+        if remaining_outstanding <= 0:
+            break
+
+        payment_amount = min(current_amount, remaining_outstanding)
+        payment_entry = create_payment_entry(
+            company=invoice_doc.company,
+            customer=invoice_doc.customer,
+            amount=payment_amount,
+            currency=invoice_doc.currency,
+            mode_of_payment=payment.get("mode_of_payment"),
+            reference_no=f"{invoice_doc.name}-{index}",
+            reference_date=invoice_doc.get("posting_date"),
+            posting_date=invoice_doc.get("posting_date"),
+            cost_center=invoice_doc.get("cost_center"),
+            submit=0,
+        )
+        payment_entry.append(
+            "references",
+            {
+                "reference_doctype": invoice_doc.doctype,
+                "reference_name": invoice_doc.name,
+                "allocated_amount": payment_amount,
+            },
+        )
+        payment_entry.flags.ignore_permissions = True
+        frappe.flags.ignore_account_permission = True
+        payment_entry.save(ignore_permissions=True)
+        payment_entry.submit()
+        submitted_entries.append(payment_entry.name)
 
     invoice_doc.reload()
     frappe.logger().info(
         frappe.as_json(
             {
-                "payment_entry.name": payment_entry.name,
-                "payment_entry.mode_of_payment": payment_entry.mode_of_payment,
-                "payment_entry.reference_no": payment_entry.reference_no,
-                "payment_entry.reference_date": payment_entry.reference_date,
+                "payment_entry_creation.invoice": invoice_doc.name,
+                "payment_entry_creation.submitted_entries": submitted_entries,
                 "invoice_doc.outstanding_amount after payment_entry submission": invoice_doc.get(
                     "outstanding_amount"
                 ),
@@ -648,8 +681,9 @@ def _submit_payment_entries_for_invoice(invoice_doc):
         )
     )
     if flt(invoice_doc.get("outstanding_amount")) != 0 or invoice_doc.get("status") != "Paid":
+        _rollback_submitted_payment_entries(submitted_entries)
         frappe.log_error(
-            title=f"POS Payment Entry did not fully settle invoice {invoice_doc.name}",
+            title=f"POS Payment Entries did not fully settle invoice {invoice_doc.name}",
             message=frappe.as_json(
                 {
                     "paid_amount": paid_amount,
@@ -657,30 +691,14 @@ def _submit_payment_entries_for_invoice(invoice_doc):
                     "grand_total": invoice_doc.get("grand_total"),
                     "invoice_doc.outstanding_amount": invoice_doc.get("outstanding_amount"),
                     "invoice_doc.status": invoice_doc.get("status"),
-                    "payment_entry.name": payment_entry.name,
-                    "payment_entry.docstatus": payment_entry.docstatus,
-                    "payment_entry.paid_amount": payment_entry.paid_amount,
-                    "payment_entry.received_amount": payment_entry.received_amount,
-                    "payment_entry.references": payment_entry.get("references"),
+                    "submitted_entries": submitted_entries,
                     "valid_payments": [payment.as_dict() for payment in valid_payments],
                 }
             ),
         )
         frappe.throw(_("Invoice payment was submitted but the Sales Invoice is still not fully paid."))
 
-    frappe.logger().info(
-        frappe.as_json(
-            {
-                "payment_entry.name": payment_entry.name,
-                "payment_entry.docstatus": payment_entry.docstatus,
-                "payment_entry.references": payment_entry.get("references"),
-                "invoice_doc.outstanding_amount after reload": invoice_doc.get("outstanding_amount"),
-                "invoice_doc.status after reload": invoice_doc.get("status"),
-            }
-        )
-    )
-
-    return [payment_entry.name]
+    return submitted_entries
 
 
 @frappe.whitelist()
@@ -897,12 +915,23 @@ def update_invoice(data):
                     or 0
                 )
 
-                # Clear existing taxes ONLY if we're injecting from template
-                # This prevents losing manually added taxes
-                # Clear only if NO item-level tax templates exist
-                has_item_tax = any(d.get("item_tax_template") for d in invoice_doc.items)
+                # Clear existing taxes when the invoice should follow the POS template.
+                # Mixed carts (only some lines carrying item tax metadata) must use the
+                # invoice-level VAT template so the full cart is taxed consistently.
+                has_item_tax = any(
+                    d.get("item_tax_template") or d.get("item_tax_rate") for d in invoice_doc.items
+                )
+                all_items_have_item_tax = bool(invoice_doc.items) and all(
+                    d.get("item_tax_template") or d.get("item_tax_rate") for d in invoice_doc.items
+                )
+                use_invoice_tax_template = has_item_tax and not all_items_have_item_tax
 
-                if not has_item_tax:
+                if use_invoice_tax_template:
+                    for item in invoice_doc.items:
+                        item.item_tax_template = None
+                        item.item_tax_rate = None
+                    invoice_doc.set("taxes", [])
+                elif not has_item_tax:
                     invoice_doc.set("taxes", [])
                 else:
                     unique_taxes = []
@@ -1239,6 +1268,20 @@ def submit_invoice(invoice, data):
     invoice_doc.flags.ignore_permissions = True
     frappe.flags.ignore_account_permission = True
     invoice_doc.posa_is_printed = 1
+
+    def _rollback_failed_created_invoice(doc):
+        if not created_new_invoice:
+            return
+        try:
+            if cint(doc.docstatus) == 1:
+                doc.cancel()
+            if frappe.db.exists(doc.doctype, doc.name):
+                frappe.delete_doc(doc.doctype, doc.name, ignore_permissions=True)
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"POS submit rollback failed for {doc.doctype} {doc.name}",
+            )
 
     # ============================================================
     # FIX: Force due_date to be >= posting_date BEFORE any operation
@@ -1620,24 +1663,10 @@ def submit_invoice(invoice, data):
                 if invoice_doc.docstatus == 1:
                     invoice_doc.reload()
             else:
-                if created_new_invoice and invoice_doc.docstatus == 0:
-                    try:
-                        frappe.delete_doc(invoice_doc.doctype, invoice_doc.name, ignore_permissions=True)
-                    except Exception:
-                        frappe.log_error(
-                            frappe.get_traceback(),
-                            f"POS submit cleanup failed for {invoice_doc.doctype} {invoice_doc.name}",
-                        )
+                _rollback_failed_created_invoice(invoice_doc)
                 raise
         except Exception:
-            if created_new_invoice and invoice_doc.docstatus == 0:
-                try:
-                    frappe.delete_doc(invoice_doc.doctype, invoice_doc.name, ignore_permissions=True)
-                except Exception:
-                    frappe.log_error(
-                        frappe.get_traceback(),
-                        f"POS submit cleanup failed for {invoice_doc.doctype} {invoice_doc.name}",
-                    )
+            _rollback_failed_created_invoice(invoice_doc)
             frappe.log_error(
                 message=frappe.get_traceback(),
                 title=f"POS submit failed for {invoice_doc.doctype} {invoice_doc.name}",
@@ -1950,6 +1979,27 @@ def get_draft_invoices(pos_opening_shift, doctype="Sales Invoice"):
     for invoice in invoices_list:
         data.append(frappe.get_cached_doc(doctype, invoice["name"]))
     return data
+
+
+@frappe.whitelist()
+def update_draft_due_date(name, due_date=None, doctype="Sales Invoice"):
+    """Update the due date for a draft invoice/job order."""
+    if not name:
+        frappe.throw(_("Draft invoice name is required"))
+
+    if not frappe.db.exists(doctype, name):
+        frappe.throw(_("Draft invoice not found"))
+
+    updated_due_date = getdate(due_date) if due_date else None
+    frappe.db.set_value(
+        doctype,
+        name,
+        "due_date",
+        updated_due_date,
+        update_modified=False,
+    )
+    frappe.db.commit()
+    return {"name": name, "due_date": frappe.db.get_value(doctype, name, "due_date")}
 
 
 @frappe.whitelist()
