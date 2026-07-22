@@ -1301,10 +1301,6 @@ export default {
 		},
 
 		validateDiscount(item, discountPercentage) {
-			if (item._auto_discount_applied || item._vehicle_discount_rule) {
-				return true;
-			}
-
 			if (!this.maxDiscountInfo) return true;
 
 			// ENGINE OIL
@@ -1316,14 +1312,32 @@ export default {
 				return false;
 			}
 
-			const invoiceCap = this.maxDiscountInfo.invoice_max_discount;
+			const itemRule = item?._vehicle_discount_rule || null;
+			const itemCap = Number(
+				item?._max_discount_allowed ||
+					itemRule?.auto_apply_value ||
+					itemRule?.max_discount ||
+					0,
+			);
 
-			if (invoiceCap !== null && discountPercentage > invoiceCap) {
+			if (itemCap > 0 && discountPercentage > itemCap) {
 				frappe.show_alert({
-					message: __("Maximum allowed discount for this customer is {0}%", [invoiceCap]),
+					message: __("Maximum allowed discount for this item is {0}%", [itemCap]),
 					indicator: "red",
 				});
 				return false;
+			}
+
+			if (itemCap <= 0) {
+				const invoiceCap = this.maxDiscountInfo.invoice_max_discount;
+
+				if (invoiceCap !== null && discountPercentage > invoiceCap) {
+					frappe.show_alert({
+						message: __("Maximum allowed discount for this customer is {0}%", [invoiceCap]),
+						indicator: "red",
+					});
+					return false;
+				}
 			}
 
 			return true;

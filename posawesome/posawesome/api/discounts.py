@@ -183,18 +183,7 @@ def get_customer_item_discount(customer, item_code):
         manual_max = discounts.custom_custom_max_discount___stock_items or 0
         item_type = "stock"
 
-    # Manual override
-    if manual_max > 0:
-        return {
-            "item_type": item_type,
-            "max_discount": float(manual_max),
-            "auto_apply": False,
-            "message": f"Manual discount allowed up to {manual_max}%",
-            "condition": None,
-            "other_condition": None,
-        }
-
-    # Auto apply
+    # Default discount takes precedence when configured.
     if default_max > 0:
         return {
             "item_type": item_type,
@@ -202,6 +191,17 @@ def get_customer_item_discount(customer, item_code):
             "auto_apply": True,
             "auto_apply_value": float(default_max),
             "message": f"Auto-applied {default_max}%",
+            "condition": None,
+            "other_condition": None,
+        }
+
+    # Manual override
+    if manual_max > 0:
+        return {
+            "item_type": item_type,
+            "max_discount": float(manual_max),
+            "auto_apply": False,
+            "message": f"Manual discount allowed up to {manual_max}%",
             "condition": None,
             "other_condition": None,
         }

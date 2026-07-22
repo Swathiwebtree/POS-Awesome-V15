@@ -783,6 +783,22 @@ export default {
 			});
 		},
 
+		getItemDiscountRule(item) {
+			const row = item?.raw || item;
+			return row?._vehicle_discount_rule || null;
+		},
+
+		isAutoAppliedDiscountLocked(item) {
+			const row = item?.raw || item;
+			const rule = this.getItemDiscountRule(row);
+
+			return Boolean(
+				row?._auto_discount_applied ||
+					row?.auto_discount_applied ||
+					rule?.auto_apply,
+			);
+		},
+
 		addOne(item) {
 			item.qty = Number(item.qty || 0) + 1;
 
@@ -882,8 +898,12 @@ export default {
 				return "Discount not allowed for Engine Oil";
 			}
 
-			if (item._auto_discount_applied) {
-				return `Auto-applied discount (Max: ${item._max_discount_allowed || 0}%)`;
+			if (this.isAutoAppliedDiscountLocked(item)) {
+				const rule = this.getItemDiscountRule(item);
+				const appliedDiscount =
+					Number(item?._max_discount_allowed || 0) ||
+					Number(rule?.auto_apply_value || rule?.max_discount || 0);
+				return `Default discount applied. Maximum allowed: ${appliedDiscount}%`;
 			}
 
 			if (item._max_discount_allowed) {
