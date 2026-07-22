@@ -584,9 +584,7 @@ def _submit_payment_entries_for_invoice(invoice_doc):
         return []
 
     if not invoice_doc.get("customer"):
-        frappe.throw(
-            _("Customer is missing on invoice {0}.").format(invoice_doc.name)
-        )
+        frappe.throw(_("Customer is missing on invoice {0}.").format(invoice_doc.name))
 
     existing_payment_entries = frappe.get_all(
         "Payment Entry Reference",
@@ -599,19 +597,12 @@ def _submit_payment_entries_for_invoice(invoice_doc):
     )
 
     if existing_payment_entries:
-        return list(
-            {
-                row.parent
-                for row in existing_payment_entries
-                if row.parent
-            }
-        )
+        return list({row.parent for row in existing_payment_entries if row.parent})
 
     valid_payments = [
         payment
         for payment in (invoice_doc.get("payments") or [])
-        if flt(payment.get("amount")) > 0
-        and not _is_credit_sale_or_on_account_payment(payment)
+        if flt(payment.get("amount")) > 0 and not _is_credit_sale_or_on_account_payment(payment)
     ]
 
     if not valid_payments:
@@ -629,9 +620,7 @@ def _submit_payment_entries_for_invoice(invoice_doc):
             # Reload after every Payment Entry so outstanding is current.
             invoice_doc.reload()
 
-            remaining_outstanding = flt(
-                invoice_doc.get("outstanding_amount")
-            )
+            remaining_outstanding = flt(invoice_doc.get("outstanding_amount"))
 
             if remaining_outstanding <= 0:
                 break
@@ -656,16 +645,10 @@ def _submit_payment_entries_for_invoice(invoice_doc):
             payment_entry.party = invoice_doc.customer
 
             # Each entry receives its own payment method.
-            payment_entry.mode_of_payment = payment.get(
-                "mode_of_payment"
-            )
+            payment_entry.mode_of_payment = payment.get("mode_of_payment")
 
-            payment_entry.reference_no = (
-                f"{invoice_doc.name}-{index}"
-            )
-            payment_entry.reference_date = (
-                invoice_doc.get("posting_date")
-            )
+            payment_entry.reference_no = f"{invoice_doc.name}-{index}"
+            payment_entry.reference_date = invoice_doc.get("posting_date")
 
             # Resolve the correct account for this payment method.
             payment_entry.setup_party_account_field()
@@ -675,9 +658,7 @@ def _submit_payment_entries_for_invoice(invoice_doc):
             payment_entry.received_amount = payment_amount
 
             if payment_entry.get("references"):
-                payment_entry.references[0].allocated_amount = (
-                    payment_amount
-                )
+                payment_entry.references[0].allocated_amount = payment_amount
 
             payment_entry.set_amounts()
 
@@ -686,9 +667,7 @@ def _submit_payment_entries_for_invoice(invoice_doc):
             payment_entry.received_amount = payment_amount
 
             if payment_entry.get("references"):
-                payment_entry.references[0].allocated_amount = (
-                    payment_amount
-                )
+                payment_entry.references[0].allocated_amount = payment_amount
 
             # Restore party after ERPNext field recalculation.
             payment_entry.party_type = "Customer"
@@ -701,10 +680,7 @@ def _submit_payment_entries_for_invoice(invoice_doc):
 
         invoice_doc.reload()
 
-        if (
-            flt(invoice_doc.get("outstanding_amount")) != 0
-            or invoice_doc.get("status") != "Paid"
-        ):
+        if flt(invoice_doc.get("outstanding_amount")) != 0 or invoice_doc.get("status") != "Paid":
             frappe.throw(
                 _(
                     "Split payments were submitted, but invoice {0} "
