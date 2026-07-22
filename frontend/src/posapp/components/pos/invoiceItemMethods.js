@@ -201,16 +201,16 @@ export default {
 		}
 
 		const res = await addItem(item, this);
-			const target = this.items.find(
-				(it) =>
-					it.item_code === item.item_code &&
-					it.uom === (item.uom || it.uom) &&
-					(!it.batch_no || it.batch_no === item.batch_no),
-			);
-			if (target) {
-				target.custom_service_item = Number(item.custom_service_item || target.custom_service_item || 0);
-			}
-			const tax_template = await this.fetch_item_tax_template(item.item_code);
+		const target = this.items.find(
+			(it) =>
+				it.item_code === item.item_code &&
+				it.uom === (item.uom || it.uom) &&
+				(!it.batch_no || it.batch_no === item.batch_no),
+		);
+		if (target) {
+			target.custom_service_item = Number(item.custom_service_item || target.custom_service_item || 0);
+		}
+		const tax_template = await this.fetch_item_tax_template(item.item_code);
 		if (tax_template) {
 			await this.apply_item_tax_template(item, tax_template);
 		}
@@ -2647,15 +2647,15 @@ export default {
 						}
 					}
 
-						item.last_purchase_rate = data.last_purchase_rate;
-						item.projected_qty = data.projected_qty;
-						item.reserved_qty = data.reserved_qty;
-						item.conversion_factor = data.conversion_factor;
-						item.stock_qty = data.stock_qty;
-						item.custom_service_item = data.custom_service_item ?? item.custom_service_item ?? 0;
-						// For service items, we intentionally do not set actual_qty to avoid clamping behavior
-						if (!isServiceItem(item)) {
-							item.actual_qty = data.actual_qty;
+					item.last_purchase_rate = data.last_purchase_rate;
+					item.projected_qty = data.projected_qty;
+					item.reserved_qty = data.reserved_qty;
+					item.conversion_factor = data.conversion_factor;
+					item.stock_qty = data.stock_qty;
+					item.custom_service_item = data.custom_service_item ?? item.custom_service_item ?? 0;
+					// For service items, we intentionally do not set actual_qty to avoid clamping behavior
+					if (!isServiceItem(item)) {
+						item.actual_qty = data.actual_qty;
 					}
 					item.stock_uom = data.stock_uom;
 					item.has_serial_no = data.has_serial_no;

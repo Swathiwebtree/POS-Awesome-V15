@@ -325,14 +325,16 @@ def get_items(
                 row.update(item)
                 row.update(detail)
                 frappe.log_error(
-    frappe.as_json({
-        "item_code": row.get("item_code"),
-        "item_value": item.get("custom_service_item"),
-        "detail_value": detail.get("custom_service_item"),
-        "final_value": row.get("custom_service_item"),
-    }),
-    "POS Service Item Merge Debug",
-)
+                    frappe.as_json(
+                        {
+                            "item_code": row.get("item_code"),
+                            "item_value": item.get("custom_service_item"),
+                            "detail_value": detail.get("custom_service_item"),
+                            "final_value": row.get("custom_service_item"),
+                        }
+                    ),
+                    "POS Service Item Merge Debug",
+                )
                 result.append(row)
 
             page_start += len(items_data)

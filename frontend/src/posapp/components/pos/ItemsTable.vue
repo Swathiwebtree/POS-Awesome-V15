@@ -1122,39 +1122,39 @@ export default {
 					item.rate === newItem.rate,
 			);
 
-				if (match) {
-					match.qty = Number(match.qty) + (Number(newItem.qty) || 1);
-					match.amount = Number(match.qty) * Number(match.rate || 0);
-					match.custom_service_item = Number(
-						newItem.custom_service_item || match.custom_service_item || 0,
-					);
-					this.$forceUpdate && this.$forceUpdate();
-					return;
-				}
+			if (match) {
+				match.qty = Number(match.qty) + (Number(newItem.qty) || 1);
+				match.amount = Number(match.qty) * Number(match.rate || 0);
+				match.custom_service_item = Number(
+					newItem.custom_service_item || match.custom_service_item || 0,
+				);
+				this.$forceUpdate && this.$forceUpdate();
+				return;
+			}
 
 			// If no exact match, attempt to find by item_code
 			const idx = this.items.findIndex((i) => i.item_code === newItem.item_code);
-				if (idx !== -1) {
-					if (newItem.rate !== undefined || newItem.base_rate !== undefined) {
-						this.applyRatesToItem(this.items[idx], newItem);
-						this.items[idx].description = newItem.description ?? this.items[idx].description;
-						this.items[idx].price_list_rate =
-							newItem.price_list_rate ?? this.items[idx].price_list_rate;
-					} else {
-						this.items[idx].qty = (Number(this.items[idx].qty) || 0) + (Number(newItem.qty) || 1);
-					}
-					this.items[idx].custom_service_item = Number(
-						newItem.custom_service_item || this.items[idx].custom_service_item || 0,
-					);
-					this.$forceUpdate && this.$forceUpdate();
-					return;
+			if (idx !== -1) {
+				if (newItem.rate !== undefined || newItem.base_rate !== undefined) {
+					this.applyRatesToItem(this.items[idx], newItem);
+					this.items[idx].description = newItem.description ?? this.items[idx].description;
+					this.items[idx].price_list_rate =
+						newItem.price_list_rate ?? this.items[idx].price_list_rate;
+				} else {
+					this.items[idx].qty = (Number(this.items[idx].qty) || 0) + (Number(newItem.qty) || 1);
 				}
+				this.items[idx].custom_service_item = Number(
+					newItem.custom_service_item || this.items[idx].custom_service_item || 0,
+				);
+				this.$forceUpdate && this.$forceUpdate();
+				return;
+			}
 
-				const newItemCopy = { ...newItem };
-				newItemCopy.custom_service_item = Number(newItemCopy.custom_service_item || 0);
-				const isService =
-					newItemCopy.is_service_item === 1 ||
-					/carwash|car wash|bike wash|bikewash/i.test(
+			const newItemCopy = { ...newItem };
+			newItemCopy.custom_service_item = Number(newItemCopy.custom_service_item || 0);
+			const isService =
+				newItemCopy.is_service_item === 1 ||
+				/carwash|car wash|bike wash|bikewash/i.test(
 					newItemCopy.item_group || newItemCopy.item_name || "",
 				);
 

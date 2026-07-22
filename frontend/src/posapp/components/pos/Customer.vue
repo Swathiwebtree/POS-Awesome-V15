@@ -932,7 +932,10 @@ export default {
 						contact_mobile: mobile,
 						custom_vehicle_no: vehicleNo,
 						vehicle_mobile_no:
-							customerData.mobile_no || customerData.tel_mobile || customerData.contact_mobile || "",
+							customerData.mobile_no ||
+							customerData.tel_mobile ||
+							customerData.contact_mobile ||
+							"",
 						custom_vehicle_make: customerData.custom_vehicle_make || customerData.make || "",
 						custom_vehicle_model: customerData.custom_vehicle_model || customerData.model || "",
 						is_corporate: isCorporate,
@@ -2079,7 +2082,10 @@ export default {
 						contact_mobile: this.customer_info?.mobile_no || "",
 						custom_vehicle_no: this.vehicle_no || "",
 						vehicle_mobile_no:
-							nextVehicle.mobile_no || nextVehicle.tel_mobile || this.customer_info?.mobile_no || "",
+							nextVehicle.mobile_no ||
+							nextVehicle.tel_mobile ||
+							this.customer_info?.mobile_no ||
+							"",
 						custom_vehicle_make:
 							nextVehicle.custom_vehicle_make ||
 							nextVehicle.make ||
@@ -2183,7 +2189,8 @@ export default {
 			this.eventBus.emit("update_customer_details", {
 				contact_mobile: this.customer_info?.mobile_no || "",
 				custom_vehicle_no: vehicle.vehicle_no || "",
-				vehicle_mobile_no: vehicle.mobile_no || vehicle.tel_mobile || this.customer_info?.mobile_no || "",
+				vehicle_mobile_no:
+					vehicle.mobile_no || vehicle.tel_mobile || this.customer_info?.mobile_no || "",
 				custom_vehicle_make:
 					vehicle.custom_vehicle_make || vehicle.make || vehicle.vehicle_make || "",
 				custom_vehicle_model:

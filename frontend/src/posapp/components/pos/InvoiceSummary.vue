@@ -54,7 +54,7 @@
 									@update:model-value="handleEmployeeChange"
 									@update:menu="handleEmployeeMenuToggle"
 									@click:clear="handleEmployeeClear"
-									>
+								>
 								</v-autocomplete>
 							</v-col>
 
@@ -187,7 +187,7 @@
 						</v-row>
 					</v-col>
 
-						<!-- Right Side - Action Buttons -->
+					<!-- Right Side - Action Buttons -->
 					<v-col cols="12" md="5">
 						<v-row dense>
 							<!-- Save Button -->
@@ -282,9 +282,9 @@
 												</span>
 											</div>
 										</div>
-										</v-card-text>
-									</v-card>
-								</v-col>
+									</v-card-text>
+								</v-card>
+							</v-col>
 
 							<!-- Item Group Bulk Discount Section -->
 							<v-col cols="12" v-if="itemGroupsList && itemGroupsList.length > 0">
@@ -459,15 +459,15 @@
 											max="100"
 											step="0.5"
 											prepend-inner-icon="mdi-percent"
-										variant="outlined"
-										density="comfortable"
-										color="info"
-										suffix="%"
-										:rules="[
-											(v) => v >= 0 || __('Cannot be negative'),
-											(v) => v <= 100 || __('Cannot exceed 100%'),
-										]"
-									></v-text-field>
+											variant="outlined"
+											density="comfortable"
+											color="info"
+											suffix="%"
+											:rules="[
+												(v) => v >= 0 || __('Cannot be negative'),
+												(v) => v <= 100 || __('Cannot exceed 100%'),
+											]"
+										></v-text-field>
 
 										<!-- Preview Alert -->
 										<v-alert
@@ -618,76 +618,70 @@
 									{{ __("PRINT DRAFT") }}
 								</v-btn>
 							</v-col>
-
-					</v-row>
+						</v-row>
 					</v-col>
 				</v-row>
+			</v-col>
+		</v-row>
+		<div class="summary-footer-actions">
+			<v-row dense class="summary-footer-row">
+				<v-col cols="4">
+					<v-btn
+						block
+						color="orange"
+						theme="dark"
+						prepend-icon="mdi-cards"
+						@click="handleFrequentCards"
+						class="summary-btn"
+						:loading="frequentCardsLoading"
+					>
+						<span class="flex-grow-1">{{ __("FREQUENT CARDS") }}</span>
+						<v-chip
+							v-if="completedCardsCount > 0"
+							size="small"
+							color="white"
+							text-color="orange"
+							class="ml-2"
+						>
+							{{ completedCardsCount }} {{ __("Free") }}
+						</v-chip>
+					</v-btn>
 				</v-col>
-				</v-row>
-				<div class="summary-footer-actions">
-				<v-row dense class="summary-footer-row">
-					<v-col cols="4">
-						<v-btn
-							block
-							color="orange"
-							theme="dark"
-							prepend-icon="mdi-cards"
-							@click="handleFrequentCards"
-							class="summary-btn"
-							:loading="frequentCardsLoading"
-						>
-							<span class="flex-grow-1">{{ __("FREQUENT CARDS") }}</span>
-							<v-chip
-								v-if="completedCardsCount > 0"
-								size="small"
-								color="white"
-								text-color="orange"
-								class="ml-2"
-							>
-								{{ completedCardsCount }} {{ __("Free") }}
-							</v-chip>
-						</v-btn>
-					</v-col>
-					<v-col cols="4">
-						<v-btn
-							block
-							color="error"
-							theme="dark"
-							@click="handleCancelSale"
-							class="summary-btn primary-action"
-							:loading="cancelLoading"
-							style="display: flex; align-items: center; justify-content: center;"
-						>
-							<v-icon left size="18">mdi-close-circle</v-icon>
-							{{ __("CANCEL SALE") }}
-						</v-btn>
-					</v-col>
-					<v-col cols="4">
-						<v-btn
-							block
-							color="green darken-2"
-							theme="dark"
-							@click="handleShowPayment"
-							class="summary-btn pay-btn primary-action"
-							:loading="paymentLoading"
-							style="display: flex; align-items: center; justify-content: center;"
-						>
-							<v-icon left size="18">mdi-credit-card</v-icon>
-							{{ __("PAY") }}
-							{{
-								formatCurrency(
-									invoice_doc?.grand_total ?? payableTotal,
-									moneyPrecision,
-								)
-							}}
-							{{ displayCurrency }}
-						</v-btn>
-					</v-col>
-				</v-row>
-			</div>
+				<v-col cols="4">
+					<v-btn
+						block
+						color="error"
+						theme="dark"
+						@click="handleCancelSale"
+						class="summary-btn primary-action"
+						:loading="cancelLoading"
+						style="display: flex; align-items: center; justify-content: center"
+					>
+						<v-icon left size="18">mdi-close-circle</v-icon>
+						{{ __("CANCEL SALE") }}
+					</v-btn>
+				</v-col>
+				<v-col cols="4">
+					<v-btn
+						block
+						color="green darken-2"
+						theme="dark"
+						@click="handleShowPayment"
+						class="summary-btn pay-btn primary-action"
+						:loading="paymentLoading"
+						style="display: flex; align-items: center; justify-content: center"
+					>
+						<v-icon left size="18">mdi-credit-card</v-icon>
+						{{ __("PAY") }}
+						{{ formatCurrency(invoice_doc?.grand_total ?? payableTotal, moneyPrecision) }}
+						{{ displayCurrency }}
+					</v-btn>
+				</v-col>
+			</v-row>
+		</div>
 
-			<!-- Loyalty Points Dialog (Redeem Only) -->
-			<v-dialog v-model="showLoyaltyDialog" max-width="520px" width="520px" persistent>
+		<!-- Loyalty Points Dialog (Redeem Only) -->
+		<v-dialog v-model="showLoyaltyDialog" max-width="520px" width="520px" persistent>
 			<v-card :style="isDarkTheme ? 'background-color:#1E1E1E;' : ''">
 				<v-card-title class="text-h6 pb-2 pt-4 px-6">
 					<v-row align="center" no-gutters>
@@ -741,10 +735,10 @@
 								(v) => v <= loyaltyPoints || __('Cannot redeem more than available points'),
 								(v) => v >= 0 || __('Points must be positive'),
 							]"
-								:hint="__('Enter points to redeem for a discount')"
-								persistent-hint
-								:disabled="isLoyaltyInputDisabled"
-							></v-text-field>
+							:hint="__('Enter points to redeem for a discount')"
+							persistent-hint
+							:disabled="isLoyaltyInputDisabled"
+						></v-text-field>
 
 						<!-- Redemption Preview -->
 						<div v-if="pointsToRedeem > 0" class="mt-3 pa-3 redemption-preview">
@@ -972,9 +966,9 @@
 					</div>
 				</v-card-text>
 			</v-card>
-			</v-dialog>
-		</v-card>
-	</template>
+		</v-dialog>
+	</v-card>
+</template>
 
 <script>
 export default {
@@ -1570,16 +1564,8 @@ export default {
 		},
 		applySelectedVehicleDetails(payload = {}) {
 			this.selectedVehicleDetails = {
-				make:
-					payload.vehicle_make ||
-					payload.custom_vehicle_make ||
-					payload.make ||
-					"",
-				model:
-					payload.vehicle_model ||
-					payload.custom_vehicle_model ||
-					payload.model ||
-					"",
+				make: payload.vehicle_make || payload.custom_vehicle_make || payload.make || "",
+				model: payload.vehicle_model || payload.custom_vehicle_model || payload.model || "",
 				mobile_no: payload.vehicle_mobile_no || payload.mobile_no || payload.tel_mobile || "",
 			};
 		},
@@ -2867,7 +2853,7 @@ export default {
 		});
 
 		// Check initially if we should show employee selection
-			this.checkIfServiceItems();
+		this.checkIfServiceItems();
 
 		this.eventBus.on("employee_selected", this.handleExternalEmployeeSelected);
 

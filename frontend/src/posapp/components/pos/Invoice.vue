@@ -4153,7 +4153,7 @@ export default {
 					(newItems || []).map((item) => ({
 						item_code: item.item_code,
 						custom_service_item: item.custom_service_item,
-					}))
+					})),
 				);
 
 				const hasOilItem = this.checkForEngineOilItem();
