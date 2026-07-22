@@ -1314,10 +1314,7 @@ export default {
 
 			const itemRule = item?._vehicle_discount_rule || null;
 			const itemCap = Number(
-				item?._max_discount_allowed ||
-					itemRule?.auto_apply_value ||
-					itemRule?.max_discount ||
-					0,
+				item?._max_discount_allowed || itemRule?.auto_apply_value || itemRule?.max_discount || 0,
 			);
 
 			if (itemCap > 0 && discountPercentage > itemCap) {

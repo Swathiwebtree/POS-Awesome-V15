@@ -792,11 +792,7 @@ export default {
 			const row = item?.raw || item;
 			const rule = this.getItemDiscountRule(row);
 
-			return Boolean(
-				row?._auto_discount_applied ||
-					row?.auto_discount_applied ||
-					rule?.auto_apply,
-			);
+			return Boolean(row?._auto_discount_applied || row?.auto_discount_applied || rule?.auto_apply);
 		},
 
 		addOne(item) {
