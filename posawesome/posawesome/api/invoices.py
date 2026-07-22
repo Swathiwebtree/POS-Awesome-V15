@@ -663,8 +663,7 @@ def _submit_payment_entries_for_invoice(invoice_doc):
         payment_entry.party_type = "Customer"
         payment_entry.party = invoice_doc.customer
         payment_entry.party_name = (
-            frappe.db.get_value("Customer", invoice_doc.customer, "customer_name")
-            or invoice_doc.customer
+            frappe.db.get_value("Customer", invoice_doc.customer, "customer_name") or invoice_doc.customer
         )
         payment_entry.append(
             "references",
