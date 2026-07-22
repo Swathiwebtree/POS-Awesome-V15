@@ -2303,11 +2303,12 @@ export default {
 			cacheResult.cached.forEach((det) => {
 				const item = items.find((it) => it.item_code === det.item_code);
 				if (item) {
-					Object.assign(item, {
-						actual_qty: det.actual_qty,
-						has_batch_no: det.has_batch_no,
-						has_serial_no: det.has_serial_no,
-					});
+						Object.assign(item, {
+							actual_qty: det.actual_qty,
+							has_batch_no: det.has_batch_no,
+							has_serial_no: det.has_serial_no,
+							custom_service_item: det.custom_service_item ?? item.custom_service_item ?? 0,
+						});
 					if (det.item_uoms && det.item_uoms.length > 0) {
 						item.item_uoms = det.item_uoms;
 						saveItemUOMs(item.item_code, det.item_uoms);
@@ -2381,13 +2382,15 @@ export default {
 
 							updatedItems.push({
 								item: item,
-								updates: {
-									actual_qty: updated_item.actual_qty,
-									has_batch_no: updated_item.has_batch_no,
-									has_serial_no: updated_item.has_serial_no,
-									batch_no_data:
-										updated_item.batch_no_data && updated_item.batch_no_data.length > 0
-											? updated_item.batch_no_data
+									updates: {
+										actual_qty: updated_item.actual_qty,
+										has_batch_no: updated_item.has_batch_no,
+										has_serial_no: updated_item.has_serial_no,
+										custom_service_item:
+											updated_item.custom_service_item ?? item.custom_service_item ?? 0,
+										batch_no_data:
+											updated_item.batch_no_data && updated_item.batch_no_data.length > 0
+												? updated_item.batch_no_data
 											: item.batch_no_data,
 									serial_no_data:
 										updated_item.serial_no_data && updated_item.serial_no_data.length > 0

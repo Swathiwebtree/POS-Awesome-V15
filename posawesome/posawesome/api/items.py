@@ -281,6 +281,7 @@ def get_items(
             "has_serial_no",
             "max_discount",
             "brand",
+            "custom_service_item",
         ]
 
         if include_description:
@@ -323,6 +324,15 @@ def get_items(
                 row = {}
                 row.update(item)
                 row.update(detail)
+                frappe.log_error(
+    frappe.as_json({
+        "item_code": row.get("item_code"),
+        "item_value": item.get("custom_service_item"),
+        "detail_value": detail.get("custom_service_item"),
+        "final_value": row.get("custom_service_item"),
+    }),
+    "POS Service Item Merge Debug",
+)
                 result.append(row)
 
             page_start += len(items_data)
@@ -420,6 +430,7 @@ def get_item_variants(pos_profile, parent_item_code, price_list=None, customer=N
         "has_serial_no",
         "max_discount",
         "brand",
+        "custom_service_item",
     ]
 
     items_data = frappe.get_all(
@@ -882,6 +893,7 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
     else:
         res["actual_qty"] = 999999
     res["max_discount"] = max_discount
+    res["custom_service_item"] = frappe.db.get_value("Item", item_code, "custom_service_item") or 0
     res["batch_no_data"] = batch_no_data
     res["serial_no_data"] = serial_no_data
 
@@ -1188,6 +1200,7 @@ def get_item_prices_custom(
             "max_discount",
             "brand",
             "image",
+            "custom_service_item",
         ],
         limit_start=limit_start,
         limit_page_length=limit_page_length,
@@ -1264,6 +1277,7 @@ def get_item_prices_custom(
 
         enriched_item = {
             **item,
+            "custom_service_item": int(item.get("custom_service_item") or 0),
             "rate": price_map.get(item_code, 0),
             "price_list_rate": price_map.get(item_code, 0),
             "actual_qty": stock_map.get(item_code, 0) if warehouse else 999999,

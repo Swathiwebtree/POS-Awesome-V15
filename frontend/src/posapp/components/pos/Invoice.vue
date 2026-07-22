@@ -1453,28 +1453,9 @@ export default {
 				return false;
 			}
 
-			// Check if any item is a car wash service
+			// Show the selector only when the cart contains at least one custom service item.
 			const hasCarWashService = this.items.some((item) => {
-				const group = (item.item_group || "").toLowerCase();
-				const code = (item.item_code || "").toLowerCase();
-				const name = (item.item_name || "").toLowerCase();
-				const serviceItemFlag = item.service_item === 1 || item.is_service_item === 1;
-
-				const washMatch =
-					group.includes("car wash") ||
-					group.includes("carwash") ||
-					group.includes("bike wash") ||
-					group.includes("bikewash") ||
-					code.includes("carwash") ||
-					code.includes("car wash") ||
-					code.includes("bikewash") ||
-					code.includes("bike wash") ||
-					name.includes("carwash") ||
-					name.includes("car wash") ||
-					name.includes("bikewash") ||
-					name.includes("bike wash");
-
-				return washMatch || serviceItemFlag;
+				return Number(item?.custom_service_item || 0) === 1;
 			});
 
 			return hasCarWashService;
@@ -4166,6 +4147,14 @@ export default {
 				if (this.invoice_doc) {
 					this.invoice_doc.items = newItems;
 				}
+
+				console.log(
+					"Cart service item values:",
+					(newItems || []).map((item) => ({
+						item_code: item.item_code,
+						custom_service_item: item.custom_service_item,
+					}))
+				);
 
 				const hasOilItem = this.checkForEngineOilItem();
 				this.eventBus.emit("show_odometer_field", hasOilItem);

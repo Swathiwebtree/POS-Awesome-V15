@@ -96,6 +96,7 @@ export function useItemAddition() {
 		let new_item;
 		if (index === -1 || context.new_line) {
 			new_item = getNewItem(item, context);
+			new_item.custom_service_item = Number(item.custom_service_item || 0);
 			// Handle serial number logic
 			if (item.has_serial_no && item.to_set_serial_no) {
 				new_item.serial_no_selected = [];
@@ -240,6 +241,7 @@ export function useItemAddition() {
 			} else {
 				const cur_item = context.items[index];
 				if (context.update_items_details) context.update_items_details([cur_item]);
+				cur_item.custom_service_item = Number(item.custom_service_item || cur_item.custom_service_item || 0);
 				// Merge serial numbers if any
 				if (new_item.serial_no_selected && new_item.serial_no_selected.length) {
 					new_item.serial_no_selected.forEach((sn) => {
@@ -269,11 +271,12 @@ export function useItemAddition() {
 					context.fetch_available_qty(cur_item);
 				}
 			}
-		} else {
-			const cur_item = context.items[index];
-			if (context.update_items_details) context.update_items_details([cur_item]);
-			// Serial number logic for existing item
-			if (item.has_serial_no && item.to_set_serial_no) {
+			} else {
+				const cur_item = context.items[index];
+				if (context.update_items_details) context.update_items_details([cur_item]);
+				cur_item.custom_service_item = Number(item.custom_service_item || cur_item.custom_service_item || 0);
+				// Serial number logic for existing item
+				if (item.has_serial_no && item.to_set_serial_no) {
 				if (cur_item.serial_no_selected.includes(item.to_set_serial_no)) {
 					context.eventBus.emit("show_message", {
 						title: __(`This Serial Number {0} has already been added!`, [item.to_set_serial_no]),

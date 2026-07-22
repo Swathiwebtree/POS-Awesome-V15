@@ -6,7 +6,7 @@
 		]"
 		:style="isDarkTheme ? 'background-color:#1E1E1E;' : ''"
 	>
-		<v-row dense class="w-100">
+		<v-row dense class="w-100 summary-scroll-area">
 			<!-- divider removed to save height -->
 
 			<!-- Totals and Actions Section -->
@@ -31,7 +31,7 @@
 									@update:model-value="emitOdometerData"
 								/>
 							</v-col>
-							<!-- Service Employee Selection (for car wash services) -->
+							<!-- Service Employee Selection (for service items) -->
 							<v-col :cols="showOdometerField ? 6 : 12" v-if="showEmployeeSelection">
 								<v-autocomplete
 									:key="employeeFieldKey"
@@ -54,78 +54,7 @@
 									@update:model-value="handleEmployeeChange"
 									@update:menu="handleEmployeeMenuToggle"
 									@click:clear="handleEmployeeClear"
-								>
-									<template v-slot:prepend-item>
-										<div class="px-3 pt-3 pb-2" @mousedown.stop @click.stop>
-											<v-text-field
-												ref="employeeSearchInput"
-												v-model="employeeSearch"
-												autocomplete="off"
-												variant="outlined"
-												density="compact"
-												hide-details
-												clearable
-												class="employee-search-input"
-												:placeholder="__('Search by employee ID or name')"
-												prepend-inner-icon="mdi-magnify"
-												:loading="loadingEmployees"
-												@click.stop
-												@focus="employeeMenu = true"
-												@blur="handleEmployeeSearchBlur"
-												@keydown.stop
-												@keypress.stop
-												@keyup.stop
-												@input.stop
-												@update:model-value="handleEmployeeSearchInput"
-											/>
-											<div
-												v-if="employeeSearch && employeeSearch.length < 3"
-												class="text-caption mt-1 employee-search-helper"
-											>
-												{{ __("Type at least 3 characters to search employees") }}
-											</div>
-										</div>
-									</template>
-									<template v-slot:item="{ props, item }">
-										<v-list-item
-											v-bind="props"
-											:title="
-												item.raw.display_label || buildEmployeeDisplayLabel(item.raw)
-											"
-										>
-											<template v-slot:prepend>
-												<v-avatar size="32" color="primary" class="mr-2">
-													<v-img v-if="item.raw.image" :src="item.raw.image" />
-													<v-icon v-else color="white">mdi-account</v-icon>
-												</v-avatar>
-											</template>
-										</v-list-item>
-									</template>
-									<template v-slot:selection="{ item }">
-										<div class="employee-selection">
-											<span
-												v-if="selectedEmployeeDisplayLabel"
-												class="employee-selection-name"
-											>
-												{{ selectedEmployeeDisplayLabel }}
-											</span>
-											<span v-else class="employee-selection-placeholder">
-												{{ __("Select Service Employee") }}
-											</span>
-										</div>
-									</template>
-									<template v-slot:no-data>
-										<v-list-item v-if="employeeSearch && employeeSearch.length < 3">
-											<v-list-item-title class="text-caption">
-												{{ __("Type at least 3 characters to search employees") }}
-											</v-list-item-title>
-										</v-list-item>
-										<v-list-item v-else>
-											<v-list-item-title class="text-caption">
-												{{ __("No employees found") }}
-											</v-list-item-title>
-										</v-list-item>
-									</template>
+									>
 								</v-autocomplete>
 							</v-col>
 
@@ -215,33 +144,50 @@
 								:prefix="currencySymbol(displayCurrency)"
 							/>
 
-							<v-col cols="12">
-								<v-btn
-									block
-									color="orange"
-									theme="dark"
-									prepend-icon="mdi-cards"
-									@click="handleFrequentCards"
-									class="summary-btn"
-									:loading="frequentCardsLoading"
-								>
-									<span class="flex-grow-1">{{ __("FREQUENT CARDS") }}</span>
-									<v-chip
-										v-if="completedCardsCount > 0"
-										size="small"
-										color="white"
-										text-color="orange"
-										class="ml-2"
-									>
-										{{ completedCardsCount }} {{ __("Free") }}
-									</v-chip>
-								</v-btn>
+							<!-- Selected Vehicle Summary -->
+							<v-col cols="12" v-if="selectedCustomerId" class="customer-vehicle-summary-wrap">
+								<v-row dense>
+									<v-col cols="12" md="4">
+										<v-text-field
+											:model-value="selectedVehicleDetails.make || '—'"
+											:label="__('Make')"
+											prepend-inner-icon="mdi-car"
+											variant="solo"
+											density="compact"
+											readonly
+											class="summary-field"
+										/>
+									</v-col>
+									<v-col cols="12" md="4">
+										<v-text-field
+											:model-value="selectedVehicleDetails.model || '—'"
+											:label="__('Model')"
+											prepend-inner-icon="mdi-car-side"
+											variant="solo"
+											density="compact"
+											readonly
+											class="summary-field"
+										/>
+									</v-col>
+									<v-col cols="12" md="4">
+										<v-text-field
+											:model-value="selectedVehicleDetails.mobile_no || '—'"
+											:label="__('Mobile No')"
+											prepend-inner-icon="mdi-phone"
+											variant="solo"
+											density="compact"
+											readonly
+											class="summary-field"
+										/>
+									</v-col>
+								</v-row>
 							</v-col>
+
 							<v-col cols="6"></v-col>
 						</v-row>
 					</v-col>
 
-					<!-- Right Side - Action Buttons -->
+						<!-- Right Side - Action Buttons -->
 					<v-col cols="12" md="5">
 						<v-row dense>
 							<!-- Save Button -->
@@ -336,9 +282,9 @@
 												</span>
 											</div>
 										</div>
-									</v-card-text>
-								</v-card>
-							</v-col>
+										</v-card-text>
+									</v-card>
+								</v-col>
 
 							<!-- Item Group Bulk Discount Section -->
 							<v-col cols="12" v-if="itemGroupsList && itemGroupsList.length > 0">
@@ -513,15 +459,15 @@
 											max="100"
 											step="0.5"
 											prepend-inner-icon="mdi-percent"
-											variant="outlined"
-											density="comfortable"
-											color="info"
-											suffix="%"
-											:rules="[
-												(v) => v >= 0 || __('Cannot be negative'),
-												(v) => v <= 100 || __('Cannot exceed 100%'),
-											]"
-										/>
+										variant="outlined"
+										density="comfortable"
+										color="info"
+										suffix="%"
+										:rules="[
+											(v) => v >= 0 || __('Cannot be negative'),
+											(v) => v <= 100 || __('Cannot exceed 100%'),
+										]"
+									></v-text-field>
 
 										<!-- Preview Alert -->
 										<v-alert
@@ -673,62 +619,75 @@
 								</v-btn>
 							</v-col>
 
-							<!-- Cancel + Pay (Right Side, Highlighted) -->
-							<v-col cols="12" class="summary-actions">
-								<v-row dense>
-									<v-col cols="6">
-										<v-btn
-											block
-											color="error"
-											theme="dark"
-											@click="handleCancelSale"
-											class="summary-btn primary-action"
-											:loading="cancelLoading"
-											style="
-												display: flex;
-												align-items: center;
-												justify-content: center;
-											"
-										>
-											<v-icon left size="18">mdi-close-circle</v-icon>
-											{{ __("CANCEL SALE") }}
-										</v-btn>
-									</v-col>
-									<v-col cols="6">
-										<v-btn
-											block
-											color="green darken-2"
-											theme="dark"
-											@click="handleShowPayment"
-											class="summary-btn pay-btn primary-action"
-											:loading="paymentLoading"
-											style="
-												display: flex;
-												align-items: center;
-												justify-content: center;
-											"
-										>
-											<v-icon left size="18">mdi-credit-card</v-icon>
-											{{ __("PAY") }}
-											{{
-												formatCurrency(
-													invoice_doc?.grand_total ?? payableTotal,
-													moneyPrecision,
-												)
-											}}
-											{{ displayCurrency }}
-										</v-btn>
-									</v-col>
-								</v-row>
-							</v-col>
-						</v-row>
+					</v-row>
 					</v-col>
 				</v-row>
-			</v-col>
-		</v-row>
+				</v-col>
+				</v-row>
+				<div class="summary-footer-actions">
+				<v-row dense class="summary-footer-row">
+					<v-col cols="4">
+						<v-btn
+							block
+							color="orange"
+							theme="dark"
+							prepend-icon="mdi-cards"
+							@click="handleFrequentCards"
+							class="summary-btn"
+							:loading="frequentCardsLoading"
+						>
+							<span class="flex-grow-1">{{ __("FREQUENT CARDS") }}</span>
+							<v-chip
+								v-if="completedCardsCount > 0"
+								size="small"
+								color="white"
+								text-color="orange"
+								class="ml-2"
+							>
+								{{ completedCardsCount }} {{ __("Free") }}
+							</v-chip>
+						</v-btn>
+					</v-col>
+					<v-col cols="4">
+						<v-btn
+							block
+							color="error"
+							theme="dark"
+							@click="handleCancelSale"
+							class="summary-btn primary-action"
+							:loading="cancelLoading"
+							style="display: flex; align-items: center; justify-content: center;"
+						>
+							<v-icon left size="18">mdi-close-circle</v-icon>
+							{{ __("CANCEL SALE") }}
+						</v-btn>
+					</v-col>
+					<v-col cols="4">
+						<v-btn
+							block
+							color="green darken-2"
+							theme="dark"
+							@click="handleShowPayment"
+							class="summary-btn pay-btn primary-action"
+							:loading="paymentLoading"
+							style="display: flex; align-items: center; justify-content: center;"
+						>
+							<v-icon left size="18">mdi-credit-card</v-icon>
+							{{ __("PAY") }}
+							{{
+								formatCurrency(
+									invoice_doc?.grand_total ?? payableTotal,
+									moneyPrecision,
+								)
+							}}
+							{{ displayCurrency }}
+						</v-btn>
+					</v-col>
+				</v-row>
+			</div>
 
-		<!-- Loyalty Points Dialog (Redeem Only) -->
-		<v-dialog v-model="showLoyaltyDialog" max-width="520px" width="520px" persistent>
+			<!-- Loyalty Points Dialog (Redeem Only) -->
+			<v-dialog v-model="showLoyaltyDialog" max-width="520px" width="520px" persistent>
 			<v-card :style="isDarkTheme ? 'background-color:#1E1E1E;' : ''">
 				<v-card-title class="text-h6 pb-2 pt-4 px-6">
 					<v-row align="center" no-gutters>
@@ -782,10 +741,10 @@
 								(v) => v <= loyaltyPoints || __('Cannot redeem more than available points'),
 								(v) => v >= 0 || __('Points must be positive'),
 							]"
-							:hint="__('Enter points to redeem for a discount')"
-							persistent-hint
-							:disabled="isLoyaltyInputDisabled"
-						/>
+								:hint="__('Enter points to redeem for a discount')"
+								persistent-hint
+								:disabled="isLoyaltyInputDisabled"
+							></v-text-field>
 
 						<!-- Redemption Preview -->
 						<div v-if="pointsToRedeem > 0" class="mt-3 pa-3 redemption-preview">
@@ -1013,9 +972,9 @@
 					</div>
 				</v-card-text>
 			</v-card>
-		</v-dialog>
-	</v-card>
-</template>
+			</v-dialog>
+		</v-card>
+	</template>
 
 <script>
 export default {
@@ -1061,6 +1020,7 @@ export default {
 			showLoyaltyDialog: false,
 			loyaltyPoints: null,
 			customerName: "",
+			customerDetails: null,
 			pointsToRedeem: 0,
 			conversionFactor: 0,
 			loyaltySnapshotLocked: false,
@@ -1099,6 +1059,11 @@ export default {
 			vehicleNumber: "",
 			vehicleMake: "",
 			mobileNumber: "",
+			selectedVehicleDetails: {
+				make: "",
+				model: "",
+				mobile_no: "",
+			},
 
 			manualRoundApplied: false,
 			manual_round_off: 0,
@@ -1285,6 +1250,15 @@ export default {
 		sharedActiveDiscountType() {
 			return this.activeDiscountType || this.discountConflictState.activeType || null;
 		},
+		selectedCustomerLabel() {
+			return (
+				this.customerDetails?.custom_display_name ||
+				this.customerDetails?.customer_name ||
+				this.customerName ||
+				this.selectedCustomerId ||
+				""
+			);
+		},
 		hasCompletedCards() {
 			return this.frequentCards.some((card) => card.visits >= card.required_visits && !card.is_expired);
 		},
@@ -1312,6 +1286,9 @@ export default {
 	watch: {
 		selectedCustomerId: {
 			handler(newVal) {
+				this.customerDetails = null;
+				this.resetSelectedVehicleDetails();
+
 				if (newVal) {
 					const draftSnapshot = this.getDraftLoyaltySnapshot();
 					if (draftSnapshot) {
@@ -1562,6 +1539,8 @@ export default {
 			this.pointsToRedeem = 0;
 			this.conversionFactor = 0;
 			this.customerName = "";
+			this.customerDetails = null;
+			this.resetSelectedVehicleDetails();
 
 			// Frequent cards
 			this.frequentCards = [];
@@ -1581,6 +1560,28 @@ export default {
 			localStorage.removeItem("pos_selected_employee");
 
 			console.log("[InvoiceSummary] Reset after payment completed");
+		},
+		resetSelectedVehicleDetails() {
+			this.selectedVehicleDetails = {
+				make: "",
+				model: "",
+				mobile_no: "",
+			};
+		},
+		applySelectedVehicleDetails(payload = {}) {
+			this.selectedVehicleDetails = {
+				make:
+					payload.vehicle_make ||
+					payload.custom_vehicle_make ||
+					payload.make ||
+					"",
+				model:
+					payload.vehicle_model ||
+					payload.custom_vehicle_model ||
+					payload.model ||
+					"",
+				mobile_no: payload.vehicle_mobile_no || payload.mobile_no || payload.tel_mobile || "",
+			};
 		},
 		formatByPrecision(value) {
 			const num = Number(value || 0);
@@ -1905,6 +1906,7 @@ export default {
 					if (this.loyaltySnapshotLocked || this.hasAppliedLoyalty) {
 						return;
 					}
+					this.customerDetails = response.message;
 					this.loyaltyPoints = response.message.loyalty_points || 0;
 					this.customerName = response.message.customer_name || "";
 					this.conversionFactor = response.message.conversion_factor || 0;
@@ -2505,19 +2507,19 @@ export default {
 			}
 		},
 
-		checkIfCarWashService() {
+		checkIfServiceItems() {
 			// Emit event to parent to check items
 			this.eventBus.emit("check_items_for_service", {
-				callback: (hasCarWashService) => {
-					if (!hasCarWashService && this.isEmployeeLoadLocked() && this.selectedEmployee) {
+				callback: (hasServiceItems) => {
+					if (!hasServiceItems && this.isEmployeeLoadLocked() && this.selectedEmployee) {
 						return;
 					}
 
-					this.showEmployeeSelection = hasCarWashService;
+					this.showEmployeeSelection = hasServiceItems;
 
 					// Fetch employees if needed and not already loaded
 					// Clear selection if no longer needed
-					if (!hasCarWashService && this.selectedEmployee) {
+					if (!hasServiceItems && this.selectedEmployee) {
 						this.selectedEmployee = null;
 						this.selectedEmployeeDetails = null;
 						this.handleEmployeeChange(null);
@@ -2530,7 +2532,7 @@ export default {
 			// payload may be { employee_id, employee_name } or just employee_id (string)
 			if (!payload) {
 				// Clear only the selected value. The field should remain visible
-				// while car wash service is still active.
+				// while a service item is still active.
 				this.selectedEmployee = null;
 				this.selectedEmployeeDetails = null;
 				this.employeeSearch = "";
@@ -2825,14 +2827,26 @@ export default {
 			this.mobileNumber = data.contact_mobile || "";
 			this.vehicleNumber = data.custom_vehicle_no || "";
 			this.vehicleMake = data.custom_vehicle_make || data.make || "";
+			this.applySelectedVehicleDetails(data || {});
 
 			// If odometer field is visible, emit the data immediately
 			if (this.showOdometerField) {
 				this.emitOdometerData();
 			}
 		});
+		this.eventBus.on("vehicle_selected", (vehicle) => {
+			if (!vehicle) {
+				this.resetSelectedVehicleDetails();
+				return;
+			}
+			if (typeof vehicle === "object") {
+				this.applySelectedVehicleDetails(vehicle);
+			}
+		});
 		this.eventBus.on("invoice_cleared", () => {
 			this.clearOdometerFields();
+			this.customerDetails = null;
+			this.resetSelectedVehicleDetails();
 		});
 
 		// Listen for item additions to check for auto-apply
@@ -2853,7 +2867,7 @@ export default {
 		});
 
 		// Check initially if we should show employee selection
-		this.checkIfCarWashService();
+			this.checkIfServiceItems();
 
 		this.eventBus.on("employee_selected", this.handleExternalEmployeeSelected);
 
@@ -2884,6 +2898,7 @@ export default {
 		this.eventBus.off("set_custom_vehicle_no");
 		this.eventBus.off("set_contact_mobile");
 		this.eventBus.off("update_customer_details");
+		this.eventBus.off("vehicle_selected");
 		this.eventBus.off("invoice_cleared");
 		this.eventBus.off("restore_loyalty_ui_state");
 		this.eventBus.off("discount_conflict_state", this.updateDiscountConflictState);
@@ -3026,11 +3041,77 @@ export default {
 }
 
 .compact-summary {
+	display: flex;
+	flex-direction: column;
 	height: 100%;
+	min-height: 0;
 	overflow-y: hidden;
 	overflow-x: hidden;
 	margin-top: 12px !important;
 	padding-top: 6px !important;
+}
+
+.summary-scroll-area {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.summary-content-area {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding-right: 2px;
+}
+
+.customer-vehicle-summary-wrap {
+	margin-top: 6px !important;
+}
+
+.customer-vehicle-summary-card {
+	background: linear-gradient(135deg, rgba(0, 150, 136, 0.08), rgba(0, 188, 212, 0.06));
+	border: 1px solid rgba(0, 150, 136, 0.18);
+	border-radius: 12px !important;
+}
+
+:deep(.v-theme--dark) .customer-vehicle-summary-card {
+	background: linear-gradient(135deg, rgba(0, 150, 136, 0.14), rgba(0, 188, 212, 0.1));
+	border-color: rgba(0, 150, 136, 0.28);
+}
+
+.customer-vehicle-values {
+	margin-top: 2px;
+}
+
+.summary-label {
+	font-size: 0.68rem;
+	line-height: 1.1;
+	color: rgba(0, 0, 0, 0.58);
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+}
+
+.summary-value {
+	font-size: 0.82rem;
+	font-weight: 700;
+	line-height: 1.15;
+	color: inherit;
+	word-break: break-word;
+}
+
+:deep(.v-theme--dark) .summary-label {
+	color: rgba(255, 255, 255, 0.58);
+}
+
+.summary-footer-actions {
+	border-top: 1px solid rgba(0, 0, 0, 0.08);
+	background: inherit;
+}
+
+:deep(.v-theme--dark) .summary-footer-actions {
+	border-top-color: rgba(255, 255, 255, 0.08);
 }
 
 .summary-btn:hover:not(:disabled) {
@@ -3226,7 +3307,12 @@ export default {
 }
 
 .summary-actions {
+	position: sticky;
+	bottom: 0;
+	z-index: 5;
 	margin-top: 6px !important;
+	padding-top: 8px;
+	background: inherit;
 }
 
 @media (max-width: 1366px) {
