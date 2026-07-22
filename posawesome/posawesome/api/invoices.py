@@ -27,7 +27,9 @@ from posawesome.posawesome.api.payments import (
     redeeming_customer_credit,
 )  # Updated import
 from posawesome.posawesome.api.customers import get_loyalty_points
-from posawesome.posawesome.api.payment_entry import create_payment_entry
+from erpnext.accounts.doctype.payment_entry.payment_entry import (
+    get_payment_entry as erpnext_get_payment_entry,
+)
 from posawesome.posawesome.api.utilities import (
     ensure_child_doctype,
     set_batch_nos_for_bundels,
@@ -576,9 +578,15 @@ def _log_submit_debug(invoice_doc, label="submit_invoice"):
 
 
 def _submit_payment_entries_for_invoice(invoice_doc):
-    """Create Payment Entry rows for paid POS invoices after Sales Invoice submit."""
+    """Create one Payment Entry for each POS payment row."""
+
     if cint(invoice_doc.get("is_return")):
         return []
+
+    if not invoice_doc.get("customer"):
+        frappe.throw(
+            _("Customer is missing on invoice {0}.").format(invoice_doc.name)
+        )
 
     existing_payment_entries = frappe.get_all(
         "Payment Entry Reference",
@@ -589,128 +597,155 @@ def _submit_payment_entries_for_invoice(invoice_doc):
         },
         fields=["parent"],
     )
+
     if existing_payment_entries:
-        return list({row.parent for row in existing_payment_entries if row.parent})
+        return list(
+            {
+                row.parent
+                for row in existing_payment_entries
+                if row.parent
+            }
+        )
 
     valid_payments = [
         payment
         for payment in (invoice_doc.get("payments") or [])
-        if flt(payment.get("amount")) > 0 and not _is_credit_sale_or_on_account_payment(payment)
+        if flt(payment.get("amount")) > 0
+        and not _is_credit_sale_or_on_account_payment(payment)
     ]
-    frappe.logger().info(
-        frappe.as_json(
-            {
-                "payment_entry_creation.invoice": invoice_doc.name,
-                "payment_entry_creation.is_pos": invoice_doc.get("is_pos"),
-                "payment_entry_creation.valid_payments": [payment.as_dict() for payment in valid_payments],
-            }
-        )
-    )
-    paid_amount = flt(sum(flt(payment.get("amount")) for payment in valid_payments))
-    if paid_amount <= 0:
+
+    if not valid_payments:
         return []
+
     submitted_entries = []
 
-    def _rollback_submitted_payment_entries(entry_names):
-        for entry_name in reversed(entry_names or []):
-            try:
-                pe = frappe.get_doc("Payment Entry", entry_name)
-                if cint(pe.docstatus) == 1:
-                    pe.cancel()
-                if frappe.db.exists("Payment Entry", entry_name):
-                    frappe.delete_doc("Payment Entry", entry_name, ignore_permissions=True)
-            except Exception:
-                frappe.log_error(
-                    frappe.get_traceback(),
-                    f"POS payment entry cleanup failed for {entry_name}",
+    try:
+        for index, payment in enumerate(valid_payments, start=1):
+            payment_amount = flt(payment.get("amount"))
+
+            if payment_amount <= 0:
+                continue
+
+            # Reload after every Payment Entry so outstanding is current.
+            invoice_doc.reload()
+
+            remaining_outstanding = flt(
+                invoice_doc.get("outstanding_amount")
+            )
+
+            if remaining_outstanding <= 0:
+                break
+
+            payment_amount = min(
+                payment_amount,
+                remaining_outstanding,
+            )
+
+            # Generate a fresh standard ERPNext Payment Entry
+            # for this specific split-payment row.
+            payment_entry = erpnext_get_payment_entry(
+                invoice_doc.doctype,
+                invoice_doc.name,
+            )
+
+            payment_entry.flags.ignore_permissions = True
+            frappe.flags.ignore_account_permission = True
+
+            payment_entry.payment_type = "Receive"
+            payment_entry.party_type = "Customer"
+            payment_entry.party = invoice_doc.customer
+
+            # Each entry receives its own payment method.
+            payment_entry.mode_of_payment = payment.get(
+                "mode_of_payment"
+            )
+
+            payment_entry.reference_no = (
+                f"{invoice_doc.name}-{index}"
+            )
+            payment_entry.reference_date = (
+                invoice_doc.get("posting_date")
+            )
+
+            # Resolve the correct account for this payment method.
+            payment_entry.setup_party_account_field()
+            payment_entry.set_missing_values()
+
+            payment_entry.paid_amount = payment_amount
+            payment_entry.received_amount = payment_amount
+
+            if payment_entry.get("references"):
+                payment_entry.references[0].allocated_amount = (
+                    payment_amount
                 )
 
-    for index, payment in enumerate(valid_payments, start=1):
-        current_amount = flt(payment.get("amount"))
-        if current_amount <= 0:
-            continue
+            payment_entry.set_amounts()
+
+            # Restore the correct split amount after recalculation.
+            payment_entry.paid_amount = payment_amount
+            payment_entry.received_amount = payment_amount
+
+            if payment_entry.get("references"):
+                payment_entry.references[0].allocated_amount = (
+                    payment_amount
+                )
+
+            # Restore party after ERPNext field recalculation.
+            payment_entry.party_type = "Customer"
+            payment_entry.party = invoice_doc.customer
+
+            payment_entry.save(ignore_permissions=True)
+            payment_entry.submit()
+
+            submitted_entries.append(payment_entry.name)
 
         invoice_doc.reload()
-        remaining_outstanding = flt(
-            invoice_doc.get("outstanding_amount")
-            or invoice_doc.get("rounded_total")
-            or invoice_doc.get("grand_total")
-            or 0
-        )
-        if remaining_outstanding <= 0:
-            break
 
-        payment_amount = min(current_amount, remaining_outstanding)
-        if not invoice_doc.customer:
+        if (
+            flt(invoice_doc.get("outstanding_amount")) != 0
+            or invoice_doc.get("status") != "Paid"
+        ):
             frappe.throw(
-                _("Customer is required to create a Payment Entry for Sales Invoice {0}").format(
-                    invoice_doc.name
+                _(
+                    "Split payments were submitted, but invoice {0} "
+                    "is not fully paid. Outstanding amount: {1}"
+                ).format(
+                    invoice_doc.name,
+                    invoice_doc.get("outstanding_amount"),
                 )
             )
 
-        payment_entry = create_payment_entry(
-            company=invoice_doc.company,
-            customer=invoice_doc.customer,
-            amount=payment_amount,
-            currency=invoice_doc.currency,
-            mode_of_payment=payment.get("mode_of_payment"),
-            reference_no=f"{invoice_doc.name}-{index}",
-            reference_date=invoice_doc.get("posting_date"),
-            posting_date=invoice_doc.get("posting_date"),
-            cost_center=invoice_doc.get("cost_center"),
-            submit=0,
-        )
-        payment_entry.party_type = "Customer"
-        payment_entry.party = invoice_doc.customer
-        payment_entry.party_name = (
-            frappe.db.get_value("Customer", invoice_doc.customer, "customer_name") or invoice_doc.customer
-        )
-        payment_entry.append(
-            "references",
-            {
-                "reference_doctype": invoice_doc.doctype,
-                "reference_name": invoice_doc.name,
-                "allocated_amount": payment_amount,
-            },
-        )
-        payment_entry.flags.ignore_permissions = True
-        frappe.flags.ignore_account_permission = True
-        payment_entry.save(ignore_permissions=True)
-        payment_entry.submit()
-        submitted_entries.append(payment_entry.name)
+        return submitted_entries
 
-    invoice_doc.reload()
-    frappe.logger().info(
-        frappe.as_json(
-            {
-                "payment_entry_creation.invoice": invoice_doc.name,
-                "payment_entry_creation.submitted_entries": submitted_entries,
-                "invoice_doc.outstanding_amount after payment_entry submission": invoice_doc.get(
-                    "outstanding_amount"
-                ),
-                "invoice_doc.status after payment_entry submission": invoice_doc.get("status"),
-            }
-        )
-    )
-    if flt(invoice_doc.get("outstanding_amount")) != 0 or invoice_doc.get("status") != "Paid":
-        _rollback_submitted_payment_entries(submitted_entries)
-        frappe.log_error(
-            title=f"POS Payment Entries did not fully settle invoice {invoice_doc.name}",
-            message=frappe.as_json(
-                {
-                    "paid_amount": paid_amount,
-                    "rounded_total": invoice_doc.get("rounded_total"),
-                    "grand_total": invoice_doc.get("grand_total"),
-                    "invoice_doc.outstanding_amount": invoice_doc.get("outstanding_amount"),
-                    "invoice_doc.status": invoice_doc.get("status"),
-                    "submitted_entries": submitted_entries,
-                    "valid_payments": [payment.as_dict() for payment in valid_payments],
-                }
-            ),
-        )
-        frappe.throw(_("Invoice payment was submitted but the Sales Invoice is still not fully paid."))
+    except Exception:
+        # Remove Payment Entries created during this failed attempt.
+        for entry_name in reversed(submitted_entries):
+            try:
+                payment_entry = frappe.get_doc(
+                    "Payment Entry",
+                    entry_name,
+                )
 
-    return submitted_entries
+                if cint(payment_entry.docstatus) == 1:
+                    payment_entry.cancel()
+
+                if frappe.db.exists(
+                    "Payment Entry",
+                    entry_name,
+                ):
+                    frappe.delete_doc(
+                        "Payment Entry",
+                        entry_name,
+                        ignore_permissions=True,
+                    )
+
+            except Exception:
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    f"Failed to rollback Payment Entry {entry_name}",
+                )
+
+        raise
 
 
 @frappe.whitelist()
