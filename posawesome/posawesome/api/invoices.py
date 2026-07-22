@@ -641,6 +641,13 @@ def _submit_payment_entries_for_invoice(invoice_doc):
             break
 
         payment_amount = min(current_amount, remaining_outstanding)
+        if not invoice_doc.customer:
+            frappe.throw(
+                _("Customer is required to create a Payment Entry for Sales Invoice {0}").format(
+                    invoice_doc.name
+                )
+            )
+
         payment_entry = create_payment_entry(
             company=invoice_doc.company,
             customer=invoice_doc.customer,
@@ -652,6 +659,12 @@ def _submit_payment_entries_for_invoice(invoice_doc):
             posting_date=invoice_doc.get("posting_date"),
             cost_center=invoice_doc.get("cost_center"),
             submit=0,
+        )
+        payment_entry.party_type = "Customer"
+        payment_entry.party = invoice_doc.customer
+        payment_entry.party_name = (
+            frappe.db.get_value("Customer", invoice_doc.customer, "customer_name")
+            or invoice_doc.customer
         )
         payment_entry.append(
             "references",
