@@ -37,6 +37,7 @@
 									:key="employeeFieldKey"
 									ref="serviceEmployeeAutocomplete"
 									v-model="selectedEmployee"
+									v-model:search="employeeSearch"
 									v-model:menu="employeeMenu"
 									:items="filteredEmployees"
 									:loading="loadingEmployees"
@@ -52,6 +53,7 @@
 									:no-filter="true"
 									:menu-props="{ maxHeight: 360, closeOnContentClick: false }"
 									@update:model-value="handleEmployeeChange"
+									@update:search="handleEmployeeSearchInput"
 									@update:menu="handleEmployeeMenuToggle"
 									@click:clear="handleEmployeeClear"
 								>
@@ -1131,7 +1133,7 @@ export default {
 
 			return sourceEmployees.filter((employee) => {
 				const employeeId = this.normalizeEmployeeValue(
-					employee.employee_id || employee.name,
+					employee.custom_employee_id || employee.name,
 				).toLowerCase();
 				const employeeName = this.normalizeEmployeeValue(employee.employee_name).toLowerCase();
 				const customEmployeeId = this.normalizeEmployeeValue(
@@ -2169,17 +2171,12 @@ export default {
 		buildEmployeeDisplayLabel(employee) {
 			if (!employee) return "";
 			const employeeId = this.normalizeEmployeeValue(
-				employee.custom_employee_id ||
-					employee.employee_number ||
-					employee.employee_id ||
-					employee.name,
+				employee.custom_employee_id || employee.employee_number || employee.employee_id || employee.name,
 			);
 			const employeeName = this.normalizeEmployeeValue(
 				employee.employee_name || employee.display_name || employee.full_name,
 			);
-			return employeeId && employeeName
-				? `${employeeId} - ${employeeName} (${employeeId})`
-				: employeeName || employeeId;
+			return employeeId && employeeName ? `${employeeId} - ${employeeName}` : employeeName || employeeId;
 		},
 
 		normalizeEmployeeRecord(employee) {

@@ -449,7 +449,7 @@ export default {
 		customers_loaded: false,
 		searchTerm: "",
 		page: 0,
-		pageSize: 200,
+		pageSize: 100,
 		hasMore: true,
 		nextCustomerStart: null,
 		searchDebounce: null,
@@ -1120,7 +1120,7 @@ export default {
 								(v.model && v.model.toString().toLowerCase().includes(q)) ||
 								(v.customer_name && v.customer_name.toString().toLowerCase().includes(q))
 							);
-						} catch (err) {
+						} catch {
 							return false;
 						}
 					});
@@ -1470,7 +1470,7 @@ export default {
 				} else if (trimmedTerm) {
 					const q = trimmedTerm.toLowerCase();
 
-					// Load all local customers (we filter in-memory for reliable substring search).
+					// Load the local customer cache first, then merge live server matches.
 					const all = await db.table("customers").toArray();
 
 					const filtered = all.filter((c) => {
@@ -1490,9 +1490,10 @@ export default {
 						}
 					});
 
-					// If nothing found locally, call server fallback (server does LIKE '%term%')
+					// Always query the server for typed searches so the POS can search across
+					// the full customer dataset without preloading all records.
 					let serverResults = [];
-					if ((!filtered || filtered.length === 0) && trimmedTerm) {
+					if (trimmedTerm && navigator.onLine) {
 						try {
 							const resp = await frappe.call({
 								method: "posawesome.posawesome.api.customers.search_customers",
@@ -1502,7 +1503,7 @@ export default {
 										this.pos_profile && this.pos_profile.pos_profile
 											? this.pos_profile.pos_profile
 											: null,
-									limit: this.pageSize || 20,
+									limit: this.pageSize || 100,
 								},
 							});
 							if (resp && resp.message && resp.message.length) {
@@ -1522,13 +1523,22 @@ export default {
 						}
 					}
 
-					// Choose data source: prefer server results if present, otherwise use local filtered + pagination
-					let slice = [];
-					if (serverResults && serverResults.length) {
-						slice = serverResults;
-					} else {
+					const merged = [];
+					const seen = new Set();
+					const pushUnique = (row) => {
+						const norm = this._normalizeCustomerRow(row);
+						const key = String(norm?.name || "").trim().toLowerCase();
+						if (!key || seen.has(key)) return;
+						seen.add(key);
+						merged.push(norm);
+					};
+					(serverResults || []).forEach(pushUnique);
+					(filtered || []).forEach(pushUnique);
+
+					let slice = merged;
+					if (!serverResults.length) {
 						const startIndex = (this.page || 0) * this.pageSize;
-						slice = filtered.slice(startIndex, startIndex + this.pageSize);
+						slice = merged.slice(startIndex, startIndex + this.pageSize);
 					}
 
 					// Normalize the shape that the UI expects (and ensure is_corporate exists)
@@ -1601,10 +1611,6 @@ export default {
 			if (this.loadingCustomers || this.isCustomerBackgroundLoading) return;
 			const count = await this.searchCustomers(this.searchTerm, true);
 			if (count === this.pageSize) return;
-			if (this.nextCustomerStart) {
-				await this.backgroundLoadCustomers(this.nextCustomerStart, getCustomersLastSync());
-				await this.searchCustomers(this.searchTerm, true);
-			}
 		},
 
 		async backgroundLoadCustomers(startAfter, syncSince) {
@@ -1672,41 +1678,13 @@ export default {
 						name: "customers",
 						progress: this.loadProgress,
 					});
-					if (serverCount > localCount) {
-						const syncSince = getCustomersLastSync();
-						const rows = await this.fetchCustomerPage(null, syncSince, this.pageSize);
-						// normalize rows before storing
-						const normalized = (rows || []).map((r) => ({
-							...r,
-							is_corporate: !!(r.is_corporate || r.is_company),
-						}));
-						await setCustomerStorage(normalized);
-						this.loadedCustomerCount += rows.length;
-						if (this.totalCustomerCount) {
-							this.loadProgress = Math.round(
-								(this.loadedCustomerCount / this.totalCustomerCount) * 100,
-							);
-							this.eventBus.emit("data-load-progress", {
-								name: "customers",
-								progress: this.loadProgress,
-							});
-						}
-						const startAfter =
-							rows.length === this.pageSize ? rows[rows.length - 1]?.name || null : null;
-						if (startAfter) {
-							this.backgroundLoadCustomers(startAfter, syncSince);
-						} else {
-							setCustomersLastSync(new Date().toISOString());
-							this.loadProgress = 100;
-							this.eventBus.emit("data-load-progress", { name: "customers", progress: 100 });
-							this.eventBus.emit("data-loaded", "customers");
-						}
-						await this.searchCustomers(this.searchTerm);
-					} else if (serverCount < localCount) {
+					if (serverCount < localCount) {
 						await clearCustomerStorage();
 						setCustomersLastSync(null);
 						this.customers = [];
 						await this.get_customer_names();
+					} else {
+						await this.searchCustomers(this.searchTerm);
 					}
 				}
 			} catch (err) {
@@ -1774,16 +1752,11 @@ export default {
 						progress: this.loadProgress,
 					});
 				}
-				this.nextCustomerStart =
-					rows.length === this.pageSize ? rows[rows.length - 1]?.name || null : null;
-				if (this.nextCustomerStart) {
-					this.backgroundLoadCustomers(this.nextCustomerStart, syncSince);
-				} else {
-					setCustomersLastSync(new Date().toISOString());
-					this.loadProgress = 100;
-					this.eventBus.emit("data-load-progress", { name: "customers", progress: 100 });
-					this.eventBus.emit("data-loaded", "customers");
-				}
+				this.nextCustomerStart = null;
+				setCustomersLastSync(new Date().toISOString());
+				this.loadProgress = 100;
+				this.eventBus.emit("data-load-progress", { name: "customers", progress: 100 });
+				this.eventBus.emit("data-loaded", "customers");
 				this.customers_loaded = true;
 			} catch (err) {
 				console.error("Failed to fetch customers:", err);

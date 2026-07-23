@@ -72,7 +72,8 @@ def get_item_prices(
                 ip.valid_upto,
                 i.disabled,
                 i.has_variants,
-                i.image
+                i.image,
+                i.custom_service_item
             FROM `tabItem Price` ip
             INNER JOIN `tabItem` i ON ip.item_code = i.name
             WHERE {where_clause}

@@ -98,7 +98,10 @@ def get_active_employees(company=None, search_term=None):
             "department": employee.department,
             "branch": employee.branch,
             "image": employee.image,
-            "display_label": f"{employee.name} - {employee.employee_name or employee.name}",
+            "display_label": (
+                f"{getattr(employee, 'custom_employee_id', '') or employee.name} - "
+                f"{employee.employee_name or employee.name}"
+            ),
             "name": str(employee.name or ""),
         }
         for employee in employees
