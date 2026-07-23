@@ -1527,7 +1527,9 @@ export default {
 					const seen = new Set();
 					const pushUnique = (row) => {
 						const norm = this._normalizeCustomerRow(row);
-						const key = String(norm?.name || "").trim().toLowerCase();
+						const key = String(norm?.name || "")
+							.trim()
+							.toLowerCase();
 						if (!key || seen.has(key)) return;
 						seen.add(key);
 						merged.push(norm);

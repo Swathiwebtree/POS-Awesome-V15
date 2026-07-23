@@ -2171,12 +2171,17 @@ export default {
 		buildEmployeeDisplayLabel(employee) {
 			if (!employee) return "";
 			const employeeId = this.normalizeEmployeeValue(
-				employee.custom_employee_id || employee.employee_number || employee.employee_id || employee.name,
+				employee.custom_employee_id ||
+					employee.employee_number ||
+					employee.employee_id ||
+					employee.name,
 			);
 			const employeeName = this.normalizeEmployeeValue(
 				employee.employee_name || employee.display_name || employee.full_name,
 			);
-			return employeeId && employeeName ? `${employeeId} - ${employeeName}` : employeeName || employeeId;
+			return employeeId && employeeName
+				? `${employeeId} - ${employeeName}`
+				: employeeName || employeeId;
 		},
 
 		normalizeEmployeeRecord(employee) {
