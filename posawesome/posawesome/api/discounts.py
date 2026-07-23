@@ -78,6 +78,33 @@ def get_customer_discount_config(customer):
     )
 
 
+def _build_discount_rule(item_type, default_discount, max_discount):
+    default_discount = float(default_discount or 0)
+    max_discount = float(max_discount or 0)
+
+    discount_enabled = default_discount > 0 or max_discount > 0
+    if not discount_enabled:
+        return {
+            "item_type": item_type,
+            "max_discount": 0,
+            "auto_apply": False,
+            "auto_apply_value": 0,
+            "discount_enabled": False,
+        }
+
+    final_max = max_discount if max_discount > 0 else default_discount
+    auto_apply = default_discount > 0
+    auto_apply_value = min(default_discount, final_max) if auto_apply else 0
+
+    return {
+        "item_type": item_type,
+        "max_discount": float(final_max),
+        "auto_apply": auto_apply,
+        "auto_apply_value": float(auto_apply_value),
+        "discount_enabled": True,
+    }
+
+
 @frappe.whitelist()
 def get_max_discount(customer):
     if not customer:
@@ -133,6 +160,7 @@ def get_customer_item_discount(customer, item_code):
         "max_discount": None,
         "auto_apply": False,
         "auto_apply_value": 0,
+        "discount_enabled": False,
         "item_type": None,
         "message": None,
         "condition": None,
@@ -153,6 +181,8 @@ def get_customer_item_discount(customer, item_code):
             "item_type": "engine_oil",
             "max_discount": 0,
             "auto_apply": False,
+            "auto_apply_value": 0,
+            "discount_enabled": False,
             "message": "Engine Oil items are not eligible for discount",
             "condition": None,
             "other_condition": None,
@@ -183,30 +213,19 @@ def get_customer_item_discount(customer, item_code):
         manual_max = discounts.custom_custom_max_discount___stock_items or 0
         item_type = "stock"
 
-    # Default discount takes precedence when configured.
-    if default_max > 0:
-        return {
-            "item_type": item_type,
-            "max_discount": float(default_max),
-            "auto_apply": True,
-            "auto_apply_value": float(default_max),
-            "message": f"Auto-applied {default_max}%",
-            "condition": None,
-            "other_condition": None,
-        }
+    rule = _build_discount_rule(item_type, default_max, manual_max)
 
-    # Manual override
-    if manual_max > 0:
-        return {
-            "item_type": item_type,
-            "max_discount": float(manual_max),
-            "auto_apply": False,
-            "message": f"Manual discount allowed up to {manual_max}%",
-            "condition": None,
-            "other_condition": None,
-        }
+    if rule["discount_enabled"]:
+        if rule["auto_apply"]:
+            rule["message"] = f"Auto-applied {rule['auto_apply_value']}%"
+        else:
+            rule["message"] = f"Manual discount allowed up to {rule['max_discount']}%"
+    else:
+        rule["message"] = "Discount disabled"
 
-    return result
+    rule["condition"] = None
+    rule["other_condition"] = None
+    return rule
 
 
 @frappe.whitelist()
@@ -221,6 +240,9 @@ def validate_discount(customer, item_code, discount_percentage):
 
     if rules.get("item_type") == "engine_oil":
         return {"is_valid": False, "message": "Discount not allowed for Engine Oil"}
+
+    if not rules.get("discount_enabled", True):
+        return {"is_valid": False, "message": "Discount not allowed for this item"}
 
     max_allowed = rules.get("max_discount")
 

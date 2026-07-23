@@ -938,28 +938,39 @@ export default {
 
 					item.allow_discount = false;
 					item.discount_locked = 1;
+					item.discount_enabled = false;
+					item._max_discount_allowed = 0;
 
+					this.recalculateItemPrice(item);
 					console.log("[Discount] Engine Oil item — discount disabled");
 					return;
 				}
 
-				if (!rule.auto_apply) {
-					console.log("[Discount] Auto-apply disabled, max allowed:", rule.max_discount);
+				const maxAllowed = Number(rule.max_discount || 0);
+				const discountEnabled = rule.discount_enabled !== false && maxAllowed > 0;
 
-					item._max_discount_allowed = rule.max_discount || 0;
+				item._max_discount_allowed = maxAllowed;
+				item.discount_enabled = discountEnabled;
+				item.allow_discount = discountEnabled;
+				item.discount_locked = discountEnabled ? 0 : 1;
 
-					// Keep manual discount field editable for non-engine-oil items.
-					// Only engine-oil rows are hard-locked (handled above).
-					item.allow_discount = true;
-					item.discount_locked = 0;
+				if (!discountEnabled) {
+					item.discount_percentage = 0;
+					item.discount_amount = 0;
+					this.recalculateItemPrice(item);
+					console.log("[Discount] Discount disabled for item:", item.item_code);
+					return;
+				}
 
+				if (Number(item.discount_percentage || 0) > 0) {
+					console.log("[Discount] Existing discount preserved for:", item.item_code);
 					return;
 				}
 
 				// AUTO-APPLY the default max discount
 				const discountToApply = Number(rule.auto_apply_value || 0);
 
-				if (discountToApply <= 0) {
+				if (!rule.auto_apply || discountToApply <= 0) {
 					console.log("[Discount] No discount value to apply");
 					return;
 				}
@@ -982,10 +993,6 @@ export default {
 
 				// Mark as auto-applied
 				item._auto_discount_applied = true;
-				item._max_discount_allowed = rule.max_discount || discountToApply;
-
-				item.allow_discount = true;
-				item.discount_locked = 0;
 
 				console.log("[Discount] Applied", discountToApply, "% to", item.item_code);
 			} catch (e) {
@@ -1152,6 +1159,21 @@ export default {
 				// 🔹 Store rule for later (VERY IMPORTANT)
 				itemRow._vehicle_discount_rule = rule;
 
+				const maxAllowed = Number(rule.max_discount || 0);
+				const discountEnabled = rule.discount_enabled !== false && maxAllowed > 0;
+
+				itemRow._max_discount_allowed = maxAllowed;
+				itemRow.discount_enabled = discountEnabled;
+				itemRow.allow_discount = discountEnabled;
+				itemRow.discount_locked = discountEnabled ? 0 : 1;
+
+				if (!discountEnabled) {
+					itemRow.discount_percentage = 0;
+					itemRow.discount_amount = 0;
+					this.recalculateItemPrice(itemRow);
+					return;
+				}
+
 				// ❌ Do not auto apply if backend says no
 				if (!rule.auto_apply) return;
 
@@ -1313,9 +1335,16 @@ export default {
 			}
 
 			const itemRule = item?._vehicle_discount_rule || null;
-			const itemCap = Number(
-				item?._max_discount_allowed || itemRule?.auto_apply_value || itemRule?.max_discount || 0,
-			);
+			const itemCap = Number(item?._max_discount_allowed || itemRule?.max_discount || 0);
+			const discountEnabled = itemRule ? itemRule.discount_enabled !== false : true;
+
+			if (!discountEnabled && discountPercentage > 0) {
+				frappe.show_alert({
+					message: __("Discount not allowed for this item"),
+					indicator: "red",
+				});
+				return false;
+			}
 
 			if (itemCap > 0 && discountPercentage > itemCap) {
 				frappe.show_alert({
@@ -1325,7 +1354,7 @@ export default {
 				return false;
 			}
 
-			if (itemCap <= 0) {
+			if (itemCap <= 0 && !itemRule) {
 				const invoiceCap = this.maxDiscountInfo.invoice_max_discount;
 
 				if (invoiceCap !== null && discountPercentage > invoiceCap) {

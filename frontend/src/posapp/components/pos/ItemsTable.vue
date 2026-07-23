@@ -649,6 +649,8 @@
 					inputmode="decimal"
 					suffix="%"
 					placeholder="0"
+					:min="0"
+					:max="getDiscountMax(item)"
 					hide-details
 					class="discount-input"
 					v-model="(item.raw || item).discount_percentage"
@@ -683,8 +685,8 @@
 </template>
 
 <script>
+/* global __, frappe */
 import _ from "lodash";
-import { useDiscounts } from "@/posapp/composables/useDiscounts";
 export default {
 	inject: ["eventBus"],
 	name: "ItemsTable",
@@ -788,6 +790,20 @@ export default {
 			return row?._vehicle_discount_rule || null;
 		},
 
+		getDiscountMax(item) {
+			const row = item?.raw || item;
+			const rule = this.getItemDiscountRule(row);
+
+			if (row?.discount_enabled === false || rule?.discount_enabled === false) {
+				return 0;
+			}
+
+			return (
+				Number(row?._max_discount_allowed || 0) ||
+				Number(rule?.max_discount || rule?.auto_apply_value || 0)
+			);
+		},
+
 		isAutoAppliedDiscountLocked(item) {
 			const row = item?.raw || item;
 			const rule = this.getItemDiscountRule(row);
@@ -832,11 +848,16 @@ export default {
 		},
 
 		handleDiscountInput(item, event) {
+			if (this.isDiscountDisabled(item)) {
+				return;
+			}
+
 			const rawValue =
 				typeof event === "string" || typeof event === "number" ? event : event?.target?.value;
-			const value = String(rawValue ?? "").replace(/[^\d.\-]/g, "");
+			const value = String(rawValue ?? "").replace(/[^\d.-]/g, "");
 			const parsed = Number(value);
 			const normalized = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+
 			item.discount_percentage = normalized;
 
 			// Emit to parent for validation
@@ -858,6 +879,10 @@ export default {
 			const row = item?.raw || item;
 
 			if (this.isEngineOil(row)) {
+				return true;
+			}
+
+			if (row.discount_enabled === false || row?._vehicle_discount_rule?.discount_enabled === false) {
 				return true;
 			}
 
@@ -894,32 +919,71 @@ export default {
 				return "Discount not allowed for Engine Oil";
 			}
 
+			const row = item?.raw || item;
+			if (row?.discount_enabled === false || row?._vehicle_discount_rule?.discount_enabled === false) {
+				return "Discount not allowed for this item";
+			}
+
 			if (this.isAutoAppliedDiscountLocked(item)) {
 				const rule = this.getItemDiscountRule(item);
 				const appliedDiscount =
 					Number(item?._max_discount_allowed || 0) ||
-					Number(rule?.auto_apply_value || rule?.max_discount || 0);
+					Number(rule?.max_discount || rule?.auto_apply_value || 0);
 				return `Default discount applied. Maximum allowed: ${appliedDiscount}%`;
 			}
 
-			if (item._max_discount_allowed) {
-				return `Maximum allowed: ${item._max_discount_allowed}%`;
+			const maxDiscount = this.getDiscountMax(item);
+			if (maxDiscount) {
+				return `Maximum allowed: ${maxDiscount}%`;
 			}
 
 			return "Enter discount percentage";
 		},
 
+		validateDiscount(item, discountPercentage) {
+			const row = item?.raw || item;
+
+			if (this.isEngineOil(row)) {
+				frappe.show_alert({
+					message: __("Discount not allowed for Engine Oil items"),
+					indicator: "red",
+				});
+				return false;
+			}
+
+			const rule = this.getItemDiscountRule(row);
+			if (row?.discount_enabled === false || rule?.discount_enabled === false) {
+				if (discountPercentage > 0) {
+					frappe.show_alert({
+						message: __("Discount not allowed for this item"),
+						indicator: "red",
+					});
+					return false;
+				}
+				return true;
+			}
+
+			const maxDiscount = Number(this.getDiscountMax(row) || 0);
+			if (maxDiscount > 0 && discountPercentage > maxDiscount) {
+				frappe.show_alert({
+					message: __("Maximum allowed discount for this item is {0}%", [maxDiscount]),
+					indicator: "red",
+				});
+				return false;
+			}
+
+			return true;
+		},
+
 		applyItemDiscount(item, value) {
+			if (this.isDiscountDisabled(item)) {
+				return;
+			}
+
 			let discount = Number(value) || 0;
 
-			const rule = this.$parent?.maxDiscountInfo?.item_level_caps?.[item.item_code];
-
-			if (rule) {
-				const min = Number(rule.min || 0);
-				const max = Number(rule.max || 0);
-
-				if (discount < min) discount = min;
-				if (max && discount > max) discount = max;
+			if (!this.validateDiscount(item, discount)) {
+				return;
 			}
 
 			item.discount_percentage = discount;
