@@ -7,9 +7,7 @@ let db;
 (async () => {
 	let DexieLib;
 	try {
-		importScripts(
-			`/assets/posawesome/dist/js/libs/dexie.min.js?v=${encodeURIComponent(workerVersion)}`,
-		);
+		importScripts(`/assets/posawesome/dist/js/libs/dexie.min.js?v=${encodeURIComponent(workerVersion)}`);
 		DexieLib = { default: Dexie };
 	} catch {
 		// Fallback to dynamic import when importScripts fails

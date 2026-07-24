@@ -10,9 +10,7 @@ if (typeof Worker !== "undefined") {
 	try {
 		// Version the worker URL so a deployment can replace cached worker code
 		// without breaking offline access to the previous cached copy.
-		const workerUrl = withPosAwesomeVersion(
-			"/assets/posawesome/dist/js/posapp/workers/itemWorker.js",
-		);
+		const workerUrl = withPosAwesomeVersion("/assets/posawesome/dist/js/posapp/workers/itemWorker.js");
 		persistWorker = new Worker(workerUrl, { type: "classic" });
 	} catch (e) {
 		console.error("Failed to init persist worker", e);

@@ -469,9 +469,7 @@ const mergeItemClassification = (target = {}, source = {}) => {
 	return target;
 };
 
-const itemWorkerUrl = withPosAwesomeVersion(
-	"/assets/posawesome/dist/js/posapp/workers/itemWorker.js",
-);
+const itemWorkerUrl = withPosAwesomeVersion("/assets/posawesome/dist/js/posapp/workers/itemWorker.js");
 
 export default {
 	mixins: [format],

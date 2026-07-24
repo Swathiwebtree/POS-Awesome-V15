@@ -97,9 +97,7 @@ export function initPersistWorker() {
 		// Load the worker without a query string so the service worker
 		// can serve the cached version when offline while still busting
 		// the browser cache on new deployments.
-		const workerUrl = withPosAwesomeVersion(
-			"/assets/posawesome/dist/js/posapp/workers/itemWorker.js",
-		);
+		const workerUrl = withPosAwesomeVersion("/assets/posawesome/dist/js/posapp/workers/itemWorker.js");
 		try {
 			persistWorker = new Worker(workerUrl, { type: "classic" });
 		} catch {
