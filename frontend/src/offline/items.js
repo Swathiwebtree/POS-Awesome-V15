@@ -98,6 +98,46 @@ export async function getCachedPriceListItems(priceList, ttl = 24 * 60 * 60 * 10
 	}
 }
 
+const normalizeItemType = (item) => {
+	const itemType = (item?.item_type || "").toString().toLowerCase();
+	if (itemType && itemType !== "unknown") {
+		return itemType;
+	}
+	if (Number(item?.custom_service_item || 0) === 1) {
+		return "service";
+	}
+	if (Number(item?.is_stock_item || 0) === 1) {
+		return "stock";
+	}
+	return "unknown";
+};
+
+const mergeCachedClassification = (base = {}, detail = {}) => {
+	const merged = { ...base, ...detail };
+	const serviceFlag =
+		Number(base.custom_service_item || 0) === 1 || Number(detail.custom_service_item || 0) === 1
+			? 1
+			: 0;
+	const stockFlag =
+		serviceFlag === 1
+			? 0
+			: Number(detail.is_stock_item || base.is_stock_item || 0) === 1
+				? 1
+				: 0;
+
+	merged.custom_service_item = serviceFlag;
+	merged.is_stock_item = stockFlag;
+	merged.item_type =
+		normalizeItemType(detail) !== "unknown"
+			? normalizeItemType(detail)
+			: normalizeItemType(base);
+	if (merged.item_type === "unknown") {
+		merged.item_type = serviceFlag ? "service" : stockFlag ? "stock" : "unknown";
+	}
+
+	return merged;
+};
+
 export async function clearPriceListCache(priceList = null) {
 	try {
 		await checkDbHealth();
@@ -133,6 +173,9 @@ export function saveItemDetailsCache(profileName, priceList, items) {
 				rate: it.rate,
 				price_list_rate: it.price_list_rate,
 				currency: it.currency,
+				custom_service_item: Number(it.custom_service_item || 0),
+				is_stock_item: Number(it.is_stock_item || 0),
+				item_type: it.item_type || normalizeItemType(it),
 			}));
 			cleanItems = JSON.parse(JSON.stringify(cleanItems));
 		} catch (err) {
@@ -182,7 +225,7 @@ export async function getCachedItemDetails(profileName, priceList, itemCodes, tt
 			const map = new Map(baseItems.map((it) => [it.item_code, it]));
 			cached.forEach((det, idx) => {
 				const base = map.get(det.item_code) || {};
-				cached[idx] = { ...base, ...det };
+				cached[idx] = mergeCachedClassification(base, det);
 			});
 		}
 

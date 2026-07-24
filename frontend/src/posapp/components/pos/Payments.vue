@@ -1342,26 +1342,10 @@ export default {
 			if (!item) {
 				return false;
 			}
-
-			const group = (item.item_group || "").toLowerCase();
-			const code = (item.item_code || "").toLowerCase();
-			const name = (item.item_name || "").toLowerCase();
-
-			const washMatch =
-				group.includes("car wash") ||
-				group.includes("carwash") ||
-				group.includes("bike wash") ||
-				group.includes("bikewash") ||
-				code.includes("carwash") ||
-				code.includes("car wash") ||
-				code.includes("bikewash") ||
-				code.includes("bike wash") ||
-				name.includes("carwash") ||
-				name.includes("car wash") ||
-				name.includes("bikewash") ||
-				name.includes("bike wash");
-
-			return washMatch;
+			return (
+				(item.item_type || "").toLowerCase() === "service" ||
+				Number(item.custom_service_item || 0) === 1
+			);
 		},
 
 		hasCarWashServiceForItems(items) {

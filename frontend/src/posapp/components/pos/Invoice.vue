@@ -485,11 +485,7 @@ export default {
 
 		isEngineOil(item) {
 			const row = item?.raw || item;
-			const ig = (row?.item_group || "").toLowerCase();
-			const name = (row?.item_name || "").toLowerCase();
-			const code = (row?.item_code || "").toLowerCase();
-
-			return ig.includes("engine oil") || name.includes("engine oil") || code.includes("engine oil");
+			return (row?.item_type || "").toLowerCase() === "engine_oil";
 		},
 
 		getDiscountConflictMessage(discountType) {
@@ -939,6 +935,7 @@ export default {
 					item.allow_discount = false;
 					item.discount_locked = 1;
 					item.discount_enabled = false;
+					item.discount_editable = false;
 					item._max_discount_allowed = 0;
 
 					this.recalculateItemPrice(item);
@@ -946,13 +943,22 @@ export default {
 					return;
 				}
 
-				const maxAllowed = Number(rule.max_discount || 0);
-				const discountEnabled = rule.discount_enabled !== false && maxAllowed > 0;
+				const discountEnabled = rule.discount_enabled !== false;
+				const discountEditable = discountEnabled && rule.discount_editable !== false;
 
-				item._max_discount_allowed = maxAllowed;
+				item._max_discount_allowed = Number(rule.max_discount || 0);
 				item.discount_enabled = discountEnabled;
-				item.allow_discount = discountEnabled;
-				item.discount_locked = discountEnabled ? 0 : 1;
+				item.discount_editable = discountEditable;
+				item.allow_discount = discountEditable;
+				item.discount_locked = discountEditable ? 0 : 1;
+
+				if (rule.configuration_warning && !item._discount_config_warning_shown) {
+					item._discount_config_warning_shown = true;
+					frappe.show_alert({
+						message: rule.message || __("Discount configuration warning"),
+						indicator: "orange",
+					});
+				}
 
 				if (!discountEnabled) {
 					item.discount_percentage = 0;
@@ -993,6 +999,7 @@ export default {
 
 				// Mark as auto-applied
 				item._auto_discount_applied = true;
+				item.auto_discount_applied = true;
 
 				console.log("[Discount] Applied", discountToApply, "% to", item.item_code);
 			} catch (e) {
@@ -1048,6 +1055,8 @@ export default {
 					if (item._auto_discount_applied && item._vehicle_discount_rule) {
 						const rule = item._vehicle_discount_rule;
 						item.discount_percentage = rule.auto_apply_value || 0;
+						item._auto_discount_applied = true;
+						item.auto_discount_applied = true;
 					} else {
 						item.discount_percentage = 0;
 					}
@@ -1059,6 +1068,8 @@ export default {
 				// Valid discount - apply it
 				item.discount_percentage = discount;
 				item._manual_discount_set = true; // Mark as manually set
+				item._auto_discount_applied = false;
+				item.auto_discount_applied = false;
 				item._max_discount_allowed = validation.max_allowed;
 
 				this.recalculateItemPrice(item);
@@ -1101,6 +1112,7 @@ export default {
 					item.discount_percentage = 0;
 					item.discount_amount = 0;
 					item._auto_discount_applied = false;
+					item.auto_discount_applied = false;
 					item._vehicle_discount_rule = null;
 					item._max_discount_allowed = 0;
 
@@ -1159,13 +1171,22 @@ export default {
 				// 🔹 Store rule for later (VERY IMPORTANT)
 				itemRow._vehicle_discount_rule = rule;
 
-				const maxAllowed = Number(rule.max_discount || 0);
-				const discountEnabled = rule.discount_enabled !== false && maxAllowed > 0;
+				const discountEnabled = rule.discount_enabled !== false;
+				const discountEditable = discountEnabled && rule.discount_editable !== false;
 
-				itemRow._max_discount_allowed = maxAllowed;
+				itemRow._max_discount_allowed = Number(rule.max_discount || 0);
 				itemRow.discount_enabled = discountEnabled;
-				itemRow.allow_discount = discountEnabled;
-				itemRow.discount_locked = discountEnabled ? 0 : 1;
+				itemRow.discount_editable = discountEditable;
+				itemRow.allow_discount = discountEditable;
+				itemRow.discount_locked = discountEditable ? 0 : 1;
+
+				if (rule.configuration_warning && !itemRow._discount_config_warning_shown) {
+					itemRow._discount_config_warning_shown = true;
+					frappe.show_alert({
+						message: rule.message || __("Discount configuration warning"),
+						indicator: "orange",
+					});
+				}
 
 				if (!discountEnabled) {
 					itemRow.discount_percentage = 0;
@@ -1178,13 +1199,14 @@ export default {
 				if (!rule.auto_apply) return;
 
 				// ❌ Prevent double apply
-				if (itemRow.auto_discount_applied) return;
+				if (itemRow._auto_discount_applied || itemRow.auto_discount_applied) return;
 
 				// ❌ Do not override manual discount
 				if (Number(itemRow.discount_percentage || 0) > 0) return;
 
 				// Apply discount %
 				itemRow.discount_percentage = Number(rule.auto_apply_value || 0);
+				itemRow._auto_discount_applied = true;
 				itemRow.auto_discount_applied = true;
 
 				// 🔥 CALCULATE DISCOUNT AMOUNT MANUALLY
@@ -1323,7 +1345,9 @@ export default {
 		},
 
 		validateDiscount(item, discountPercentage) {
-			if (!this.maxDiscountInfo) return true;
+			if (Number(discountPercentage || 0) <= 0) {
+				return true;
+			}
 
 			// ENGINE OIL
 			if (this.isEngineOil(item)) {
@@ -1334,13 +1358,40 @@ export default {
 				return false;
 			}
 
+			if ((item?.item_type || "").toLowerCase() === "unknown") {
+				frappe.show_alert({
+					message: __("Discount not allowed for unknown item type"),
+					indicator: "red",
+				});
+				return false;
+			}
+
+			if (!this.maxDiscountInfo) return true;
+
 			const itemRule = item?._vehicle_discount_rule || null;
-			const itemCap = Number(item?._max_discount_allowed || itemRule?.max_discount || 0);
+			const itemCap = Number(itemRule?.max_discount ?? item?._max_discount_allowed ?? 0);
 			const discountEnabled = itemRule ? itemRule.discount_enabled !== false : true;
+			const discountEditable = itemRule ? itemRule.discount_editable !== false : true;
+			const autoApplyValue = Number(itemRule?.auto_apply_value || 0);
+			const isAutoAppliedValue =
+				Boolean(itemRule?.auto_apply) &&
+				Math.abs(Number(discountPercentage || 0) - autoApplyValue) <= 0.000001;
 
 			if (!discountEnabled && discountPercentage > 0) {
 				frappe.show_alert({
 					message: __("Discount not allowed for this item"),
+					indicator: "red",
+				});
+				return false;
+			}
+
+			if (!discountEditable) {
+				if (isAutoAppliedValue) {
+					return true;
+				}
+
+				frappe.show_alert({
+					message: __("Discount field is locked for this item"),
 					indicator: "red",
 				});
 				return false;
@@ -1407,6 +1458,8 @@ export default {
 					item._max_discount_allowed = validation.max_allowed;
 				}
 
+				item._manual_discount_set = true;
+				item._auto_discount_applied = false;
 				return true;
 			} catch (e) {
 				console.error("[Discount] Validation error:", e);
@@ -1418,53 +1471,94 @@ export default {
 			}
 		},
 
+		async validateGroupDiscountItems(items, discountPercentage) {
+			for (const item of items || []) {
+				if (!this.validateDiscount(item, discountPercentage)) {
+					return false;
+				}
+
+				const canApply = await this.validateItemDiscountCap(item, discountPercentage);
+				if (!canApply) {
+					return false;
+				}
+			}
+
+			return true;
+		},
+
 		async applyItemGroupDiscount({ group, percentage }) {
+			const targetType = (group || "").toString().trim().toLowerCase();
 			//  ENGINE OIL BLOCK
-			if (group && group.toLowerCase().includes("engine oil")) {
+			if (targetType === "engine_oil") {
 				frappe.show_alert({
-					message: __("Group discount is not allowed for Engine Oil items"),
+					message: __("Item type discount is not allowed for Engine Oil items"),
 					indicator: "red",
 				});
 				return;
 			}
 
+			const matchingItems = (this.items || []).filter((item) => {
+				const itemType = (item?.item_type || "").toString().trim().toLowerCase();
+				return itemType === targetType && itemType !== "unknown" && itemType !== "engine_oil";
+			});
+
+			if (matchingItems.length === 0) {
+				delete this.itemGroupDiscounts[targetType];
+				this.$nextTick(() => {
+					this.update_totals();
+					this.apply_additional_discount();
+					this.$forceUpdate();
+				});
+				return { applied: 0, rejected: 0 };
+			}
+
+			const canApplyAll = await this.validateGroupDiscountItems(matchingItems, percentage);
+			if (!canApplyAll) {
+				delete this.itemGroupDiscounts[targetType];
+				this.$nextTick(() => {
+					this.update_totals();
+					this.apply_additional_discount();
+					this.$forceUpdate();
+				});
+				return { applied: 0, rejected: matchingItems.length };
+			}
+
 			let itemsUpdated = 0;
-			let itemsRejected = 0;
-
-			for (const item of this.items) {
-				if ((item.item_group || "").trim() !== group) {
-					continue;
+			for (const item of matchingItems) {
+				if (!item.original_rate) {
+					item.original_rate = item.rate;
+					item.original_price_list_rate = item.price_list_rate;
+				}
+				if (
+					item.original_discount_amount === undefined ||
+					item.original_discount_amount === null
+				) {
+					item.original_discount_amount = item.discount_amount || 0;
+				}
+				if (
+					item.original_price_list_rate === undefined ||
+					item.original_price_list_rate === null
+				) {
+					item.original_price_list_rate = item.price_list_rate || item.original_rate || 0;
 				}
 
-				// VALIDATION (IMPORTANT)
-				if (!this.validateDiscount(item, percentage)) {
-					itemsRejected++;
-					continue;
-				}
-
-				const canApply = await this.validateItemDiscountCap(item, percentage);
-				if (!canApply) {
-					itemsRejected++;
-					continue;
-				}
-
-				const gross = item.price_list_rate * item.qty;
+				const discountAmount = (Number(item.original_rate) * percentage) / 100;
 
 				item.discount_percentage = percentage;
-
-				item.discount_amount = this.flt((gross * percentage) / 100, this.currency_precision);
-
-				item.rate = this.flt((gross - item.discount_amount) / item.qty, this.currency_precision);
+				item.discount_amount = Number(item.original_discount_amount) + discountAmount;
+				item.rate = Number(item.original_rate) - discountAmount;
 
 				item.amount = this.flt(item.qty * item.rate, this.currency_precision);
+				item.group_discount_percentage = percentage;
+				item.group_discount_applied = targetType;
 				itemsUpdated++;
 			}
 
 			// Store group discount only if something was applied
 			if (itemsUpdated > 0 && percentage > 0) {
-				this.itemGroupDiscounts[group] = percentage;
+				this.itemGroupDiscounts[targetType] = percentage;
 			} else {
-				delete this.itemGroupDiscounts[group];
+				delete this.itemGroupDiscounts[targetType];
 			}
 
 			this.$nextTick(() => {
@@ -1473,7 +1567,7 @@ export default {
 				this.$forceUpdate();
 			});
 
-			return { applied: itemsUpdated, rejected: itemsRejected };
+			return { applied: itemsUpdated, rejected: 0 };
 		},
 
 		checkForEngineOilItem() {
@@ -1495,7 +1589,10 @@ export default {
 
 			// Show the selector only when the cart contains at least one custom service item.
 			const hasCarWashService = this.items.some((item) => {
-				return Number(item?.custom_service_item || 0) === 1;
+				return (
+					Number(item?.custom_service_item || 0) === 1 ||
+					(item?.item_type || "").toLowerCase() === "service"
+				);
 			});
 
 			return hasCarWashService;
@@ -2029,13 +2126,16 @@ export default {
 					// ===== DEFENSIVE: ensure qty is numeric and service items keep qty=1 =====
 					const parsedQty = Number(item.qty);
 					const looksLikeService =
+						(item.item_type || "").toLowerCase() === "service" ||
+						Number(item.custom_service_item || 0) === 1 ||
 						item.is_service_item === 1 ||
-						item.service_item === 1 ||
-						/Carwash|car wash|bike wash|bikewash/i.test(item.item_group || item.item_name || "");
+						item.service_item === 1;
 					if (looksLikeService) {
 						item.qty = Number.isFinite(parsedQty) && parsedQty > 0 ? parsedQty : 1;
 						item.is_service_item = 1;
+						item.custom_service_item = 1;
 						item.update_stock = 0;
+						item.item_type = "service";
 					} else {
 						item.qty = Number.isFinite(parsedQty) ? parsedQty : 0;
 					}
@@ -2280,23 +2380,26 @@ export default {
 			// DEFENSE 0: Protect service items in-place BEFORE any processing
 			// This prevents other code (rate updates, expands) from accidentally zeroing qty
 			try {
-				this.items.forEach((it) => {
-					if (!it) return;
-					const looksLikeService =
-						it.is_service_item ||
-						it.service_item ||
-						/carwash|car wash|bike wash|bikewash/i.test(it.item_group || it.item_name || "");
-					if (looksLikeService) {
-						const q = Number(it.qty);
-						if (!Number.isFinite(q) || q <= 0) {
-							it.qty = 1;
-						}
-						// enforce service flags
-						it.is_service_item = 1;
-						it.update_stock = 0;
-					} else {
-						// ensure numeric qty for non-service items (do not force it to 0 if it's valid)
-						const q = Number(it.qty);
+					this.items.forEach((it) => {
+						if (!it) return;
+						const looksLikeService =
+							(it.item_type || "").toLowerCase() === "service" ||
+							Number(it.custom_service_item || 0) === 1 ||
+							it.is_service_item ||
+							it.service_item;
+						if (looksLikeService) {
+							const q = Number(it.qty);
+							if (!Number.isFinite(q) || q <= 0) {
+								it.qty = 1;
+							}
+							// enforce service flags
+							it.is_service_item = 1;
+							it.custom_service_item = 1;
+							it.update_stock = 0;
+							it.item_type = "service";
+						} else {
+							// ensure numeric qty for non-service items (do not force it to 0 if it's valid)
+							const q = Number(it.qty);
 						it.qty = Number.isFinite(q) ? q : 0;
 					}
 				});
@@ -2314,16 +2417,9 @@ export default {
 				const allService =
 					itemsForCheck.length > 0 &&
 					itemsForCheck.every(function (it) {
-						const ig = (it.item_group || "").toString().toLowerCase();
-						const name = (it.item_name || "").toString().toLowerCase();
-						const code = (it.item_code || "").toString().toLowerCase();
 						return (
-							ig.includes("carwash") ||
-							ig.includes("car wash") ||
-							ig.includes("bike wash") ||
-							ig.includes("bikewash") ||
-							name.includes("wash") ||
-							code.includes("wash") ||
+							(it.item_type || "").toString().toLowerCase() === "service" ||
+							Number(it.custom_service_item || 0) === 1 ||
 							it.service_item === 1 ||
 							it.is_service_item === 1
 						);
@@ -2382,9 +2478,10 @@ export default {
 
 					// If item marked as service (or looks like carwash), default invalid qty -> 1
 					const looksLikeService =
+						(row.item_type || "").toLowerCase() === "service" ||
+						Number(row.custom_service_item || 0) === 1 ||
 						row.is_service_item ||
-						row.service_item ||
-						/carwash|car wash|bike wash|bikewash/i.test(row.item_group || row.item_name || "");
+						row.service_item;
 					if (looksLikeService) {
 						row.qty = Number.isFinite(qty) && qty > 0 ? qty : 1;
 					} else {
@@ -2394,7 +2491,9 @@ export default {
 					row.rate = Number.isFinite(rate) ? rate : 0;
 
 					// flags
-					row.is_service_item = row.is_service_item ? 1 : 0;
+					row.is_service_item = row.is_service_item || row.custom_service_item ? 1 : 0;
+					row.custom_service_item = Number(row.custom_service_item || row.is_service_item || 0);
+					row.item_type = row.item_type || (row.custom_service_item ? "service" : "unknown");
 					row.update_stock =
 						typeof row.update_stock !== "undefined"
 							? row.update_stock
@@ -3597,7 +3696,7 @@ export default {
 		this.eventBus.on("get_items_by_group", (data) => {
 			const { group, callback } = data;
 			const itemsInGroup = this.items.filter((item) => {
-				return (item.item_group || "").trim() === group;
+				return (item.item_type || "").toString().trim().toLowerCase() === (group || "").toString().trim().toLowerCase();
 			});
 			if (typeof callback === "function") {
 				callback(itemsInGroup);
@@ -3606,90 +3705,39 @@ export default {
 
 		// Apply group discount to all items in that group
 		this.eventBus.on("apply_group_discount", async (data) => {
-			const { group } = data;
+			const group = (data.type || data.group || "").toString().trim().toLowerCase();
 			const rawDiscount =
 				typeof data.discountPercentage === "number"
 					? data.discountPercentage
 					: Number(data.percentage || 0);
 			const discountPercentage = Number.isFinite(rawDiscount) ? rawDiscount : 0;
 
-			console.log("[GroupDiscount] Applying to group:", group, "discount:", discountPercentage);
+			console.log("[GroupDiscount] Applying to type:", group, "discount:", discountPercentage);
 
-			let itemsUpdated = 0;
-			let itemsRejected = 0;
-			const attempted = [];
+			const result = await this.applyItemGroupDiscount({
+				group,
+				percentage: discountPercentage,
+			});
 
-			for (const item of this.items) {
-				if ((item.item_group || "").trim() === group && !this.isEngineOil(item)) {
-					attempted.push(item);
-					if (!this.validateDiscount(item, discountPercentage)) {
-						itemsRejected++;
-						continue;
-					}
-
-					const canApply = await this.validateItemDiscountCap(item, discountPercentage);
-					if (!canApply) {
-						itemsRejected++;
-						continue;
-					}
-
-					// Store original values if not stored
-					if (!item.original_rate) {
-						item.original_rate = item.rate;
-						item.original_price_list_rate = item.price_list_rate;
-					}
-					if (
-						item.original_discount_amount === undefined ||
-						item.original_discount_amount === null
-					) {
-						item.original_discount_amount = item.discount_amount || 0;
-					}
-					if (
-						item.original_price_list_rate === undefined ||
-						item.original_price_list_rate === null
-					) {
-						item.original_price_list_rate = item.price_list_rate || item.original_rate || 0;
-					}
-
-					// Calculate discount from original rate
-					const discountAmount = (Number(item.original_rate) * discountPercentage) / 100;
-
-					// Update item
-					item.discount_percentage = discountPercentage;
-					item.discount_amount = Number(item.original_discount_amount) + discountAmount;
-					item.rate = Number(item.original_rate) - discountAmount;
-					item.amount = Number(item.qty || 0) * Number(item.rate);
-					item.group_discount_percentage = discountPercentage;
-					item.group_discount_applied = group;
-
-					itemsUpdated++;
-				}
-			}
-
-			console.log("[GroupDiscount] Updated", itemsUpdated, "items");
+			console.log("[GroupDiscount] Updated", result.applied || 0, "items");
 
 			if (typeof data.callback === "function") {
 				data.callback({
-					applied: itemsUpdated,
-					rejected: itemsRejected,
-					attempted: attempted.length,
+					applied: result.applied || 0,
+					rejected: result.rejected || 0,
+					attempted: result.applied || 0,
 				});
 			}
-
-			this.$nextTick(() => {
-				this.apply_additional_discount();
-				this.$forceUpdate();
-			});
 		});
 
 		// Remove group discount
 		this.eventBus.on("remove_group_discount", (data) => {
-			const { group } = data;
+			const group = (data.group || "").toString().trim().toLowerCase();
 
 			console.log("[GroupDiscount] Removing from group:", group);
 
 			this.items.forEach((item) => {
-				if ((item.item_group || "").trim() === group && item.group_discount_applied) {
+				if ((item.item_type || "").toString().trim().toLowerCase() === group && item.group_discount_applied) {
 					// Restore original values
 					if (item.original_rate) {
 						item.rate = item.original_rate;
@@ -3752,26 +3800,41 @@ export default {
 
 		// Listen for customer details from Customer component
 		this.eventBus.on("update_customer_details", (data) => {
-			// Store customer mobile and vehicle
-			this.contact_mobile = data.contact_mobile || "";
-			this.custom_vehicle_no = data.custom_vehicle_no || "";
+			const hasContactMobile = Object.prototype.hasOwnProperty.call(data, "contact_mobile");
+			const hasVehicleNo = Object.prototype.hasOwnProperty.call(data, "custom_vehicle_no");
+			const hasVehicleMake = Object.prototype.hasOwnProperty.call(data, "custom_vehicle_make");
+			const hasVehicleModel = Object.prototype.hasOwnProperty.call(data, "custom_vehicle_model");
+
+			// Store customer mobile and vehicle only when the field is present in the payload.
+			// This preserves vehicle-derived details when a later customer refresh returns blanks.
+			if (hasContactMobile) {
+				this.contact_mobile = data.contact_mobile || "";
+			}
+			if (hasVehicleNo) {
+				this.custom_vehicle_no = data.custom_vehicle_no || "";
+			}
 
 			// Update invoice_doc
 			if (this.invoice_doc) {
-				this.invoice_doc.contact_mobile = data.contact_mobile || "";
-				this.invoice_doc.custom_vehicle_no = data.custom_vehicle_no || "";
-				this.custom_vehicle_make =
-					data.custom_vehicle_make || data.make || this.custom_vehicle_make || "";
-				this.invoice_doc.custom_vehicle_make =
-					this.custom_vehicle_make || this.invoice_doc.custom_vehicle_make || "";
-				this.invoice_doc.custom_vehicle_model =
-					data.custom_vehicle_model || data.model || this.invoice_doc.custom_vehicle_model || "";
-				if (Object.prototype.hasOwnProperty.call(data, "custom_vehicle_make")) {
-					this.invoice_doc.custom_vehicle_make = data.custom_vehicle_make || "";
-					this.custom_vehicle_make = data.custom_vehicle_make || "";
+				if (hasContactMobile) {
+					this.invoice_doc.contact_mobile = data.contact_mobile || "";
 				}
-				if (Object.prototype.hasOwnProperty.call(data, "custom_vehicle_model")) {
+				if (hasVehicleNo) {
+					this.invoice_doc.custom_vehicle_no = data.custom_vehicle_no || "";
+				}
+				if (hasVehicleMake && data.custom_vehicle_make) {
+					this.custom_vehicle_make = data.custom_vehicle_make || "";
+					this.invoice_doc.custom_vehicle_make = this.custom_vehicle_make;
+				}
+				if (!hasVehicleMake && data.make) {
+					this.custom_vehicle_make = data.make || "";
+					this.invoice_doc.custom_vehicle_make = this.custom_vehicle_make;
+				}
+				if (hasVehicleModel && data.custom_vehicle_model) {
 					this.invoice_doc.custom_vehicle_model = data.custom_vehicle_model || "";
+				}
+				if (!hasVehicleModel && data.model) {
+					this.invoice_doc.custom_vehicle_model = data.model || "";
 				}
 			}
 		});

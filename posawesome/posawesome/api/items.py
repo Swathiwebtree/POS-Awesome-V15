@@ -14,12 +14,29 @@ from frappe.utils import cstr, flt, get_datetime, nowdate
 from frappe.utils.background_jobs import enqueue
 from frappe.utils.caching import redis_cache
 
+from .discounts import classify_item
 from .utils import HAS_VARIANTS_EXCLUSION, get_item_groups, expand_item_groups
 
 
 def normalize_brand(brand: str) -> str:
     """Return a normalized representation of a brand name."""
     return cstr(brand).strip().lower()
+
+
+def _normalize_item_flags(row):
+    row["is_stock_item"] = int(row.get("is_stock_item") or 0)
+    row["custom_service_item"] = int(row.get("custom_service_item") or 0)
+    classification = classify_item(
+        item_code=row.get("item_code"),
+        item_group=row.get("item_group"),
+        is_stock_item_flag=row.get("is_stock_item"),
+        custom_service_item=row.get("custom_service_item"),
+    )
+    row["item_group"] = classification.get("item_group") or row.get("item_group")
+    row["item_type"] = classification.get("item_type") or "unknown"
+    row["is_stock_item"] = int(classification.get("is_stock_item") or 0)
+    row["custom_service_item"] = int(classification.get("custom_service_item") or 0)
+    return row
 
 
 def get_stock_availability(item_code, warehouse):
@@ -324,17 +341,7 @@ def get_items(
                 row = {}
                 row.update(item)
                 row.update(detail)
-                frappe.log_error(
-                    frappe.as_json(
-                        {
-                            "item_code": row.get("item_code"),
-                            "item_value": item.get("custom_service_item"),
-                            "detail_value": detail.get("custom_service_item"),
-                            "final_value": row.get("custom_service_item"),
-                        }
-                    ),
-                    "POS Service Item Merge Debug",
-                )
+                _normalize_item_flags(row)
                 result.append(row)
 
             page_start += len(items_data)
@@ -484,6 +491,7 @@ def get_item_variants(pos_profile, parent_item_code, price_list=None, customer=N
 
     for item in result:
         item["item_attributes"] = item_attr_map.get(item["item_code"], [])
+        _normalize_item_flags(item)
 
     # Ensure attributes_meta is always a dictionary
     return {"variants": result, "attributes_meta": attributes_meta or {}}
@@ -895,7 +903,20 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
     else:
         res["actual_qty"] = 999999
     res["max_discount"] = max_discount
-    res["custom_service_item"] = frappe.db.get_value("Item", item_code, "custom_service_item") or 0
+    res["item_group"] = item.get("item_group") or frappe.db.get_value("Item", item_code, "item_group")
+    res["is_stock_item"] = int(
+        item.get("is_stock_item")
+        if item.get("is_stock_item") is not None
+        else frappe.db.get_value("Item", item_code, "is_stock_item")
+        or 0
+    )
+    res["custom_service_item"] = int(
+        item.get("custom_service_item")
+        if item.get("custom_service_item") is not None
+        else frappe.db.get_value("Item", item_code, "custom_service_item")
+        or 0
+    )
+    _normalize_item_flags(res)
     res["batch_no_data"] = batch_no_data
     res["serial_no_data"] = serial_no_data
 
@@ -943,14 +964,41 @@ def get_items_from_barcode(selling_price_list, currency, barcode):
             "price_list_rate",
         )
 
-        return {
-            "item_code": item_doc.name,
-            "item_name": item_doc.item_name,
-            "barcode": barcode,
-            "rate": item_price or 0,
-            "uom": search_item.posa_uom or item_doc.stock_uom,
-            "currency": currency,
-        }
+        return _normalize_item_flags(
+            {
+                "item_code": item_doc.name,
+                "item_name": item_doc.item_name,
+                "item_group": item_doc.item_group,
+                "custom_service_item": item_doc.custom_service_item or 0,
+                "is_stock_item": item_doc.is_stock_item or 0,
+                "item_type": None,
+                "barcode": barcode,
+                "rate": item_price or 0,
+                "uom": search_item.posa_uom or item_doc.stock_uom,
+                "currency": currency,
+            }
+        )
+    item_doc = frappe.get_cached_doc("Item", barcode) if frappe.db.exists("Item", barcode) else None
+    if item_doc:
+        return _normalize_item_flags(
+            {
+                "item_code": item_doc.name,
+                "item_name": item_doc.item_name,
+                "item_group": item_doc.item_group,
+                "custom_service_item": item_doc.custom_service_item or 0,
+                "is_stock_item": item_doc.is_stock_item or 0,
+                "item_type": None,
+                "barcode": barcode,
+                "rate": frappe.db.get_value(
+                    "Item Price",
+                    {"item_code": item_doc.name, "price_list": selling_price_list, "currency": currency},
+                    "price_list_rate",
+                )
+                or 0,
+                "uom": item_doc.stock_uom,
+                "currency": currency,
+            }
+        )
     return None
 
 
@@ -1280,6 +1328,7 @@ def get_item_prices_custom(
         enriched_item = {
             **item,
             "custom_service_item": int(item.get("custom_service_item") or 0),
+            "is_stock_item": int(item.get("is_stock_item") or 0),
             "rate": price_map.get(item_code, 0),
             "price_list_rate": price_map.get(item_code, 0),
             "actual_qty": stock_map.get(item_code, 0) if warehouse else 999999,
@@ -1287,6 +1336,7 @@ def get_item_prices_custom(
             "item_uoms": item_uoms,
             "currency": currency,
         }
+        _normalize_item_flags(enriched_item)
         enriched_items.append(enriched_item)
 
     has_more = (limit_start + limit_page_length) < total_count

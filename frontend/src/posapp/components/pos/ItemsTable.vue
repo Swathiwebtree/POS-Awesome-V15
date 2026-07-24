@@ -757,12 +757,41 @@ export default {
 		},
 	},
 	methods: {
+		looksLikeServiceItem(item) {
+			const row = item?.raw || item || {};
+			const itemType = (row?.item_type || "").toString().toLowerCase();
+			if (itemType === "service" || Number(row?.custom_service_item || 0) === 1) {
+				return true;
+			}
+
+			const searchable = [row?.item_group, row?.item_name, row?.item_code, row?.code]
+				.map((value) => (value || "").toString().toLowerCase())
+				.filter(Boolean);
+			const keywords = ["carwash", "car wash", "bike wash", "bikewash", "wash", "service"];
+			return searchable.some((text) => keywords.some((keyword) => text.includes(keyword)));
+		},
+
+		getItemType(item) {
+			const row = item?.raw || item;
+			const itemType = (row?.item_type || "").toString().toLowerCase();
+			if (itemType && itemType !== "unknown") {
+				return itemType;
+			}
+			if (Number(row?.custom_service_item || 0) === 1) {
+				return "service";
+			}
+			if (this.looksLikeServiceItem(row)) {
+				return "service";
+			}
+			if (Number(row?.is_stock_item || 0) === 1) {
+				return "stock";
+			}
+			return "unknown";
+		},
+
 		isEngineOil(item) {
 			const row = item?.raw || item;
-			const ig = (row.item_group || "").toLowerCase();
-			const name = (row.item_name || "").toLowerCase();
-
-			return ig.includes("engine oil") || name.includes("engine oil");
+			return this.getItemType(row) === "engine_oil";
 		},
 
 		getRowItem(item) {
@@ -798,17 +827,14 @@ export default {
 				return 0;
 			}
 
-			return (
-				Number(row?._max_discount_allowed || 0) ||
-				Number(rule?.max_discount || rule?.auto_apply_value || 0)
-			);
+			return Number(rule?.max_discount ?? row?._max_discount_allowed ?? 0);
 		},
 
 		isAutoAppliedDiscountLocked(item) {
 			const row = item?.raw || item;
 			const rule = this.getItemDiscountRule(row);
 
-			return Boolean(row?._auto_discount_applied || row?.auto_discount_applied || rule?.auto_apply);
+			return Boolean(rule?.auto_apply && !rule?.discount_editable);
 		},
 
 		addOne(item) {
@@ -887,7 +913,7 @@ export default {
 			}
 
 			// Disable if locked by vehicle discount system
-			if (row.discount_locked) {
+			if (row.discount_locked || row?.discount_editable === false || row?._vehicle_discount_rule?.discount_editable === false) {
 				return true;
 			}
 
@@ -926,10 +952,11 @@ export default {
 
 			if (this.isAutoAppliedDiscountLocked(item)) {
 				const rule = this.getItemDiscountRule(item);
-				const appliedDiscount =
-					Number(item?._max_discount_allowed || 0) ||
-					Number(rule?.max_discount || rule?.auto_apply_value || 0);
-				return `Default discount applied. Maximum allowed: ${appliedDiscount}%`;
+				const appliedDiscount = Number(rule?.auto_apply_value || 0);
+				if (rule?.configuration_warning) {
+					return rule.message || "Configuration warning";
+				}
+				return `Default discount applied and locked at ${appliedDiscount}%`;
 			}
 
 			const maxDiscount = this.getDiscountMax(item);
@@ -963,7 +990,25 @@ export default {
 				return true;
 			}
 
-			const maxDiscount = Number(this.getDiscountMax(row) || 0);
+			const maxDiscount = Number(rule?.max_discount ?? row?._max_discount_allowed ?? 0);
+			const discountEditable = rule ? rule.discount_editable !== false : row?.discount_editable !== false;
+			const autoApplyValue = Number(rule?.auto_apply_value || 0);
+			const isAutoAppliedValue =
+				Boolean(rule?.auto_apply) &&
+				Math.abs(Number(discountPercentage || 0) - autoApplyValue) <= 0.000001;
+
+			if (!discountEditable) {
+				if (isAutoAppliedValue) {
+					return true;
+				}
+
+				frappe.show_alert({
+					message: __("Discount field is locked for this item"),
+					indicator: "red",
+				});
+				return false;
+			}
+
 			if (maxDiscount > 0 && discountPercentage > maxDiscount) {
 				frappe.show_alert({
 					message: __("Maximum allowed discount for this item is {0}%", [maxDiscount]),
@@ -1011,19 +1056,7 @@ export default {
 		},
 		isCarWashItem(item) {
 			if (!item) return false;
-
-			const ig = item.item_group || "";
-			const name = item.item_name || "";
-			const code = item.item_code || "";
-
-			return (
-				ig.includes("Carwash") ||
-				ig.includes("Car wash") ||
-				name.includes("Carwash") ||
-				name.includes("Car wash") ||
-				code.includes("Carwash") ||
-				code.includes("Car wash")
-			);
+			return this.getItemType(item) === "service";
 		},
 
 		// === SAFE: applyRatesToItem ===
@@ -1042,10 +1075,7 @@ export default {
 				item.exchange_rate = Number(rates.exchange_rate ?? item.exchange_rate ?? 1);
 
 				// detect service (Carwash) - adjust regex if you use strict case-sensitive matching
-				const looksLikeService =
-					item.is_service_item === 1 ||
-					item.service_item === 1 ||
-					/Carwash|car wash|bike wash|bikewash/i.test(item.item_group || item.item_name || "");
+				const looksLikeService = this.getItemType(item) === "service";
 
 				if (looksLikeService) {
 					// restore/ensure qty >= 1 for service items
@@ -1066,10 +1096,13 @@ export default {
 			item = item || {};
 
 			// Normalize flags
-			item.is_service_item = item.is_service_item ? 1 : 0;
+			item.item_type = this.getItemType(item);
+			item.custom_service_item = Number(item.custom_service_item || 0);
+			item.is_stock_item = Number(item.is_stock_item || 0);
+			item.is_service_item = item.item_type === "service" ? 1 : 0;
 
 			// If CarWash/service item -> protect qty and skip server normalization
-			const isCarWash = this.isCarWashItem ? this.isCarWashItem(item) : item.is_service_item === 1;
+			const isCarWash = this.isCarWashItem ? this.isCarWashItem(item) : item.item_type === "service";
 			if (isCarWash || item.is_service_item) {
 				// Ensure qty numeric and default to 1 for service items
 				item.qty = Number(item.qty);
@@ -1079,7 +1112,9 @@ export default {
 
 				item.actual_qty = item.qty;
 				item.is_service_item = 1;
+				item.custom_service_item = 1;
 				item.update_stock = 0;
+				item.item_type = "service";
 
 				return; // do not call server update that might overwrite qty
 			}
@@ -1205,9 +1240,12 @@ export default {
 			if (match) {
 				match.qty = Number(match.qty) + (Number(newItem.qty) || 1);
 				match.amount = Number(match.qty) * Number(match.rate || 0);
-				match.custom_service_item = Number(
-					newItem.custom_service_item || match.custom_service_item || 0,
-				);
+				match.custom_service_item =
+					Number(newItem.custom_service_item || match.custom_service_item || 0) === 1 ? 1 : 0;
+				match.is_stock_item =
+					Number(newItem.is_stock_item || match.is_stock_item || 0) === 1 ? 1 : 0;
+				match.item_type =
+					newItem.item_type || match.item_type || (match.custom_service_item ? "service" : "unknown");
 				this.$forceUpdate && this.$forceUpdate();
 				return;
 			}
@@ -1223,25 +1261,30 @@ export default {
 				} else {
 					this.items[idx].qty = (Number(this.items[idx].qty) || 0) + (Number(newItem.qty) || 1);
 				}
-				this.items[idx].custom_service_item = Number(
-					newItem.custom_service_item || this.items[idx].custom_service_item || 0,
-				);
+				this.items[idx].custom_service_item =
+					Number(newItem.custom_service_item || this.items[idx].custom_service_item || 0) === 1
+						? 1
+						: 0;
+				this.items[idx].is_stock_item =
+					Number(newItem.is_stock_item || this.items[idx].is_stock_item || 0) === 1 ? 1 : 0;
+				this.items[idx].item_type =
+					newItem.item_type ||
+					this.items[idx].item_type ||
+					(this.items[idx].custom_service_item ? "service" : "unknown");
 				this.$forceUpdate && this.$forceUpdate();
 				return;
 			}
 
 			const newItemCopy = { ...newItem };
 			newItemCopy.custom_service_item = Number(newItemCopy.custom_service_item || 0);
-			const isService =
-				newItemCopy.is_service_item === 1 ||
-				/carwash|car wash|bike wash|bikewash/i.test(
-					newItemCopy.item_group || newItemCopy.item_name || "",
-				);
+			const isService = this.getItemType(newItemCopy) === "service";
 
 			newItemCopy.qty = isService ? Number(newItemCopy.qty) || 1 : Number(newItemCopy.qty) || 0;
 
 			newItemCopy.is_service_item = isService ? 1 : 0;
+			newItemCopy.custom_service_item = isService ? 1 : newItemCopy.custom_service_item;
 			newItemCopy.update_stock = isService ? 0 : 1;
+			newItemCopy.item_type = isService ? "service" : this.getItemType(newItemCopy);
 
 			this.items.push(newItemCopy);
 

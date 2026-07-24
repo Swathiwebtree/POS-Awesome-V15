@@ -21,25 +21,45 @@ const { updateDiscountAmount, calcPrices, calcItemPrice } = useDiscounts();
 const { removeItem, addItem, getNewItem, clearInvoice } = useItemAddition();
 const { calcUom, calcStockQty } = useStockUtils();
 
-// --- SERVICE ITEM HELPER ---
-const isServiceItem = (item) => {
-	if (!item) return false;
-	const ig = (item.item_group || "").toString().toLowerCase();
-	const name = (item.item_name || "").toString().toLowerCase();
-	const code = (item.item_code || item.code || "").toString().toLowerCase();
-
-	// keywords commonly used for car/bike washes or generic service items
-	const keywords = ["Carwash", "car wash", "bikewash", "bike wash", "wash", "service"];
-
-	for (let k of keywords) {
-		if (ig.includes(k) || name.includes(k) || code.includes(k)) return true;
+const looksLikeServiceItem = (item) => {
+	const row = item || {};
+	const itemType = (row.item_type || "").toString().toLowerCase();
+	if (itemType === "service" || Number(row.custom_service_item || 0) === 1) {
+		return true;
 	}
 
-	// fallback: treat explicitly non-stock as service
-	if (item.is_stock_item === 0 || item.update_stock === 0) return true;
+	const searchable = [
+		row.item_group,
+		row.item_name,
+		row.item_code,
+		row.code,
+	]
+		.map((value) => (value || "").toString().toLowerCase())
+		.filter(Boolean);
 
-	return false;
+	const keywords = ["carwash", "car wash", "bike wash", "bikewash", "wash", "service"];
+	return searchable.some((text) => keywords.some((keyword) => text.includes(keyword)));
 };
+
+const getItemType = (item) => {
+	const itemType = (item?.item_type || "").toString().toLowerCase();
+	if (itemType && itemType !== "unknown") {
+		return itemType;
+	}
+	if (Number(item?.custom_service_item || 0) === 1) {
+		return "service";
+	}
+	if (looksLikeServiceItem(item)) {
+		return "service";
+	}
+	if (Number(item?.is_stock_item || 0) === 1) {
+		return "stock";
+	}
+	return "unknown";
+};
+
+const isServiceItem = (item) => getItemType(item) === "service";
+const isEngineOilItem = (item) => getItemType(item) === "engine_oil";
 
 // Alias so older code that expects the other name still works
 const isCarWashOrService = isServiceItem;
@@ -208,7 +228,11 @@ export default {
 				(!it.batch_no || it.batch_no === item.batch_no),
 		);
 		if (target) {
-			target.custom_service_item = Number(item.custom_service_item || target.custom_service_item || 0);
+			target.custom_service_item =
+				Number(item.custom_service_item || target.custom_service_item || 0) === 1 ? 1 : 0;
+			target.is_stock_item =
+				Number(item.is_stock_item || target.is_stock_item || 0) === 1 ? 1 : 0;
+			target.item_type = item.item_type || target.item_type || (target.custom_service_item ? "service" : "unknown");
 		}
 		const tax_template = await this.fetch_item_tax_template(item.item_code);
 		if (tax_template) {
@@ -2299,24 +2323,7 @@ export default {
 	},
 
 	isCarWashOrService(item) {
-		// defensive: accept null/undefined
-		if (!item) return false;
-
-		// normalized checks on group, code, name
-		const group = (item.item_group || "").toString().toLowerCase();
-		const name = (item.item_name || "").toString().toLowerCase();
-		const code = (item.item_code || item.code || "").toString().toLowerCase();
-
-		// keywords commonly used for car/bike washes
-		const keywords = ["carwash", "car wash", "bikewash", "bike wash"];
-
-		const washMatch = keywords.some((k) => group.includes(k) || name.includes(k) || code.includes(k));
-
-		// prefer explicit flags but only for wash-related items
-		const serviceFlag = item.is_service_item === 1 || item.service_item === 1;
-		if (washMatch || (serviceFlag && washMatch)) return true;
-
-		return false;
+		return isServiceItem(item);
 	},
 
 	// This version preserves service/carwash item qty/rate and skips server call for them.
@@ -2351,8 +2358,11 @@ export default {
 			target.posa_offers = preservedOfferState.posa_offers;
 		};
 
-		// Normalize flags
-		item.is_service_item = item.is_service_item ? 1 : 0;
+		// Normalize flags from backend classification
+		item.item_type = getItemType(item);
+		item.custom_service_item = Number(item.custom_service_item || 0);
+		item.is_stock_item = Number(item.is_stock_item || 0);
+		item.is_service_item = item.item_type === "service" ? 1 : 0;
 
 		// Use robust helper (alias ensures compatibility)
 		const isCarWash =
@@ -2376,8 +2386,10 @@ export default {
 
 			// Mark flags: service items shouldn't update stock
 			item.is_service_item = 1;
+			item.custom_service_item = 1;
 			item.update_stock = 0;
 			item.is_stock_item = 0;
+			item.item_type = "service";
 
 			// Ensure numeric rate and amount (don't rely on server)
 			item.rate = Number(item.rate ?? item.price ?? 0);
@@ -2652,7 +2664,11 @@ export default {
 					item.reserved_qty = data.reserved_qty;
 					item.conversion_factor = data.conversion_factor;
 					item.stock_qty = data.stock_qty;
-					item.custom_service_item = data.custom_service_item ?? item.custom_service_item ?? 0;
+					item.custom_service_item =
+						Number(data.custom_service_item || item.custom_service_item || 0) === 1 ? 1 : 0;
+					item.is_stock_item =
+						Number(data.is_stock_item || item.is_stock_item || 0) === 1 ? 1 : 0;
+					item.item_type = data.item_type || item.item_type || (item.custom_service_item ? "service" : "unknown");
 					// For service items, we intentionally do not set actual_qty to avoid clamping behavior
 					if (!isServiceItem(item)) {
 						item.actual_qty = data.actual_qty;

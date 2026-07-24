@@ -1,4 +1,18 @@
 export function useDiscounts() {
+	const getItemType = (item) => {
+		const itemType = (item?.item_type || "").toString().toLowerCase();
+		if (itemType && itemType !== "unknown") {
+			return itemType;
+		}
+		if (Number(item?.custom_service_item || 0) === 1) {
+			return "service";
+		}
+		if (Number(item?.is_stock_item || 0) === 1) {
+			return "stock";
+		}
+		return "unknown";
+	};
+
 	// -----------------------------
 	// Update additional discount amount based on percentage
 	// -----------------------------
@@ -40,7 +54,7 @@ export function useDiscounts() {
 		// ==================================================
 		// 🛢 ENGINE OIL — DISCOUNT NOT ALLOWED (HARD BLOCK)
 		// ==================================================
-		if ((item.item_group || "").trim() === "Engine Oil") {
+		if (getItemType(item) === "engine_oil") {
 			item.discount_percentage = 0;
 			item.discount_amount = 0;
 
@@ -247,7 +261,7 @@ export function useDiscounts() {
 		// ==================================================
 		// 🛢 ENGINE OIL — FINAL SAFETY BLOCK
 		// ==================================================
-		if ((item.item_group || "").trim() === "Engine Oil") {
+		if (getItemType(item) === "engine_oil") {
 			item.discount_percentage = 0;
 			item.discount_amount = 0;
 

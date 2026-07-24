@@ -1,48 +1,55 @@
 import frappe
-from posawesome.posawesome.api.utils import expand_item_groups
 
-SERVICE_ROOT_GROUPS = ["Services"]
-STOCK_ROOT_GROUPS = ["Products"]
+_ITEM_GROUP_PARENT_CACHE = {}
 
 
-def get_all_service_groups():
-    return set(expand_item_groups(SERVICE_ROOT_GROUPS))
+def _normalize_item_group(item_group):
+    return item_group.strip() if isinstance(item_group, str) and item_group.strip() else None
 
 
-def get_all_stock_groups():
-    return set(expand_item_groups(STOCK_ROOT_GROUPS))
+def _normalize_item_text(value):
+    return value.strip().lower() if isinstance(value, str) and value.strip() else ""
 
 
-def get_item_group(item_code=None, item_group=None):
-    if not item_group and item_code:
-        item_group = frappe.db.get_value("Item", item_code, "item_group")
-    return item_group.strip() if item_group else None
+def _looks_like_service(item_group=None, item_name=None, item_code=None):
+    searchable = (
+        _normalize_item_text(item_group),
+        _normalize_item_text(item_name),
+        _normalize_item_text(item_code),
+    )
+    keywords = ("carwash", "car wash", "bike wash", "bikewash", "wash", "service")
+
+    for text in searchable:
+        if not text:
+            continue
+        if any(keyword in text for keyword in keywords):
+            return True
+
+    return False
 
 
 def get_item_context(item_code=None, item_group=None):
-    if item_group and item_code:
-        is_stock = frappe.db.get_value("Item", item_code, "is_stock_item")
-        return {
-            "item_group": item_group.strip() if item_group else None,
-            "is_stock_item": int(is_stock or 0),
-        }
-
     if item_code:
         item_doc = frappe.db.get_value(
             "Item",
             item_code,
-            ["item_group", "is_stock_item"],
+            ["item_group", "item_name", "is_stock_item", "custom_service_item"],
             as_dict=True,
         )
         if item_doc:
+            item_group = _normalize_item_group(item_doc.item_group) or _normalize_item_group(item_group)
             return {
-                "item_group": (item_doc.item_group or "").strip() or None,
+                "item_group": item_group,
+                "item_name": item_doc.item_name,
                 "is_stock_item": int(item_doc.is_stock_item or 0),
+                "custom_service_item": int(item_doc.custom_service_item or 0),
             }
 
     return {
-        "item_group": get_item_group(item_group=item_group),
+        "item_group": _normalize_item_group(item_group),
+        "item_name": None,
         "is_stock_item": None,
+        "custom_service_item": None,
     }
 
 
@@ -50,18 +57,100 @@ def is_engine_oil(item_group: str) -> bool:
     return bool(item_group and "engine oil" in item_group.lower())
 
 
-def is_service_item(item_code=None, item_group=None, is_stock_item_flag=None):
-    item_group = get_item_group(item_code, item_group)
-    if is_stock_item_flag is not None:
-        return bool(item_group and not is_engine_oil(item_group) and int(is_stock_item_flag) == 0)
-    return bool(item_group and not is_engine_oil(item_group) and item_group in get_all_service_groups())
+def _get_item_group_parent(item_group):
+    normalized_group = _normalize_item_group(item_group)
+    if not normalized_group:
+        return None
+
+    cache_key = normalized_group.lower()
+    if cache_key in _ITEM_GROUP_PARENT_CACHE:
+        return _ITEM_GROUP_PARENT_CACHE[cache_key]
+
+    parent_group = frappe.db.get_value("Item Group", normalized_group, "parent_item_group")
+    parent_group = _normalize_item_group(parent_group)
+    _ITEM_GROUP_PARENT_CACHE[cache_key] = parent_group
+    return parent_group
 
 
-def is_stock_item(item_code=None, item_group=None, is_stock_item_flag=None):
-    item_group = get_item_group(item_code, item_group)
-    if is_stock_item_flag is not None:
-        return bool(item_group and not is_engine_oil(item_group) and int(is_stock_item_flag) == 1)
-    return bool(item_group and not is_engine_oil(item_group) and item_group in get_all_stock_groups())
+def _get_item_group_lineage(item_group):
+    lineage = []
+    current_group = _normalize_item_group(item_group)
+    seen_groups = set()
+
+    while current_group:
+        cache_key = current_group.lower()
+        if cache_key in seen_groups:
+            break
+
+        lineage.append(current_group)
+        seen_groups.add(cache_key)
+        current_group = _get_item_group_parent(current_group)
+
+    return lineage
+
+
+def _classify_group_hierarchy(item_group):
+    lineage = _get_item_group_lineage(item_group)
+
+    for group in lineage:
+        if is_engine_oil(group):
+            return "engine_oil"
+
+    for group in lineage:
+        if group and group.strip().lower() == "services":
+            return "service"
+
+    return "stock"
+
+
+def classify_item(item_code=None, item_group=None, is_stock_item_flag=None, custom_service_item=None):
+    item_ctx = get_item_context(item_code=item_code, item_group=item_group)
+
+    normalized_group = _normalize_item_group(item_ctx.get("item_group"))
+    custom_service = item_ctx.get("custom_service_item")
+
+    if custom_service_item is not None:
+        custom_service = custom_service_item
+
+    item_type = _classify_group_hierarchy(normalized_group)
+    if item_type == "engine_oil":
+        return {
+            "item_type": "engine_oil",
+            "item_group": normalized_group,
+            "is_stock_item": 0,
+            "custom_service_item": 0,
+        }
+
+    if int(custom_service or 0) == 1:
+        return {
+            "item_type": "service",
+            "item_group": normalized_group,
+            "is_stock_item": 0,
+            "custom_service_item": 1,
+        }
+
+    if item_type == "service":
+        return {
+            "item_type": "service",
+            "item_group": normalized_group,
+            "is_stock_item": 0,
+            "custom_service_item": 1,
+        }
+
+    if item_type == "stock":
+        return {
+            "item_type": "stock",
+            "item_group": normalized_group,
+            "is_stock_item": 1,
+            "custom_service_item": 0,
+        }
+
+    return {
+        "item_type": "stock",
+        "item_group": normalized_group,
+        "is_stock_item": 1,
+        "custom_service_item": 0,
+    }
 
 
 def get_customer_discount_config(customer):
@@ -83,25 +172,46 @@ def _build_discount_rule(item_type, default_discount, max_discount):
     max_discount = float(max_discount or 0)
 
     discount_enabled = default_discount > 0 or max_discount > 0
+    discount_editable = max_discount > 0
+    auto_apply = default_discount > 0
+    auto_apply_value = float(default_discount if auto_apply else 0)
+
     if not discount_enabled:
         return {
             "item_type": item_type,
+            "default_discount": 0,
             "max_discount": 0,
             "auto_apply": False,
             "auto_apply_value": 0,
             "discount_enabled": False,
+            "discount_editable": False,
+            "configuration_warning": False,
+            "message": "Discount disabled",
         }
 
-    final_max = max_discount if max_discount > 0 else default_discount
-    auto_apply = default_discount > 0
-    auto_apply_value = min(default_discount, final_max) if auto_apply else 0
+    configuration_warning = bool(auto_apply and discount_editable and default_discount > max_discount)
+    if configuration_warning:
+        message = (
+            f"Configuration warning: {item_type.title()} default discount {default_discount}% "
+            f"exceeds the maximum allowed {max_discount}%."
+        )
+    elif auto_apply and not discount_editable:
+        message = f"Auto-applied {auto_apply_value}% and locked"
+    elif auto_apply:
+        message = f"Auto-applied {auto_apply_value}%"
+    else:
+        message = f"Manual discount allowed up to {max_discount}%"
 
     return {
         "item_type": item_type,
-        "max_discount": float(final_max),
+        "default_discount": float(default_discount),
+        "max_discount": float(max_discount),
         "auto_apply": auto_apply,
-        "auto_apply_value": float(auto_apply_value),
+        "auto_apply_value": auto_apply_value,
         "discount_enabled": True,
+        "discount_editable": discount_editable,
+        "configuration_warning": configuration_warning,
+        "message": message,
     }
 
 
@@ -157,69 +267,82 @@ def get_max_discount(customer):
 def get_customer_item_discount(customer, item_code):
 
     result = {
+        "default_discount": 0,
         "max_discount": None,
         "auto_apply": False,
         "auto_apply_value": 0,
         "discount_enabled": False,
+        "discount_editable": False,
         "item_type": None,
         "message": None,
         "condition": None,
         "other_condition": None,
+        "configuration_warning": False,
     }
 
     if not customer or not item_code:
         return result
 
     item_ctx = get_item_context(item_code=item_code)
-    item_group = item_ctx.get("item_group")
-    is_stock_item_flag = item_ctx.get("is_stock_item")
-    if not item_group:
-        return result
+    classification = classify_item(
+        item_code=item_code,
+        item_group=item_ctx.get("item_group"),
+        is_stock_item_flag=item_ctx.get("is_stock_item"),
+        custom_service_item=item_ctx.get("custom_service_item"),
+    )
+    item_type = classification.get("item_type")
 
-    if is_engine_oil(item_group):
+    if item_type == "engine_oil":
         return {
             "item_type": "engine_oil",
+            "default_discount": 0,
             "max_discount": 0,
             "auto_apply": False,
             "auto_apply_value": 0,
             "discount_enabled": False,
+            "discount_editable": False,
             "message": "Engine Oil items are not eligible for discount",
             "condition": None,
             "other_condition": None,
+            "configuration_warning": False,
         }
 
-    is_service = is_service_item(
-        item_group=item_group,
-        is_stock_item_flag=is_stock_item_flag,
-    )
-    is_stock = is_stock_item(
-        item_group=item_group,
-        is_stock_item_flag=is_stock_item_flag,
-    )
-
-    if not is_service and not is_stock:
-        return result
+    if item_type == "unknown":
+        return {
+            "item_type": "unknown",
+            "default_discount": 0,
+            "max_discount": 0,
+            "auto_apply": False,
+            "auto_apply_value": 0,
+            "discount_enabled": False,
+            "discount_editable": False,
+            "message": "Unknown items are not eligible for service or stock discounts",
+            "condition": None,
+            "other_condition": None,
+            "configuration_warning": False,
+        }
 
     discounts = get_customer_discount_config(customer)
     if not discounts:
+        result["item_type"] = item_type
+        result["message"] = "Discount disabled"
         return result
 
-    if is_service:
+    if item_type == "service":
         default_max = discounts.custom_custom_default_discount___service_items or 0
         manual_max = discounts.custom_custom_max_discount___service_items or 0
-        item_type = "service"
     else:
         default_max = discounts.custom_custom_default_discount___stock_items or 0
         manual_max = discounts.custom_custom_max_discount___stock_items or 0
-        item_type = "stock"
 
     rule = _build_discount_rule(item_type, default_max, manual_max)
 
     if rule["discount_enabled"]:
-        if rule["auto_apply"]:
-            rule["message"] = f"Auto-applied {rule['auto_apply_value']}%"
-        else:
-            rule["message"] = f"Manual discount allowed up to {rule['max_discount']}%"
+        if rule["configuration_warning"]:
+            rule["message"] = (
+                f"Configuration warning: {item_type.title()} default discount {rule['default_discount']}% "
+                f"exceeds the maximum allowed {rule['max_discount']}%."
+            )
     else:
         rule["message"] = "Discount disabled"
 
@@ -241,10 +364,24 @@ def validate_discount(customer, item_code, discount_percentage):
     if rules.get("item_type") == "engine_oil":
         return {"is_valid": False, "message": "Discount not allowed for Engine Oil"}
 
+    if rules.get("item_type") == "unknown":
+        return {"is_valid": False, "message": "Discount not allowed for unknown item type"}
+
     if not rules.get("discount_enabled", True):
         return {"is_valid": False, "message": "Discount not allowed for this item"}
 
+    auto_apply_value = float(rules.get("auto_apply_value") or 0)
+    discount_editable = bool(rules.get("discount_editable"))
     max_allowed = rules.get("max_discount")
+
+    if not discount_editable:
+        if rules.get("auto_apply") and abs(discount_percentage - auto_apply_value) <= 0.000001:
+            return {"is_valid": True, "max_allowed": max_allowed}
+        return {
+            "is_valid": False,
+            "message": "Discount field is locked for this item",
+            "max_allowed": max_allowed,
+        }
 
     if max_allowed is not None:
         if discount_percentage > max_allowed:

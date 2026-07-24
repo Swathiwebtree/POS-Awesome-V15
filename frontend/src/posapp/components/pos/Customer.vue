@@ -929,15 +929,32 @@ export default {
 					);
 
 					this.eventBus.emit("update_customer_details", {
-						contact_mobile: mobile,
-						custom_vehicle_no: vehicleNo,
-						vehicle_mobile_no:
-							customerData.mobile_no ||
+						...(mobile ? { contact_mobile: mobile } : {}),
+						...(vehicleNo ? { custom_vehicle_no: vehicleNo } : {}),
+						...((customerData.mobile_no ||
 							customerData.tel_mobile ||
 							customerData.contact_mobile ||
-							"",
-						custom_vehicle_make: customerData.custom_vehicle_make || customerData.make || "",
-						custom_vehicle_model: customerData.custom_vehicle_model || customerData.model || "",
+							"")
+							? {
+									vehicle_mobile_no:
+										customerData.mobile_no ||
+										customerData.tel_mobile ||
+										customerData.contact_mobile ||
+										"",
+								}
+							: {}),
+						...(customerData.custom_vehicle_make || customerData.make
+							? {
+									custom_vehicle_make:
+										customerData.custom_vehicle_make || customerData.make || "",
+								}
+							: {}),
+						...(customerData.custom_vehicle_model || customerData.model
+							? {
+									custom_vehicle_model:
+										customerData.custom_vehicle_model || customerData.model || "",
+								}
+							: {}),
 						is_corporate: isCorporate,
 					});
 				}

@@ -288,7 +288,7 @@
 								</v-card>
 							</v-col>
 
-							<!-- Item Group Bulk Discount Section -->
+							<!-- Item Type Bulk Discount Section -->
 							<v-col cols="12" v-if="itemGroupsList && itemGroupsList.length > 0">
 								<v-card class="item-group-discount-card" elevation="2">
 									<v-card-text class="pa-4">
@@ -308,7 +308,7 @@
 												</v-avatar>
 												<div>
 													<p class="text-subtitle-2 font-weight-bold mb-0">
-														{{ __("Item Group Discounts") }}
+														{{ __("Type Discounts") }}
 													</p>
 												</div>
 											</div>
@@ -330,7 +330,7 @@
 													"
 												>
 													<span class="font-weight-600">
-														{{ itemGroupDiscountEntries[0][0] }}:
+														{{ formatItemTypeLabel(itemGroupDiscountEntries[0][0]) }}:
 														{{ itemGroupDiscountEntries[0][1] }}%
 													</span>
 												</v-chip>
@@ -361,7 +361,7 @@
 																discount,
 															] in itemGroupDiscountEntries"
 															:key="group"
-															:title="`${group}: ${discount}%`"
+															:title="`${formatItemTypeLabel(group)}: ${discount}%`"
 														>
 															<template #append>
 																<v-btn
@@ -410,7 +410,7 @@
 								</v-card>
 							</v-col>
 
-							<!-- Item Group Discount Dialog -->
+							<!-- Item Type Discount Dialog -->
 							<v-dialog
 								v-model="showItemGroupDiscountDialog"
 								max-width="480px"
@@ -423,7 +423,7 @@
 											<v-avatar color="info" size="36" class="mr-3">
 												<v-icon color="white" size="20">mdi-folder-multiple</v-icon>
 											</v-avatar>
-											<span>{{ __("Apply Group Discount") }}</span>
+											<span>{{ __("Apply Item Type Discount") }}</span>
 											<v-spacer></v-spacer>
 											<v-btn
 												icon
@@ -439,17 +439,18 @@
 									<v-divider></v-divider>
 
 									<v-card-text class="px-6 py-4">
-										<!-- Select Item Group -->
+										<!-- Select Item Type -->
 										<v-select
 											v-model="selectedItemGroupForDiscount"
 											:items="itemGroupsList"
-											:label="__('Select Item Group')"
+											:label="__('Select Item Type')"
 											prepend-inner-icon="mdi-folder"
 											variant="outlined"
 											density="comfortable"
 											color="info"
 											class="mb-4"
 											clearable
+											:no-data-text="__('No eligible items available.')"
 										/>
 
 										<!-- Discount Percentage Input -->
@@ -490,6 +491,19 @@
 											</p>
 										</v-alert>
 
+										<v-alert
+											v-else-if="itemGroupsList.length === 0"
+											type="warning"
+											variant="tonal"
+											density="compact"
+											icon="mdi-alert-outline"
+											class="mt-4 mb-0"
+										>
+											<p class="text-caption mb-0">
+												{{ __("No eligible items available.") }}
+											</p>
+										</v-alert>
+
 										<!-- No Selection Alert -->
 										<v-alert
 											v-else-if="!selectedItemGroupForDiscount"
@@ -502,7 +516,7 @@
 											<p class="text-caption mb-0">
 												{{
 													__(
-														"Please select an item group and enter a discount percentage",
+														"Please select an item type and enter a discount percentage",
 													)
 												}}
 											</p>
@@ -524,6 +538,7 @@
 											color="info"
 											variant="flat"
 											:disabled="
+												itemGroupsList.length === 0 ||
 												!selectedItemGroupForDiscount ||
 												discountPercentageByGroup <= 0
 											"
@@ -1150,26 +1165,26 @@ export default {
 		},
 
 		itemGroupsList() {
-			const itemBasedGroups = Array.isArray(this.$parent?.items)
-				? this.$parent.items.map((item) => (item?.item_group || "").toString().trim()).filter(Boolean)
-				: [];
+			const eligibleTypes = new Set();
+			const items = Array.isArray(this.$parent?.items) ? this.$parent.items : [];
 
-			const sourceGroups =
-				itemBasedGroups.length > 0
-					? itemBasedGroups
-					: Array.isArray(this.items_group) && this.items_group.length
-						? this.items_group
-						: this.availableItemGroups;
+			items.forEach((item) => {
+				const itemType = (item?.item_type || "").toString().trim().toLowerCase();
+				if (itemType === "service" || itemType === "stock") {
+					eligibleTypes.add(itemType);
+				}
+			});
 
-			return [...new Set((sourceGroups || []).map((g) => String(g || "").trim()).filter(Boolean))]
-				.filter((group) => group.toUpperCase() !== "ALL")
-				.sort((a, b) => a.localeCompare(b));
+			const order = ["service", "stock"];
+			return order
+				.filter((type) => eligibleTypes.has(type))
+				.map((type) => this.formatItemTypeLabel(type));
 		},
 
 		itemGroupSummary() {
-			// Calculate totals per item group for display
+			// Calculate totals per item type for display
 			const summary = {};
-			this.items_group.forEach((group) => {
+			this.itemGroupsList.forEach((group) => {
 				summary[group] = {
 					discount: this.itemGroupDiscounts[group] || 0,
 					itemCount: this.countItemsByGroup(group),
@@ -1178,12 +1193,31 @@ export default {
 			return summary;
 		},
 		displayItemGroupDiscounts() {
-			return Object.fromEntries(
+			const savedDiscounts = Object.fromEntries(
 				Object.entries(this.itemGroupDiscounts || {}).filter(([group]) => {
 					const name = (group || "").toString().trim();
 					return name.length > 0 && name.toLowerCase() !== "null";
 				}),
 			);
+
+			if (Object.keys(savedDiscounts).length > 0) {
+				return savedDiscounts;
+			}
+
+			const derivedDiscounts = {};
+			const items = Array.isArray(this.$parent?.items) ? this.$parent.items : [];
+
+			items.forEach((item) => {
+				const group = (item?.group_discount_applied || "").toString().trim().toLowerCase();
+				const discount = Number(item?.group_discount_percentage || item?.discount_percentage || 0);
+				if (!group || !Number.isFinite(discount) || discount <= 0) {
+					return;
+				}
+
+				derivedDiscounts[group] = discount;
+			});
+
+			return derivedDiscounts;
 		},
 		itemGroupDiscountEntries() {
 			return Object.entries(this.displayItemGroupDiscounts);
@@ -1343,6 +1377,12 @@ export default {
 				message: payload.message || "",
 			};
 		},
+		formatItemTypeLabel(value) {
+			const normalized = (value || "").toString().trim().toLowerCase();
+			if (normalized === "service") return "Service";
+			if (normalized === "stock") return "Stock";
+			return value;
+		},
 		getAutoRoundedBase() {
 			return this.roundByLastTwoDecimals(this.subtotal || 0);
 		},
@@ -1376,9 +1416,11 @@ export default {
 		},
 
 		countItemsByGroup(group) {
-			// Count items in specific group
-			return this.pos_profile && Array.isArray(this.items_group)
-				? this.items_group.filter((g) => g === group).length
+			const targetType = (group || "").toString().trim().toLowerCase();
+			return Array.isArray(this.$parent?.items)
+				? this.$parent.items.filter(
+						(item) => (item?.item_type || "").toString().trim().toLowerCase() === targetType,
+					).length
 				: 0;
 		},
 
@@ -1390,9 +1432,10 @@ export default {
 
 			// Access parent's items through $parent reference
 			const parentItems = this.$parent?.items || [];
+			const targetType = (group || "").toString().trim().toLowerCase();
 
 			const groupTotal = parentItems.reduce((sum, item) => {
-				if ((item.item_group || "").trim() === group) {
+				if ((item?.item_type || "").toString().trim().toLowerCase() === targetType) {
 					return sum + Number(item.qty || 0) * Number(item.rate || 0);
 				}
 				return sum;
@@ -1402,19 +1445,29 @@ export default {
 		},
 
 		openItemGroupDiscountDialog() {
-			const currentGroup = (this.item_group || "").toString().trim();
-			if (
-				currentGroup &&
-				currentGroup.toUpperCase() !== "ALL" &&
-				this.itemGroupsList.includes(currentGroup)
+			const availableTypes = this.itemGroupsList;
+			if (availableTypes.length === 1) {
+				this.selectedItemGroupForDiscount = availableTypes[0];
+			} else if (
+				this.selectedItemGroupForDiscount &&
+				!availableTypes.includes(this.selectedItemGroupForDiscount)
 			) {
-				this.selectedItemGroupForDiscount = currentGroup;
+				this.selectedItemGroupForDiscount = null;
 			}
 			this.showItemGroupDiscountDialog = true;
 		},
 
 		applyItemGroupDiscount() {
-			if (this.selectedItemGroupForDiscount === "Engine Oil") {
+			if (this.itemGroupsList.length === 0) {
+				frappe.show_alert({
+					message: this.__("No eligible items available."),
+					indicator: "warning",
+				});
+				return;
+			}
+
+			const targetType = (this.selectedItemGroupForDiscount || "").toString().trim().toLowerCase();
+			if (targetType === "engine_oil") {
 				frappe.show_alert({
 					message: this.__("Discounts are not allowed for Engine Oil items"),
 					indicator: "red",
@@ -1424,7 +1477,7 @@ export default {
 
 			if (!this.selectedItemGroupForDiscount) {
 				frappe.show_alert({
-					message: this.__("Please select an item group"),
+					message: this.__("Please select an item type"),
 					indicator: "warning",
 				});
 				return;
@@ -1433,7 +1486,7 @@ export default {
 			const groupName = (this.selectedItemGroupForDiscount || "").toString().trim();
 			if (!groupName || groupName.toLowerCase() === "null") {
 				frappe.show_alert({
-					message: this.__("Please select a valid item group"),
+					message: this.__("Please select a valid item type"),
 					indicator: "warning",
 				});
 				return;
@@ -1450,6 +1503,7 @@ export default {
 
 			// Emit event to parent to apply discount to items (callback handles success/failure)
 			this.eventBus.emit("apply_group_discount", {
+				type: targetType,
 				group: groupName,
 				percentage: discountPct,
 				callback: (result = {}) => {
@@ -1464,7 +1518,10 @@ export default {
 						return;
 					}
 
-					this.itemGroupDiscounts[groupName] = discountPct;
+					this.itemGroupDiscounts = {
+						...(this.itemGroupDiscounts || {}),
+						[targetType]: discountPct,
+					};
 
 					if (rejected > 0) {
 						frappe.show_alert({
@@ -1493,7 +1550,9 @@ export default {
 
 		removeItemGroupDiscount(group) {
 			// Remove discount from specific group
-			delete this.itemGroupDiscounts[group];
+			const nextDiscounts = { ...(this.itemGroupDiscounts || {}) };
+			delete nextDiscounts[group];
+			this.itemGroupDiscounts = nextDiscounts;
 
 			// Emit event to parent to remove discount
 			this.eventBus.emit("remove_group_discount", {

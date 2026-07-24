@@ -4,6 +4,26 @@ import { useBundles } from "./useBundles.js";
 
 /* global frappe, __ */
 
+const mergeItemClassification = (target = {}, source = {}) => {
+	const serviceFlag =
+		Number(target.custom_service_item || 0) === 1 || Number(source.custom_service_item || 0) === 1
+			? 1
+			: 0;
+	const stockFlag = Number(source.is_stock_item || target.is_stock_item || 0) === 1 ? 1 : 0;
+	const itemType = (source.item_type || target.item_type || "").toString().toLowerCase();
+	target.custom_service_item = serviceFlag;
+	target.is_stock_item = serviceFlag ? 0 : stockFlag;
+	target.item_type =
+		itemType && itemType !== "unknown"
+			? itemType
+			: serviceFlag
+				? "service"
+				: stockFlag
+					? "stock"
+					: "unknown";
+	return target;
+};
+
 export function useItemAddition() {
 	// Remove item from invoice
 	const removeItem = (item, context) => {
@@ -96,7 +116,7 @@ export function useItemAddition() {
 		let new_item;
 		if (index === -1 || context.new_line) {
 			new_item = getNewItem(item, context);
-			new_item.custom_service_item = Number(item.custom_service_item || 0);
+			mergeItemClassification(new_item, item);
 			// Handle serial number logic
 			if (item.has_serial_no && item.to_set_serial_no) {
 				new_item.serial_no_selected = [];
@@ -241,9 +261,7 @@ export function useItemAddition() {
 			} else {
 				const cur_item = context.items[index];
 				if (context.update_items_details) context.update_items_details([cur_item]);
-				cur_item.custom_service_item = Number(
-					item.custom_service_item || cur_item.custom_service_item || 0,
-				);
+				mergeItemClassification(cur_item, item);
 				// Merge serial numbers if any
 				if (new_item.serial_no_selected && new_item.serial_no_selected.length) {
 					new_item.serial_no_selected.forEach((sn) => {
@@ -276,9 +294,7 @@ export function useItemAddition() {
 		} else {
 			const cur_item = context.items[index];
 			if (context.update_items_details) context.update_items_details([cur_item]);
-			cur_item.custom_service_item = Number(
-				item.custom_service_item || cur_item.custom_service_item || 0,
-			);
+			mergeItemClassification(cur_item, item);
 			// Serial number logic for existing item
 			if (item.has_serial_no && item.to_set_serial_no) {
 				if (cur_item.serial_no_selected.includes(item.to_set_serial_no)) {

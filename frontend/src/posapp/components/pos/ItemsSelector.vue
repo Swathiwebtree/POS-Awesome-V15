@@ -448,6 +448,26 @@ import placeholderImage from "./placeholder-image.png";
 import Skeleton from "../ui/Skeleton.vue";
 import { ref, onMounted, onUnmounted, computed } from "vue";
 
+const mergeItemClassification = (target = {}, source = {}) => {
+	const serviceFlag =
+		Number(target.custom_service_item || 0) === 1 || Number(source.custom_service_item || 0) === 1
+			? 1
+			: 0;
+	const stockFlag = Number(source.is_stock_item || target.is_stock_item || 0) === 1 ? 1 : 0;
+	const itemType = (source.item_type || target.item_type || "").toString().toLowerCase();
+	target.custom_service_item = serviceFlag;
+	target.is_stock_item = serviceFlag ? 0 : stockFlag;
+	target.item_type =
+		itemType && itemType !== "unknown"
+			? itemType
+			: serviceFlag
+				? "service"
+				: stockFlag
+					? "stock"
+					: "unknown";
+	return target;
+};
+
 export default {
 	mixins: [format],
 	setup() {
@@ -1719,6 +1739,7 @@ export default {
 
 				// Process items
 				const processedItems = data.items.map((item) => {
+					mergeItemClassification(item, item);
 					// Ensure UOMs
 					if (!item.item_uoms || item.item_uoms.length === 0) {
 						item.item_uoms = [
@@ -2030,16 +2051,17 @@ export default {
 
 			// ===== CARWASH SPECIFIC LOGIC =====
 			const isCarWash =
-				item.item_group &&
-				(item.item_group.toLowerCase().includes("car wash") ||
-					item.item_group.toLowerCase().includes("carwash"));
+				(item.item_type || "").toLowerCase() === "service" ||
+				Number(item.custom_service_item || 0) === 1;
 
 			if (isCarWash) {
 				// Ensure qty is a number (never string or undefined)
 				item.qty = Number(item.qty) || 1;
 				// Mark as service item and avoid stock update
 				item.is_service_item = 1;
+				item.custom_service_item = 1;
 				item.update_stock = 0;
+				item.item_type = "service";
 
 				// If there is any local property that other code uses to detect qty changes,
 				// update it too (defensive).
@@ -2121,7 +2143,7 @@ export default {
 		// ===== HELPER METHOD: Check if item is CarWash =====
 		isCarWashItem(item) {
 			if (!item) return false;
-			return item.item_group === "Carwash";
+			return (item.item_type || "").toLowerCase() === "service" || Number(item.custom_service_item || 0) === 1;
 		},
 
 		// ===== UPDATE: enter_event method to handle CarWash in barcode scanning =====
@@ -2307,8 +2329,13 @@ export default {
 						actual_qty: det.actual_qty,
 						has_batch_no: det.has_batch_no,
 						has_serial_no: det.has_serial_no,
-						custom_service_item: det.custom_service_item ?? item.custom_service_item ?? 0,
+						custom_service_item:
+							Number(det.custom_service_item || item.custom_service_item || 0) === 1 ? 1 : 0,
+						is_stock_item:
+							Number(det.is_stock_item || item.is_stock_item || 0) === 1 ? 1 : 0,
+						item_type: det.item_type || item.item_type || "unknown",
 					});
+					mergeItemClassification(item, item);
 					if (det.item_uoms && det.item_uoms.length > 0) {
 						item.item_uoms = det.item_uoms;
 						saveItemUOMs(item.item_code, det.item_uoms);
@@ -2387,7 +2414,16 @@ export default {
 									has_batch_no: updated_item.has_batch_no,
 									has_serial_no: updated_item.has_serial_no,
 									custom_service_item:
-										updated_item.custom_service_item ?? item.custom_service_item ?? 0,
+										Number(
+											updated_item.custom_service_item || item.custom_service_item || 0,
+										) === 1
+											? 1
+											: 0,
+									is_stock_item:
+										Number(updated_item.is_stock_item || item.is_stock_item || 0) === 1
+											? 1
+											: 0,
+									item_type: updated_item.item_type || item.item_type || "unknown",
 									batch_no_data:
 										updated_item.batch_no_data && updated_item.batch_no_data.length > 0
 											? updated_item.batch_no_data
@@ -2421,6 +2457,7 @@ export default {
 
 					updatedItems.forEach(({ item, updates }) => {
 						Object.assign(item, updates);
+						mergeItemClassification(item, item);
 						vm.applyCurrencyConversionToItem(item);
 					});
 
