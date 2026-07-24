@@ -330,8 +330,11 @@
 													"
 												>
 													<span class="font-weight-600">
-														{{ formatItemTypeLabel(itemGroupDiscountEntries[0][0]) }}:
-														{{ itemGroupDiscountEntries[0][1] }}%
+														{{
+															formatItemTypeLabel(
+																itemGroupDiscountEntries[0][0],
+															)
+														}}: {{ itemGroupDiscountEntries[0][1] }}%
 													</span>
 												</v-chip>
 											</div>

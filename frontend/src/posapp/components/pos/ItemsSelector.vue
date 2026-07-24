@@ -2143,7 +2143,10 @@ export default {
 		// ===== HELPER METHOD: Check if item is CarWash =====
 		isCarWashItem(item) {
 			if (!item) return false;
-			return (item.item_type || "").toLowerCase() === "service" || Number(item.custom_service_item || 0) === 1;
+			return (
+				(item.item_type || "").toLowerCase() === "service" ||
+				Number(item.custom_service_item || 0) === 1
+			);
 		},
 
 		// ===== UPDATE: enter_event method to handle CarWash in barcode scanning =====
@@ -2331,8 +2334,7 @@ export default {
 						has_serial_no: det.has_serial_no,
 						custom_service_item:
 							Number(det.custom_service_item || item.custom_service_item || 0) === 1 ? 1 : 0,
-						is_stock_item:
-							Number(det.is_stock_item || item.is_stock_item || 0) === 1 ? 1 : 0,
+						is_stock_item: Number(det.is_stock_item || item.is_stock_item || 0) === 1 ? 1 : 0,
 						item_type: det.item_type || item.item_type || "unknown",
 					});
 					mergeItemClassification(item, item);

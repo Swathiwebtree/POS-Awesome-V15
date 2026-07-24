@@ -1529,16 +1529,10 @@ export default {
 					item.original_rate = item.rate;
 					item.original_price_list_rate = item.price_list_rate;
 				}
-				if (
-					item.original_discount_amount === undefined ||
-					item.original_discount_amount === null
-				) {
+				if (item.original_discount_amount === undefined || item.original_discount_amount === null) {
 					item.original_discount_amount = item.discount_amount || 0;
 				}
-				if (
-					item.original_price_list_rate === undefined ||
-					item.original_price_list_rate === null
-				) {
+				if (item.original_price_list_rate === undefined || item.original_price_list_rate === null) {
 					item.original_price_list_rate = item.price_list_rate || item.original_rate || 0;
 				}
 
@@ -2380,26 +2374,26 @@ export default {
 			// DEFENSE 0: Protect service items in-place BEFORE any processing
 			// This prevents other code (rate updates, expands) from accidentally zeroing qty
 			try {
-					this.items.forEach((it) => {
-						if (!it) return;
-						const looksLikeService =
-							(it.item_type || "").toLowerCase() === "service" ||
-							Number(it.custom_service_item || 0) === 1 ||
-							it.is_service_item ||
-							it.service_item;
-						if (looksLikeService) {
-							const q = Number(it.qty);
-							if (!Number.isFinite(q) || q <= 0) {
-								it.qty = 1;
-							}
-							// enforce service flags
-							it.is_service_item = 1;
-							it.custom_service_item = 1;
-							it.update_stock = 0;
-							it.item_type = "service";
-						} else {
-							// ensure numeric qty for non-service items (do not force it to 0 if it's valid)
-							const q = Number(it.qty);
+				this.items.forEach((it) => {
+					if (!it) return;
+					const looksLikeService =
+						(it.item_type || "").toLowerCase() === "service" ||
+						Number(it.custom_service_item || 0) === 1 ||
+						it.is_service_item ||
+						it.service_item;
+					if (looksLikeService) {
+						const q = Number(it.qty);
+						if (!Number.isFinite(q) || q <= 0) {
+							it.qty = 1;
+						}
+						// enforce service flags
+						it.is_service_item = 1;
+						it.custom_service_item = 1;
+						it.update_stock = 0;
+						it.item_type = "service";
+					} else {
+						// ensure numeric qty for non-service items (do not force it to 0 if it's valid)
+						const q = Number(it.qty);
 						it.qty = Number.isFinite(q) ? q : 0;
 					}
 				});
@@ -3696,7 +3690,10 @@ export default {
 		this.eventBus.on("get_items_by_group", (data) => {
 			const { group, callback } = data;
 			const itemsInGroup = this.items.filter((item) => {
-				return (item.item_type || "").toString().trim().toLowerCase() === (group || "").toString().trim().toLowerCase();
+				return (
+					(item.item_type || "").toString().trim().toLowerCase() ===
+					(group || "").toString().trim().toLowerCase()
+				);
 			});
 			if (typeof callback === "function") {
 				callback(itemsInGroup);
@@ -3737,7 +3734,10 @@ export default {
 			console.log("[GroupDiscount] Removing from group:", group);
 
 			this.items.forEach((item) => {
-				if ((item.item_type || "").toString().trim().toLowerCase() === group && item.group_discount_applied) {
+				if (
+					(item.item_type || "").toString().trim().toLowerCase() === group &&
+					item.group_discount_applied
+				) {
 					// Restore original values
 					if (item.original_rate) {
 						item.rate = item.original_rate;

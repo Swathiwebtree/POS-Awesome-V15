@@ -28,12 +28,7 @@ const looksLikeServiceItem = (item) => {
 		return true;
 	}
 
-	const searchable = [
-		row.item_group,
-		row.item_name,
-		row.item_code,
-		row.code,
-	]
+	const searchable = [row.item_group, row.item_name, row.item_code, row.code]
 		.map((value) => (value || "").toString().toLowerCase())
 		.filter(Boolean);
 
@@ -230,9 +225,9 @@ export default {
 		if (target) {
 			target.custom_service_item =
 				Number(item.custom_service_item || target.custom_service_item || 0) === 1 ? 1 : 0;
-			target.is_stock_item =
-				Number(item.is_stock_item || target.is_stock_item || 0) === 1 ? 1 : 0;
-			target.item_type = item.item_type || target.item_type || (target.custom_service_item ? "service" : "unknown");
+			target.is_stock_item = Number(item.is_stock_item || target.is_stock_item || 0) === 1 ? 1 : 0;
+			target.item_type =
+				item.item_type || target.item_type || (target.custom_service_item ? "service" : "unknown");
 		}
 		const tax_template = await this.fetch_item_tax_template(item.item_code);
 		if (tax_template) {
@@ -2666,9 +2661,11 @@ export default {
 					item.stock_qty = data.stock_qty;
 					item.custom_service_item =
 						Number(data.custom_service_item || item.custom_service_item || 0) === 1 ? 1 : 0;
-					item.is_stock_item =
-						Number(data.is_stock_item || item.is_stock_item || 0) === 1 ? 1 : 0;
-					item.item_type = data.item_type || item.item_type || (item.custom_service_item ? "service" : "unknown");
+					item.is_stock_item = Number(data.is_stock_item || item.is_stock_item || 0) === 1 ? 1 : 0;
+					item.item_type =
+						data.item_type ||
+						item.item_type ||
+						(item.custom_service_item ? "service" : "unknown");
 					// For service items, we intentionally do not set actual_qty to avoid clamping behavior
 					if (!isServiceItem(item)) {
 						item.actual_qty = data.actual_qty;

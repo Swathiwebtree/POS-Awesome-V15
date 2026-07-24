@@ -115,22 +115,14 @@ const normalizeItemType = (item) => {
 const mergeCachedClassification = (base = {}, detail = {}) => {
 	const merged = { ...base, ...detail };
 	const serviceFlag =
-		Number(base.custom_service_item || 0) === 1 || Number(detail.custom_service_item || 0) === 1
-			? 1
-			: 0;
+		Number(base.custom_service_item || 0) === 1 || Number(detail.custom_service_item || 0) === 1 ? 1 : 0;
 	const stockFlag =
-		serviceFlag === 1
-			? 0
-			: Number(detail.is_stock_item || base.is_stock_item || 0) === 1
-				? 1
-				: 0;
+		serviceFlag === 1 ? 0 : Number(detail.is_stock_item || base.is_stock_item || 0) === 1 ? 1 : 0;
 
 	merged.custom_service_item = serviceFlag;
 	merged.is_stock_item = stockFlag;
 	merged.item_type =
-		normalizeItemType(detail) !== "unknown"
-			? normalizeItemType(detail)
-			: normalizeItemType(base);
+		normalizeItemType(detail) !== "unknown" ? normalizeItemType(detail) : normalizeItemType(base);
 	if (merged.item_type === "unknown") {
 		merged.item_type = serviceFlag ? "service" : stockFlag ? "stock" : "unknown";
 	}

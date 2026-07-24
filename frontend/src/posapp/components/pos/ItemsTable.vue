@@ -913,7 +913,11 @@ export default {
 			}
 
 			// Disable if locked by vehicle discount system
-			if (row.discount_locked || row?.discount_editable === false || row?._vehicle_discount_rule?.discount_editable === false) {
+			if (
+				row.discount_locked ||
+				row?.discount_editable === false ||
+				row?._vehicle_discount_rule?.discount_editable === false
+			) {
 				return true;
 			}
 
@@ -991,7 +995,9 @@ export default {
 			}
 
 			const maxDiscount = Number(rule?.max_discount ?? row?._max_discount_allowed ?? 0);
-			const discountEditable = rule ? rule.discount_editable !== false : row?.discount_editable !== false;
+			const discountEditable = rule
+				? rule.discount_editable !== false
+				: row?.discount_editable !== false;
 			const autoApplyValue = Number(rule?.auto_apply_value || 0);
 			const isAutoAppliedValue =
 				Boolean(rule?.auto_apply) &&
@@ -1242,10 +1248,11 @@ export default {
 				match.amount = Number(match.qty) * Number(match.rate || 0);
 				match.custom_service_item =
 					Number(newItem.custom_service_item || match.custom_service_item || 0) === 1 ? 1 : 0;
-				match.is_stock_item =
-					Number(newItem.is_stock_item || match.is_stock_item || 0) === 1 ? 1 : 0;
+				match.is_stock_item = Number(newItem.is_stock_item || match.is_stock_item || 0) === 1 ? 1 : 0;
 				match.item_type =
-					newItem.item_type || match.item_type || (match.custom_service_item ? "service" : "unknown");
+					newItem.item_type ||
+					match.item_type ||
+					(match.custom_service_item ? "service" : "unknown");
 				this.$forceUpdate && this.$forceUpdate();
 				return;
 			}

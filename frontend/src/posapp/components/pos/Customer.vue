@@ -931,10 +931,10 @@ export default {
 					this.eventBus.emit("update_customer_details", {
 						...(mobile ? { contact_mobile: mobile } : {}),
 						...(vehicleNo ? { custom_vehicle_no: vehicleNo } : {}),
-						...((customerData.mobile_no ||
-							customerData.tel_mobile ||
-							customerData.contact_mobile ||
-							"")
+						...(customerData.mobile_no ||
+						customerData.tel_mobile ||
+						customerData.contact_mobile ||
+						""
 							? {
 									vehicle_mobile_no:
 										customerData.mobile_no ||

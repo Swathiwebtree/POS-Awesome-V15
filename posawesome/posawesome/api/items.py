@@ -907,14 +907,12 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
     res["is_stock_item"] = int(
         item.get("is_stock_item")
         if item.get("is_stock_item") is not None
-        else frappe.db.get_value("Item", item_code, "is_stock_item")
-        or 0
+        else frappe.db.get_value("Item", item_code, "is_stock_item") or 0
     )
     res["custom_service_item"] = int(
         item.get("custom_service_item")
         if item.get("custom_service_item") is not None
-        else frappe.db.get_value("Item", item_code, "custom_service_item")
-        or 0
+        else frappe.db.get_value("Item", item_code, "custom_service_item") or 0
     )
     _normalize_item_flags(res)
     res["batch_no_data"] = batch_no_data
