@@ -15,43 +15,12 @@ import { useBatchSerial } from "../../composables/useBatchSerial.js";
 import { useDiscounts } from "../../composables/useDiscounts.js";
 import { useItemAddition } from "../../composables/useItemAddition.js";
 import { useStockUtils } from "../../composables/useStockUtils.js";
+import { getItemType, looksLikeServiceItem } from "../../utils/itemType.js";
 
 const { setSerialNo, setBatchQty } = useBatchSerial();
 const { updateDiscountAmount, calcPrices, calcItemPrice } = useDiscounts();
 const { removeItem, addItem, getNewItem, clearInvoice } = useItemAddition();
 const { calcUom, calcStockQty } = useStockUtils();
-
-const looksLikeServiceItem = (item) => {
-	const row = item || {};
-	const itemType = (row.item_type || "").toString().toLowerCase();
-	if (itemType === "service" || Number(row.custom_service_item || 0) === 1) {
-		return true;
-	}
-
-	const searchable = [row.item_group, row.item_name, row.item_code, row.code]
-		.map((value) => (value || "").toString().toLowerCase())
-		.filter(Boolean);
-
-	const keywords = ["carwash", "car wash", "bike wash", "bikewash", "wash", "service"];
-	return searchable.some((text) => keywords.some((keyword) => text.includes(keyword)));
-};
-
-const getItemType = (item) => {
-	const itemType = (item?.item_type || "").toString().toLowerCase();
-	if (itemType && itemType !== "unknown") {
-		return itemType;
-	}
-	if (Number(item?.custom_service_item || 0) === 1) {
-		return "service";
-	}
-	if (looksLikeServiceItem(item)) {
-		return "service";
-	}
-	if (Number(item?.is_stock_item || 0) === 1) {
-		return "stock";
-	}
-	return "unknown";
-};
 
 const isServiceItem = (item) => getItemType(item) === "service";
 const isEngineOilItem = (item) => getItemType(item) === "engine_oil";

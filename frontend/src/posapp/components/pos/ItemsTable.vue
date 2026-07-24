@@ -687,6 +687,7 @@
 <script>
 /* global __, frappe */
 import _ from "lodash";
+import { getItemType, looksLikeServiceItem } from "../../utils/itemType.js";
 export default {
 	inject: ["eventBus"],
 	name: "ItemsTable",
@@ -758,35 +759,11 @@ export default {
 	},
 	methods: {
 		looksLikeServiceItem(item) {
-			const row = item?.raw || item || {};
-			const itemType = (row?.item_type || "").toString().toLowerCase();
-			if (itemType === "service" || Number(row?.custom_service_item || 0) === 1) {
-				return true;
-			}
-
-			const searchable = [row?.item_group, row?.item_name, row?.item_code, row?.code]
-				.map((value) => (value || "").toString().toLowerCase())
-				.filter(Boolean);
-			const keywords = ["carwash", "car wash", "bike wash", "bikewash", "wash", "service"];
-			return searchable.some((text) => keywords.some((keyword) => text.includes(keyword)));
+			return looksLikeServiceItem(item);
 		},
 
 		getItemType(item) {
-			const row = item?.raw || item;
-			const itemType = (row?.item_type || "").toString().toLowerCase();
-			if (itemType && itemType !== "unknown") {
-				return itemType;
-			}
-			if (Number(row?.custom_service_item || 0) === 1) {
-				return "service";
-			}
-			if (this.looksLikeServiceItem(row)) {
-				return "service";
-			}
-			if (Number(row?.is_stock_item || 0) === 1) {
-				return "stock";
-			}
-			return "unknown";
+			return getItemType(item);
 		},
 
 		isEngineOil(item) {

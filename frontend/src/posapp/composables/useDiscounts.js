@@ -1,17 +1,6 @@
+import { getItemType } from "../utils/itemType.js";
+
 export function useDiscounts() {
-	const getItemType = (item) => {
-		const itemType = (item?.item_type || "").toString().toLowerCase();
-		if (itemType && itemType !== "unknown") {
-			return itemType;
-		}
-		if (Number(item?.custom_service_item || 0) === 1) {
-			return "service";
-		}
-		if (Number(item?.is_stock_item || 0) === 1) {
-			return "stock";
-		}
-		return "unknown";
-	};
 
 	// -----------------------------
 	// Update additional discount amount based on percentage

@@ -11,6 +11,16 @@ def _normalize_item_text(value):
     return value.strip().lower() if isinstance(value, str) and value.strip() else ""
 
 
+def _looks_like_engine_oil(*values):
+    for value in values:
+        text = _normalize_item_text(value)
+        if not text:
+            continue
+        if "engine oil" in text or "engine-oil" in text or "engineoil" in text:
+            return True
+    return False
+
+
 def _looks_like_service(item_group=None, item_name=None, item_code=None):
     searchable = (
         _normalize_item_text(item_group),
@@ -54,7 +64,7 @@ def get_item_context(item_code=None, item_group=None):
 
 
 def is_engine_oil(item_group: str) -> bool:
-    return bool(item_group and "engine oil" in item_group.lower())
+    return _looks_like_engine_oil(item_group)
 
 
 def _get_item_group_parent(item_group):
@@ -108,18 +118,20 @@ def classify_item(item_code=None, item_group=None, is_stock_item_flag=None, cust
 
     normalized_group = _normalize_item_group(item_ctx.get("item_group"))
     custom_service = item_ctx.get("custom_service_item")
+    item_name = item_ctx.get("item_name")
 
     if custom_service_item is not None:
         custom_service = custom_service_item
 
-    item_type = _classify_group_hierarchy(normalized_group)
-    if item_type == "engine_oil":
+    if _looks_like_engine_oil(normalized_group, item_name, item_code):
         return {
             "item_type": "engine_oil",
             "item_group": normalized_group,
             "is_stock_item": 0,
             "custom_service_item": 0,
         }
+
+    item_type = _classify_group_hierarchy(normalized_group)
 
     if int(custom_service or 0) == 1:
         return {

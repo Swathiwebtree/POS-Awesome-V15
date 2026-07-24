@@ -1,6 +1,7 @@
 import { nextTick } from "vue";
 import _ from "lodash";
 import { useBundles } from "./useBundles.js";
+import { getItemType } from "../utils/itemType.js";
 
 /* global frappe, __ */
 
@@ -10,17 +11,11 @@ const mergeItemClassification = (target = {}, source = {}) => {
 			? 1
 			: 0;
 	const stockFlag = Number(source.is_stock_item || target.is_stock_item || 0) === 1 ? 1 : 0;
-	const itemType = (source.item_type || target.item_type || "").toString().toLowerCase();
+	const itemType = getItemType(source) || getItemType(target);
 	target.custom_service_item = serviceFlag;
-	target.is_stock_item = serviceFlag ? 0 : stockFlag;
+	target.is_stock_item = itemType === "engine_oil" ? 0 : serviceFlag ? 0 : stockFlag;
 	target.item_type =
-		itemType && itemType !== "unknown"
-			? itemType
-			: serviceFlag
-				? "service"
-				: stockFlag
-					? "stock"
-					: "unknown";
+		itemType && itemType !== "unknown" ? itemType : serviceFlag ? "service" : stockFlag ? "stock" : "unknown";
 	return target;
 };
 
