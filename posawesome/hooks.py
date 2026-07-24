@@ -18,12 +18,12 @@ app_license = "GPLv3"
 # app_include_css = "/assets/posawesome/css/posawesome.css"
 # app_include_js = "/assets/posawesome/js/posawesome.js"
 app_include_js = [
-    "/assets/posawesome/dist/js/posawesome.umd.js",
+    f"/assets/posawesome/dist/js/posawesome.umd.js?v={app_version}",
 ]
 
 app_include_css = [
-    "/assets/posawesome/dist/js/posawesome.css",
-    "/assets/posawesome/css/custom.css",
+    f"/assets/posawesome/dist/js/posawesome.css?v={app_version}",
+    f"/assets/posawesome/css/custom.css?v={app_version}",
 ]
 
 # include js, css files in header of web template
@@ -39,11 +39,11 @@ app_include_css = [
 
 # include js in doctype views
 doctype_js = {
-    "POS Profile": "posawesome/api/pos_profile.js",
-    "POS Payment Method": "posawesome/api/pos_profile.js",
-    "Sales Invoice": "posawesome/api/invoice.js",
-    "Company": "posawesome/api/company.js",
-    "Payment Entry": "posawesome/api/payment_entry.js",
+    "POS Profile": f"posawesome/api/pos_profile.js?v={app_version}",
+    "POS Payment Method": f"posawesome/api/pos_profile.js?v={app_version}",
+    "Sales Invoice": f"posawesome/api/invoice.js?v={app_version}",
+    "Company": f"posawesome/api/company.js?v={app_version}",
+    "Payment Entry": f"posawesome/api/payment_entry.js?v={app_version}",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}

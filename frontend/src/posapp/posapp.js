@@ -10,10 +10,14 @@ import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
 import Home from "./Home.vue";
 import "@mdi/font/css/materialdesignicons.css";
+import { POSAWESOME_VERSION, withPosAwesomeVersion } from "../utils/version.js";
 
 // Expose Dexie globally for libraries that expect a global Dexie instance
 if (typeof window !== "undefined" && !window.Dexie) {
 	window.Dexie = Dexie;
+}
+if (typeof window !== "undefined") {
+	window.__POSAWESOME_VERSION__ = POSAWESOME_VERSION;
 }
 
 frappe.provide("frappe.PosApp");
@@ -86,7 +90,7 @@ frappe.PosApp.posapp = class {
 		if (!document.querySelector('link[rel="manifest"]')) {
 			const link = document.createElement("link");
 			link.rel = "manifest";
-			link.href = "/manifest.json";
+			link.href = withPosAwesomeVersion("/manifest.json");
 			document.head.appendChild(link);
 		}
 
@@ -96,7 +100,7 @@ frappe.PosApp.posapp = class {
 			window.location.hostname === "127.0.0.1"
 		) {
 			navigator.serviceWorker
-				.register("/sw.js")
+				.register(withPosAwesomeVersion("/sw.js"))
 				.catch((err) => console.error("SW registration failed", err));
 		}
 	}

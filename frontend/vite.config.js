@@ -7,6 +7,7 @@ import frappeVueStyle from "../frappe-vue-style";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import tailwindcss from "tailwindcss";
 import autoprefixer from "autoprefixer";
+import packageJson from "../package.json";
 
 export default defineConfig({
 	plugins: [
@@ -83,5 +84,6 @@ export default defineConfig({
 	define: {
 		"process.env.NODE_ENV": '"production"',
 		process: '{"env":{}}',
+		__POSAWESOME_VERSION__: JSON.stringify(packageJson.version),
 	},
 });

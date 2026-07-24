@@ -1,8 +1,12 @@
+const SW_VERSION = new URL(self.location.href).searchParams.get("v") || "1";
+
 if (!self.define) {
 	try {
 		importScripts("https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox-sw.js");
 	} catch (e) {
-		importScripts("/assets/posawesome/dist/js/libs/workbox-sw.js");
+		importScripts(
+			`/assets/posawesome/dist/js/libs/workbox-sw.js?v=${encodeURIComponent(SW_VERSION)}`,
+		);
 	}
 }
 
@@ -12,10 +16,10 @@ self.addEventListener("message", (event) => {
 
 workbox.core.clientsClaim();
 
-const SW_REVISION = "1";
+const SW_REVISION = SW_VERSION;
 workbox.precaching.precacheAndRoute([
-	{ url: "/assets/posawesome/dist/js/posawesome.umd.js", revision: SW_REVISION },
-	{ url: "/assets/posawesome/dist/js/offline/index.js", revision: SW_REVISION },
+	{ url: `/assets/posawesome/dist/js/posawesome.umd.js?v=${encodeURIComponent(SW_VERSION)}`, revision: SW_REVISION },
+	{ url: `/assets/posawesome/dist/js/offline/index.js?v=${encodeURIComponent(SW_VERSION)}`, revision: SW_REVISION },
 	{ url: "/manifest.json", revision: SW_REVISION },
 	{ url: "/offline.html", revision: SW_REVISION },
 ]);

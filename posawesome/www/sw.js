@@ -1,4 +1,5 @@
-const CACHE_NAME = "posawesome-cache-v1";
+const SW_VERSION = new URL(self.location.href).searchParams.get("v") || "1";
+const CACHE_NAMESPACE = `posawesome-cache-${SW_VERSION}`;
 const MAX_CACHE_ITEMS = 1000;
 
 async function enforceCacheLimit(cache) {
@@ -15,15 +16,13 @@ self.addEventListener("install", (event) => {
 	self.skipWaiting();
 	event.waitUntil(
 		(async () => {
-			const cache = await caches.open(CACHE_NAME);
+			const cache = await caches.open(CACHE_NAMESPACE);
 			const resources = [
 				"/app/posapp",
-				"/assets/posawesome/dist/js/posawesome.umd.js",
-
-				"/assets/posawesome/dist/js/offline/index.js",
-
-				"/assets/posawesome/dist/js/posapp/workers/itemWorker.js",
-				"/assets/posawesome/dist/js/libs/dexie.min.js",
+				`/assets/posawesome/dist/js/posawesome.umd.js?v=${encodeURIComponent(SW_VERSION)}`,
+				`/assets/posawesome/dist/js/offline/index.js?v=${encodeURIComponent(SW_VERSION)}`,
+				`/assets/posawesome/dist/js/posapp/workers/itemWorker.js?v=${encodeURIComponent(SW_VERSION)}`,
+				`/assets/posawesome/dist/js/libs/dexie.min.js?v=${encodeURIComponent(SW_VERSION)}`,
 
 				"/manifest.json",
 				"/offline.html",
@@ -49,8 +48,8 @@ self.addEventListener("activate", (event) => {
 	event.waitUntil(
 		(async () => {
 			const keys = await caches.keys();
-			await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
-			const cache = await caches.open(CACHE_NAME);
+			await Promise.all(keys.filter((key) => key !== CACHE_NAMESPACE).map((key) => caches.delete(key)));
+			const cache = await caches.open(CACHE_NAMESPACE);
 			await enforceCacheLimit(cache);
 			await self.clients.claim();
 		})(),
@@ -104,7 +103,7 @@ self.addEventListener("fetch", (event) => {
 				if (resp && resp.ok && resp.status === 200) {
 					try {
 						const clone = resp.clone();
-						const cache = await caches.open(CACHE_NAME);
+						const cache = await caches.open(CACHE_NAMESPACE);
 						await cache.put(event.request, clone);
 						await enforceCacheLimit(cache);
 					} catch (e) {

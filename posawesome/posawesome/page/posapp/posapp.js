@@ -1,4 +1,24 @@
 // Include onscan.js
+const posaVersion = (() => {
+	if (window.__POSAWESOME_VERSION__) {
+		return window.__POSAWESOME_VERSION__;
+	}
+	const script = Array.from(document.querySelectorAll("script")).find((el) =>
+		(el.src || "").includes("/assets/posawesome/dist/js/posawesome.umd.js"),
+	);
+	if (!script || !script.src) return "";
+	try {
+		return new URL(script.src, window.location.origin).searchParams.get("v") || "";
+	} catch {
+		return "";
+	}
+})();
+const withPosAwesomeVersion = (url) => {
+	if (!posaVersion) return url;
+	const separator = url.includes("?") ? "&" : "?";
+	return `${url}${separator}v=${encodeURIComponent(posaVersion)}`;
+};
+
 frappe.pages["posapp"].on_page_load = async function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -89,7 +109,7 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 
 						applySetting(posa_tax_inclusive);
 
-						import("/assets/posawesome/dist/js/offline/index.js")
+						import(withPosAwesomeVersion("/assets/posawesome/dist/js/offline/index.js"))
 							.then((m) => m?.setTaxInclusiveSetting?.(posa_tax_inclusive))
 							.catch(() => {});
 					}
@@ -101,7 +121,7 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 			try {
 				const val = JSON.parse(cachedValue);
 				applySetting(val);
-				import("/assets/posawesome/dist/js/offline/index.js")
+				import(withPosAwesomeVersion("/assets/posawesome/dist/js/offline/index.js"))
 					.then((m) => m?.setTaxInclusiveSetting?.(val))
 					.catch(() => {});
 				return;

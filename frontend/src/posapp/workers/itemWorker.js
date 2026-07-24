@@ -1,15 +1,21 @@
 /* eslint-env worker */
 /* global importScripts, Dexie */
 
+const workerVersion = new URL(self.location.href).searchParams.get("v") || "1";
+
 let db;
 (async () => {
 	let DexieLib;
 	try {
-		importScripts("/assets/posawesome/dist/js/libs/dexie.min.js?v=1");
+		importScripts(
+			`/assets/posawesome/dist/js/libs/dexie.min.js?v=${encodeURIComponent(workerVersion)}`,
+		);
 		DexieLib = { default: Dexie };
 	} catch {
 		// Fallback to dynamic import when importScripts fails
-		DexieLib = await import("/assets/posawesome/dist/js/libs/dexie.min.js?v=1");
+		DexieLib = await import(
+			`/assets/posawesome/dist/js/libs/dexie.min.js?v=${encodeURIComponent(workerVersion)}`
+		);
 	}
 	db = new DexieLib.default("posawesome_offline");
 	db.version(7)

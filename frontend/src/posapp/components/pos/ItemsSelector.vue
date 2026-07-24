@@ -444,6 +444,7 @@ import {
 import { useResponsive } from "../../composables/useResponsive.js";
 import { useRtl } from "../../composables/useRtl.js";
 import { useFlyAnimation } from "../../composables/useFlyAnimation.js";
+import { withPosAwesomeVersion } from "../../../utils/version.js";
 import placeholderImage from "./placeholder-image.png";
 import Skeleton from "../ui/Skeleton.vue";
 import { ref, onMounted, onUnmounted, computed } from "vue";
@@ -467,6 +468,10 @@ const mergeItemClassification = (target = {}, source = {}) => {
 					: "unknown";
 	return target;
 };
+
+const itemWorkerUrl = withPosAwesomeVersion(
+	"/assets/posawesome/dist/js/posapp/workers/itemWorker.js",
+);
 
 export default {
 	mixins: [format],
@@ -976,8 +981,7 @@ export default {
 					!this.itemWorker
 				) {
 					try {
-						const workerUrl = "/assets/posawesome/dist/js/posapp/workers/itemWorker.js";
-						this.itemWorker = new Worker(workerUrl, { type: "classic" });
+						this.itemWorker = new Worker(itemWorkerUrl, { type: "classic" });
 						this.itemWorker.onerror = function (event) {
 							console.error("Worker error:", event);
 							console.error("Message:", event.message);
@@ -3271,11 +3275,7 @@ export default {
 
 		if (typeof Worker !== "undefined") {
 			try {
-				// Use the plain URL so the service worker can match the cached file
-				// even when offline. Using a query string causes cache lookups to fail
-				// which results in "Failed to fetch a worker script" errors.
-				const workerUrl = "/assets/posawesome/dist/js/posapp/workers/itemWorker.js";
-				this.itemWorker = new Worker(workerUrl, { type: "classic" });
+				this.itemWorker = new Worker(itemWorkerUrl, { type: "classic" });
 
 				this.itemWorker.onerror = function (event) {
 					console.error("Worker error:", event);
@@ -3291,11 +3291,7 @@ export default {
 
 		if (typeof Worker !== "undefined") {
 			try {
-				// Use the plain URL so the service worker can match the cached file
-				// even when offline. Using a query string causes cache lookups to fail
-				// which results in "Failed to fetch a worker script" errors.
-				const workerUrl = "/assets/posawesome/dist/js/posapp/workers/itemWorker.js";
-				this.itemWorker = new Worker(workerUrl, { type: "classic" });
+				this.itemWorker = new Worker(itemWorkerUrl, { type: "classic" });
 
 				this.itemWorker.onerror = function (event) {
 					console.error("Worker error:", event);

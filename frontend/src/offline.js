@@ -1,4 +1,5 @@
 import Dexie from "dexie/dist/dexie.mjs";
+import { withPosAwesomeVersion } from "./utils/version.js";
 
 // --- Dexie initialization ---------------------------------------------------
 const db = new Dexie("posawesome_offline");
@@ -7,8 +8,11 @@ db.version(1).stores({ keyval: "&key" });
 let persistWorker = null;
 if (typeof Worker !== "undefined") {
 	try {
-		// Use the plain URL so the service worker cache matches when offline
-		const workerUrl = "/assets/posawesome/dist/js/posapp/workers/itemWorker.js";
+		// Version the worker URL so a deployment can replace cached worker code
+		// without breaking offline access to the previous cached copy.
+		const workerUrl = withPosAwesomeVersion(
+			"/assets/posawesome/dist/js/posapp/workers/itemWorker.js",
+		);
 		persistWorker = new Worker(workerUrl, { type: "classic" });
 	} catch (e) {
 		console.error("Failed to init persist worker", e);

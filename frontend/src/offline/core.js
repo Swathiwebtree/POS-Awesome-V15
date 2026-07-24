@@ -1,5 +1,6 @@
 import Dexie from "dexie/dist/dexie.mjs";
 import { withWriteLock } from "./db-utils.js";
+import { withPosAwesomeVersion } from "../utils/version.js";
 
 // --- Dexie initialization ---------------------------------------------------
 export const db = new Dexie("posawesome_offline");
@@ -94,8 +95,11 @@ export function initPersistWorker() {
 	if (persistWorker || typeof Worker === "undefined") return;
 	try {
 		// Load the worker without a query string so the service worker
-		// can serve the cached version when offline.
-		const workerUrl = "/assets/posawesome/dist/js/posapp/workers/itemWorker.js";
+		// can serve the cached version when offline while still busting
+		// the browser cache on new deployments.
+		const workerUrl = withPosAwesomeVersion(
+			"/assets/posawesome/dist/js/posapp/workers/itemWorker.js",
+		);
 		try {
 			persistWorker = new Worker(workerUrl, { type: "classic" });
 		} catch {
