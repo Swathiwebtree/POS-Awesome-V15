@@ -460,7 +460,13 @@ const mergeItemClassification = (target = {}, source = {}) => {
 	target.custom_service_item = serviceFlag;
 	target.is_stock_item = itemType === "engine_oil" ? 0 : serviceFlag ? 0 : stockFlag;
 	target.item_type =
-		itemType && itemType !== "unknown" ? itemType : serviceFlag ? "service" : stockFlag ? "stock" : "unknown";
+		itemType && itemType !== "unknown"
+			? itemType
+			: serviceFlag
+				? "service"
+				: stockFlag
+					? "stock"
+					: "unknown";
 	return target;
 };
 

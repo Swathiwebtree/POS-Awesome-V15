@@ -1,7 +1,6 @@
 import { getItemType } from "../utils/itemType.js";
 
 export function useDiscounts() {
-
 	// -----------------------------
 	// Update additional discount amount based on percentage
 	// -----------------------------

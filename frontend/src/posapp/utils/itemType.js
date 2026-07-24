@@ -1,8 +1,9 @@
 const normalizeText = (value) => (value || "").toString().trim().toLowerCase();
 
-const getSearchableFields = (item) => [item?.item_group, item?.item_name, item?.item_code, item?.code]
-	.map((value) => normalizeText(value))
-	.filter(Boolean);
+const getSearchableFields = (item) =>
+	[item?.item_group, item?.item_name, item?.item_code, item?.code]
+		.map((value) => normalizeText(value))
+		.filter(Boolean);
 
 export function looksLikeEngineOilItem(item) {
 	const row = item?.raw || item || {};
@@ -12,11 +13,7 @@ export function looksLikeEngineOilItem(item) {
 	}
 
 	return getSearchableFields(row).some((text) => {
-		return (
-			text.includes("engine oil") ||
-			text.includes("engine-oil") ||
-			text.includes("engineoil")
-		);
+		return text.includes("engine oil") || text.includes("engine-oil") || text.includes("engineoil");
 	});
 }
 
