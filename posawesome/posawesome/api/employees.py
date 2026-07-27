@@ -9,6 +9,27 @@ def _employee_has_field(fieldname):
         return False
 
 
+def _get_employee_doc_by_identifier(employee_id):
+    if not employee_id:
+        return None
+
+    try:
+        return frappe.get_doc("Employee", employee_id)
+    except Exception:
+        pass
+
+    if _employee_has_field("custom_employee_id"):
+        employee_name = frappe.db.get_value(
+            "Employee",
+            {"custom_employee_id": employee_id, "docstatus": 0},
+            "name",
+        )
+        if employee_name:
+            return frappe.get_doc("Employee", employee_name)
+
+    return None
+
+
 @frappe.whitelist()
 def get_active_employees(company=None, search_term=None):
     """
@@ -21,6 +42,8 @@ def get_active_employees(company=None, search_term=None):
         filters["company"] = company
 
     has_custom_employee_id = _employee_has_field("custom_employee_id")
+    if _employee_has_field("custom_is_company_expense"):
+        filters["custom_is_company_expense"] = 0
 
     if search_term:
         search_term = (search_term or "").strip()
@@ -77,15 +100,24 @@ def get_employee_details(employee_id):
     if not employee_id:
         return None
 
-    employee = frappe.get_doc("Employee", employee_id)
+    employee = _get_employee_doc_by_identifier(employee_id)
+    if not employee:
+        return None
+
+    custom_employee_id = str(getattr(employee, "custom_employee_id", "") or "")
+    display_label = (
+        f"{custom_employee_id or employee.name} - {employee.employee_name or employee.name}"
+    )
 
     return {
         "name": str(employee.name or ""),
+        "employee_id": str(employee.name or ""),
         "employee_name": str(employee.employee_name or employee.name or ""),
-        "custom_employee_id": str(getattr(employee, "custom_employee_id", "") or ""),
+        "custom_employee_id": custom_employee_id,
         "designation": employee.designation,
         "department": employee.department,
         "branch": employee.branch,
         "image": employee.image,
         "status": employee.status,
+        "display_label": display_label,
     }

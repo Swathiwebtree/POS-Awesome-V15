@@ -2123,6 +2123,14 @@ export default {
 						vehicle_no: this.vehicles[0].vehicle_no,
 					});
 				} else if (!vehicleNo || this.vehicles.length === 0) {
+					// Keep an already-selected vehicle when this refresh returns empty.
+					// This avoids a stale async response from clearing a valid selection.
+					if (preserveExistingSelection && currentSelectedVehicleName && currentSelectedVehicleNo) {
+						this.vehicleSearchText = "";
+						this.vehicleSearchTerm = "";
+						this.vehicleSearchResults = [];
+						return;
+					}
 					this.selectedVehicle = null;
 					this.vehicle_no = "";
 					this.vehicleSearchText = "";

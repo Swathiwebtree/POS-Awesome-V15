@@ -398,6 +398,104 @@ export default {
 		this.eventBus.emit("reset_manual_total");
 	},
 
+	async syncServiceEmployeeFromDoc(data = this.invoice_doc, { emit = true } = {}) {
+		const source = data || {};
+		const rawEmployeeId = String(
+			source.custom_service_employee || source.service_employee || "",
+		).trim();
+		const rawEmployeeName = String(
+			source.custom_service_employee_name || source.service_employee_name || "",
+		).trim();
+		const rawDesignation = source.custom_service_employee_designation || source.service_employee_designation || null;
+		const rawDepartment = source.custom_service_employee_department || source.service_employee_department || null;
+
+		const clearEmployeeState = () => {
+			if (typeof this.clearServiceEmployee === "function") {
+				this.clearServiceEmployee();
+				return;
+			}
+
+			this.service_employee = null;
+			this.service_employee_name = null;
+			this.service_employee_designation = null;
+			this.service_employee_department = null;
+			if (this.invoice_doc) {
+				this.invoice_doc.custom_service_employee = null;
+				this.invoice_doc.custom_service_employee_name = null;
+				this.invoice_doc.custom_service_employee_designation = null;
+				this.invoice_doc.custom_service_employee_department = null;
+			}
+		};
+
+		if (!rawEmployeeId && !rawEmployeeName) {
+			clearEmployeeState();
+			if (emit) {
+				this.eventBus.emit("employee_selected", {
+					employee_id: null,
+					employee_name: null,
+				});
+			}
+			return null;
+		}
+
+		let employeeDetails = null;
+		try {
+			const lookupEmployeeId = rawEmployeeId || rawEmployeeName;
+			const response = await frappe.call({
+				method: "posawesome.posawesome.api.employees.get_employee_details",
+				args: { employee_id: lookupEmployeeId },
+			});
+			employeeDetails = response?.message || null;
+		} catch (error) {
+			console.warn("[Invoice] Failed to restore service employee from doc:", error);
+		}
+
+		const resolvedEmployeeId =
+			String(employeeDetails?.employee_id || employeeDetails?.name || rawEmployeeId || "").trim();
+		const resolvedCustomEmployeeId = String(
+			employeeDetails?.custom_employee_id || rawEmployeeId || "",
+		).trim();
+		const resolvedEmployeeName = String(
+			rawEmployeeName ||
+				employeeDetails?.employee_name ||
+				resolvedCustomEmployeeId ||
+				resolvedEmployeeId ||
+				"",
+		).trim();
+		const resolvedDesignation = rawDesignation || employeeDetails?.designation || null;
+		const resolvedDepartment = rawDepartment || employeeDetails?.department || null;
+
+		this.service_employee = resolvedEmployeeId || resolvedCustomEmployeeId || rawEmployeeName;
+		this.service_employee_name = resolvedEmployeeName;
+		this.service_employee_designation = resolvedDesignation;
+		this.service_employee_department = resolvedDepartment;
+
+		if (this.invoice_doc) {
+			this.invoice_doc.custom_service_employee = this.service_employee;
+			this.invoice_doc.custom_service_employee_name = this.service_employee_name;
+			this.invoice_doc.custom_service_employee_designation = this.service_employee_designation;
+			this.invoice_doc.custom_service_employee_department = this.service_employee_department;
+		}
+
+		if (emit) {
+			this.eventBus.emit("employee_selected", {
+				employee_id: this.service_employee,
+				custom_employee_id: resolvedCustomEmployeeId,
+				employee_name: this.service_employee_name,
+				designation: this.service_employee_designation,
+				department: this.service_employee_department,
+			});
+		}
+
+		return {
+			employee_id: this.service_employee,
+			custom_employee_id: resolvedCustomEmployeeId,
+			employee_name: this.service_employee_name,
+			designation: this.service_employee_designation,
+			department: this.service_employee_department,
+		};
+	},
+
 	// Fetch customer balance from backend or cache
 	async fetch_customer_balance() {
 		try {
@@ -566,6 +664,8 @@ export default {
 		this.items = data.items || [];
 		this.packed_items = data.packed_items || [];
 		console.log("Items set:", this.items.length, "items");
+
+		await this.syncServiceEmployeeFromDoc(data);
 
 		if (data.is_return && data.return_against) {
 			this.items.forEach((item) => {
@@ -971,6 +1071,8 @@ export default {
 			this.invoice_doc = data;
 			this.items = data.items;
 			console.log("[new_order] Setting items:", this.items?.length || 0);
+
+			await this.syncServiceEmployeeFromDoc(data);
 
 			this.update_items_details(this.items);
 			this.posa_offers = data.posa_offers || [];

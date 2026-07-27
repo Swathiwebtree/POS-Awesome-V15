@@ -1533,7 +1533,11 @@ export default {
 			this.refreshPaymentMethodsForCustomer(this.customer_info, this.invoice_doc);
 
 			const hasServiceItem = this.hasCarWashServiceForItems(this.invoice_doc.items || []);
-			const hasEmployee = !!this.invoice_doc?.custom_service_employee;
+			const hasEmployee = Boolean(
+				this.invoice_doc?.custom_service_employee ||
+					this.invoice_doc?.custom_service_employee_name ||
+					this.service_employee,
+			);
 
 			if (hasServiceItem && !hasEmployee) {
 				frappe.show_alert({

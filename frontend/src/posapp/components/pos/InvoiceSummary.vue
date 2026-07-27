@@ -1627,10 +1627,26 @@ export default {
 			};
 		},
 		applySelectedVehicleDetails(payload = {}) {
+			const current = this.selectedVehicleDetails || {};
 			this.selectedVehicleDetails = {
-				make: payload.vehicle_make || payload.custom_vehicle_make || payload.make || "",
-				model: payload.vehicle_model || payload.custom_vehicle_model || payload.model || "",
-				mobile_no: payload.vehicle_mobile_no || payload.mobile_no || payload.tel_mobile || "",
+				make:
+					payload.vehicle_make ||
+					payload.custom_vehicle_make ||
+					payload.make ||
+					current.make ||
+					"",
+				model:
+					payload.vehicle_model ||
+					payload.custom_vehicle_model ||
+					payload.model ||
+					current.model ||
+					"",
+				mobile_no:
+					payload.vehicle_mobile_no ||
+					payload.mobile_no ||
+					payload.tel_mobile ||
+					current.mobile_no ||
+					"",
 			};
 		},
 		formatByPrecision(value) {
@@ -2752,7 +2768,14 @@ export default {
 				return;
 			}
 
-			if (this.showEmployeeSelection && !this.selectedEmployee) {
+			const hasSelectedEmployee = Boolean(
+				this.selectedEmployee ||
+					this.selectedEmployeeDetails?.employee_id ||
+					this.selectedEmployeeDetails?.custom_employee_id ||
+					this.invoice_doc?.custom_service_employee ||
+					this.invoice_doc?.custom_service_employee_name,
+			);
+			if (this.showEmployeeSelection && !hasSelectedEmployee) {
 				frappe.show_alert({
 					message: this.__("Please select the service employee."),
 					indicator: "red",
@@ -2873,10 +2896,12 @@ export default {
 
 		// Listen for customer details from Customer component (AUTO-FETCH)
 		this.eventBus.on("update_customer_details", (data) => {
+			const currentVehicleDetails = this.selectedVehicleDetails || {};
 			// Auto-populate mobile and vehicle from customer
-			this.mobileNumber = data.contact_mobile || "";
-			this.vehicleNumber = data.custom_vehicle_no || "";
-			this.vehicleMake = data.custom_vehicle_make || data.make || "";
+			this.mobileNumber = data.contact_mobile || this.mobileNumber || "";
+			this.vehicleNumber = data.custom_vehicle_no || this.vehicleNumber || "";
+			this.vehicleMake =
+				data.custom_vehicle_make || data.make || currentVehicleDetails.make || this.vehicleMake || "";
 			this.applySelectedVehicleDetails(data || {});
 
 			// If odometer field is visible, emit the data immediately

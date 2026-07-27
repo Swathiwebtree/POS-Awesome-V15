@@ -2979,7 +2979,12 @@ export default {
 
 			// Validate employee for car wash services
 			const hasCarWashService = this.checkForCarWashServices();
-			if (hasCarWashService && !this.service_employee) {
+			const hasServiceEmployee = Boolean(
+				this.service_employee ||
+					this.invoice_doc?.custom_service_employee ||
+					this.invoice_doc?.custom_service_employee_name,
+			);
+			if (hasCarWashService && !hasServiceEmployee) {
 				frappe.show_alert({
 					message: this.__("Please select a service employee for car wash services"),
 					indicator: "warning",
@@ -3853,8 +3858,9 @@ export default {
 			}
 
 			// Update employee data
-			this.service_employee = data.employee_id;
-			this.service_employee_name = data.employee_name;
+			this.service_employee = data.employee_id || data.custom_employee_id;
+			this.service_employee_name =
+				data.employee_name || data.custom_employee_id || data.employee_id;
 			this.service_employee_designation = data.designation || null;
 			this.service_employee_department = data.department || null;
 

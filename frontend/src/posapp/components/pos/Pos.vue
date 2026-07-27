@@ -685,8 +685,11 @@ export default {
 					// If the loaded invoice has a service employee, tell other components.
 					if (r.message.custom_service_employee) {
 						let employeeName = r.message.custom_service_employee_name || null;
+						const customEmployeeId = r.message.custom_employee_id || null;
 
 						// Older/mobile-created drafts may only store the employee code on the invoice.
+						// Avoid querying custom_employee_id directly so local installs without that
+						// custom field still load the job order cleanly.
 						if (!employeeName) {
 							try {
 								const employeeResp = await frappe.call({
@@ -699,10 +702,10 @@ export default {
 										},
 									},
 								});
-								employeeName = employeeResp?.message?.employee_name || null;
+								employeeName = employeeResp?.message?.employee_name || employeeName;
 							} catch (employeeError) {
 								console.warn(
-									"[POS] Failed to resolve employee name for loaded draft:",
+									"[POS] Failed to resolve employee by ERP name:",
 									r.message.custom_service_employee,
 									employeeError,
 								);
@@ -711,6 +714,7 @@ export default {
 
 						this.eventBus.emit("employee_selected", {
 							employee_id: r.message.custom_service_employee,
+							custom_employee_id: customEmployeeId,
 							employee_name: employeeName,
 						});
 					}
