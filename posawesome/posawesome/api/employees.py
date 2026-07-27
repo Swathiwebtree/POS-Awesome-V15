@@ -105,9 +105,7 @@ def get_employee_details(employee_id):
         return None
 
     custom_employee_id = str(getattr(employee, "custom_employee_id", "") or "")
-    display_label = (
-        f"{custom_employee_id or employee.name} - {employee.employee_name or employee.name}"
-    )
+    display_label = f"{custom_employee_id or employee.name} - {employee.employee_name or employee.name}"
 
     return {
         "name": str(employee.name or ""),

@@ -400,14 +400,14 @@ export default {
 
 	async syncServiceEmployeeFromDoc(data = this.invoice_doc, { emit = true } = {}) {
 		const source = data || {};
-		const rawEmployeeId = String(
-			source.custom_service_employee || source.service_employee || "",
-		).trim();
+		const rawEmployeeId = String(source.custom_service_employee || source.service_employee || "").trim();
 		const rawEmployeeName = String(
 			source.custom_service_employee_name || source.service_employee_name || "",
 		).trim();
-		const rawDesignation = source.custom_service_employee_designation || source.service_employee_designation || null;
-		const rawDepartment = source.custom_service_employee_department || source.service_employee_department || null;
+		const rawDesignation =
+			source.custom_service_employee_designation || source.service_employee_designation || null;
+		const rawDepartment =
+			source.custom_service_employee_department || source.service_employee_department || null;
 
 		const clearEmployeeState = () => {
 			if (typeof this.clearServiceEmployee === "function") {
@@ -450,8 +450,9 @@ export default {
 			console.warn("[Invoice] Failed to restore service employee from doc:", error);
 		}
 
-		const resolvedEmployeeId =
-			String(employeeDetails?.employee_id || employeeDetails?.name || rawEmployeeId || "").trim();
+		const resolvedEmployeeId = String(
+			employeeDetails?.employee_id || employeeDetails?.name || rawEmployeeId || "",
+		).trim();
 		const resolvedCustomEmployeeId = String(
 			employeeDetails?.custom_employee_id || rawEmployeeId || "",
 		).trim();

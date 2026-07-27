@@ -1630,11 +1630,7 @@ export default {
 			const current = this.selectedVehicleDetails || {};
 			this.selectedVehicleDetails = {
 				make:
-					payload.vehicle_make ||
-					payload.custom_vehicle_make ||
-					payload.make ||
-					current.make ||
-					"",
+					payload.vehicle_make || payload.custom_vehicle_make || payload.make || current.make || "",
 				model:
 					payload.vehicle_model ||
 					payload.custom_vehicle_model ||
