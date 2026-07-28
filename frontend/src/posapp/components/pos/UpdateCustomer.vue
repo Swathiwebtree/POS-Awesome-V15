@@ -747,7 +747,10 @@ export default {
 				frappe.throw(this.__(`Only ${maxLength} characters required`));
 				return;
 			}
-			if (this.vehicle_no && !new RegExp(`^[A-Za-z0-9-]{1,${maxLength}}$`).test(String(this.vehicle_no))) {
+			if (
+				this.vehicle_no &&
+				!new RegExp(`^[A-Za-z0-9-]{1,${maxLength}}$`).test(String(this.vehicle_no))
+			) {
 				frappe.throw(__("Vehicle Number can contain only letters, numbers, and '-'"));
 				return;
 			}

@@ -785,7 +785,8 @@ export default {
 						d.customer_name ||
 						d.customer ||
 						"";
-					d.customer_name = d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
+					d.customer_name =
+						d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
 					return d;
 				});
 

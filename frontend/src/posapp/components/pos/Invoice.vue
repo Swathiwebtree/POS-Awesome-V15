@@ -3858,10 +3858,8 @@ export default {
 			}
 
 			// Update employee data
-			this.service_employee =
-				data.employee_id || data.custom_employee_id || data.employee_name || null;
-			this.service_employee_name =
-				data.employee_name || data.custom_employee_id || data.employee_id;
+			this.service_employee = data.employee_id || data.custom_employee_id || data.employee_name || null;
+			this.service_employee_name = data.employee_name || data.custom_employee_id || data.employee_id;
 			this.service_employee_designation = data.designation || null;
 			this.service_employee_department = data.department || null;
 

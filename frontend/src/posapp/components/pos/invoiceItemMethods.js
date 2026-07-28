@@ -668,7 +668,9 @@ export default {
 			row.is_stock_item = Number(row.is_stock_item || 0);
 			row.item_type = getItemType(row);
 			row.group_discount_percentage = Number(row.group_discount_percentage || 0);
-			row.group_discount_applied = String(row.group_discount_applied || "").trim().toLowerCase();
+			row.group_discount_applied = String(row.group_discount_applied || "")
+				.trim()
+				.toLowerCase();
 			return row;
 		});
 		this.invoice_doc.items = this.items.map((item) => ({ ...item }));
@@ -1085,7 +1087,9 @@ export default {
 				row.is_stock_item = Number(row.is_stock_item || 0);
 				row.item_type = getItemType(row);
 				row.group_discount_percentage = Number(row.group_discount_percentage || 0);
-				row.group_discount_applied = String(row.group_discount_applied || "").trim().toLowerCase();
+				row.group_discount_applied = String(row.group_discount_applied || "")
+					.trim()
+					.toLowerCase();
 				return row;
 			});
 			this.invoice_doc.items = this.items.map((item) => ({ ...item }));

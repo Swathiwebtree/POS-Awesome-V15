@@ -141,11 +141,7 @@
 				</template>
 
 				<template #item="{ props, item }">
-					<v-list-item
-						v-bind="props"
-						:title="getCustomerDisplayName(item)"
-						:subtitle="''"
-					>
+					<v-list-item v-bind="props" :title="getCustomerDisplayName(item)" :subtitle="''">
 						<v-list-item-subtitle v-if="getCustomerIdLabel(item)">
 							<div>ID: {{ getCustomerIdLabel(item) }}</div>
 						</v-list-item-subtitle>
@@ -589,12 +585,7 @@ export default {
 		getCustomerDisplayName(item) {
 			if (!item) return "";
 			const row = item.raw || item;
-			return (
-				row.custom_display_name ||
-				row.customer_name ||
-				row.name ||
-				""
-			);
+			return row.custom_display_name || row.customer_name || row.name || "";
 		},
 		getCustomerIdLabel(item) {
 			if (!item) return "";
@@ -2438,7 +2429,8 @@ export default {
 						employee_id: employeeId || employeeName,
 						custom_employee_id: payload.custom_employee_id || employeeId || "",
 						employee_name: employeeName || employeeId || "",
-						designation: payload.custom_service_employee_designation || payload.designation || null,
+						designation:
+							payload.custom_service_employee_designation || payload.designation || null,
 						department: payload.custom_service_employee_department || payload.department || null,
 					});
 				}
