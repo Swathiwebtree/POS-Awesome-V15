@@ -197,6 +197,7 @@ export async function setCustomerStorage(customers) {
 		const clean = customers.map((c) => ({
 			name: c.name,
 			customer_name: c.customer_name,
+			custom_display_name: c.custom_display_name || c.customer_name || c.name,
 			mobile_no: c.mobile_no,
 			email_id: c.email_id,
 			primary_address: c.primary_address,

@@ -893,7 +893,7 @@ export default {
 		},
 
 		async applyVehicleDiscountToItem(item) {
-			if (!item || !item.item_code || !this.custom_vehicle_no) {
+			if (!item || !item.item_code || !this.custom_vehicle_no || !this.customer) {
 				return;
 			}
 
@@ -1149,7 +1149,7 @@ export default {
 		},
 
 		async applyVehicleAutoDiscount(itemRow) {
-			if (!itemRow || !itemRow.item_code || !this.custom_vehicle_no) return;
+			if (!itemRow || !itemRow.item_code || !this.custom_vehicle_no || !this.customer) return;
 
 			//prevent infinite loop
 			if (itemRow._vehicle_discount_loading) return;
@@ -3858,8 +3858,10 @@ export default {
 			}
 
 			// Update employee data
-			this.service_employee = data.employee_id || data.custom_employee_id;
-			this.service_employee_name = data.employee_name || data.custom_employee_id || data.employee_id;
+			this.service_employee =
+				data.employee_id || data.custom_employee_id || data.employee_name || null;
+			this.service_employee_name =
+				data.employee_name || data.custom_employee_id || data.employee_id;
 			this.service_employee_designation = data.designation || null;
 			this.service_employee_department = data.department || null;
 
@@ -4235,6 +4237,16 @@ export default {
 			this.$nextTick(() => {
 				this.fetchMaxDiscount();
 			});
+
+			if (this.custom_vehicle_no) {
+				this.$nextTick(() => {
+					(this.items || []).forEach((item) => {
+						if (!item.discount_locked) {
+							this.applyVehicleAutoDiscount(item);
+						}
+					});
+				});
+			}
 
 			if (!this.invoice_doc) return;
 

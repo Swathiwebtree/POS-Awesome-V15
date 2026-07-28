@@ -304,18 +304,19 @@ export default {
 			}
 			const raw = String(val);
 			let cleaned = raw.replace(/[^A-Za-z0-9-]/g, "");
+			const maxLength = this.getVehicleNumberMaxLength();
 			if (raw !== cleaned) {
-				if (cleaned.length > 8) {
-					this.vehicle_no_error = __("Only 8 characters required");
+				if (cleaned.length > maxLength) {
+					this.vehicle_no_error = this.__(`Only ${maxLength} characters required`);
 				} else {
 					this.vehicle_no_error = __("Vehicle Number can contain only letters, numbers, and '-'");
 				}
 			} else {
 				this.vehicle_no_error = "";
 			}
-			if (cleaned.length > 8) {
-				this.vehicle_no_error = __("Only 8 characters required");
-				cleaned = cleaned.slice(0, 8);
+			if (cleaned.length > maxLength) {
+				this.vehicle_no_error = this.__(`Only ${maxLength} characters required`);
+				cleaned = cleaned.slice(0, maxLength);
 			}
 			if (cleaned !== this.vehicle_no) this.vehicle_no = cleaned;
 		},
@@ -323,6 +324,10 @@ export default {
 			// Clear inline error when focus leaves the field.
 			// Submit validation will still block invalid values.
 			this.vehicle_no_error = "";
+		},
+		getVehicleNumberMaxLength() {
+			const iso = this.selected_phone_iso || this.default_country_iso;
+			return iso === "SA" ? 7 : 8;
 		},
 		async loadDefaultCountryIso() {
 			const countryName = (this.country || "").toString().trim();
@@ -737,11 +742,12 @@ export default {
 				return;
 			}
 			// Vehicle number max length
-			if (this.vehicle_no && String(this.vehicle_no).length > 8) {
-				frappe.throw(__("Only 8 characters required"));
+			const maxLength = this.getVehicleNumberMaxLength();
+			if (this.vehicle_no && String(this.vehicle_no).length > maxLength) {
+				frappe.throw(this.__(`Only ${maxLength} characters required`));
 				return;
 			}
-			if (this.vehicle_no && !/^[A-Za-z0-9-]{1,8}$/.test(String(this.vehicle_no))) {
+			if (this.vehicle_no && !new RegExp(`^[A-Za-z0-9-]{1,${maxLength}}$`).test(String(this.vehicle_no))) {
 				frappe.throw(__("Vehicle Number can contain only letters, numbers, and '-'"));
 				return;
 			}

@@ -63,13 +63,7 @@
 					<template v-slot:item.customer="{ item }">
 						<div class="d-flex align-center gap-1">
 							<span class="customer-name">
-								{{
-									item.custom_display_name ||
-									item.title ||
-									item.display_name ||
-									item.customer_name ||
-									item.customer
-								}}
+								{{ getDraftCustomerDisplayName(item) }}
 							</span>
 							<v-chip
 								v-if="item.is_corporate"
@@ -785,16 +779,13 @@ export default {
 				drafts = drafts.map((d) => {
 					const custType = this._customerTypeCache[d.customer];
 					d.is_corporate = custType === "Company";
-					d.customer_name =
-						d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
 					d.custom_display_name =
 						d.custom_display_name ||
-						d.title ||
-						d.display_name ||
 						this._customerDisplayNameCache[d.customer] ||
 						d.customer_name ||
 						d.customer ||
 						"";
+					d.customer_name = d.customer_name || this._customerNameCache[d.customer] || d.customer || "";
 					return d;
 				});
 
@@ -937,15 +928,13 @@ export default {
 			}
 			const custType = this._customerTypeCache[nd.customer];
 			nd.is_corporate = custType === "Company";
-			nd.customer_name = nd.customer_name || this._customerNameCache[nd.customer] || nd.customer || "";
 			nd.custom_display_name =
 				nd.custom_display_name ||
-				nd.title ||
-				nd.display_name ||
 				this._customerDisplayNameCache[nd.customer] ||
 				nd.customer_name ||
 				nd.customer ||
 				"";
+			nd.customer_name = nd.customer_name || this._customerNameCache[nd.customer] || nd.customer || "";
 
 			if (nd.custom_vehicle_no) {
 				if (!this._vehicleModelCache[nd.custom_vehicle_no]) {
@@ -1039,6 +1028,17 @@ export default {
 				custom_has_oil_item: Boolean(Number(item.custom_has_oil_item)) || false,
 			};
 		},
+		getDraftCustomerDisplayName(item) {
+			if (!item) return "";
+			return (
+				item.custom_display_name ||
+				item.customer_name ||
+				item.display_name ||
+				item.title ||
+				item.customer ||
+				""
+			);
+		},
 
 		_normalizeAndSort(list) {
 			const normalized = (list || []).map((i) => this._normalizeSingle(i));
@@ -1124,10 +1124,20 @@ export default {
 						loyalty_discount_amount:
 							invoice.loyalty_discount_amount ?? invoice.loyalty_amount ?? 0,
 						loyalty_amount: invoice.loyalty_amount ?? invoice.loyalty_discount_amount ?? 0,
+						custom_service_employee: invoice.custom_service_employee || "",
+						custom_service_employee_name: invoice.custom_service_employee_name || "",
 						custom_odometer_reading: normalizedOdometer,
 						custom_has_oil_item: normalizedHasOilItem ? 1 : 0,
 						allow_vehicle_fallback: false,
 					});
+
+					if (invoice.custom_service_employee || invoice.custom_service_employee_name) {
+						this.eventBus.emit("employee_selected", {
+							employee_id: invoice.custom_service_employee || "",
+							employee_name:
+								invoice.custom_service_employee_name || invoice.custom_service_employee || "",
+						});
+					}
 
 					const redeemedPoints = Number(
 						invoice.custom_redeemed_loyalty_points ??

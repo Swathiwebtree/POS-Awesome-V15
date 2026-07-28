@@ -143,11 +143,11 @@
 				<template #item="{ props, item }">
 					<v-list-item
 						v-bind="props"
-						:title="item.raw.custom_display_name || item.raw.customer_name || item.raw.name"
+						:title="getCustomerDisplayName(item)"
 						:subtitle="''"
 					>
-						<v-list-item-subtitle v-if="item.raw.name">
-							<div>ID: {{ item.raw.name }}</div>
+						<v-list-item-subtitle v-if="getCustomerIdLabel(item)">
+							<div>ID: {{ getCustomerIdLabel(item) }}</div>
 						</v-list-item-subtitle>
 						<v-list-item-subtitle v-if="item.raw.mobile_no">
 							<div>Mobile: {{ item.raw.mobile_no }}</div>
@@ -589,7 +589,23 @@ export default {
 		getCustomerDisplayName(item) {
 			if (!item) return "";
 			const row = item.raw || item;
-			return row.custom_display_name || row.customer_name || row.name || "";
+			return (
+				row.custom_display_name ||
+				row.customer_name ||
+				row.name ||
+				""
+			);
+		},
+		getCustomerIdLabel(item) {
+			if (!item) return "";
+			const row = item.raw || item;
+			const customerId = String(row.name || "").trim();
+			const displayName = this.getCustomerDisplayName(item);
+			const customerName = String(row.customer_name || "").trim();
+			if (!customerId || customerId === displayName || customerId === customerName) {
+				return "";
+			}
+			return customerId;
 		},
 		// --- Helper to normalize customer rows --
 		_normalizeCustomerRow(r) {
@@ -1502,7 +1518,7 @@ export default {
 								(c.tax_id && c.tax_id.toString().toLowerCase().includes(q)) ||
 								(c.vehicle_no && c.vehicle_no.toString().toLowerCase().includes(q))
 							);
-						} catch (err) {
+						} catch {
 							return false;
 						}
 					});
@@ -1587,6 +1603,8 @@ export default {
 						const norm = this._normalizeCustomerRow(r);
 						return {
 							...norm,
+							custom_display_name:
+								norm.custom_display_name || norm.customer_name || norm.name || "",
 						};
 					});
 				}
@@ -2405,6 +2423,25 @@ export default {
 					preserveExistingSelection: allowVehicleFallback,
 				});
 				this.jobOrderLoading = false;
+
+				const employeeId = this.normalizeCustomerValue(
+					payload.custom_service_employee || payload.employee_id || payload.service_employee,
+				);
+				const employeeName = this.normalizeCustomerValue(
+					payload.custom_service_employee_name ||
+						payload.employee_name ||
+						payload.service_employee_name ||
+						"",
+				);
+				if (employeeId || employeeName) {
+					this.eventBus.emit("employee_selected", {
+						employee_id: employeeId || employeeName,
+						custom_employee_id: payload.custom_employee_id || employeeId || "",
+						employee_name: employeeName || employeeId || "",
+						designation: payload.custom_service_employee_designation || payload.designation || null,
+						department: payload.custom_service_employee_department || payload.department || null,
+					});
+				}
 
 				// Auto-select vehicle if present in draft
 				if (requestedVehicleNo) {

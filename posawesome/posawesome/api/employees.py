@@ -35,43 +35,50 @@ def get_active_employees(company=None, search_term=None):
     """
     Fetch active employees for car wash service
     """
-    filters = {"status": "Active", "docstatus": 0}
-    or_filters = None
-
-    if company:
-        filters["company"] = company
+    search_term = (search_term or "").strip()
+    if search_term and len(search_term) < 3:
+        return []
 
     has_custom_employee_id = _employee_has_field("custom_employee_id")
-    if _employee_has_field("custom_is_company_expense"):
-        filters["custom_is_company_expense"] = 0
+    has_company_expense_flag = _employee_has_field("custom_is_company_expense")
 
-    if search_term:
-        search_term = (search_term or "").strip()
-        if len(search_term) < 3:
-            return []
-        like_term = f"%{search_term}%"
-        or_filters = [
-            ["Employee", "name", "like", like_term],
-            ["Employee", "employee_name", "like", like_term],
-        ]
+    def _build_filters(scoped_company=None):
+        filters = {"status": "Active", "docstatus": 0}
+        if scoped_company:
+            filters["company"] = scoped_company
+        if has_company_expense_flag:
+            filters["custom_is_company_expense"] = 0
+        return filters
+
+    def _build_query(scoped_company=None):
+        or_filters = None
+        if search_term:
+            like_term = f"%{search_term}%"
+            or_filters = [
+                ["Employee", "name", "like", like_term],
+                ["Employee", "employee_name", "like", like_term],
+            ]
+            if has_custom_employee_id:
+                or_filters.append(["Employee", "custom_employee_id", "like", like_term])
+
+        get_all_kwargs = {
+            "doctype": "Employee",
+            "filters": _build_filters(scoped_company),
+            "or_filters": or_filters,
+            "fields": ["name", "employee_name", "designation", "department", "branch", "image"],
+            "order_by": "employee_name asc",
+        }
+
         if has_custom_employee_id:
-            or_filters.append(["Employee", "custom_employee_id", "like", like_term])
+            get_all_kwargs["fields"].insert(2, "custom_employee_id")
+        if search_term:
+            get_all_kwargs["limit_page_length"] = 20
+        return get_all_kwargs
 
-    get_all_kwargs = {
-        "doctype": "Employee",
-        "filters": filters,
-        "or_filters": or_filters,
-        "fields": ["name", "employee_name", "designation", "department", "branch", "image"],
-        "order_by": "employee_name asc",
-    }
+    employees = frappe.get_all(**_build_query(company))
 
-    if has_custom_employee_id:
-        get_all_kwargs["fields"].insert(2, "custom_employee_id")
-
-    if search_term:
-        get_all_kwargs["limit_page_length"] = 20
-
-    employees = frappe.get_all(**get_all_kwargs)
+    if company and not employees:
+        employees = frappe.get_all(**_build_query(None))
 
     return [
         {

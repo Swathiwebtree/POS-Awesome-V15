@@ -662,7 +662,16 @@ export default {
 
 		this.invoice_doc = data;
 		this.loaded_draft_name = data.name || null;
-		this.items = data.items || [];
+		this.items = (data.items || []).map((item) => {
+			const row = { ...item };
+			row.custom_service_item = Number(row.custom_service_item || 0);
+			row.is_stock_item = Number(row.is_stock_item || 0);
+			row.item_type = getItemType(row);
+			row.group_discount_percentage = Number(row.group_discount_percentage || 0);
+			row.group_discount_applied = String(row.group_discount_applied || "").trim().toLowerCase();
+			return row;
+		});
+		this.invoice_doc.items = this.items.map((item) => ({ ...item }));
 		this.packed_items = data.packed_items || [];
 		console.log("Items set:", this.items.length, "items");
 
@@ -1070,7 +1079,16 @@ export default {
 			}
 
 			this.invoice_doc = data;
-			this.items = data.items;
+			this.items = (data.items || []).map((item) => {
+				const row = { ...item };
+				row.custom_service_item = Number(row.custom_service_item || 0);
+				row.is_stock_item = Number(row.is_stock_item || 0);
+				row.item_type = getItemType(row);
+				row.group_discount_percentage = Number(row.group_discount_percentage || 0);
+				row.group_discount_applied = String(row.group_discount_applied || "").trim().toLowerCase();
+				return row;
+			});
+			this.invoice_doc.items = this.items.map((item) => ({ ...item }));
 			console.log("[new_order] Setting items:", this.items?.length || 0);
 
 			await this.syncServiceEmployeeFromDoc(data);

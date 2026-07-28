@@ -44,10 +44,10 @@
 									clearable
 								>
 									<template #item="{ props, item }">
-										<v-list-item v-bind="props">
-											<v-list-item-title>
-												{{ getCustomerDisplayLabel(item.raw) }}
-											</v-list-item-title>
+										<v-list-item
+											v-bind="props"
+											:title="getCustomerDisplayLabel(item.raw)"
+										>
 											<v-list-item-subtitle v-if="item.raw.mobile_no">
 												{{ item.raw.mobile_no }}
 											</v-list-item-subtitle>
@@ -313,9 +313,10 @@ export default {
 			const raw = String(val);
 			let cleaned = raw.replace(/[^A-Za-z0-9-]/g, "");
 			this.validateVehicleNo(raw, cleaned);
-			if (cleaned.length > 8) {
-				this.vehicle_no_error = this.__("Only 8 characters required");
-				cleaned = cleaned.slice(0, 8);
+			const maxLength = this.getVehicleNumberMaxLength();
+			if (cleaned.length > maxLength) {
+				this.vehicle_no_error = this.__(`Only ${maxLength} characters required`);
+				cleaned = cleaned.slice(0, maxLength);
 			}
 			if (cleaned !== this.vehicle_no) this.vehicle_no = cleaned;
 		},
@@ -345,16 +346,20 @@ export default {
 		getCurrentMobileRule() {
 			return this.gcc_rules[this.selected_country_iso] || this.gcc_rules.BH;
 		},
+		getVehicleNumberMaxLength() {
+			return this.selected_country_iso === "SA" ? 7 : 8;
+		},
 		validateVehicleNo(rawVal, cleanedVal = null) {
 			const raw = String(rawVal || "");
 			const cleaned = typeof cleanedVal === "string" ? cleanedVal : raw.replace(/[^A-Za-z0-9-]/g, "");
+			const maxLength = this.getVehicleNumberMaxLength();
 			if (!raw) {
 				this.vehicle_no_error = "";
 				return;
 			}
 			if (raw !== cleaned) {
-				if (cleaned.length > 8) {
-					this.vehicle_no_error = this.__("Only 8 characters required");
+				if (cleaned.length > maxLength) {
+					this.vehicle_no_error = this.__(`Only ${maxLength} characters required`);
 				} else {
 					this.vehicle_no_error = this.__(
 						"Vehicle Number can contain only letters, numbers, and '-'",
@@ -362,7 +367,7 @@ export default {
 				}
 				return;
 			}
-			if (!/^[A-Za-z0-9-]{1,8}$/.test(cleaned)) {
+			if (!new RegExp(`^[A-Za-z0-9-]{1,${maxLength}}$`).test(cleaned)) {
 				this.vehicle_no_error = this.__("Vehicle Number can contain only letters, numbers, and '-'");
 				return;
 			}
@@ -578,14 +583,15 @@ export default {
 				});
 				return;
 			}
-			if (String(this.vehicle_no).length > 8) {
+			const maxLength = this.getVehicleNumberMaxLength();
+			if (String(this.vehicle_no).length > maxLength) {
 				frappe.show_alert({
-					message: this.__("Only 8 characters required"),
+					message: this.__(`Only ${maxLength} characters required`),
 					indicator: "red",
 				});
 				return;
 			}
-			if (this.vehicle_no && !/^[A-Za-z0-9-]{1,8}$/.test(String(this.vehicle_no))) {
+			if (this.vehicle_no && !new RegExp(`^[A-Za-z0-9-]{1,${maxLength}}$`).test(String(this.vehicle_no))) {
 				frappe.show_alert({
 					message: this.__("Vehicle Number can contain only letters, numbers, and '-'"),
 					indicator: "red",

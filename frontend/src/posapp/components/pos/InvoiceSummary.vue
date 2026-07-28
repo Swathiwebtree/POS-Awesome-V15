@@ -2373,6 +2373,20 @@ export default {
 			}
 		},
 
+		async reloadAllEmployees() {
+			if (!this.pos_profile?.company) {
+				return [];
+			}
+
+			// Clearing a loaded draft can leave the autocomplete with only that
+			// employee cached. Pull the active list again so the user can choose
+			// from the full set after removing the selection.
+			this.employeeSearchRequestId += 1;
+			this.employees = [];
+			this.allEmployees = [];
+			return this.fetchEmployees("");
+		},
+
 		async fetchEmployeeById(employeeId) {
 			const normalizedEmployeeId = this.normalizeEmployeeValue(employeeId);
 			if (!normalizedEmployeeId) return null;
@@ -2599,6 +2613,7 @@ export default {
 				this.selectedEmployeeDetails = null;
 				this.employeeSearch = "";
 				this.closeEmployeeDropdown();
+				await this.reloadAllEmployees();
 				return;
 			}
 
@@ -2620,14 +2635,24 @@ export default {
 			this.showEmployeeSelection = true;
 			this.activateEmployeeLoadLock();
 
-			// if we already have employees loaded, set selection directly
+			// If the draft only gives us the saved employee document name, fetch the
+			// full record so we can render the custom employee id in the label.
 			let resolvedEmployee = null;
-			if (empNameProvided) {
+			if (empNameProvided && customEmployeeId) {
 				resolvedEmployee = this.normalizeEmployeeRecord({
 					employee_id: lookupEmployeeId,
 					custom_employee_id: customEmployeeId,
 					employee_name: empNameProvided,
 				});
+			} else if (empNameProvided) {
+				resolvedEmployee = await this.fetchEmployeeById(lookupEmployeeId);
+				if (resolvedEmployee) {
+					resolvedEmployee = this.normalizeEmployeeRecord({
+						...resolvedEmployee,
+						employee_id: resolvedEmployee.employee_id || lookupEmployeeId,
+						employee_name: resolvedEmployee.employee_name || empNameProvided,
+					});
+				}
 			} else {
 				resolvedEmployee = await this.fetchEmployeeById(lookupEmployeeId);
 			}
@@ -2653,7 +2678,14 @@ export default {
 					item.custom_employee_id === lookupEmployeeId ||
 					item.name === lookupEmployeeId,
 			);
-			if (empNameProvided && !employeeExistsInCache) {
+			const employeeExistsInCurrentList = this.employees.some(
+				(item) =>
+					item.employee_id === lookupEmployeeId ||
+					item.custom_employee_id === lookupEmployeeId ||
+					item.name === lookupEmployeeId ||
+					item.display_label === resolvedEmployee.display_label,
+			);
+			if (empNameProvided && !employeeExistsInCache && !employeeExistsInCurrentList) {
 				this.employees.unshift(resolvedEmployee);
 				this.allEmployees.unshift(resolvedEmployee);
 			}
@@ -2661,6 +2693,11 @@ export default {
 			this.selectedEmployee = resolvedEmployee.employee_id || lookupEmployeeId;
 			this.selectedEmployeeDetails = resolvedEmployee;
 			this.closeEmployeeDropdown();
+
+			// Draft/job-order loads often inject only the saved employee first.
+			// Refresh the active list immediately so the dropdown can show everyone,
+			// not just the loaded employee, when the user wants to switch.
+			await this.reloadAllEmployees();
 		},
 		closeEmployeeDropdown() {
 			this.employeeSearch = "";
@@ -2760,21 +2797,6 @@ export default {
 				frappe.show_alert({
 					message: this.__("Please select a customer first"),
 					indicator: "warning",
-				});
-				return;
-			}
-
-			const hasSelectedEmployee = Boolean(
-				this.selectedEmployee ||
-					this.selectedEmployeeDetails?.employee_id ||
-					this.selectedEmployeeDetails?.custom_employee_id ||
-					this.invoice_doc?.custom_service_employee ||
-					this.invoice_doc?.custom_service_employee_name,
-			);
-			if (this.showEmployeeSelection && !hasSelectedEmployee) {
-				frappe.show_alert({
-					message: this.__("Please select the service employee."),
-					indicator: "red",
 				});
 				return;
 			}
