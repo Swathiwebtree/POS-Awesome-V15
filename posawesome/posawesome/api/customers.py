@@ -1843,33 +1843,67 @@ def create_customer(
 def search_customers(search_term="", pos_profile=None, limit=20):
     """
     Server-side fallback for substring search used by the POS frontend.
-    Returns list of dict: {name, customer_name, mobile_no, email_id, tax_id, vehicle_no}
+    Returns list of dict: {name, customer_name, custom_display_name, mobile_no, email_id, tax_id, vehicle_no}
     """
     search_term = (search_term or "").strip()
     limit = int(limit or 20)
     if not search_term:
         # if no search term, return limited recent active customers
-        return frappe.get_all(
+        has_custom_display_name = False
+        try:
+            has_custom_display_name = bool(
+                frappe.db.has_column("tabCustomer", "custom_display_name")
+                and frappe.get_meta("Customer").get_field("custom_display_name")
+            )
+        except Exception:
+            has_custom_display_name = False
+
+        fields = ["name", "customer_name", "mobile_no", "email_id", "tax_id", "vehicle_no"]
+        if has_custom_display_name:
+            fields.insert(2, "custom_display_name")
+
+        rows = frappe.get_all(
             "Customer",
             filters=[["disabled", "=", 0]],
-            fields=["name", "customer_name", "mobile_no", "email_id", "tax_id", "vehicle_no"],
+            fields=fields,
             limit_page_length=limit,
             order_by="modified desc",
         )
+
+        if not has_custom_display_name:
+            for row in rows:
+                row["custom_display_name"] = row.get("customer_name") or row.get("name") or ""
+
+        return rows
+
+    has_custom_display_name = False
+    try:
+        has_custom_display_name = bool(
+            frappe.db.has_column("tabCustomer", "custom_display_name")
+            and frappe.get_meta("Customer").get_field("custom_display_name")
+        )
+    except Exception:
+        has_custom_display_name = False
+
+    custom_display_select = (
+        "COALESCE(custom_display_name, customer_name) AS custom_display_name"
+        if has_custom_display_name
+        else "customer_name AS custom_display_name"
+    )
 
     # Build SQL-style like pattern safely
     like = "%%%s%%" % frappe.db.escape(search_term).replace("%", "").replace("'", "")
 
     # Use SQL for OR across many fields (more reliable & fast)
     rows = frappe.db.sql(
-        """
-        SELECT name, customer_name, COALESCE(custom_display_name, customer_name) AS custom_display_name, mobile_no, email_id, COALESCE(tax_id, '') AS tax_id, COALESCE(vehicle_no, '') AS vehicle_no
+        f"""
+        SELECT name, customer_name, {custom_display_select}, mobile_no, email_id, COALESCE(tax_id, '') AS tax_id, COALESCE(vehicle_no, '') AS vehicle_no
         FROM `tabCustomer`
         WHERE disabled = 0
         AND (
             name LIKE %(like)s
             OR customer_name LIKE %(like)s
-            OR custom_display_name LIKE %(like)s
+            {"OR custom_display_name LIKE %(like)s" if has_custom_display_name else ""}
             OR mobile_no LIKE %(like)s
             OR email_id LIKE %(like)s
             OR tax_id LIKE %(like)s
