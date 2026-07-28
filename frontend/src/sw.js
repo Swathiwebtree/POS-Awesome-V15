@@ -1,4 +1,5 @@
 const SW_VERSION = new URL(self.location.href).searchParams.get("v") || "1";
+const versioned = (url) => `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(SW_VERSION)}`;
 
 if (!self.define) {
 	try {
@@ -17,15 +18,15 @@ workbox.core.clientsClaim();
 const SW_REVISION = SW_VERSION;
 workbox.precaching.precacheAndRoute([
 	{
-		url: `/assets/posawesome/dist/js/posawesome.umd.js?v=${encodeURIComponent(SW_VERSION)}`,
+		url: versioned("/assets/posawesome/dist/js/posawesome.umd.js"),
 		revision: SW_REVISION,
 	},
 	{
-		url: `/assets/posawesome/dist/js/offline/index.js?v=${encodeURIComponent(SW_VERSION)}`,
+		url: versioned("/assets/posawesome/dist/js/offline/index.js"),
 		revision: SW_REVISION,
 	},
-	{ url: "/manifest.json", revision: SW_REVISION },
-	{ url: "/offline.html", revision: SW_REVISION },
+	{ url: versioned("/manifest.json"), revision: SW_REVISION },
+	{ url: versioned("/offline.html"), revision: SW_REVISION },
 ]);
 
 workbox.routing.registerRoute(

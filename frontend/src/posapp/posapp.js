@@ -18,6 +18,7 @@ if (typeof window !== "undefined" && !window.Dexie) {
 }
 if (typeof window !== "undefined") {
 	window.__POSAWESOME_VERSION__ = POSAWESOME_VERSION;
+	window.__POSAWESOME_BUILD_VERSION__ = POSAWESOME_VERSION;
 }
 
 frappe.provide("frappe.PosApp");

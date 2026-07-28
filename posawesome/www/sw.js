@@ -1,6 +1,7 @@
 const SW_VERSION = new URL(self.location.href).searchParams.get("v") || "1";
 const CACHE_NAMESPACE = `posawesome-cache-${SW_VERSION}`;
 const MAX_CACHE_ITEMS = 1000;
+const versioned = (url) => `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(SW_VERSION)}`;
 
 async function enforceCacheLimit(cache) {
 	const keys = await cache.keys();
@@ -18,14 +19,13 @@ self.addEventListener("install", (event) => {
 		(async () => {
 			const cache = await caches.open(CACHE_NAMESPACE);
 			const resources = [
-				"/app/posapp",
-				`/assets/posawesome/dist/js/posawesome.umd.js?v=${encodeURIComponent(SW_VERSION)}`,
-				`/assets/posawesome/dist/js/offline/index.js?v=${encodeURIComponent(SW_VERSION)}`,
-				`/assets/posawesome/dist/js/posapp/workers/itemWorker.js?v=${encodeURIComponent(SW_VERSION)}`,
-				`/assets/posawesome/dist/js/libs/dexie.min.js?v=${encodeURIComponent(SW_VERSION)}`,
-
-				"/manifest.json",
-				"/offline.html",
+				versioned("/app/posapp"),
+				versioned("/assets/posawesome/dist/js/posawesome.umd.js"),
+				versioned("/assets/posawesome/dist/js/offline/index.js"),
+				versioned("/assets/posawesome/dist/js/posapp/workers/itemWorker.js"),
+				versioned("/assets/posawesome/dist/js/libs/dexie.min.js"),
+				versioned("/manifest.json"),
+				versioned("/offline.html"),
 			];
 			await Promise.all(
 				resources.map(async (url) => {
@@ -64,6 +64,35 @@ self.addEventListener("fetch", (event) => {
 
 	if (event.request.url.includes("socket.io")) return;
 
+	if (url.pathname.startsWith("/api/")) {
+		event.respondWith(
+			(async () => {
+				try {
+					const resp = await fetch(event.request);
+					if (resp && resp.ok && resp.status === 200) {
+						try {
+							const clone = resp.clone();
+							const cache = await caches.open(CACHE_NAMESPACE);
+							await cache.put(event.request, clone);
+							await enforceCacheLimit(cache);
+						} catch (e) {
+							console.warn("SW API cache put failed", e);
+						}
+					}
+					return resp;
+				} catch (err) {
+					try {
+						const cached = await caches.match(event.request);
+						return cached || Response.error();
+					} catch (e) {
+						return Response.error();
+					}
+				}
+			})(),
+		);
+		return;
+	}
+
 	if (event.request.mode === "navigate") {
 		event.respondWith(
 			(async () => {
@@ -75,12 +104,12 @@ self.addEventListener("fetch", (event) => {
 						return cached;
 					}
 
-					const appShell = await caches.match("/app/posapp");
+					const appShell = await caches.match("/app/posapp", { ignoreSearch: true });
 					if (appShell) {
 						return appShell;
 					}
 
-					const offlinePage = await caches.match("/offline.html");
+					const offlinePage = await caches.match("/offline.html", { ignoreSearch: true });
 					if (offlinePage) {
 						return offlinePage;
 					}

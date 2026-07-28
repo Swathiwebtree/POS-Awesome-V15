@@ -8,6 +8,26 @@ import { viteStaticCopy } from "vite-plugin-static-copy";
 import tailwindcss from "tailwindcss";
 import autoprefixer from "autoprefixer";
 import packageJson from "../package.json";
+import { execSync } from "child_process";
+
+function getBuildVersion() {
+	if (process.env.POSAWESOME_BUILD_VERSION) {
+		return process.env.POSAWESOME_BUILD_VERSION.trim();
+	}
+
+	try {
+		return execSync("git rev-parse --short=12 HEAD", {
+			cwd: resolve(__dirname, ".."),
+			stdio: ["ignore", "pipe", "ignore"],
+		})
+			.toString()
+			.trim();
+	} catch {
+		return packageJson.version;
+	}
+}
+
+const buildVersion = getBuildVersion();
 
 export default defineConfig({
 	plugins: [
@@ -84,6 +104,7 @@ export default defineConfig({
 	define: {
 		"process.env.NODE_ENV": '"production"',
 		process: '{"env":{}}',
-		__POSAWESOME_VERSION__: JSON.stringify(packageJson.version),
+		__POSAWESOME_VERSION__: JSON.stringify(buildVersion),
+		__POSAWESOME_BUILD_VERSION__: JSON.stringify(buildVersion),
 	},
 });

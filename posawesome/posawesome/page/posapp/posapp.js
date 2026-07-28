@@ -1,5 +1,8 @@
 // Include onscan.js
 const posaVersion = (() => {
+	if (window.__POSAWESOME_BUILD_VERSION__) {
+		return window.__POSAWESOME_BUILD_VERSION__;
+	}
 	if (window.__POSAWESOME_VERSION__) {
 		return window.__POSAWESOME_VERSION__;
 	}
